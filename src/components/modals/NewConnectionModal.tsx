@@ -40,7 +40,8 @@ export const NewConnectionModal = () => {
   const { t } = useTranslation();
   const { 
     modals, 
-    toggleModal 
+    toggleModal,
+    quickConnectData
   } = useAppStore();
   const { addRootNode, connectNode, addKbiSession } = useSessionTreeStore();
   const { error: toastError } = useToast();
@@ -82,8 +83,15 @@ export const NewConnectionModal = () => {
     if (modals.newConnection) {
       api.getGroups().then(setGroups).catch(() => setGroups([]));
       api.isAgentAvailable().then(setAgentAvailable).catch(() => setAgentAvailable(false));
+
+      // Pre-fill from Quick Connect data (⌘K user@host:port)
+      if (quickConnectData) {
+        setHost(quickConnectData.host);
+        setPort(String(quickConnectData.port));
+        setUsername(quickConnectData.username);
+      }
     }
-  }, [modals.newConnection]);
+  }, [modals.newConnection, quickConnectData]);
 
   // 移除了连接复用检查逻辑，现在由 SessionTree 后端统一处理
   /* 旧逻辑已删除 */

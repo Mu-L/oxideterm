@@ -94,6 +94,10 @@
       "reconnecting": "Wiederverbindung läuft...",
       "input_locked": "Eingabe ist während der Wiederverbindung gesperrt"
     },
+    "disconnected": {
+      "message": "Verbindung getrennt",
+      "retry": "Erneut verbinden"
+    },
     "pane": {
       "split_horizontal": "Horizontal teilen",
       "split_vertical": "Vertikal teilen",

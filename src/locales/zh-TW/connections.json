@@ -71,13 +71,15 @@
       "cancelled": "已取消重連",
       "recovered": "連線已恢復 — 會話完整保留",
       "phase": {
+        "queued": "排隊中",
         "snapshot": "快照",
         "ssh_connect": "SSH 連線",
         "await_terminal": "等待終端",
         "restore_forwards": "恢復轉發",
         "resume_transfers": "恢復傳輸",
         "restore_ide": "恢復 IDE",
-        "grace_period": "寬限期"
+        "grace_period": "寬限期",
+        "verify": "驗證中"
       },
       "result": {
         "ok": "已完成",

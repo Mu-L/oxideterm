@@ -77,6 +77,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const isComposingRef = useRef(false);
 
   // Store selectors — minimal subscriptions
   const tabs = useAppStore((s) => s.tabs);
@@ -198,9 +199,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
       section: 'quick_connect',
       icon: <Zap className="h-4 w-4" />,
       action: () => {
-        // Open new connection modal with pre-filled values
-        // For now, open new connection modal — user can fill in auth details
-        useAppStore.getState().toggleModal('newConnection', true);
+        // Open new connection modal with pre-filled host/port/username
+        useAppStore.getState().toggleModal('newConnection', true, { host, port, username });
       },
     };
   }, [query, t]);
@@ -297,6 +297,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // Ignore key events during IME composition (e.g. Chinese / Japanese input)
+      const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean; keyCode?: number };
+      if (
+        isComposingRef.current ||
+        nativeEvent.isComposing ||
+        nativeEvent.keyCode === 229 ||
+        e.key === 'Process'
+      ) {
+        return;
+      }
+
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
@@ -348,6 +359,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
             placeholder={t('command_palette.placeholder')}
             className="h-10 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-theme-text-muted"
             autoComplete="off"

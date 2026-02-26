@@ -71,13 +71,15 @@
       "cancelled": "Đã hủy kết nối lại",
       "recovered": "Kết nối đã phục hồi — phiên được giữ nguyên",
       "phase": {
+        "queued": "Đang chờ",
         "snapshot": "Ảnh chụp",
         "ssh_connect": "Kết nối SSH",
         "await_terminal": "Đợi terminal",
         "restore_forwards": "Khôi phục chuyển tiếp",
         "resume_transfers": "Tiếp tục truyền tải",
         "restore_ide": "Khôi phục IDE",
-        "grace_period": "Thời gian ân hạn"
+        "grace_period": "Thời gian ân hạn",
+        "verify": "Đang xác minh"
       },
       "result": {
         "ok": "Hoàn thành",

@@ -94,6 +94,10 @@
       "reconnecting": "Reconectando...",
       "input_locked": "Entrada bloqueada durante reconexión"
     },
+    "disconnected": {
+      "message": "Conexión desconectada",
+      "retry": "Reconectar"
+    },
     "pane": {
       "split_horizontal": "Dividir horizontal",
       "split_vertical": "Dividir vertical",

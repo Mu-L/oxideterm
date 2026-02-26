@@ -94,6 +94,10 @@
       "reconnecting": "重连中...",
       "input_locked": "重连期间输入已锁定"
     },
+    "disconnected": {
+      "message": "连接已断开",
+      "retry": "重新连接"
+    },
     "pane": {
       "split_horizontal": "水平分屏",
       "split_vertical": "垂直分屏",

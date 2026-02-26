@@ -71,13 +71,15 @@
       "cancelled": "Neuverbindung abgebrochen",
       "recovered": "Verbindung wiederhergestellt — Sitzung erhalten",
       "phase": {
+        "queued": "Warteschlange",
         "snapshot": "Snapshot",
         "ssh_connect": "SSH-Verbindung",
         "await_terminal": "Terminal abwarten",
         "restore_forwards": "Weiterleitungen wiederherstellen",
         "resume_transfers": "Übertragungen fortsetzen",
         "restore_ide": "IDE wiederherstellen",
-        "grace_period": "Karenzzeit"
+        "grace_period": "Karenzzeit",
+        "verify": "Überprüfung"
       },
       "result": {
         "ok": "Abgeschlossen",

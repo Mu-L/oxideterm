@@ -31,6 +31,13 @@ interface ModalsState {
   autoRoute: boolean; // 自动路由选择器
 }
 
+/** Pre-fill data for NewConnectionModal when opened via Quick Connect */
+export type QuickConnectData = {
+  host: string;
+  port: number;
+  username: string;
+} | null;
+
 // Re-export SidebarSection from settingsStore for backwards compatibility
 export type { SidebarSection };
 
@@ -45,6 +52,8 @@ interface AppStore {
   readonly sidebarCollapsed: boolean;
   readonly sidebarActiveSection: SidebarSection;
   modals: ModalsState;
+  /** Pre-fill data consumed by NewConnectionModal on open */
+  quickConnectData: QuickConnectData;
   savedConnections: ConnectionInfo[];
   groups: string[];
   selectedGroup: string | null;
@@ -106,7 +115,7 @@ interface AppStore {
   // Actions - UI
   toggleSidebar: () => void;
   setSidebarSection: (section: SidebarSection) => void;
-  toggleModal: (modal: keyof ModalsState, isOpen: boolean) => void;
+  toggleModal: (modal: keyof ModalsState, isOpen: boolean, quickConnect?: QuickConnectData) => void;
   
   // Actions - Connections & Groups
   loadSavedConnections: () => Promise<void>;
@@ -172,6 +181,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     connectionManager: false,
     autoRoute: false, // 自动路由
   },
+  quickConnectData: null,
   savedConnections: [],
   groups: [],
   selectedGroup: null,
@@ -1077,9 +1087,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     useSettingsStore.getState().setSidebarSection(section);
   },
   
-  toggleModal: (modal, isOpen) => {
+  toggleModal: (modal, isOpen, quickConnect) => {
     set((state) => ({
-      modals: { ...state.modals, [modal]: isOpen }
+      modals: { ...state.modals, [modal]: isOpen },
+      // Set or clear quickConnectData when opening/closing newConnection modal
+      quickConnectData: modal === 'newConnection' ? (isOpen ? (quickConnect ?? null) : null) : state.quickConnectData,
     }));
   },
 

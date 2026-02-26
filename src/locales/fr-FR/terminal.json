@@ -94,6 +94,10 @@
       "reconnecting": "Reconnexion en cours...",
       "input_locked": "L'entrée est verrouillée pendant la reconnexion"
     },
+    "disconnected": {
+      "message": "Connexion déconnectée",
+      "retry": "Reconnecter"
+    },
     "pane": {
       "split_horizontal": "Diviser horizontalement",
       "split_vertical": "Diviser verticalement",

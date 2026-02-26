@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Terminal, FolderOpen, GitFork, RefreshCw, XCircle, WifiOff, Settings, Activity, Network, Plug, Square, HardDrive, LayoutList, Puzzle, Monitor } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
@@ -192,7 +192,7 @@ const ReconnectIndicator = ({
     >
       <RefreshCw className="h-3 w-3 animate-spin" />
       <span>
-        {job.status}
+        {t(`connections.reconnect.phase.${job.status.replace(/-/g, '_')}`)}
         {job.attempt > 1 && ` (${job.attempt}/${job.maxAttempts})`}
       </span>
       <button
@@ -318,6 +318,37 @@ export const TabBar = () => {
   // Scroll container ref
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Track scroll overflow for fade indicators
+  const [scrollOverflow, setScrollOverflow] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
+
+  const updateScrollOverflow = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const hasOverflow = el.scrollWidth > el.clientWidth + 1; // +1 for rounding
+    setScrollOverflow({
+      left: hasOverflow && el.scrollLeft > 2,
+      right: hasOverflow && el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', updateScrollOverflow, { passive: true });
+    const ro = new ResizeObserver(updateScrollOverflow);
+    ro.observe(el);
+    updateScrollOverflow();
+    return () => {
+      el.removeEventListener('scroll', updateScrollOverflow);
+      ro.disconnect();
+    };
+  }, [updateScrollOverflow]);
+
+  // Re-check overflow when tabs change
+  useEffect(() => {
+    updateScrollOverflow();
+  }, [tabs.length, updateScrollOverflow]);
+
   // Handle wheel event - convert vertical scroll to horizontal
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     const container = scrollContainerRef.current;
@@ -426,11 +457,16 @@ export const TabBar = () => {
       )}
 
       {/* 中间层（滚动层）：flex-1 + min-w-0 强制收缩 + overflow-x-auto 触发滚动 */}
-      <div
-        ref={scrollContainerRef}
-        onWheel={handleWheel}
-        className="flex-1 min-w-0 h-full overflow-x-auto scrollbar-thin"
-      >
+      <div className="relative flex-1 min-w-0 h-full">
+        {/* Left fade — more tabs off-screen to the left */}
+        {scrollOverflow.left && (
+          <div className="absolute left-0 top-0 bottom-0 w-6 z-10 pointer-events-none bg-gradient-to-r from-theme-bg to-transparent" />
+        )}
+        <div
+          ref={scrollContainerRef}
+          onWheel={handleWheel}
+          className="h-full overflow-x-auto scrollbar-thin"
+        >
         {/* 最内层（渲染层）：inline-flex 让子元素一行排列，不换行 */}
         <div className="inline-flex h-full">
           {tabs.map((tab) => {
@@ -559,6 +595,11 @@ export const TabBar = () => {
             );
           })}
         </div>
+      </div>
+        {/* Right fade — more tabs off-screen to the right */}
+        {scrollOverflow.right && (
+          <div className="absolute right-0 top-0 bottom-0 w-6 z-10 pointer-events-none bg-gradient-to-l from-theme-bg to-transparent" />
+        )}
       </div>
 
       {/* Right-fixed area: terminal-specific actions (recording, cast) */}

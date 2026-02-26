@@ -94,6 +94,10 @@
       "reconnecting": "재연결 중...",
       "input_locked": "재연결 중 입력이 잠김"
     },
+    "disconnected": {
+      "message": "연결이 끊어졌습니다",
+      "retry": "다시 연결"
+    },
     "pane": {
       "split_horizontal": "가로 분할",
       "split_vertical": "세로 분할",

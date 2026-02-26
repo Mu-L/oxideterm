@@ -94,6 +94,10 @@
       "reconnecting": "Đang kết nối lại...",
       "input_locked": "Đầu vào bị khóa trong quá trình kết nối lại"
     },
+    "disconnected": {
+      "message": "Kết nối đã ngắt",
+      "retry": "Kết nối lại"
+    },
     "pane": {
       "split_horizontal": "Chia theo chiều ngang",
       "split_vertical": "Chia theo chiều dọc",

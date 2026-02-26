@@ -22,7 +22,7 @@ import { terminalLinkHandler } from '../../lib/safeUrl';
 import { SearchMatch, SessionInfo } from '../../types';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { Lock, Loader2 } from 'lucide-react';
+import { Lock, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 import { 
@@ -34,6 +34,7 @@ import {
 import { onMapleRegularLoaded, ensureCJKFallback } from '../../lib/fontLoader';
 import { runInputPipeline, runOutputPipeline } from '../../lib/plugin/pluginTerminalHooks';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
+import { useReconnectOrchestratorStore } from '../../store/reconnectOrchestratorStore';
 import type { BackgroundFit } from '../../store/settingsStore';
 import { installTerminalClipboardSupport } from '../../lib/clipboardSupport';
 import { useTerminalRecording } from '../../hooks/useTerminalRecording';
@@ -2241,6 +2242,25 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
              <div className="text-xs text-zinc-400 text-center">
                {t('terminal.standby.input_locked')}
              </div>
+           </div>
+         </div>
+       )}
+
+       {/* Disconnected Overlay - shown when connection is permanently lost */}
+       {!inputLocked && connectionStatus === 'disconnected' && (
+         <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center pb-6 pointer-events-none">
+           <div className="pointer-events-auto bg-zinc-900/95 border border-zinc-700 rounded-lg px-5 py-3 flex items-center gap-3 shadow-xl">
+             <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+             <span className="text-sm text-zinc-300">{t('terminal.disconnected.message')}</span>
+             {nodeId && (
+               <button
+                 onClick={() => useReconnectOrchestratorStore.getState().scheduleReconnect(nodeId)}
+                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-theme-accent/20 hover:bg-theme-accent/30 text-theme-accent text-sm font-medium transition-colors"
+               >
+                 <RefreshCw className="h-3.5 w-3.5" />
+                 {t('terminal.disconnected.retry')}
+               </button>
+             )}
            </div>
          </div>
        )}

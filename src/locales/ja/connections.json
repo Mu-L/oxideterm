@@ -71,13 +71,15 @@
       "cancelled": "再接続がキャンセルされました",
       "recovered": "接続が回復しました — セッション保持",
       "phase": {
+        "queued": "待機中",
         "snapshot": "スナップショット",
         "ssh_connect": "SSH 接続",
         "await_terminal": "ターミナル待機",
         "restore_forwards": "転送復元",
         "resume_transfers": "転送再開",
         "restore_ide": "IDE 復元",
-        "grace_period": "猶予期間"
+        "grace_period": "猶予期間",
+        "verify": "検証中"
       },
       "result": {
         "ok": "完了",

@@ -71,13 +71,15 @@
       "cancelled": "Reconexão cancelada",
       "recovered": "Conexão recuperada — sessão preservada",
       "phase": {
+        "queued": "Na fila",
         "snapshot": "Instantâneo",
         "ssh_connect": "Conexão SSH",
         "await_terminal": "Aguardar terminal",
         "restore_forwards": "Restaurar encaminhamentos",
         "resume_transfers": "Retomar transferências",
         "restore_ide": "Restaurar IDE",
-        "grace_period": "Período de carência"
+        "grace_period": "Período de carência",
+        "verify": "Verificando"
       },
       "result": {
         "ok": "Concluído",

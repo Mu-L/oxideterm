@@ -71,13 +71,15 @@
       "cancelled": "재연결이 취소되었습니다",
       "recovered": "연결 복구됨 — 세션 유지",
       "phase": {
+        "queued": "대기 중",
         "snapshot": "스냅샷",
         "ssh_connect": "SSH 연결",
         "await_terminal": "터미널 대기",
         "restore_forwards": "포워딩 복원",
         "resume_transfers": "전송 재개",
         "restore_ide": "IDE 복원",
-        "grace_period": "유예 기간"
+        "grace_period": "유예 기간",
+        "verify": "확인 중"
       },
       "result": {
         "ok": "완료",

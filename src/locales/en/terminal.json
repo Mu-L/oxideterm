@@ -94,6 +94,10 @@
       "reconnecting": "Reconnecting...",
       "input_locked": "Input is locked during reconnection"
     },
+    "disconnected": {
+      "message": "Connection disconnected",
+      "retry": "Reconnect"
+    },
     "pane": {
       "split_horizontal": "Split Horizontal",
       "split_vertical": "Split Vertical",

@@ -1,10 +1,10 @@
 # Third-Party Notices (Frontend)
 
 This file lists third-party components used by the frontend (including transitive production dependencies) and their declared licenses.
-Generated: 2026-02-28T06:52:10.674Z
+Generated: 2026-03-01T15:50:49.584Z
 
 ## Summary
-- MIT: 219
+- MIT: 220
 - ISC: 34
 - Apache-2.0: 18
 - BSD-3-Clause: 8
@@ -182,6 +182,7 @@ Generated: 2026-02-28T06:52:10.674Z
 | chevrotain-allstar | 0.3.1 | MIT | https://github.com/langium/chevrotain-allstar#readme |
 | class-variance-authority | 0.7.1 | Apache-2.0 | https://github.com/joe-bell/cva#readme |
 | clsx | 2.1.1 | MIT | https://github.com/lukeed/clsx#readme |
+| cmdk | 1.1.1 | MIT | https://github.com/pacocoursey/cmdk#readme |
 | codepage | 1.15.0 | Apache-2.0 | https://sheetjs.com/ |
 | commander | 7.2.0, 8.3.0 | MIT | https://github.com/tj/commander.js#readme |
 | confbox | 0.1.8 | MIT | https://github.com/unjs/confbox#readme |

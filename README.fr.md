@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.15.3-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.16.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="License">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">
@@ -204,7 +204,22 @@ Système multi-images avec contrôle de transparence par onglet :
 - **Adapté aux plateformes** : transparence macOS ; chemin WSLg Windows exclu (canvas VNC opaque)
 - **Sécurité** : suppression canonicalisée empêchant la traversée de répertoire ; propagation complète des erreurs depuis le backend Rust
 
-### 🎨 Moteur de thèmes personnalisés
+### �️ Rendu adaptatif — Taux de rafraîchissement dynamique
+
+Un planificateur de rendu à trois niveaux remplace le batching RAF fixe, améliorant la réactivité lors de sorties intensives et réduisant la charge GPU/batterie au ralenti :
+
+| Niveau | Déclencheur | Cadence effective | Bénéfice |
+|---|---|---|---|
+| **Boost** | Données de trame ≥ 4 Ko | 120 Hz+ (RAF / ProMotion natif) | Élimine les saccades lors d'une sortie rapide |
+| **Normal** | Frappe standard / I/O légère | 60 Hz (RAF) | Interaction fluide de base |
+| **Idle** | 3 s sans I/O, page cachée ou fenêtre sans focus | 1–15 Hz (timer, croissance exponentielle) | Charge GPU quasi nulle, économie de batterie |
+
+- **Mode automatique** : transitions pilotées par le volume de données, l'activité utilisateur et l'API Page Visibility — aucun réglage manuel nécessaire
+- **Sécurité arrière-plan** : quand l'onglet est masqué, les données distantes entrantes continuent d'être vidées via le timer idle — le RAF n'est jamais réveillé, évitant l'accumulation de tampons en attente sur les onglets en arrière-plan
+- **Paramètres** : trois modes (Auto / Toujours 60 Hz / Désactivé) dans Paramètres → Terminal → Rendu
+- **Diagnostic en direct** : activer **Afficher la superposition FPS** pour voir un badge de niveau en temps réel (`B`=boost · `N`=normal · `I`=idle), la cadence de rendu et le compteur d'écritures par seconde dans le coin du terminal
+
+### �🎨 Moteur de thèmes personnalisés
 
 Personnalisation thématique en profondeur au-delà des palettes prédéfinies :
 

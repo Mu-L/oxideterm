@@ -31,7 +31,9 @@ import { onMapleRegularLoaded, ensureCJKFallback } from '../../lib/fontLoader';
 import { api } from '../../lib/api';
 import { installTerminalClipboardSupport } from '../../lib/clipboardSupport';
 import { useTerminalRecording } from '../../hooks/useTerminalRecording';
+import { useAdaptiveRenderer } from '../../hooks/useAdaptiveRenderer';
 import { RecordingControls } from './RecordingControls';
+import { FpsOverlay } from './FpsOverlay';
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
 
@@ -164,16 +166,28 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   const currentSearchQueryRef = useRef<string>('');
   const currentSearchOptionsRef = useRef<ISearchOptions | undefined>(undefined);
 
-  // RAF buffering for high-frequency PTY data (prevents search index jumping)
-  // This batches rapid data events into single writes, reducing buffer churn
-  const pendingDataRef = useRef<Uint8Array[]>([]);
-  const rafIdRef = useRef<number | null>(null);
+  // RAF buffering delegated to useAdaptiveRenderer (adaptive FPS)
+  // pendingDataRef / rafIdRef are no longer needed here.
   
   // Search pause mechanism: pause search updates during heavy output bursts
   // This prevents the "1->2->3->1" cycling when buffer changes rapidly
   const searchPausedRef = useRef(false);
   const outputThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefillHistoryRef = useRef(false);
+
+  // Get terminal settings (read early for adaptive renderer)
+  const terminalSettings = useSettingsStore((state) => state.settings.terminal);
+
+  // ── Adaptive Renderer (Dynamic Refresh Rate) ──────────────────────────
+  const adaptiveRenderer = useAdaptiveRenderer({
+    terminalRef,
+    mode: terminalSettings.adaptiveRenderer ?? 'auto',
+  });
+
+  // Stable ref so event listener effects never depend on the handle identity.
+  // Callbacks read .current at call-time, making the effect deps truly stable.
+  const adaptiveRendererRef = useRef(adaptiveRenderer);
+  adaptiveRendererRef.current = adaptiveRenderer;
 
   const ensureSearchAddon = useCallback(() => {
     const term = terminalRef.current;
@@ -273,8 +287,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     };
   }, [sessionId, isSessionRecording, startRecording, handleRecordingStop]);
 
-  // Get terminal settings
-  const terminalSettings = useSettingsStore((state) => state.settings.terminal);
+  // terminalSettings already read above (before adaptive renderer hook)
 
   // Font family resolver — see src/lib/fontFamily.ts
 
@@ -717,6 +730,8 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     // IMPORTANT: Save IDisposable for cleanup to prevent memory leaks
     onDataDisposableRef.current = term.onData((data) => {
       if (!isRunning) return;
+      // Notify adaptive renderer of user activity (exits idle tier)
+      adaptiveRendererRef.current.notifyUserInput();
       // Feed recording (user input)
       feedInput(data);
       const encoder = new TextEncoder();
@@ -875,57 +890,35 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     let unlistenDataFn: (() => void) | null = null;
     let unlistenClosedFn: (() => void) | null = null;
 
-    // Rust PTY sends high-frequency small packets; batching reduces buffer churn
+    // Rust PTY sends high-frequency small packets; adaptive renderer handles batching
     listen<{ sessionId: string; data: number[] }>(dataEventName, (event) => {
       if (!mounted || !isMountedRef.current || !terminalRef.current) return;
       const data = new Uint8Array(event.payload.data);
       
-      // Queue data for RAF batch write
-      pendingDataRef.current.push(data);
-      
-      if (rafIdRef.current === null) {
-        rafIdRef.current = requestAnimationFrame(() => {
-          rafIdRef.current = null;
-          if (!mounted || !isMountedRef.current || !terminalRef.current) return;
-          
-          const pending = pendingDataRef.current;
-          if (pending.length === 0) return;
-          
-          // Concatenate all chunks for single write (reduces xterm buffer mutations)
-          const totalLength = pending.reduce((sum, chunk) => sum + chunk.length, 0);
-          const combined = new Uint8Array(totalLength);
-          let offset = 0;
-          for (const chunk of pending) {
-            combined.set(chunk, offset);
-            offset += chunk.length;
+      maybeLoadImageAddon(data);
+      // Feed recording (terminal output)
+      feedOutput(data);
+      // Delegate batching + tier management to adaptive renderer
+      adaptiveRendererRef.current.scheduleWrite(data);
+
+      // Pause search updates during high-frequency output
+      // Resume after 150ms of quiet, then re-run search to get accurate results
+      if (currentSearchQueryRef.current) {
+        searchPausedRef.current = true;
+        if (outputThrottleRef.current) {
+          clearTimeout(outputThrottleRef.current);
+        }
+        outputThrottleRef.current = setTimeout(() => {
+          searchPausedRef.current = false;
+          outputThrottleRef.current = null;
+          // Re-trigger search to get accurate results after output settles
+          if (currentSearchQueryRef.current && searchAddonRef.current) {
+            searchAddonRef.current.findNext(
+              currentSearchQueryRef.current,
+              currentSearchOptionsRef.current
+            );
           }
-          
-          pendingDataRef.current = [];
-          maybeLoadImageAddon(combined);
-          // Feed recording (terminal output)
-          feedOutput(combined);
-          terminalRef.current.write(combined);
-          
-          // Pause search updates during high-frequency output
-          // Resume after 150ms of quiet, then re-run search to get accurate results
-          if (currentSearchQueryRef.current) {
-            searchPausedRef.current = true;
-            if (outputThrottleRef.current) {
-              clearTimeout(outputThrottleRef.current);
-            }
-            outputThrottleRef.current = setTimeout(() => {
-              searchPausedRef.current = false;
-              outputThrottleRef.current = null;
-              // Re-trigger search to get accurate results after output settles
-              if (currentSearchQueryRef.current && searchAddonRef.current) {
-                searchAddonRef.current.findNext(
-                  currentSearchQueryRef.current,
-                  currentSearchOptionsRef.current
-                );
-              }
-            }, 150);
-          }
-        });
+        }, 150);
       }
     }).then((fn) => {
       if (mounted) {
@@ -962,16 +955,11 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
 
     return () => {
       mounted = false;
-      // Clean up RAF and throttle timers
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
+      // Adaptive renderer cleanup is handled by the hook's own useEffect.
       if (outputThrottleRef.current) {
         clearTimeout(outputThrottleRef.current);
         outputThrottleRef.current = null;
       }
-      pendingDataRef.current = [];
       searchPausedRef.current = false;
       
       unlistenDataFn?.();
@@ -1414,6 +1402,11 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         <div className="absolute bottom-2 right-2 bg-zinc-800/70 text-zinc-400 text-[11px] px-2 py-0.5 rounded pointer-events-none select-none">
           {t('terminal.mouse_mode_hint')}
         </div>
+      )}
+
+      {/* FPS / Tier overlay (enabled in Settings → Terminal → Show FPS Overlay) */}
+      {terminalSettings.showFpsOverlay && (
+        <FpsOverlay getStats={adaptiveRenderer.getStats} />
       )}
 
       {/* Status overlay when not running */}

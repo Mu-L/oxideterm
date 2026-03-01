@@ -43,6 +43,9 @@ const LEGACY_KEYS = [
 /** Renderer type */
 export type RendererType = 'auto' | 'webgl' | 'canvas';
 
+/** Adaptive renderer mode (Dynamic Refresh Rate) */
+export type AdaptiveRendererMode = 'auto' | 'always-60' | 'off';
+
 /** 
  * Font family options - "双轨制" (Dual-Track System)
  * 
@@ -96,6 +99,8 @@ export interface TerminalSettings {
   cursorBlink: boolean;
   scrollback: number;      // xterm scrollback lines
   renderer: RendererType;
+  adaptiveRenderer: AdaptiveRendererMode; // Dynamic refresh rate: auto/always-60/off
+  showFpsOverlay: boolean;               // Show FPS/tier debug overlay on terminal
   pasteProtection: boolean; // Confirm before pasting multi-line content
   osc52Clipboard: boolean;  // Allow remote programs to write system clipboard via OSC 52
   // Background image settings
@@ -281,6 +286,8 @@ const defaultTerminalSettings: TerminalSettings = {
   cursorBlink: true,
   scrollback: 3000,
   renderer: isWindows ? 'canvas' : 'auto',
+  adaptiveRenderer: 'auto',  // Dynamic refresh rate: auto = three-tier adaptive
+  showFpsOverlay: false,      // Hidden by default; user enables for diagnostics
   pasteProtection: true,  // Default enabled for safety
   osc52Clipboard: false,  // Opt-in: user must explicitly enable OSC 52 clipboard bridge
   // Background image defaults

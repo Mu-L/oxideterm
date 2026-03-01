@@ -13,7 +13,6 @@ import { triggerGitRefresh } from '../../store/ideStore';
 import { api } from '../../lib/api';
 import { themes } from '../../lib/themes';
 import { getFontFamily } from '../../lib/fontFamily';
-import { platform } from '../../lib/platform';
 import { useTerminalViewShortcuts } from '../../hooks/useTerminalKeyboard';
 import { SearchBar, DeepSearchState } from './SearchBar';
 import { AiInlinePanel, type CursorPosition } from './AiInlinePanel';
@@ -38,7 +37,9 @@ import { useReconnectOrchestratorStore } from '../../store/reconnectOrchestrator
 import type { BackgroundFit } from '../../store/settingsStore';
 import { installTerminalClipboardSupport } from '../../lib/clipboardSupport';
 import { useTerminalRecording } from '../../hooks/useTerminalRecording';
+import { useAdaptiveRenderer } from '../../hooks/useAdaptiveRenderer';
 import { RecordingControls } from './RecordingControls';
+import { FpsOverlay } from './FpsOverlay';
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
 
@@ -235,12 +236,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     durationMs: 0,
   });
   
-  // P3: Backpressure handling - batch terminal writes with RAF
-  const pendingDataRef = useRef<Uint8Array[]>([]);
-  const rafIdRef = useRef<number | null>(null);
+  // P3: Backpressure handling — delegated to useAdaptiveRenderer (adaptive FPS)
+  // pendingDataRef / rafIdRef are no longer needed here.
 
   // IME composition state tracking (for Windows input method compatibility)
   const isComposingRef = useRef(false);
+
+  // Get terminal settings from unified store (read early for adaptive renderer)
+  const terminalSettings = useSettingsStore((state) => state.settings.terminal);
+
+  // ── Adaptive Renderer (Dynamic Refresh Rate) ──────────────────────────
+  const adaptiveRenderer = useAdaptiveRenderer({
+    terminalRef,
+    mode: terminalSettings.adaptiveRenderer ?? 'auto',
+  });
 
   // Track last connected ws_url for reconnection detection
   const lastWsUrlRef = useRef<string | null>(null);
@@ -395,55 +404,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         // Feed recording (after plugin pipeline, before terminal write)
         feedOutput(payloadCopy);
 
-        if (platform.isWindows) {
-          // Windows: branch on IME composition state
-          if (isComposingRef.current) {
-            // IME composing: use RAF buffering to avoid candidate window flicker
-            pendingDataRef.current.push(payloadCopy);
-            if (rafIdRef.current === null) {
-              rafIdRef.current = requestAnimationFrame(() => {
-                if (pendingDataRef.current.length > 0 && terminalRef.current) {
-                  const combined = new Uint8Array(
-                    pendingDataRef.current.reduce((acc, arr) => acc + arr.length, 0)
-                  );
-                  let offset = 0;
-                  for (const chunk of pendingDataRef.current) {
-                    combined.set(chunk, offset);
-                    offset += chunk.length;
-                  }
-                  pendingDataRef.current = [];
-                  terminalRef.current.write(combined);
-                }
-                rafIdRef.current = null;
-              });
-            }
-          } else {
-            // Not composing: write directly for minimal latency
-            if (terminalRef.current) {
-              terminalRef.current.write(payloadCopy);
-            }
-          }
-        } else {
-          // macOS/Linux: RAF batch processing for performance
-          pendingDataRef.current.push(payloadCopy);
-          if (rafIdRef.current === null) {
-            rafIdRef.current = requestAnimationFrame(() => {
-              if (pendingDataRef.current.length > 0 && terminalRef.current) {
-                const combined = new Uint8Array(
-                  pendingDataRef.current.reduce((acc, arr) => acc + arr.length, 0)
-                );
-                let offset = 0;
-                for (const chunk of pendingDataRef.current) {
-                  combined.set(chunk, offset);
-                  offset += chunk.length;
-                }
-                pendingDataRef.current = [];
-                terminalRef.current.write(combined);
-              }
-              rafIdRef.current = null;
-            });
-          }
-        }
+        // Adaptive renderer handles RAF batching + tier switching on all platforms
+        adaptiveRenderer.scheduleWrite(payloadCopy);
         break;
       }
       case MSG_TYPE_HEARTBEAT:
@@ -459,7 +421,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         break;
       }
     }
-  }, [maybeLoadImageAddon, sessionId, nodeId]);
+  }, [maybeLoadImageAddon, sessionId, nodeId, adaptiveRenderer]);
+
+  // Keep a stable ref to handleWsMessage so WebSocket onmessage handlers
+  // (bound once in the init effect) always call the latest version.
+  // This ensures settings changes (e.g. adaptive renderer mode) take effect
+  // without requiring a WebSocket reconnect.
+  const handleWsMessageRef = useRef(handleWsMessage);
+  handleWsMessageRef.current = handleWsMessage;
 
   useEffect(() => {
     sessionRef.current = session;
@@ -621,8 +590,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [sessionId, recoverWebSocket]);
 
-  // Get terminal settings from unified store
-  const terminalSettings = useSettingsStore((state) => state.settings.terminal);
+  // terminalSettings already read above (before adaptive renderer hook)
 
   // === Listen for connection status changes (Standby mode trigger) ===
   useEffect(() => {
@@ -999,7 +967,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         }
       };
 
-      ws.onmessage = (e) => handleWsMessage(e, ws);
+      ws.onmessage = (e) => handleWsMessageRef.current(e, ws);
 
       ws.onerror = (error) => {
         if (!isMountedRef.current || wsRef.current !== ws) return;
@@ -1441,7 +1409,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   resolve();
               };
 
-              ws.onmessage = (e) => handleWsMessage(e, ws);
+              ws.onmessage = (e) => handleWsMessageRef.current(e, ws);
             });
         };
 
@@ -1496,6 +1464,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           return; // Discard input silently
         }
         
+        // Notify adaptive renderer of user activity (exits idle tier)
+        adaptiveRenderer.notifyUserInput();
+
         // Plugin input pipeline (fail-open, null = suppress)
         const processed = runInputPipeline(data, sessionId, nodeId);
         if (processed === null) return;
@@ -1642,12 +1613,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       if (wsConnectTimeout) {
           clearTimeout(wsConnectTimeout);
       }
-      // Cancel pending RAF
-      if (rafIdRef.current !== null) {
-          cancelAnimationFrame(rafIdRef.current);
-          rafIdRef.current = null;
-      }
-      pendingDataRef.current = [];
+      // Adaptive renderer cleanup is handled by the hook's own useEffect.
+      // No manual RAF cancellation needed here.
         if (wsRef.current) {
           manualCloseRef.current = true;
           cleanupWebSocket(wsRef.current, 'Unmount');
@@ -2337,6 +2304,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
          <div className="absolute bottom-2 right-2 bg-zinc-800/70 text-zinc-400 text-[11px] px-2 py-0.5 rounded pointer-events-none select-none">
            {t('terminal.mouse_mode_hint')}
          </div>
+       )}
+
+       {/* FPS / Tier overlay (enabled in Settings → Terminal → Show FPS Overlay) */}
+       {terminalSettings.showFpsOverlay && (
+         <FpsOverlay getStats={adaptiveRenderer.getStats} />
        )}
     </div>
   );

@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.15.3-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.16.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="License">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">
@@ -209,7 +209,22 @@ Multi-image background system with per-tab transparency control:
 - **Platform-aware**: macOS transparency support; Windows WSLg path excluded (opaque VNC canvas)
 - **Security**: path-canonicalized delete prevents directory traversal; full error propagation from Rust backend
 
-### 🎨 Custom Theme Engine
+### �️ Adaptive Rendering — Dynamic Refresh Rate
+
+A three-tier render scheduler replaces fixed RAF batching, improving responsiveness during heavy output and reducing GPU/battery load during idle:
+
+| Tier | Trigger | Effective Rate | Benefit |
+|---|---|---|---|
+| **Boost** | Frame data ≥ 4 KB | 120 Hz+ (RAF / ProMotion native) | Eliminates scroll lag on rapid output |
+| **Normal** | Standard typing / light I/O | 60 Hz (RAF) | Smooth baseline interaction |
+| **Idle** | 3 s no I/O, page hidden, or window blur | 1–15 Hz (timer, grows exponentially) | Near-zero GPU load, battery savings |
+
+- **Automatic mode**: transitions driven by data volume, user input, and Page Visibility API — no manual tuning needed
+- **Background-safe**: when the tab is hidden, incoming remote data continues to be flushed via the idle timer — RAF is never woken, preventing pending-buffer accumulation on backgrounded tabs
+- **Settings**: three modes (Auto / Always 60 Hz / Off) in Settings → Terminal → Renderer
+- **Live diagnostics**: enable **Show FPS Overlay** to see a real-time tier badge (`B`=boost · `N`=normal · `I`=idle), frame rate, and write-per-second counter floating in the terminal corner
+
+### �🎨 Custom Theme Engine
 
 Full-depth theme customization beyond preset palettes:
 

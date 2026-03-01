@@ -4,7 +4,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../../store/appStore';
-import { useSettingsStore, type RendererType, type FontFamily, type CursorStyle, type Language, type BackgroundFit, type UiDensity, type AnimationSpeed, type FrostedGlassMode } from '../../store/settingsStore';
+import { useSettingsStore, type RendererType, type AdaptiveRendererMode, type FontFamily, type CursorStyle, type Language, type BackgroundFit, type UiDensity, type AnimationSpeed, type FrostedGlassMode } from '../../store/settingsStore';
 import { useTabBgActive } from '../../hooks/useTabBackground';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
@@ -1218,6 +1218,40 @@ export const SettingsView = () => {
                                                 <SelectItem value="canvas">Canvas</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                    </div>
+
+                                    <Separator className="opacity-50" />
+
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <Label className="text-theme-text">{t('settings_view.terminal.adaptive_renderer')}</Label>
+                                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.adaptive_renderer_hint')}</p>
+                                        </div>
+                                        <Select
+                                            value={terminal.adaptiveRenderer ?? 'auto'}
+                                            onValueChange={(val) => updateTerminal('adaptiveRenderer', val as AdaptiveRendererMode)}
+                                        >
+                                            <SelectTrigger className="w-[200px]">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="auto">{t('settings_view.terminal.adaptive_renderer_auto')}</SelectItem>
+                                                <SelectItem value="always-60">{t('settings_view.terminal.adaptive_renderer_always60')}</SelectItem>
+                                                <SelectItem value="off">{t('settings_view.terminal.adaptive_renderer_off')}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <Label className="text-theme-text">{t('settings_view.terminal.show_fps_overlay')}</Label>
+                                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.show_fps_overlay_hint')}</p>
+                                        </div>
+                                        <Checkbox
+                                            id="show-fps-overlay"
+                                            checked={terminal.showFpsOverlay ?? false}
+                                            onCheckedChange={(checked) => updateTerminal('showFpsOverlay', checked as boolean)}
+                                        />
                                     </div>
                                 </div>
                             </div>

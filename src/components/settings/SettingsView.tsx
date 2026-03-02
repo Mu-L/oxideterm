@@ -325,7 +325,6 @@ const LocalTerminalSettings = () => {
                                 className="flex items-center justify-between p-3 rounded-md bg-theme-bg-panel/30 border border-theme-border/50"
                             >
                                 <div className="flex items-center gap-3">
-                                    <Square className="h-4 w-4 text-theme-text-muted" />
                                     <div>
                                         <div className="text-sm text-theme-text">{shell.label}</div>
                                         <div className="text-xs text-theme-text-muted">{shell.path}</div>
@@ -1173,7 +1172,7 @@ export const SettingsView = () => {
                                                     type="number"
                                                     value={terminal.fontSize}
                                                     onChange={(e) => updateTerminal('fontSize', parseInt(e.target.value))}
-                                                    className="w-16 text-center"
+                                                    className="w-16"
                                                 />
                                                 <span className="text-xs text-theme-text-muted">px</span>
                                             </div>
@@ -1194,7 +1193,7 @@ export const SettingsView = () => {
                                             max="3"
                                             value={terminal.lineHeight}
                                             onChange={(e) => updateTerminal('lineHeight', parseFloat(e.target.value))}
-                                            className="w-20 text-center"
+                                            className="w-20"
                                         />
                                     </div>
 
@@ -1341,7 +1340,7 @@ export const SettingsView = () => {
                                         onChange={(e) => updateTerminal('scrollback', parseInt(e.target.value))}
                                         min={100}
                                         max={50000}
-                                        className="w-28 text-center"
+                                        className="w-28"
                                     />
                                 </div>
                             </div>
@@ -1515,24 +1514,9 @@ export const SettingsView = () => {
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="bg-theme-bg-panel border-theme-border">
-                                                <SelectItem value="compact" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">
-                                                    <div className="flex flex-col">
-                                                        <span>{t('settings_view.appearance.density_compact')}</span>
-                                                        <span className="text-xs text-theme-text-muted">{t('settings_view.appearance.density_compact_desc')}</span>
-                                                    </div>
-                                                </SelectItem>
-                                                <SelectItem value="comfortable" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">
-                                                    <div className="flex flex-col">
-                                                        <span>{t('settings_view.appearance.density_comfortable')}</span>
-                                                        <span className="text-xs text-theme-text-muted">{t('settings_view.appearance.density_comfortable_desc')}</span>
-                                                    </div>
-                                                </SelectItem>
-                                                <SelectItem value="spacious" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">
-                                                    <div className="flex flex-col">
-                                                        <span>{t('settings_view.appearance.density_spacious')}</span>
-                                                        <span className="text-xs text-theme-text-muted">{t('settings_view.appearance.density_spacious_desc')}</span>
-                                                    </div>
-                                                </SelectItem>
+                                                <SelectItem value="compact" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">{t('settings_view.appearance.density_compact')}</SelectItem>
+                                                <SelectItem value="comfortable" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">{t('settings_view.appearance.density_comfortable')}</SelectItem>
+                                                <SelectItem value="spacious" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">{t('settings_view.appearance.density_spacious')}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -1544,7 +1528,32 @@ export const SettingsView = () => {
                                             <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.appearance.border_radius_hint')}</p>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 border border-theme-border bg-theme-bg-hover" style={{ borderRadius: `${localBorderRadius}px` }} />
+                                            <svg width="24" height="24" viewBox="0 0 24 24" className="flex-shrink-0">
+                                                <path
+                                                    d={(() => {
+                                                        const s = 24;
+                                                        const r = Math.min(localBorderRadius, s / 2);
+                                                        if (r <= 0) return 'M0,0H24V24H0Z';
+                                                        // Squircle — continuous-curvature bezier: curve extends 1.28× radius along edge
+                                                        const p = Math.min(r * 1.28, s / 2);
+                                                        const cp = p * 0.64; // flatter than circle (0.552)
+                                                        return [
+                                                            `M${p},0`,
+                                                            `L${s - p},0`,
+                                                            `C${s - p + cp},0 ${s},${p - cp} ${s},${p}`,
+                                                            `L${s},${s - p}`,
+                                                            `C${s},${s - p + cp} ${s - p + cp},${s} ${s - p},${s}`,
+                                                            `L${p},${s}`,
+                                                            `C${p - cp},${s} 0,${s - p + cp} 0,${s - p}`,
+                                                            `L0,${p}`,
+                                                            `C0,${p - cp} ${p - cp},0 ${p},0`,
+                                                            'Z'
+                                                        ].join(' ');
+                                                    })()}
+                                                    className="fill-theme-bg-hover stroke-theme-border"
+                                                    strokeWidth={1}
+                                                />
+                                            </svg>
                                             <input
                                                 type="range"
                                                 min={0}
@@ -1569,7 +1578,7 @@ export const SettingsView = () => {
                                             value={localUiFont}
                                             onChange={(e) => handleUiFontChange(e.target.value)}
                                             placeholder={t('settings_view.appearance.ui_font_placeholder')}
-                                            className="w-[200px]"
+                                            className="w-[180px]"
                                         />
                                     </div>
 
@@ -1583,7 +1592,7 @@ export const SettingsView = () => {
                                             value={appearance.animationSpeed}
                                             onValueChange={(val) => updateAppearance('animationSpeed', val as AnimationSpeed)}
                                         >
-                                            <SelectTrigger className="w-[140px] text-theme-text">
+                                            <SelectTrigger className="w-[180px] text-theme-text">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="bg-theme-bg-panel border-theme-border">
@@ -1611,12 +1620,7 @@ export const SettingsView = () => {
                                             <SelectContent className="bg-theme-bg-panel border-theme-border">
                                                 <SelectItem value="off" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">{t('settings_view.appearance.frosted_glass_off')}</SelectItem>
                                                 <SelectItem value="css" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">{t('settings_view.appearance.frosted_glass_css')}</SelectItem>
-                                                <SelectItem value="native" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">
-                                                    <div className="flex flex-col">
-                                                        <span>{t('settings_view.appearance.frosted_glass_native')}</span>
-                                                        <span className="text-xs text-theme-text-muted">{t('settings_view.appearance.frosted_glass_native_hint')}</span>
-                                                    </div>
-                                                </SelectItem>
+                                                <SelectItem value="native" className="text-theme-text focus:bg-theme-bg-hover focus:text-theme-text">{t('settings_view.appearance.frosted_glass_native')}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -2326,7 +2330,7 @@ export const SettingsView = () => {
                                                 const v = e.target.value;
                                                 updateIde('fontSize', v === '' ? null : Math.min(32, Math.max(8, parseInt(v) || 14)));
                                             }}
-                                            className="w-20 text-center"
+                                            className="w-20"
                                         />
                                         <span className="text-xs text-theme-text-muted">px</span>
                                     </div>
@@ -2353,7 +2357,7 @@ export const SettingsView = () => {
                                             const v = e.target.value;
                                             updateIde('lineHeight', v === '' ? null : Math.min(3, Math.max(0.8, parseFloat(v) || 1.2)));
                                         }}
-                                        className="w-20 text-center"
+                                        className="w-20"
                                     />
                                 </div>
                             </div>

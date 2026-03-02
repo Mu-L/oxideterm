@@ -718,7 +718,7 @@ export const Sidebar = () => {
             variant={getButtonVariant(def)}
             size="icon"
             onClick={() => handleButtonClick(def, collapsed)}
-            className="rounded-md h-9 w-9"
+            className="rounded-[min(var(--ui-radius),10px)] h-9 w-9"
           >
             <Icon className="h-5 w-5" />
           </Button>
@@ -770,7 +770,7 @@ export const Sidebar = () => {
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className="rounded-md h-9 w-9"
+              className="rounded-[min(var(--ui-radius),10px)] h-9 w-9"
             >
               {sidebarCollapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
             </Button>

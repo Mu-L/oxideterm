@@ -67,12 +67,23 @@ export function useAppUpdater() {
         }));
       }
     } catch (err) {
-      setState(s => ({
-        ...s,
-        status: 'error',
-        errorMessage: err instanceof Error ? err.message : String(err),
-        lastCheckedAt: Date.now(),
-      }));
+      const msg = err instanceof Error ? err.message : String(err);
+      // 404 / 网络错误 / dev 模式：静默当作「已是最新」而非报错
+      const isNotFound = /404|not found|fetch|network|endpoint/i.test(msg);
+      if (isNotFound) {
+        setState(s => ({
+          ...s,
+          status: 'up-to-date',
+          lastCheckedAt: Date.now(),
+        }));
+      } else {
+        setState(s => ({
+          ...s,
+          status: 'error',
+          errorMessage: msg,
+          lastCheckedAt: Date.now(),
+        }));
+      }
     }
   }, []);
 

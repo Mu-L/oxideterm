@@ -126,5 +126,5 @@ jobs:
           releaseBody: ${{ steps.release_notes.outputs.body || 'See the assets below to download the installer for your platform.' }}
           releaseDraft: false
           prerelease: false
-          updater: true
+          includeUpdaterJson: true
           args: ${{ matrix.args }}

@@ -422,7 +422,18 @@
       "github": "GitHub 儲存庫",
       "issues": "回報問題",
       "license": "OxideTerm 使用 PolyForm 非商業許可證 1.0.0 授權。",
-      "shortcut_keyboard_shortcuts": "鍵盤快捷鍵"
+      "shortcut_keyboard_shortcuts": "鍵盤快捷鍵",
+      "check_update": "檢查更新",
+      "checking": "正在檢查更新...",
+      "up_to_date": "已是最新版本",
+      "update_available": "發現新版本",
+      "update_available_toast": "有新版本可用，前往 設定 → 說明 頁面更新。",
+      "download_install": "下載並安裝",
+      "downloading": "正在下載更新...",
+      "ready_to_restart": "更新已安裝，重新啟動後生效",
+      "restart_now": "立即重啟",
+      "update_error": "檢查更新失敗",
+      "retry": "重試"
     },
     "errors": {
       "create_group_failed": "無法建立群組：{{error}}",

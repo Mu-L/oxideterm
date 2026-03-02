@@ -6,6 +6,7 @@ import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore, type RendererType, type AdaptiveRendererMode, type FontFamily, type CursorStyle, type Language, type BackgroundFit, type UiDensity, type AnimationSpeed, type FrostedGlassMode } from '../../store/settingsStore';
 import { useTabBgActive } from '../../hooks/useTabBackground';
+import { useAppUpdater } from '../../hooks/useAppUpdater';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -29,7 +30,7 @@ import {
     SelectLabel,
     SelectSeparator
 } from '../ui/select';
-import { Monitor, Key, Terminal as TerminalIcon, Shield, Plus, Trash2, FolderInput, Sparkles, Square, HardDrive, HelpCircle, Github, ExternalLink, Keyboard, RefreshCw, ImageIcon, X, Code2, WifiOff, Download, Upload, Network, ArrowLeftRight, Settings, Folder, ListTree, Rocket, Puzzle, Activity } from 'lucide-react';
+import { Monitor, Key, Terminal as TerminalIcon, Shield, Plus, Trash2, FolderInput, Sparkles, Square, HardDrive, HelpCircle, Github, ExternalLink, Keyboard, RefreshCw, ImageIcon, X, Code2, WifiOff, Download, Upload, Network, ArrowLeftRight, Settings, Folder, ListTree, Rocket, Puzzle, Activity, Loader2, CheckCircle2, ArrowDownToLine, RotateCw } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useLocalTerminalStore } from '../../store/localTerminalStore';
 import { SshKeyInfo, SshHostInfo } from '../../types';
@@ -346,6 +347,7 @@ const LocalTerminalSettings = () => {
 const HelpAboutSection = () => {
     const { t } = useTranslation();
     const [appVersion, setAppVersion] = useState<string>('...');
+    const updater = useAppUpdater();
 
     useEffect(() => {
         getVersion().then(setAppVersion).catch(() => setAppVersion('1.4.0'));
@@ -378,6 +380,100 @@ const HelpAboutSection = () => {
                         <span className="text-theme-text-muted">{t('settings_view.help.version')}</span>
                         <span className="text-theme-text font-mono">{appVersion}</span>
                     </div>
+                </div>
+
+                {/* Update check UI */}
+                <div className="mt-4 pt-4 border-t border-theme-border/50">
+                    {updater.status === 'idle' && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={updater.checkForUpdate}
+                            className="gap-2"
+                        >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            {t('settings_view.help.check_update')}
+                        </Button>
+                    )}
+
+                    {updater.status === 'checking' && (
+                        <div className="flex items-center gap-2 text-sm text-theme-text-muted">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {t('settings_view.help.checking')}
+                        </div>
+                    )}
+
+                    {updater.status === 'up-to-date' && (
+                        <div className="flex items-center gap-2 text-sm text-emerald-400">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {t('settings_view.help.up_to_date')}
+                        </div>
+                    )}
+
+                    {updater.status === 'available' && (
+                        <div className="flex items-center justify-between">
+                            <div className="text-sm">
+                                <span className="text-theme-text">{t('settings_view.help.update_available')}</span>
+                                <span className="ml-2 font-mono text-theme-accent">v{updater.newVersion}</span>
+                            </div>
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={updater.downloadAndInstall}
+                                className="gap-2"
+                            >
+                                <ArrowDownToLine className="h-3.5 w-3.5" />
+                                {t('settings_view.help.download_install')}
+                            </Button>
+                        </div>
+                    )}
+
+                    {updater.status === 'downloading' && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-theme-text-muted">{t('settings_view.help.downloading')}</span>
+                                <span className="text-theme-text font-mono">{updater.downloadProgress}%</span>
+                            </div>
+                            <div className="h-1.5 bg-theme-bg rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-theme-accent rounded-full transition-[width] duration-300"
+                                    style={{ width: `${updater.downloadProgress}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {updater.status === 'ready' && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-emerald-400">{t('settings_view.help.ready_to_restart')}</span>
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={updater.restartApp}
+                                className="gap-2"
+                            >
+                                <RotateCw className="h-3.5 w-3.5" />
+                                {t('settings_view.help.restart_now')}
+                            </Button>
+                        </div>
+                    )}
+
+                    {updater.status === 'error' && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-red-400 truncate mr-2">
+                                {updater.errorMessage || t('settings_view.help.update_error')}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={updater.checkForUpdate}
+                                className="gap-2 shrink-0"
+                            >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                {t('settings_view.help.retry')}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
 

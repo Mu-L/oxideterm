@@ -422,7 +422,18 @@
       "github": "Repositorio en GitHub",
       "issues": "Reportar un problema",
       "license": "OxideTerm está licenciado bajo la Licencia PolyForm Noncommercial 1.0.0.",
-      "shortcut_keyboard_shortcuts": "Atajos de teclado"
+      "shortcut_keyboard_shortcuts": "Atajos de teclado",
+      "check_update": "Buscar actualizaciones",
+      "checking": "Buscando actualizaciones...",
+      "up_to_date": "Estás al día",
+      "update_available": "Nueva versión disponible",
+      "update_available_toast": "Hay una nueva versión disponible. Ve a Ajustes → Ayuda para actualizar.",
+      "download_install": "Descargar e instalar",
+      "downloading": "Descargando actualización...",
+      "ready_to_restart": "Actualización instalada — reinicia para aplicar",
+      "restart_now": "Reiniciar ahora",
+      "update_error": "Error al buscar actualizaciones",
+      "retry": "Reintentar"
     },
     "errors": {
       "create_group_failed": "Error al crear grupo: {{error}}",

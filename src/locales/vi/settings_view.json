@@ -422,7 +422,18 @@
       "github": "Kho lưu trữ GitHub",
       "issues": "Báo cáo vấn đề",
       "license": "OxideTerm được cấp phép theo Giấy phép PolyForm Noncommercial 1.0.0.",
-      "shortcut_keyboard_shortcuts": "Phím tắt bàn phím"
+      "shortcut_keyboard_shortcuts": "Phím tắt bàn phím",
+      "check_update": "Kiểm tra cập nhật",
+      "checking": "Đang kiểm tra cập nhật...",
+      "up_to_date": "Bạn đang dùng phiên bản mới nhất",
+      "update_available": "Có phiên bản mới",
+      "update_available_toast": "Có phiên bản mới. Vào Cài đặt → Trợ giúp để cập nhật.",
+      "download_install": "Tải và cài đặt",
+      "downloading": "Đang tải cập nhật...",
+      "ready_to_restart": "Cập nhật đã cài đặt — khởi động lại để áp dụng",
+      "restart_now": "Khởi động lại ngay",
+      "update_error": "Kiểm tra cập nhật thất bại",
+      "retry": "Thử lại"
     },
     "errors": {
       "create_group_failed": "Không thể tạo nhóm: {{error}}",

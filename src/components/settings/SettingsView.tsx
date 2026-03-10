@@ -6,7 +6,7 @@ import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore, type RendererType, type AdaptiveRendererMode, type FontFamily, type CursorStyle, type Language, type BackgroundFit, type UiDensity, type AnimationSpeed, type FrostedGlassMode } from '../../store/settingsStore';
 import { useTabBgActive } from '../../hooks/useTabBackground';
-import { useAppUpdater } from '../../hooks/useAppUpdater';
+import { useUpdateStore } from '../../store/updateStore';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -347,7 +347,7 @@ const LocalTerminalSettings = () => {
 const HelpAboutSection = () => {
     const { t } = useTranslation();
     const [appVersion, setAppVersion] = useState<string>('...');
-    const updater = useAppUpdater();
+    const updater = useUpdateStore();
 
     useEffect(() => {
         getVersion().then(setAppVersion).catch(() => setAppVersion('1.4.0'));
@@ -389,11 +389,11 @@ const HelpAboutSection = () => {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={updater.checkForUpdate}
-                            disabled={updater.status === 'checking' || updater.status === 'downloading' || updater.status === 'ready'}
+                            onClick={() => updater.checkForUpdate()}
+                            disabled={updater.stage === 'checking' || updater.stage === 'downloading' || updater.stage === 'verifying' || updater.stage === 'installing' || updater.stage === 'ready'}
                             className="gap-2 shrink-0"
                         >
-                            {updater.status === 'checking'
+                            {updater.stage === 'checking'
                                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 : <RefreshCw className="h-3.5 w-3.5" />
                             }
@@ -401,52 +401,68 @@ const HelpAboutSection = () => {
                         </Button>
 
                         {/* 各状态行内提示 */}
-                        {updater.status === 'checking' && (
+                        {updater.stage === 'checking' && (
                             <span className="text-sm text-theme-text-muted">
                                 {t('settings_view.help.checking')}
                             </span>
                         )}
-                        {updater.status === 'up-to-date' && (
+                        {updater.stage === 'up-to-date' && (
                             <span className="flex items-center gap-1.5 text-sm text-emerald-400">
                                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                                 {t('settings_view.help.up_to_date')}
                             </span>
                         )}
-                        {updater.status === 'available' && (
+                        {updater.stage === 'available' && (
                             <span className="flex items-center gap-1.5 text-sm">
                                 <span className="text-theme-text">{t('settings_view.help.update_available')}</span>
                                 <span className="font-mono text-theme-accent">v{updater.newVersion}</span>
                             </span>
                         )}
-                        {updater.status === 'downloading' && (
+                        {(updater.stage === 'downloading' || updater.stage === 'verifying' || updater.stage === 'installing') && (
                             <span className="text-sm text-theme-text-muted">
-                                {t('settings_view.help.downloading')} {updater.downloadProgress}%
+                                {updater.stage === 'downloading'
+                                    ? `${t('settings_view.help.downloading')} ${updater.totalBytes ? Math.round((updater.downloadedBytes / updater.totalBytes) * 100) : 0}%`
+                                    : updater.stage === 'verifying'
+                                        ? t('settings_view.help.verifying', 'Verifying...')
+                                        : t('settings_view.help.installing', 'Installing...')}
+                                {updater.attempt > 1 && ` (${t('settings_view.help.retry', 'Retry')} #${updater.attempt})`}
                             </span>
                         )}
-                        {updater.status === 'ready' && (
+                        {updater.stage === 'ready' && (
                             <span className="text-sm text-emerald-400">
                                 {t('settings_view.help.ready_to_restart')}
                             </span>
                         )}
-                        {updater.status === 'error' && (
+                        {updater.stage === 'error' && (
                             <span className="text-sm text-red-400 truncate">
                                 {updater.errorMessage || t('settings_view.help.update_error')}
                             </span>
                         )}
 
-                        {/* 下载 / 重启操作按钮 */}
-                        {updater.status === 'available' && (
+                        {/* 下载 / 取消 / 重启操作按钮 */}
+                        {updater.stage === 'available' && (
                             <Button
                                 variant="default"
                                 size="sm"
-                                onClick={updater.downloadAndInstall}
+                                onClick={updater.startDownload}
                                 className="gap-2 shrink-0 ml-auto"
                             >
                                 <ArrowDownToLine className="h-3.5 w-3.5" />
                                 {t('settings_view.help.download_install')}
                             </Button>
                         )}
-                        {updater.status === 'ready' && (
+                        {updater.stage === 'downloading' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={updater.cancelDownload}
+                                className="gap-2 shrink-0 ml-auto"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                                {t('settings_view.help.cancel', 'Cancel')}
+                            </Button>
+                        )}
+                        {updater.stage === 'ready' && (
                             <Button
                                 variant="default"
                                 size="sm"
@@ -460,11 +476,11 @@ const HelpAboutSection = () => {
                     </div>
 
                     {/* 下载进度条 */}
-                    {updater.status === 'downloading' && (
+                    {updater.stage === 'downloading' && (
                         <div className="h-1.5 bg-theme-bg rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-theme-accent rounded-full transition-[width] duration-300"
-                                style={{ width: `${updater.downloadProgress}%` }}
+                                style={{ width: `${updater.totalBytes ? (updater.downloadedBytes / updater.totalBytes) * 100 : 0}%` }}
                             />
                         </div>
                     )}

@@ -17,7 +17,7 @@ import { preloadTerminalFonts } from './lib/fontLoader';
 import { initializePluginSystem } from './lib/plugin/pluginLoader';
 import { setupConnectionBridge, setupNodeStateBridge, pluginEventBridge } from './lib/plugin/pluginEventBridge';
 import { useToastStore } from './hooks/useToast';
-import { check as checkForAppUpdate } from '@tauri-apps/plugin-updater';
+import { useUpdateStore } from './store/updateStore';
 import { PluginConfirmDialog } from './components/plugin/PluginConfirmDialog';
 import { CommandPalette } from './components/command-palette/CommandPalette';
 import { CastPlayer } from './components/terminal/CastPlayer';
@@ -404,22 +404,9 @@ function App() {
 
   // Startup update check — silent, fires once after 8s
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const update = await checkForAppUpdate();
-        if (update) {
-          useToastStore.getState().addToast({
-            title: `v${update.version}`,
-            description: 'settings_view.help.update_available_toast',
-            variant: 'default',
-            duration: 8000,
-          });
-        }
-      } catch {
-        // 静默失败
-      }
-    }, 8_000);
-    return () => clearTimeout(timer);
+    useUpdateStore.getState().initAutoUpdateCheck(8000);
+    const unlisten = useUpdateStore.getState().initResumableListeners();
+    return unlisten;
   }, []);
 
   // Setup SessionTree state sync

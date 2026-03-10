@@ -108,8 +108,11 @@ sysinfo = { version = "0.33", default-features = false, features = ["disk", "sys
 # Window vibrancy (native frosted glass effect)
 window-vibrancy = "0.6"
 
-# HTTP client (plugin registry)
-reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+# HTTP client (plugin registry, resumable updates)
+reqwest = { version = "0.12", features = ["rustls-tls", "stream", "json"], default-features = false }
+
+# Signature verification (resumable updater)
+minisign-verify = "0.2"
 
 # Persistence Layer
 redb = "2.1"

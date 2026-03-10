@@ -23,6 +23,7 @@ pub mod session;
 pub mod sftp;
 pub mod ssh;
 pub mod state;
+pub mod update_manager;
 
 // Windows: 高精度系统定时器
 #[cfg(target_os = "windows")]
@@ -337,7 +338,8 @@ pub fn run() {
         .manage(session_tree_state)
         .manage(node_router)
         .manage(node_event_emitter.clone())
-        .manage(Arc::new(PluginFileServer::new()));
+        .manage(Arc::new(PluginFileServer::new()))
+        .manage(update_manager::UpdateManagerState::default());
 
     // Conditionally add AI chat store (may be None if initialization failed)
     let builder = if let Some(ai_store) = ai_chat_store {
@@ -693,6 +695,11 @@ pub fn run() {
         terminal_bg::init_terminal_background,
         // Appearance commands
         commands::set_window_vibrancy,
+        // Resumable update commands
+        update_manager::update_start_resumable_install,
+        update_manager::update_get_resumable_status,
+        update_manager::update_cancel_resumable_install,
+        update_manager::update_clear_resumable_cache,
     ]);
     #[cfg(not(feature = "local-terminal"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -955,6 +962,11 @@ pub fn run() {
         terminal_bg::init_terminal_background,
         // Appearance commands
         commands::set_window_vibrancy,
+        // Resumable update commands
+        update_manager::update_start_resumable_install,
+        update_manager::update_get_resumable_status,
+        update_manager::update_cancel_resumable_install,
+        update_manager::update_clear_resumable_cache,
     ]);
 
     builder

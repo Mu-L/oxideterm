@@ -15,9 +15,11 @@ import {
   getActivePaneMetadata, 
   getActiveTerminalBuffer,
   getActiveTerminalSelection,
+  gatherAllPaneContexts,
 } from './terminalRegistry';
 import { useAppStore } from '../store/appStore';
 import { useSessionTreeStore } from '../store/sessionTreeStore';
+import { useLocalTerminalStore } from '../store/localTerminalStore';
 import type { RemoteEnvInfo, TabType } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -159,6 +161,45 @@ export const DEFAULT_CONTEXT_CONFIG = {
   /** Maximum characters for selection */
   maxSelectionChars: 2000,
 };
+
+/**
+ * Build a compact summary of available sessions for the system prompt.
+ * This gives AI immediate awareness of targets without needing list_sessions.
+ */
+function gatherSessionsSummary(activeSessionId: string | null): string | null {
+  const lines: string[] = [];
+
+  // SSH sessions
+  const nodes = useSessionTreeStore.getState().nodes;
+  const connections = useAppStore.getState().connections;
+  const sshNodes = nodes.filter(n =>
+    n.runtime?.connectionId || n.runtime?.status === 'connected' || n.runtime?.status === 'active'
+  );
+  for (const node of sshNodes) {
+    const conn = node.runtime.connectionId ? connections.get(node.runtime.connectionId) : undefined;
+    const host = conn ? `${conn.username}@${conn.host}` : `${node.username ?? '?'}@${node.host ?? '?'}`;
+    const terminalIds = node.runtime.terminalIds ?? [];
+    for (const tid of terminalIds) {
+      const active = tid === activeSessionId ? ' ★' : '';
+      lines.push(`- SSH session_id=${tid} → ${host} (node_id=${node.id})${active}`);
+    }
+    if (terminalIds.length === 0) {
+      lines.push(`- SSH node_id=${node.id} → ${host} (no open terminal)`);
+    }
+  }
+
+  // Local terminals
+  const localTerminals = useLocalTerminalStore.getState().terminals;
+  for (const [sessionId, info] of localTerminals) {
+    const shellName = info.shell?.label || info.shell?.path || 'shell';
+    const active = sessionId === activeSessionId ? ' ★' : '';
+    lines.push(`- Local session_id=${sessionId} → ${shellName}${active}`);
+  }
+
+  if (lines.length === 0) return null;
+
+  return `## Available Sessions\n${lines.join('\n')}`;
+}
 
 /**
  * Gather complete sidebar context for AI
@@ -308,6 +349,9 @@ function formatSystemPromptSegment(env: EnvironmentSnapshot, terminal: TerminalC
   
   if (env.terminalType === 'terminal' && env.connection) {
     parts.push(`- Terminal: SSH to ${env.connection.formatted}`);
+    if (env.sessionId) {
+      parts.push(`- Active session_id: ${env.sessionId}`);
+    }
     
     // Remote OS: prefer detected env, fall back to guessing
     if (env.remoteEnv) {
@@ -326,8 +370,18 @@ function formatSystemPromptSegment(env: EnvironmentSnapshot, terminal: TerminalC
     }
   } else if (env.terminalType === 'local_terminal') {
     parts.push(`- Terminal: Local (${env.localOS})`);
+    if (env.sessionId) {
+      parts.push(`- Active session_id: ${env.sessionId}`);
+    }
   } else {
     parts.push('- Terminal: No active terminal');
+  }
+  
+  // Available sessions summary — so AI can target sessions without calling list_sessions
+  const sessionsSummary = gatherSessionsSummary(env.sessionId);
+  if (sessionsSummary) {
+    parts.push('');
+    parts.push(sessionsSummary);
   }
   
   // Selection notice
@@ -341,7 +395,8 @@ function formatSystemPromptSegment(env: EnvironmentSnapshot, terminal: TerminalC
 }
 
 /**
- * Format context as a code block for API messages
+ * Format context as a code block for API messages.
+ * Includes multi-pane context when split panes exist in the active tab.
  */
 function formatContextBlock(_env: EnvironmentSnapshot, terminal: TerminalContext): string {
   const parts: string[] = [];
@@ -353,8 +408,43 @@ function formatContextBlock(_env: EnvironmentSnapshot, terminal: TerminalContext
     parts.push('');
   }
   
-  // Buffer context
-  if (terminal.buffer) {
+  // Multi-pane context: if active tab has split panes, show all pane buffers
+  const appState = useAppStore.getState();
+  const activeTab = appState.tabs.find(t => t.id === appState.activeTabId);
+  
+  const MULTI_PANE_MAX_CHARS = 4000;
+  const MULTI_PANE_MAX_LINES = 30;
+
+  if (activeTab) {
+    try {
+      const paneContexts = gatherAllPaneContexts(activeTab.id, MULTI_PANE_MAX_CHARS);
+      if (paneContexts.length > 1) {
+        // Multiple panes — show each with label
+        for (const ctx of paneContexts) {
+          if (!ctx.buffer) continue;
+          const label = ctx.isActive ? 'Active Pane' : 'Pane';
+          const typeName = ctx.terminalType === 'terminal' ? 'SSH' : 'Local';
+          const lines = ctx.buffer.split('\n');
+          const lastLines = lines.slice(-MULTI_PANE_MAX_LINES).join('\n');
+          parts.push(`=== ${label} (${typeName}, session_id=${ctx.sessionId}) — last ${Math.min(lines.length, MULTI_PANE_MAX_LINES)} lines ===`);
+          parts.push(lastLines);
+          parts.push('');
+        }
+      } else {
+        // Single pane — use the already-gathered buffer
+        if (terminal.buffer) {
+          parts.push(`=== Terminal Output (last ${terminal.lineCount} lines) ===`);
+          parts.push(terminal.buffer);
+        }
+      }
+    } catch (e) {
+      console.warn('[sidebarContextProvider] Failed to gather pane contexts:', e);
+      if (terminal.buffer) {
+        parts.push(`=== Terminal Output (last ${terminal.lineCount} lines) ===`);
+        parts.push(terminal.buffer);
+      }
+    }
+  } else if (terminal.buffer) {
     parts.push(`=== Terminal Output (last ${terminal.lineCount} lines) ===`);
     parts.push(terminal.buffer);
   }

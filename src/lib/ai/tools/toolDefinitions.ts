@@ -16,7 +16,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
   {
     name: 'terminal_exec',
     description:
-      'Execute a shell command on a remote node or send a command into an existing terminal session. Use node_id for direct remote execution with captured stdout/stderr. Use session_id to send a command to an open SSH/local terminal session.',
+      'Execute a shell command on a remote node or send a command into an existing terminal session. Use node_id for direct remote execution with captured stdout/stderr. Use session_id to send a command to an open terminal session — output is captured automatically (no need for await_terminal_output).',
     parameters: {
       type: 'object',
       properties: {
@@ -41,6 +41,10 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
         session_id: {
           type: 'string',
           description: 'Target open terminal session ID. Use this to send a command into an existing SSH or local terminal session discovered via list_sessions.',
+        },
+        await_output: {
+          type: 'boolean',
+          description: 'When using session_id, automatically wait for command output. Default: true. Set false for interactive/long-running commands.',
         },
       },
       required: ['command'],

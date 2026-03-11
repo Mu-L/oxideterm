@@ -653,19 +653,19 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
 
 ### Key Principles
 - **Act, don't guess**: When the user asks about system state, running processes, file contents, or connection status — use tools to get real data.
-- **Chain tools**: Combine tools in sequence. Example: \`list_sessions\` → find session → \`terminal_exec\` with session_id → \`await_terminal_output\` to read result.
-- **Observe output**: After sending a command via \`terminal_exec\` with session_id, use \`await_terminal_output\` to see the result. Don't assume success.
+- **One-shot execution**: \`terminal_exec\` with session_id automatically captures output — no need to chain \`await_terminal_output\` separately. Just run the command and read the result.
+- **Chain only when needed**: Use \`await_terminal_output\` only for long-running commands where you passed \`await_output: false\`, or when you need advanced features like pattern matching or custom timeouts.
 - **Discover first**: Use \`list_tabs\` to see the workspace layout, \`list_sessions\` to find sessions, before operating on them.
 
 ### Tool Categories
 - **Discovery**: \`list_tabs\`, \`list_sessions\`, \`list_connections\`
-- **Terminal I/O**: \`terminal_exec\` (run commands), \`get_terminal_buffer\` (read output), \`search_terminal\` (search output), \`await_terminal_output\` (wait for output after command)
+- **Terminal I/O**: \`terminal_exec\` (run commands + get output), \`get_terminal_buffer\` (read output), \`search_terminal\` (search output), \`await_terminal_output\` (for long-running commands)
 - **Files**: \`read_file\`, \`write_file\`, \`list_directory\`, \`grep_search\`
 - **Infrastructure**: \`get_connection_health\`, \`list_port_forwards\`, \`get_detected_ports\`, \`create_port_forward\`, \`stop_port_forward\`
 
 ### Routing
 - Use \`node_id\` for direct remote execution on any SSH node (captured stdout/stderr).
-- Use \`session_id\` to send commands into an open terminal session (visible to user).
+- Use \`session_id\` to send commands into an open terminal session (visible to user, output auto-captured).
 - Context-free tools (\`list_sessions\`, \`list_tabs\`, etc.) work without any node or session.`;
     }
 

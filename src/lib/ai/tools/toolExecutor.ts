@@ -22,7 +22,7 @@ import {
 import { nodeSftpListDir, nodeSftpPreview, nodeSftpStat } from '../../api';
 import { api } from '../../api';
 import type { AiToolResult, AgentFileEntry } from '../../../types';
-import { CONTEXT_FREE_TOOLS, SESSION_ID_TOOLS } from './toolDefinitions';
+import { CONTEXT_FREE_TOOLS, SESSION_ID_TOOLS, isCommandDenied } from './toolDefinitions';
 import { useSessionTreeStore } from '../../../store/sessionTreeStore';
 import { useAppStore } from '../../../store/appStore';
 import { useLocalTerminalStore } from '../../../store/localTerminalStore';
@@ -37,6 +37,8 @@ const MAX_COMMAND_TIMEOUT_SECS = 60;
 const MAX_LIST_DEPTH = 8;
 const MAX_GREP_RESULTS = 200;
 const MAX_PATTERN_LENGTH = 200;
+const AUTO_AWAIT_TIMEOUT_SECS = 15;
+const AUTO_AWAIT_STABLE_SECS = 2;
 
 /** Context needed to execute tools — activeNodeId may be null when no terminal is focused */
 export type ToolExecutionContext = {
@@ -296,6 +298,10 @@ async function execTerminalCommandToSession(
     return { toolCallId, toolName: 'terminal_exec', success: false, output: '', error: 'Missing required argument: command', durationMs: Date.now() - startTime };
   }
 
+  if (isCommandDenied(command)) {
+    return { toolCallId, toolName: 'terminal_exec', success: false, output: '', error: 'Command rejected: matches deny-list pattern.', durationMs: Date.now() - startTime };
+  }
+
   const paneId = findPaneBySessionId(sessionId);
   if (!paneId) {
     return {
@@ -320,11 +326,32 @@ async function execTerminalCommandToSession(
     };
   }
 
+  // Auto-await output (default: true)
+  const awaitOutput = args.await_output !== false;
+  if (!awaitOutput) {
+    return {
+      toolCallId,
+      toolName: 'terminal_exec',
+      success: true,
+      output: `Command sent to terminal session ${sessionId}: ${command}`,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  const waitResult = await waitForTerminalOutput(
+    sessionId,
+    AUTO_AWAIT_TIMEOUT_SECS,
+    AUTO_AWAIT_STABLE_SECS,
+    null,
+    startTime,
+  );
   return {
     toolCallId,
     toolName: 'terminal_exec',
-    success: true,
-    output: `Command sent to terminal session ${sessionId}: ${command}`,
+    success: waitResult.success,
+    output: waitResult.output,
+    error: waitResult.error,
+    truncated: waitResult.truncated,
     durationMs: Date.now() - startTime,
   };
 }
@@ -774,45 +801,33 @@ async function execSearchTerminal(
   return { toolCallId, toolName: 'search_terminal', success: true, output: text, truncated, durationMs: Date.now() - startTime };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Shared Terminal Output Waiting Logic
+// ═══════════════════════════════════════════════════════════════════════════
+
+type WaitResult = {
+  success: boolean;
+  output: string;
+  error?: string;
+  truncated?: boolean;
+};
+
 /**
- * Wait for new output in a terminal session using event-driven notifications.
- * Returns the delta (new lines) once output stabilizes, a pattern matches, or timeout is reached.
- * Works for both SSH (remote) and local terminals via the unified notifyTerminalOutput hook.
+ * Core logic: wait for new terminal output after a command is sent.
+ * Subscribes to terminal output notifications and waits for stability, pattern match, or timeout.
+ * Shared by `terminal_exec` (auto-await) and `await_terminal_output`.
  */
-async function execAwaitTerminalOutput(
-  args: Record<string, unknown>,
+async function waitForTerminalOutput(
+  sessionId: string,
+  timeoutSecs: number,
+  stableSecs: number,
+  patternRe: RegExp | null,
   startTime: number,
-  toolCallId: string,
-): Promise<AiToolResult> {
-  const toolName = 'await_terminal_output';
-  const sessionId = args.session_id as string;
-  if (!sessionId) {
-    return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: session_id. Use list_sessions to find session IDs.', durationMs: Date.now() - startTime };
-  }
-
-  const timeoutSecs = clamp(Number(args.timeout_secs) || 15, 1, 120);
-  const stableSecs = clamp(Number(args.stable_secs) || 2, 0.5, 10);
-  const patternStr = typeof args.pattern === 'string' ? args.pattern.trim() : '';
-
-  let patternRe: RegExp | null = null;
-  if (patternStr) {
-    if (patternStr.length > MAX_PATTERN_LENGTH) {
-      return { toolCallId, toolName, success: false, output: '', error: `Pattern too long (max ${MAX_PATTERN_LENGTH} characters)`, durationMs: Date.now() - startTime };
-    }
-    if (hasPotentiallyCatastrophicRegex(patternStr)) {
-      return { toolCallId, toolName, success: false, output: '', error: 'Pattern rejected: potentially catastrophic regular expression', durationMs: Date.now() - startTime };
-    }
-    try {
-      patternRe = new RegExp(patternStr, 'i');
-    } catch {
-      return { toolCallId, toolName, success: false, output: '', error: `Invalid regex pattern: ${patternStr}`, durationMs: Date.now() - startTime };
-    }
-  }
-
+): Promise<WaitResult> {
   // Snapshot current buffer line count
   const initialLines = await readBufferLines(sessionId);
   if (initialLines === null) {
-    return { toolCallId, toolName, success: false, output: '', error: 'Session not found or buffer unavailable. Use list_sessions to see available sessions.', durationMs: Date.now() - startTime };
+    return { success: false, output: '', error: 'Session not found or buffer unavailable.' };
   }
   const initialLineCount = initialLines.length;
 
@@ -877,13 +892,13 @@ async function execAwaitTerminalOutput(
   // Read final buffer and extract delta
   const finalLines = await readBufferLines(sessionId);
   if (finalLines === null || result === 'lost') {
-    return { toolCallId, toolName, success: false, output: '', error: 'Session became unavailable during wait.', durationMs: Date.now() - startTime };
+    return { success: false, output: '', error: 'Session became unavailable during wait.' };
   }
 
   // Handle buffer shrink (e.g. terminal clear/reset)
   if (finalLines.length < initialLineCount) {
     const { text, truncated } = truncateOutput(finalLines.join('\n'));
-    return { toolCallId, toolName, success: true, output: `[Buffer was cleared during wait]\n${text}`, truncated, durationMs: Date.now() - startTime };
+    return { success: true, output: `[Buffer was cleared during wait]\n${text}`, truncated };
   }
 
   const newLines = finalLines.slice(initialLineCount);
@@ -891,11 +906,58 @@ async function execAwaitTerminalOutput(
     const msg = result === 'timeout'
       ? `No new output after ${timeoutSecs}s. The command may be waiting for input or still running.`
       : 'No new output detected.';
-    return { toolCallId, toolName, success: true, output: msg, durationMs: Date.now() - startTime };
+    return { success: true, output: msg };
   }
 
   const { text, truncated } = truncateOutput(newLines.join('\n'));
-  return { toolCallId, toolName, success: true, output: text, truncated, durationMs: Date.now() - startTime };
+  return { success: true, output: text, truncated };
+}
+
+/**
+ * Wait for new output in a terminal session using event-driven notifications.
+ * Returns the delta (new lines) once output stabilizes, a pattern matches, or timeout is reached.
+ * Works for both SSH (remote) and local terminals via the unified notifyTerminalOutput hook.
+ */
+async function execAwaitTerminalOutput(
+  args: Record<string, unknown>,
+  startTime: number,
+  toolCallId: string,
+): Promise<AiToolResult> {
+  const toolName = 'await_terminal_output';
+  const sessionId = args.session_id as string;
+  if (!sessionId) {
+    return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: session_id. Use list_sessions to find session IDs.', durationMs: Date.now() - startTime };
+  }
+
+  const timeoutSecs = clamp(Number(args.timeout_secs) || 15, 1, 120);
+  const stableSecs = clamp(Number(args.stable_secs) || 2, 0.5, 10);
+  const patternStr = typeof args.pattern === 'string' ? args.pattern.trim() : '';
+
+  let patternRe: RegExp | null = null;
+  if (patternStr) {
+    if (patternStr.length > MAX_PATTERN_LENGTH) {
+      return { toolCallId, toolName, success: false, output: '', error: `Pattern too long (max ${MAX_PATTERN_LENGTH} characters)`, durationMs: Date.now() - startTime };
+    }
+    if (hasPotentiallyCatastrophicRegex(patternStr)) {
+      return { toolCallId, toolName, success: false, output: '', error: 'Pattern rejected: potentially catastrophic regular expression', durationMs: Date.now() - startTime };
+    }
+    try {
+      patternRe = new RegExp(patternStr, 'i');
+    } catch {
+      return { toolCallId, toolName, success: false, output: '', error: `Invalid regex pattern: ${patternStr}`, durationMs: Date.now() - startTime };
+    }
+  }
+
+  const waitResult = await waitForTerminalOutput(sessionId, timeoutSecs, stableSecs, patternRe, startTime);
+  return {
+    toolCallId,
+    toolName,
+    success: waitResult.success,
+    output: waitResult.output,
+    error: waitResult.error,
+    truncated: waitResult.truncated,
+    durationMs: Date.now() - startTime,
+  };
 }
 
 /** Read all buffer lines for a session (backend or frontend fallback). */

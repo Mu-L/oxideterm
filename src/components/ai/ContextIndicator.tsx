@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Info, Shrink } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -143,6 +144,17 @@ export function ContextIndicator({ pendingInput = '' }: ContextIndicatorProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showPopover]);
 
+  // Calculate popover position relative to viewport
+  const popoverPos = useMemo(() => {
+    if (!showPopover || !triggerRef.current) return { top: 0, left: 0 };
+    const rect = triggerRef.current.getBoundingClientRect();
+    return {
+      top: rect.top - 8, // 8px gap above trigger
+      left: rect.left,
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPopover]);
+
   const handleCompact = useCallback(async () => {
     setShowPopover(false);
     await compactConversation();
@@ -170,11 +182,16 @@ export function ContextIndicator({ pendingInput = '' }: ContextIndicatorProps) {
         </span>
       </div>
 
-      {/* Detail popover */}
-      {showPopover && (
+      {/* Detail popover — rendered via portal to escape overflow:hidden ancestors */}
+      {showPopover && createPortal(
         <div
           ref={popoverRef}
-          className="absolute bottom-full left-0 mb-2 w-60 bg-theme-bg-secondary border border-theme-border/30 rounded-lg shadow-xl z-50 overflow-hidden"
+          className="fixed w-60 bg-theme-bg-secondary border border-theme-border/30 rounded-lg shadow-xl z-[9999] overflow-hidden"
+          style={{
+            top: popoverPos.top,
+            left: popoverPos.left,
+            transform: 'translateY(-100%)',
+          }}
         >
           {/* Header: Context Window */}
           <div className="px-3 pt-3 pb-2">
@@ -236,7 +253,8 @@ export function ContextIndicator({ pendingInput = '' }: ContextIndicatorProps) {
               </div>
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

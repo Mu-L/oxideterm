@@ -99,6 +99,20 @@
       "refresh_models": "Refresh",
       "api_key_not_found": "API key not found. Please configure it in Settings > AI.",
       "failed_to_get_api_key": "Failed to get API key."
+    },
+    "tool_use": {
+      "heading": "Tool Calls",
+      "arguments": "Arguments",
+      "output": "Output",
+      "output_truncated": "Output was truncated",
+      "tool_names": {
+        "terminal_exec": "Run Command",
+        "read_file": "Read File",
+        "write_file": "Write File",
+        "list_directory": "List Directory",
+        "grep_search": "Search",
+        "git_status": "Git Status"
+      }
     }
   }
 }

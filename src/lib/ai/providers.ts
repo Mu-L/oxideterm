@@ -17,6 +17,8 @@ import type { AiProviderType } from '../../types';
 export type AiStreamEvent =
   | { type: 'content'; content: string }
   | { type: 'thinking'; content: string }
+  | { type: 'tool_call'; id: string; name: string; arguments: string }
+  | { type: 'tool_call_complete'; id: string; name: string; arguments: string }
   | { type: 'done' }
   | { type: 'error'; message: string };
 
@@ -33,14 +35,29 @@ export type AiRequestConfig = {
   apiKey: string;
   /** Maximum tokens the model may generate in its response. Provider-specific default if omitted. */
   maxResponseTokens?: number;
+  /** Tool definitions for function calling. Provider adapters convert to format-specific payloads. */
+  tools?: AiToolDefinition[];
+};
+
+/**
+ * Tool definition in provider-agnostic format (JSON Schema parameters)
+ */
+export type AiToolDefinition = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
 };
 
 /**
  * A chat message in the standard format
  */
 export type ChatMessage = {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
+  /** Tool calls made by the assistant (for assistant messages) */
+  tool_calls?: Array<{ id: string; name: string; arguments: string }>;
+  /** Tool call ID this message is responding to (for tool messages) */
+  tool_call_id?: string;
 };
 
 /**

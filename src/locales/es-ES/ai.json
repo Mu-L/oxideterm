@@ -99,6 +99,20 @@
       "refresh_models": "Actualizar",
       "api_key_not_found": "Clave API no encontrada. Configúraela en Configuración > IA.",
       "failed_to_get_api_key": "Error al obtener la clave API."
+    },
+    "tool_use": {
+      "heading": "Llamadas a herramientas",
+      "arguments": "Argumentos",
+      "output": "Salida",
+      "output_truncated": "La salida fue truncada",
+      "tool_names": {
+        "terminal_exec": "Ejecutar comando",
+        "read_file": "Leer archivo",
+        "write_file": "Escribir archivo",
+        "list_directory": "Listar directorio",
+        "grep_search": "Buscar",
+        "git_status": "Estado Git"
+      }
     }
   }
 }

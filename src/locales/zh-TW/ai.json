@@ -99,6 +99,20 @@
       "refresh_models": "重新整理",
       "api_key_not_found": "未找到 API 金鑰。請在設定 > AI 中配置。",
       "failed_to_get_api_key": "獲取 API 金鑰失敗。"
+    },
+    "tool_use": {
+      "heading": "工具呼叫",
+      "arguments": "參數",
+      "output": "輸出",
+      "output_truncated": "輸出已截斷",
+      "tool_names": {
+        "terminal_exec": "執行命令",
+        "read_file": "讀取檔案",
+        "write_file": "寫入檔案",
+        "list_directory": "列出目錄",
+        "grep_search": "搜尋",
+        "git_status": "Git 狀態"
+      }
     }
   }
 }

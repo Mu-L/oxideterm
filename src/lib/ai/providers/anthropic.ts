@@ -7,34 +7,74 @@
  * - Separate content_block_delta events for text and thinking
  */
 
-import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent } from '../providers';
+import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent, AiToolDefinition } from '../providers';
 
 /**
  * Convert standard ChatMessage format to Anthropic's Messages API format.
  * System messages are extracted and sent separately.
+ * Tool messages are converted to Anthropic's tool_result content blocks.
  */
 function convertMessages(messages: ChatMessage[]): {
   system: string | undefined;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: Array<{ role: 'user' | 'assistant'; content: unknown }>;
 } {
   let system: string | undefined;
-  const converted: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  const converted: Array<{ role: 'user' | 'assistant'; content: unknown }> = [];
 
   for (const msg of messages) {
     if (msg.role === 'system') {
       system = system ? `${system}\n\n${msg.content}` : msg.content;
+    } else if (msg.role === 'tool') {
+      // Anthropic wraps tool results in a user message with content blocks
+      converted.push({
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: msg.tool_call_id,
+          content: msg.content,
+        }],
+      });
+    } else if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+      // Assistant message with tool use — convert to content blocks
+      const contentBlocks: Array<Record<string, unknown>> = [];
+      if (msg.content) {
+        contentBlocks.push({ type: 'text', text: msg.content });
+      }
+      for (const tc of msg.tool_calls) {
+        let input: Record<string, unknown> = {};
+        try { input = JSON.parse(tc.arguments); } catch { /* empty */ }
+        contentBlocks.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.name,
+          input,
+        });
+      }
+      converted.push({ role: 'assistant', content: contentBlocks });
     } else {
-      converted.push({ role: msg.role, content: msg.content });
+      converted.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
     }
   }
 
   // Anthropic requires alternating user/assistant messages starting with user
   // Merge consecutive same-role messages
-  const merged: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  const merged: Array<{ role: 'user' | 'assistant'; content: unknown }> = [];
   for (const msg of converted) {
     const last = merged[merged.length - 1];
     if (last && last.role === msg.role) {
-      last.content += '\n\n' + msg.content;
+      // Only merge string content; array content blocks must stay separate
+      if (typeof last.content === 'string' && typeof msg.content === 'string') {
+        last.content += '\n\n' + msg.content;
+      } else {
+        // Convert both to arrays and concatenate
+        const lastArr = Array.isArray(last.content)
+          ? last.content
+          : [{ type: 'text', text: last.content as string }];
+        const msgArr = Array.isArray(msg.content)
+          ? msg.content
+          : [{ type: 'text', text: msg.content as string }];
+        last.content = [...lastArr, ...msgArr];
+      }
     } else {
       merged.push({ ...msg });
     }
@@ -46,6 +86,17 @@ function convertMessages(messages: ChatMessage[]): {
   }
 
   return { system, messages: merged };
+}
+
+/**
+ * Convert AiToolDefinition[] to Anthropic tools format.
+ */
+function convertTools(tools: AiToolDefinition[]): Array<{ name: string; description: string; input_schema: Record<string, unknown> }> {
+  return tools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.parameters,
+  }));
 }
 
 export const anthropicProvider: AiStreamProvider = {
@@ -74,11 +125,8 @@ export const anthropicProvider: AiStreamProvider = {
       body.system = system;
     }
 
-    // Enable extended thinking for supported models
-    const supportsThinking = config.model.includes('claude-3') || config.model.includes('claude-sonnet') || config.model.includes('claude-opus');
-    if (supportsThinking) {
-      // Extended thinking is opt-in; we request it
-      // The API will ignore if the model doesn't support it
+    if (config.tools && config.tools.length > 0) {
+      body.tools = convertTools(config.tools);
     }
 
     const response = await fetch(url, {
@@ -114,6 +162,8 @@ export const anthropicProvider: AiStreamProvider = {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    // Track current tool_use block being assembled
+    let currentToolUse: { id: string; name: string; arguments: string } | null = null;
 
     try {
       while (true) {
@@ -134,7 +184,14 @@ export const anthropicProvider: AiStreamProvider = {
 
             switch (event.type) {
               case 'content_block_start': {
-                // Track block type for logging; content type is determined by delta type
+                const block = event.content_block;
+                if (block?.type === 'tool_use') {
+                  currentToolUse = {
+                    id: block.id || '',
+                    name: block.name || '',
+                    arguments: '',
+                  };
+                }
                 break;
               }
 
@@ -144,11 +201,18 @@ export const anthropicProvider: AiStreamProvider = {
                   yield { type: 'thinking', content: delta.thinking };
                 } else if (delta?.type === 'text_delta' && delta.text) {
                   yield { type: 'content', content: delta.text };
+                } else if (delta?.type === 'input_json_delta' && delta.partial_json && currentToolUse) {
+                  currentToolUse.arguments += delta.partial_json;
+                  yield { type: 'tool_call', id: currentToolUse.id, name: currentToolUse.name, arguments: currentToolUse.arguments };
                 }
                 break;
               }
 
               case 'content_block_stop': {
+                if (currentToolUse) {
+                  yield { type: 'tool_call_complete', id: currentToolUse.id, name: currentToolUse.name, arguments: currentToolUse.arguments };
+                  currentToolUse = null;
+                }
                 break;
               }
 

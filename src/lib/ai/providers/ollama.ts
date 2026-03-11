@@ -5,13 +5,27 @@
  * Uses the OpenAI-compatible `/v1/chat/completions` endpoint (Ollama >= 0.1.14).
  */
 
-import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent } from '../providers';
+import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent, AiToolDefinition } from '../providers';
 import { getModelContextWindow } from '../tokenUtils';
 
 /** Timeout for individual /api/show calls (ms) */
 const OLLAMA_SHOW_TIMEOUT = 2000;
 /** Max "wild" models to query via API (those not in the static lookup table) */
 const MAX_WILD_MODELS_QUERY = 20;
+
+/**
+ * Convert AiToolDefinition[] to OpenAI function calling format (shared with Ollama).
+ */
+function convertTools(tools: AiToolDefinition[]): Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }> {
+  return tools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    },
+  }));
+}
 
 export const ollamaProvider: AiStreamProvider = {
   type: 'ollama',
@@ -28,19 +42,23 @@ export const ollamaProvider: AiStreamProvider = {
 
     let response: Response;
     try {
+      const body: Record<string, unknown> = {
+        model: config.model,
+        messages,
+        stream: true,
+        ...(config.maxResponseTokens ? { max_tokens: config.maxResponseTokens } : {}),
+      };
+      if (config.tools && config.tools.length > 0) {
+        body.tools = convertTools(config.tools);
+      }
+
       response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Ollama doesn't require auth but we send it if configured
           ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {}),
         },
-        body: JSON.stringify({
-          model: config.model,
-          messages,
-          stream: true,
-          ...(config.maxResponseTokens ? { max_tokens: config.maxResponseTokens } : {}),
-        }),
+        body: JSON.stringify(body),
         signal,
       });
     } catch (e) {
@@ -76,6 +94,7 @@ export const ollamaProvider: AiStreamProvider = {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    const pendingToolCalls = new Map<number, { id: string; name: string; arguments: string }>();
 
     try {
       while (true) {
@@ -90,16 +109,43 @@ export const ollamaProvider: AiStreamProvider = {
           if (line.startsWith('data: ')) {
             const data = line.slice(6).trim();
             if (data === '[DONE]') {
+              for (const tc of pendingToolCalls.values()) {
+                yield { type: 'tool_call_complete', id: tc.id, name: tc.name, arguments: tc.arguments };
+              }
+              pendingToolCalls.clear();
               yield { type: 'done' };
               return;
             }
 
             try {
               const json = JSON.parse(data);
-              // Handle DeepSeek-R1 style thinking in Ollama
               const delta = json.choices?.[0]?.delta;
+              const finishReason = json.choices?.[0]?.finish_reason;
+
               if (delta?.reasoning_content) {
                 yield { type: 'thinking', content: delta.reasoning_content };
+              }
+              // Handle tool_calls delta (OpenAI-compatible format)
+              if (delta?.tool_calls) {
+                for (const tc of delta.tool_calls) {
+                  const idx = tc.index ?? 0;
+                  if (!pendingToolCalls.has(idx)) {
+                    pendingToolCalls.set(idx, { id: tc.id || '', name: tc.function?.name || '', arguments: '' });
+                  }
+                  const pending = pendingToolCalls.get(idx)!;
+                  if (tc.id) pending.id = tc.id;
+                  if (tc.function?.name) pending.name = tc.function.name;
+                  if (tc.function?.arguments) {
+                    pending.arguments += tc.function.arguments;
+                    yield { type: 'tool_call', id: pending.id, name: pending.name, arguments: pending.arguments };
+                  }
+                }
+              }
+              if (finishReason === 'tool_calls') {
+                for (const tc of pendingToolCalls.values()) {
+                  yield { type: 'tool_call_complete', id: tc.id, name: tc.name, arguments: tc.arguments };
+                }
+                pendingToolCalls.clear();
               }
               if (delta?.content) {
                 yield { type: 'content', content: delta.content };

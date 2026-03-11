@@ -99,6 +99,20 @@
       "refresh_models": "刷新",
       "api_key_not_found": "未找到 API 密钥。请在设置 > AI 中配置。",
       "failed_to_get_api_key": "获取 API 密钥失败。"
+    },
+    "tool_use": {
+      "heading": "工具调用",
+      "arguments": "参数",
+      "output": "输出",
+      "output_truncated": "输出已截断",
+      "tool_names": {
+        "terminal_exec": "执行命令",
+        "read_file": "读取文件",
+        "write_file": "写入文件",
+        "list_directory": "列出目录",
+        "grep_search": "搜索",
+        "git_status": "Git 状态"
+      }
     }
   }
 }

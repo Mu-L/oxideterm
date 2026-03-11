@@ -99,6 +99,20 @@
       "refresh_models": "Actualiser",
       "api_key_not_found": "Clé API introuvable. Veuillez la configurer dans Paramètres > IA.",
       "failed_to_get_api_key": "Échec de la récupération de la clé API."
+    },
+    "tool_use": {
+      "heading": "Appels d'outils",
+      "arguments": "Arguments",
+      "output": "Sortie",
+      "output_truncated": "La sortie a été tronquée",
+      "tool_names": {
+        "terminal_exec": "Exécuter commande",
+        "read_file": "Lire fichier",
+        "write_file": "Écrire fichier",
+        "list_directory": "Lister répertoire",
+        "grep_search": "Rechercher",
+        "git_status": "Statut Git"
+      }
     }
   }
 }

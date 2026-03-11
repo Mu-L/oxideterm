@@ -1213,6 +1213,10 @@ export interface AiChatMessage {
   isThinkingExpanded?: boolean;
   /** Whether thinking is currently streaming */
   isThinkingStreaming?: boolean;
+  /** Tool calls requested by the assistant */
+  toolCalls?: AiToolCall[];
+  /** Tool result (for messages representing a tool execution response) */
+  toolResult?: AiToolResult;
   /** Optional metadata for special message types (e.g. compaction anchors) */
   metadata?: {
     /** Discriminator for special message types */
@@ -1292,6 +1296,42 @@ export interface AiProvider {
   /** Creation timestamp */
   createdAt: number;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI Tool Use Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A tool call requested by the AI model */
+export type AiToolCall = {
+  /** Unique ID assigned by the provider */
+  id: string;
+  /** Tool name (e.g. "read_file", "terminal_exec") */
+  name: string;
+  /** JSON-serialized arguments */
+  arguments: string;
+  /** Current execution status */
+  status: 'pending' | 'approved' | 'rejected' | 'running' | 'completed' | 'error';
+  /** Execution result (populated after completion) */
+  result?: AiToolResult;
+};
+
+/** Result of a tool execution */
+export type AiToolResult = {
+  /** The tool call ID this result corresponds to */
+  toolCallId: string;
+  /** Tool name */
+  toolName: string;
+  /** Whether execution succeeded */
+  success: boolean;
+  /** Output content (truncated to max 8KB) */
+  output: string;
+  /** Error message if failed */
+  error?: string;
+  /** Whether output was truncated */
+  truncated?: boolean;
+  /** Execution duration in ms */
+  durationMs?: number;
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Agent Types (Remote Agent Architecture)

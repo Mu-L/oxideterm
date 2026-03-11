@@ -7,6 +7,7 @@ import type { AiChatMessage } from '../../types';
 import { renderMarkdown, markdownStyles, renderMathInElement } from '../../lib/markdownRenderer';
 import { useMermaid } from '../../hooks/useMermaid';
 import { ThinkingBlock } from './ThinkingBlock';
+import { ToolCallBlock } from './ToolCallBlock';
 
 interface ChatMessageProps {
   message: AiChatMessage;
@@ -53,6 +54,7 @@ function arePropsEqual(prev: ChatMessageProps, next: ChatMessageProps): boolean 
     prev.message.isStreaming === next.message.isStreaming &&
     prev.message.thinkingContent === next.message.thinkingContent &&
     prev.message.isThinkingStreaming === next.message.isThinkingStreaming &&
+    prev.message.toolCalls === next.message.toolCalls &&
     prev.message.branches?.activeIndex === next.message.branches?.activeIndex &&
     prev.message.branches?.total === next.message.branches?.total &&
     prev.isLastAssistant === next.isLastAssistant &&
@@ -251,6 +253,11 @@ export const ChatMessage = memo(function ChatMessage({
             content={message.thinkingContent}
             isStreaming={message.isThinkingStreaming}
           />
+        )}
+
+        {/* Tool Calls Block */}
+        {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
+          <ToolCallBlock toolCalls={message.toolCalls} />
         )}
 
         {/* Edit mode for user messages */}

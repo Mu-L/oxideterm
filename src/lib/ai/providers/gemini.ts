@@ -5,23 +5,42 @@
  * Uses the `generateContent` endpoint with `streamGenerateContent`.
  */
 
-import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent } from '../providers';
+import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent, AiToolDefinition } from '../providers';
 
 /**
  * Convert standard ChatMessage format to Gemini API format.
+ * Handles tool role by converting to functionResponse parts.
  */
 function convertMessages(messages: ChatMessage[]): {
   systemInstruction: string | undefined;
-  contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>;
+  contents: Array<{ role: 'user' | 'model'; parts: Array<Record<string, unknown>> }>;
 } {
   let systemInstruction: string | undefined;
-  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  const contents: Array<{ role: 'user' | 'model'; parts: Array<Record<string, unknown>> }> = [];
 
   for (const msg of messages) {
     if (msg.role === 'system') {
       systemInstruction = systemInstruction
         ? `${systemInstruction}\n\n${msg.content}`
         : msg.content;
+    } else if (msg.role === 'tool') {
+      // Gemini uses functionResponse in a user-role message
+      let response: Record<string, unknown> = { output: msg.content };
+      try { response = JSON.parse(msg.content); } catch { /* use as string */ }
+      contents.push({
+        role: 'user',
+        parts: [{ functionResponse: { name: msg.tool_call_id || 'unknown', response } }],
+      });
+    } else if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+      // Model message with function calls
+      const parts: Array<Record<string, unknown>> = [];
+      if (msg.content) parts.push({ text: msg.content });
+      for (const tc of msg.tool_calls) {
+        let args: Record<string, unknown> = {};
+        try { args = JSON.parse(tc.arguments); } catch { /* empty */ }
+        parts.push({ functionCall: { name: tc.name, args } });
+      }
+      contents.push({ role: 'model', parts });
     } else {
       const role = msg.role === 'assistant' ? 'model' : 'user';
       const last = contents[contents.length - 1];
@@ -40,6 +59,19 @@ function convertMessages(messages: ChatMessage[]): {
   }
 
   return { systemInstruction, contents };
+}
+
+/**
+ * Convert AiToolDefinition[] to Gemini functionDeclarations format.
+ */
+function convertTools(tools: AiToolDefinition[]): Array<{ functionDeclarations: Array<{ name: string; description: string; parameters: Record<string, unknown> }> }> {
+  return [{
+    functionDeclarations: tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    })),
+  }];
 }
 
 export const geminiProvider: AiStreamProvider = {
@@ -63,6 +95,9 @@ export const geminiProvider: AiStreamProvider = {
     }
     if (config.maxResponseTokens) {
       body.generationConfig = { maxOutputTokens: config.maxResponseTokens };
+    }
+    if (config.tools && config.tools.length > 0) {
+      body.tools = convertTools(config.tools);
     }
 
     const response = await fetch(url, {
@@ -115,6 +150,12 @@ export const geminiProvider: AiStreamProvider = {
               for (const part of candidates[0].content.parts) {
                 if (part.text) {
                   yield { type: 'content', content: part.text };
+                }
+                // Handle function calling
+                if (part.functionCall) {
+                  const callId = `gemini-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                  const args = JSON.stringify(part.functionCall.args || {});
+                  yield { type: 'tool_call_complete', id: callId, name: part.functionCall.name, arguments: args };
                 }
               }
             }

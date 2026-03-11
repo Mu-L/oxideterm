@@ -198,6 +198,15 @@ export interface AiSettings {
    * If set, overrides the dynamic `responseReserve()` calculation.
    */
   modelMaxResponseTokens?: Record<string, Record<string, number>>;
+  /** Tool use (function calling) settings */
+  toolUse?: {
+    /** Master switch for tool use — default false */
+    enabled: boolean;
+    /** Auto-approve read-only tools (read_file, list_directory, grep_search, git_status) */
+    autoApproveReadOnly: boolean;
+    /** Auto-approve ALL tools including writes — advanced/dangerous */
+    autoApproveAll: boolean;
+  };
 }
 
 /** Local terminal settings */
@@ -355,6 +364,11 @@ const defaultAiSettings: AiSettings = {
   thinkingStyle: 'detailed',         // Default: show full thinking content
   thinkingDefaultExpanded: false,    // Default: collapsed for less noise
   customSystemPrompt: '',            // Default: use built-in prompt
+  toolUse: {
+    enabled: false,                  // Default: disabled until user opts in
+    autoApproveReadOnly: true,       // Default: auto-approve read-only tools
+    autoApproveAll: false,           // Default: require approval for write tools
+  },
 };
 
 const defaultLocalTerminalSettings: LocalTerminalSettings = {

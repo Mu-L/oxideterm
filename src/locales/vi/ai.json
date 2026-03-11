@@ -99,6 +99,20 @@
       "refresh_models": "Làm mới",
       "api_key_not_found": "Không tìm thấy khóa API. Vui lòng cấu hình trong Cài đặt > AI.",
       "failed_to_get_api_key": "Không thể lấy khóa API."
+    },
+    "tool_use": {
+      "heading": "Gọi công cụ",
+      "arguments": "Tham số",
+      "output": "Kết quả",
+      "output_truncated": "Kết quả đã bị cắt ngắn",
+      "tool_names": {
+        "terminal_exec": "Chạy lệnh",
+        "read_file": "Đọc tệp",
+        "write_file": "Ghi tệp",
+        "list_directory": "Liệt kê thư mục",
+        "grep_search": "Tìm kiếm",
+        "git_status": "Trạng thái Git"
+      }
     }
   }
 }

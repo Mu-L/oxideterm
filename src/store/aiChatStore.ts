@@ -2,12 +2,14 @@ import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { api } from '../lib/api';
 import { useSettingsStore } from './settingsStore';
+import { useSessionTreeStore } from './sessionTreeStore';
 import { gatherSidebarContext, type SidebarContext } from '../lib/sidebarContextProvider';
 import { getProvider } from '../lib/ai/providerRegistry';
 import { estimateTokens, trimHistoryToTokenBudget, getModelContextWindow, responseReserve } from '../lib/ai/tokenUtils';
 import type { ChatMessage as ProviderChatMessage } from '../lib/ai/providers';
-import type { AiChatMessage, AiConversation } from '../types';
+import type { AiChatMessage, AiConversation, AiToolCall } from '../types';
 import { DEFAULT_SYSTEM_PROMPT, COMPACTION_TRIGGER_THRESHOLD } from '../lib/ai/constants';
+import { BUILTIN_TOOLS, READ_ONLY_TOOLS, executeTool, type ToolExecutionContext } from '../lib/ai/tools';
 import i18n from '../i18n';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -617,7 +619,7 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
       let lastUpdateTime = 0;
       const UPDATE_INTERVAL = 50; // ms - throttle updates for smoother streaming
 
-      const updateContent = (content: string, force = false, isThinkingStreaming = false) => {
+      const updateContent = (content: string, force = false, isThinkingStreaming = false, toolCalls?: AiToolCall[]) => {
         const now = Date.now();
         if (!force && now - lastUpdateTime < UPDATE_INTERVAL) return;
         lastUpdateTime = now;
@@ -629,7 +631,7 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
               ...c,
               messages: c.messages.map((m) =>
                 m.id === assistantMessage.id 
-                  ? { ...m, content, isThinkingStreaming } 
+                  ? { ...m, content, isThinkingStreaming, ...(toolCalls !== undefined ? { toolCalls } : {}) } 
                   : m
               ),
               updatedAt: now,
@@ -639,7 +641,7 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
       };
 
       // ════════════════════════════════════════════════════════════════════
-      // Stream via Provider Abstraction Layer
+      // Stream via Provider Abstraction Layer (with tool execution loop)
       // ════════════════════════════════════════════════════════════════════
 
       const provider = getProvider(providerType);
@@ -651,26 +653,144 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
         : undefined;
       const maxResponseTokens = userOverride ?? responseReserve(contextWindow);
 
-      for await (const event of provider.streamCompletion(
-        { baseUrl: providerBaseUrl, model: providerModel, apiKey: apiKey || '', maxResponseTokens },
-        apiMessages,
-        abortController.signal
-      )) {
-        switch (event.type) {
-          case 'content':
-            fullContent += event.content;
-            updateContent(fullContent, false, false);
-            break;
-          case 'thinking':
-            thinkingContent += event.content;
-            // Show thinking as temporary content with thinking tag
-            updateContent(fullContent || '...', false, true);
-            break;
-          case 'error':
-            throw new Error(event.message);
-          case 'done':
-            break;
+      // Tool use configuration
+      const toolUseEnabled = aiSettings.toolUse?.enabled === true;
+      const autoApproveReadOnly = aiSettings.toolUse?.autoApproveReadOnly !== false;
+      const autoApproveAll = aiSettings.toolUse?.autoApproveAll === true;
+      const toolDefs = toolUseEnabled ? BUILTIN_TOOLS : undefined;
+
+      // Derive tool execution context (nodeId) from sidebar context
+      let toolContext: ToolExecutionContext | null = null;
+      if (toolUseEnabled && sidebarContext?.env.sessionId) {
+        const node = useSessionTreeStore.getState().getNodeByTerminalId(sidebarContext.env.sessionId);
+        if (node) {
+          toolContext = { nodeId: node.id, agentAvailable: false };
         }
+      }
+
+      const MAX_TOOL_ROUNDS = 10;
+      let round = 0;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const completedToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+
+        for await (const event of provider.streamCompletion(
+          { baseUrl: providerBaseUrl, model: providerModel, apiKey: apiKey || '', maxResponseTokens, tools: toolDefs },
+          apiMessages,
+          abortController.signal
+        )) {
+          switch (event.type) {
+            case 'content':
+              fullContent += event.content;
+              updateContent(fullContent, false, false);
+              break;
+            case 'thinking':
+              thinkingContent += event.content;
+              updateContent(fullContent || '...', false, true);
+              break;
+            case 'tool_call_complete':
+              completedToolCalls.push({ id: event.id, name: event.name, arguments: event.arguments });
+              break;
+            case 'error':
+              throw new Error(event.message);
+            case 'done':
+              break;
+          }
+        }
+
+        // If no tool calls or no context to execute them, break
+        if (completedToolCalls.length === 0 || !toolContext) break;
+
+        // Guard against infinite loops
+        round++;
+        if (round > MAX_TOOL_ROUNDS) {
+          fullContent += '\n\n[Tool use limit reached]';
+          updateContent(fullContent, true, false);
+          break;
+        }
+
+        // ── Execute tool calls ──
+        const toolCallEntries: AiToolCall[] = completedToolCalls.map((tc) => ({
+          id: tc.id,
+          name: tc.name,
+          arguments: tc.arguments,
+          status: 'pending' as const,
+        }));
+
+        // Show tool calls in UI immediately
+        updateContent(fullContent, true, false, toolCallEntries);
+
+        // Approve tools based on settings
+        for (const tc of toolCallEntries) {
+          const isReadOnly = READ_ONLY_TOOLS.has(tc.name);
+          if (autoApproveAll || (autoApproveReadOnly && isReadOnly)) {
+            tc.status = 'approved';
+          } else {
+            // For now, auto-approve all when tool use is enabled
+            // Full approval UI will be added with ToolCallBlock component
+            tc.status = 'approved';
+          }
+        }
+
+        // Execute approved tools
+        const toolResultMessages: ProviderChatMessage[] = [];
+        for (const tc of toolCallEntries) {
+          if (tc.status !== 'approved') {
+            tc.status = 'rejected';
+            toolResultMessages.push({
+              role: 'tool',
+              content: 'Tool call was rejected by the user.',
+              tool_call_id: tc.id,
+            });
+            continue;
+          }
+
+          tc.status = 'running';
+          updateContent(fullContent, true, false, [...toolCallEntries]);
+
+          let parsedArgs: Record<string, unknown> = {};
+          try {
+            parsedArgs = JSON.parse(tc.arguments);
+          } catch {
+            tc.status = 'error';
+            tc.result = {
+              toolCallId: tc.id, toolName: tc.name,
+              success: false, output: '', error: 'Invalid JSON arguments',
+            };
+            toolResultMessages.push({
+              role: 'tool',
+              content: JSON.stringify({ error: 'Invalid JSON arguments' }),
+              tool_call_id: tc.id,
+            });
+            continue;
+          }
+
+          const result = await executeTool(tc.name, parsedArgs, toolContext);
+          result.toolCallId = tc.id;
+          tc.result = result;
+          tc.status = result.success ? 'completed' : 'error';
+          updateContent(fullContent, true, false, [...toolCallEntries]);
+
+          toolResultMessages.push({
+            role: 'tool',
+            content: result.success ? result.output : JSON.stringify({ error: result.error }),
+            tool_call_id: tc.id,
+          });
+        }
+
+        // Append assistant message (with tool calls) and tool results to API context
+        apiMessages.push({
+          role: 'assistant',
+          content: fullContent,
+          tool_calls: completedToolCalls.map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments })),
+        });
+        for (const trm of toolResultMessages) {
+          apiMessages.push(trm);
+        }
+
+        // Reset content for next round (model will generate new response)
+        fullContent = '';
       }
 
       // For providers that handle thinking natively (Anthropic), use extracted thinking

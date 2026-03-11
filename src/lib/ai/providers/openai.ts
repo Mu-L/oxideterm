@@ -5,7 +5,48 @@
  * Handles SSE streaming with `data: [DONE]` termination.
  */
 
-import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent } from '../providers';
+import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent, AiToolDefinition } from '../providers';
+
+/**
+ * Convert AiToolDefinition[] to OpenAI function calling format.
+ */
+function convertTools(tools: AiToolDefinition[]): Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }> {
+  return tools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    },
+  }));
+}
+
+/**
+ * Convert ChatMessage[] to OpenAI API message format (handles tool role).
+ */
+function convertMessages(messages: ChatMessage[]): Array<Record<string, unknown>> {
+  return messages.map((msg) => {
+    if (msg.role === 'tool') {
+      return {
+        role: 'tool',
+        tool_call_id: msg.tool_call_id,
+        content: msg.content,
+      };
+    }
+    if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+      return {
+        role: 'assistant',
+        content: msg.content || null,
+        tool_calls: msg.tool_calls.map((tc) => ({
+          id: tc.id,
+          type: 'function',
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+      };
+    }
+    return { role: msg.role, content: msg.content };
+  });
+}
 
 export const openaiProvider: AiStreamProvider = {
   type: 'openai',
@@ -19,18 +60,24 @@ export const openaiProvider: AiStreamProvider = {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
     const url = `${cleanBaseUrl}/chat/completions`;
 
+    const body: Record<string, unknown> = {
+      model: config.model,
+      messages: convertMessages(messages),
+      stream: true,
+      ...(config.maxResponseTokens ? { max_tokens: config.maxResponseTokens } : {}),
+    };
+
+    if (config.tools && config.tools.length > 0) {
+      body.tools = convertTools(config.tools);
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        stream: true,
-        ...(config.maxResponseTokens ? { max_tokens: config.maxResponseTokens } : {}),
-      }),
+      body: JSON.stringify(body),
       signal,
     });
 
@@ -55,6 +102,8 @@ export const openaiProvider: AiStreamProvider = {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    // Track in-flight tool_calls being assembled across chunks
+    const pendingToolCalls = new Map<number, { id: string; name: string; arguments: string }>();
 
     try {
       while (true) {
@@ -69,6 +118,11 @@ export const openaiProvider: AiStreamProvider = {
           if (line.startsWith('data: ')) {
             const data = line.slice(6).trim();
             if (data === '[DONE]') {
+              // Flush any remaining tool calls
+              for (const tc of pendingToolCalls.values()) {
+                yield { type: 'tool_call_complete', id: tc.id, name: tc.name, arguments: tc.arguments };
+              }
+              pendingToolCalls.clear();
               yield { type: 'done' };
               return;
             }
@@ -76,10 +130,43 @@ export const openaiProvider: AiStreamProvider = {
             try {
               const json = JSON.parse(data);
               const delta = json.choices?.[0]?.delta;
+              const finishReason = json.choices?.[0]?.finish_reason;
+
               // Handle reasoning_content (DeepSeek-R1, QwQ, etc.)
               if (delta?.reasoning_content) {
                 yield { type: 'thinking', content: delta.reasoning_content };
               }
+
+              // Handle tool_calls delta
+              if (delta?.tool_calls) {
+                for (const tc of delta.tool_calls) {
+                  const idx = tc.index ?? 0;
+                  if (!pendingToolCalls.has(idx)) {
+                    pendingToolCalls.set(idx, {
+                      id: tc.id || '',
+                      name: tc.function?.name || '',
+                      arguments: '',
+                    });
+                  }
+                  const pending = pendingToolCalls.get(idx)!;
+                  if (tc.id) pending.id = tc.id;
+                  if (tc.function?.name) pending.name = tc.function.name;
+                  if (tc.function?.arguments) {
+                    pending.arguments += tc.function.arguments;
+                    // Emit incremental tool_call event for UI progress
+                    yield { type: 'tool_call', id: pending.id, name: pending.name, arguments: pending.arguments };
+                  }
+                }
+              }
+
+              // Flush tool calls on finish_reason === 'tool_calls'
+              if (finishReason === 'tool_calls') {
+                for (const tc of pendingToolCalls.values()) {
+                  yield { type: 'tool_call_complete', id: tc.id, name: tc.name, arguments: tc.arguments };
+                }
+                pendingToolCalls.clear();
+              }
+
               const content = delta?.content || '';
               if (content) {
                 yield { type: 'content', content };

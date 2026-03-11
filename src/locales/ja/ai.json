@@ -99,6 +99,20 @@
       "refresh_models": "更新",
       "api_key_not_found": "API キーが見つかりません。設定 > AI で設定してください。",
       "failed_to_get_api_key": "API キーの取得に失敗しました。"
+    },
+    "tool_use": {
+      "heading": "ツール呼び出し",
+      "arguments": "引数",
+      "output": "出力",
+      "output_truncated": "出力は切り詰められました",
+      "tool_names": {
+        "terminal_exec": "コマンド実行",
+        "read_file": "ファイル読取",
+        "write_file": "ファイル書込",
+        "list_directory": "ディレクトリ一覧",
+        "grep_search": "検索",
+        "git_status": "Git ステータス"
+      }
     }
   }
 }

@@ -159,7 +159,10 @@
         "get_session_tree": "세션 트리",
         "list_plugins": "플러그인 목록",
         "send_control_sequence": "제어 신호 전송",
-        "batch_exec": "일괄 실행"
+        "batch_exec": "일괄 실행",
+        "read_screen": "화면 읽기",
+        "send_keys": "키 전송",
+        "send_mouse": "마우스 전송"
       }
     },
     "tool_selector": {

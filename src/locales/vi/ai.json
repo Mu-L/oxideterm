@@ -159,7 +159,10 @@
         "get_session_tree": "Cây phiên",
         "list_plugins": "Danh sách plugin",
         "send_control_sequence": "Gửi tín hiệu điều khiển",
-        "batch_exec": "Thực thi hàng loạt"
+        "batch_exec": "Thực thi hàng loạt",
+        "read_screen": "Đọc màn hình",
+        "send_keys": "Gửi phím",
+        "send_mouse": "Gửi chuột"
       }
     },
     "tool_selector": {

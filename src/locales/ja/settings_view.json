@@ -327,6 +327,8 @@
       "tool_use_group_connection_monitor": "接続モニター",
       "tool_use_group_session_manager": "セッション管理",
       "tool_use_group_plugin_manager": "プラグイン管理",
+      "tool_use_group_tui_interaction": "TUI 操作",
+      "experimental": "実験的",
       "tool_use_subgroup_read_only": "読み取り専用",
       "tool_use_subgroup_write": "書き込み / 実行",
       "tool_use_approve_all": "すべて承認",

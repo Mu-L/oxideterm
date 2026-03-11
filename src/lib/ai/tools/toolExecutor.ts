@@ -29,7 +29,7 @@ import { useLocalTerminalStore } from '../../../store/localTerminalStore';
 import { useIdeStore } from '../../../store/ideStore';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { usePluginStore } from '../../../store/pluginStore';
-import { findPaneBySessionId, getTerminalBuffer, writeToTerminal, subscribeTerminalOutput } from '../../terminalRegistry';
+import { findPaneBySessionId, getTerminalBuffer, writeToTerminal, subscribeTerminalOutput, readScreen } from '../../terminalRegistry';
 
 /** Max output size returned from a tool execution (bytes) */
 const MAX_OUTPUT_BYTES = 8192;
@@ -172,6 +172,12 @@ export async function executeTool(
           return await execSendControlSequence(args, startTime, toolCallId);
         case 'batch_exec':
           return await execBatchExec(args, startTime, toolCallId);
+        case 'read_screen':
+          return execReadScreen(args, startTime, toolCallId);
+        case 'send_keys':
+          return await execSendKeys(args, startTime, toolCallId);
+        case 'send_mouse':
+          return await execSendMouse(args, startTime, toolCallId);
         default:
           return { toolCallId, toolName, success: false, output: '', error: `Unknown session tool: ${toolName}`, durationMs: Date.now() - startTime };
       }
@@ -1117,6 +1123,284 @@ async function execBatchExec(
     success: true,
     output: text,
     truncated,
+    durationMs: Date.now() - startTime,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TUI Interaction Executors (Experimental)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Special key name → terminal escape sequence mapping */
+const KEY_SEQUENCES: Record<string, string> = {
+  'enter': '\r',
+  'escape': '\x1b',
+  'tab': '\t',
+  'backspace': '\x7f',
+  'delete': '\x1b[3~',
+  'up': '\x1b[A',
+  'down': '\x1b[B',
+  'right': '\x1b[C',
+  'left': '\x1b[D',
+  'home': '\x1b[H',
+  'end': '\x1b[F',
+  'pageup': '\x1b[5~',
+  'pagedown': '\x1b[6~',
+  'insert': '\x1b[2~',
+  'space': ' ',
+  'f1': '\x1bOP',
+  'f2': '\x1bOQ',
+  'f3': '\x1bOR',
+  'f4': '\x1bOS',
+  'f5': '\x1b[15~',
+  'f6': '\x1b[17~',
+  'f7': '\x1b[18~',
+  'f8': '\x1b[19~',
+  'f9': '\x1b[20~',
+  'f10': '\x1b[21~',
+  'f11': '\x1b[23~',
+  'f12': '\x1b[24~',
+};
+
+/** SGR mouse button codes */
+const MOUSE_BUTTONS: Record<string, number> = {
+  'left': 0,
+  'middle': 1,
+  'right': 2,
+};
+const MOUSE_SCROLL_UP = 64;
+const MOUSE_SCROLL_DOWN = 65;
+
+/** Max keys in single send_keys call to prevent accidental spam */
+const MAX_KEYS = 50;
+/** Max scroll events per send_mouse call (prevents infinite scrolling) */
+const MAX_SCROLL_COUNT = 20;
+/** Wait up to 1s for terminal output to stabilize after keystrokes */
+const SEND_KEYS_STABLE_SECS = 1;
+/** Total timeout for waiting on keystroke response (3s for slow remote) */
+const SEND_KEYS_TIMEOUT_SECS = 3;
+
+function execReadScreen(
+  args: Record<string, unknown>,
+  startTime: number,
+  toolCallId: string,
+): AiToolResult {
+  const toolName = 'read_screen';
+  const sessionId = args.session_id as string;
+
+  if (!sessionId) {
+    return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: session_id.', durationMs: Date.now() - startTime };
+  }
+
+  const paneId = findPaneBySessionId(sessionId);
+  if (!paneId) {
+    return { toolCallId, toolName, success: false, output: '', error: `Open terminal session not found: ${sessionId}`, durationMs: Date.now() - startTime };
+  }
+
+  const snapshot = readScreen(paneId);
+  if (!snapshot) {
+    return { toolCallId, toolName, success: false, output: '', error: 'Screen reader not available for this terminal.', durationMs: Date.now() - startTime };
+  }
+
+  // Format output with metadata header + numbered lines
+  const bufferMode = snapshot.isAlternateBuffer ? 'alternate buffer (TUI mode)' : 'normal buffer';
+  const header = `[Screen ${snapshot.cols}×${snapshot.rows} | Cursor: (${snapshot.cursorX},${snapshot.cursorY}) | ${bufferMode}]`;
+  const separator = '─'.repeat(Math.min(snapshot.cols, 80));
+  const lineWidth = String(snapshot.rows).length;
+  const numberedLines = snapshot.lines.map((line: string, i: number) => {
+    const num = String(i + 1).padStart(lineWidth);
+    return `${num}│${line}`;
+  });
+
+  const output = `${header}\n${separator}\n${numberedLines.join('\n')}`;
+  const { text, truncated } = truncateOutput(output);
+
+  return {
+    toolCallId,
+    toolName,
+    success: true,
+    output: text,
+    truncated,
+    durationMs: Date.now() - startTime,
+  };
+}
+
+async function execSendKeys(
+  args: Record<string, unknown>,
+  startTime: number,
+  toolCallId: string,
+): Promise<AiToolResult> {
+  const toolName = 'send_keys';
+  const sessionId = args.session_id as string;
+  const keys = args.keys as string[] | undefined;
+  if (args.delay_ms !== undefined && typeof args.delay_ms !== 'number') {
+    return { toolCallId, toolName, success: false, output: '', error: 'delay_ms must be a number (10-1000 milliseconds).', durationMs: Date.now() - startTime };
+  }
+  const delayMs = Math.max(10, Math.min(1000, typeof args.delay_ms === 'number' ? args.delay_ms : 50));
+
+  if (!sessionId) {
+    return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: session_id.', durationMs: Date.now() - startTime };
+  }
+  if (!Array.isArray(keys) || keys.length === 0) {
+    return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: keys (non-empty array).', durationMs: Date.now() - startTime };
+  }
+  if (keys.length > MAX_KEYS) {
+    return { toolCallId, toolName, success: false, output: '', error: `Too many keys (max ${MAX_KEYS}).`, durationMs: Date.now() - startTime };
+  }
+
+  const paneId = findPaneBySessionId(sessionId);
+  if (!paneId) {
+    return { toolCallId, toolName, success: false, output: '', error: `Open terminal session not found: ${sessionId}`, durationMs: Date.now() - startTime };
+  }
+
+  // Validate all keys are non-empty strings before sending
+  for (let i = 0; i < keys.length; i++) {
+    if (typeof keys[i] !== 'string' || keys[i] === '') {
+      return { toolCallId, toolName, success: false, output: '', error: `keys[${i}] must be a non-empty string.`, durationMs: Date.now() - startTime };
+    }
+  }
+
+  const sentSummary: string[] = [];
+
+  /** Printable-only regex: ASCII 0x20-0x7E plus extended Unicode (no control chars) */
+  const PRINTABLE_RE = /^[\x20-\x7E\u0080-\uFFFF]+$/;
+
+  for (let i = 0; i < keys.length; i++) {
+    const raw = keys[i];
+    const lower = raw.toLowerCase();
+    const sequence = KEY_SEQUENCES[lower];
+
+    if (sequence !== undefined) {
+      // Special key — send its escape sequence
+      const sent = writeToTerminal(paneId, sequence);
+      if (!sent) {
+        return { toolCallId, toolName, success: false, output: sentSummary.join(', '), error: `Terminal not writable at key ${i + 1}.`, durationMs: Date.now() - startTime };
+      }
+      sentSummary.push(`[${raw}]`);
+    } else {
+      // Plain text — must be printable characters only (no raw escape sequences)
+      if (!PRINTABLE_RE.test(raw)) {
+        return { toolCallId, toolName, success: false, output: sentSummary.join(', '), error: `keys[${i}] contains control characters. Use named keys (e.g. "Escape", "Enter") instead.`, durationMs: Date.now() - startTime };
+      }
+      const sent = writeToTerminal(paneId, raw);
+      if (!sent) {
+        return { toolCallId, toolName, success: false, output: sentSummary.join(', '), error: `Terminal not writable at key ${i + 1}.`, durationMs: Date.now() - startTime };
+      }
+      sentSummary.push(raw.length <= 10 ? `"${raw}"` : `"${raw.slice(0, 10)}…"`);
+    }
+
+    // Delay between keys (skip after last key)
+    if (i < keys.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  // Wait briefly for terminal to process keystrokes
+  const waitResult = await waitForTerminalOutput(sessionId, SEND_KEYS_TIMEOUT_SECS, SEND_KEYS_STABLE_SECS, null, startTime);
+
+  const summary = `Sent ${keys.length} key(s): ${sentSummary.join(', ')}`;
+  const output = waitResult.output
+    ? `${summary}\n\nTerminal response:\n${waitResult.output}`
+    : `${summary}\n\nNo immediate terminal response.`;
+
+  const { text, truncated } = truncateOutput(output);
+
+  return {
+    toolCallId,
+    toolName,
+    success: true,
+    output: text,
+    truncated: truncated || waitResult.truncated,
+    durationMs: Date.now() - startTime,
+  };
+}
+
+async function execSendMouse(
+  args: Record<string, unknown>,
+  startTime: number,
+  toolCallId: string,
+): Promise<AiToolResult> {
+  const toolName = 'send_mouse';
+  const sessionId = args.session_id as string;
+  const action = typeof args.action === 'string' ? args.action.toLowerCase() : '';
+  const x = typeof args.x === 'number' ? Math.floor(args.x) : 0;
+  const y = typeof args.y === 'number' ? Math.floor(args.y) : 0;
+  const button = typeof args.button === 'string' ? args.button.toLowerCase() : 'left';
+  const direction = typeof args.direction === 'string' ? args.direction.toLowerCase() : 'down';
+  const count = Math.max(1, Math.min(MAX_SCROLL_COUNT, typeof args.count === 'number' ? Math.floor(args.count) : 1));
+
+  if (!sessionId) {
+    return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: session_id.', durationMs: Date.now() - startTime };
+  }
+  if (action !== 'click' && action !== 'scroll') {
+    return { toolCallId, toolName, success: false, output: '', error: 'Invalid action. Must be "click" or "scroll".', durationMs: Date.now() - startTime };
+  }
+  if (x < 1 || y < 1) {
+    return { toolCallId, toolName, success: false, output: '', error: 'Coordinates must be >= 1 (1-based).', durationMs: Date.now() - startTime };
+  }
+
+  const paneId = findPaneBySessionId(sessionId);
+  if (!paneId) {
+    return { toolCallId, toolName, success: false, output: '', error: `Open terminal session not found: ${sessionId}`, durationMs: Date.now() - startTime };
+  }
+
+  // Validate coordinates are within terminal bounds
+  const snapshot = readScreen(paneId);
+  if (snapshot && (x > snapshot.cols || y > snapshot.rows)) {
+    return { toolCallId, toolName, success: false, output: '', error: `Coordinates out of bounds. Terminal is ${snapshot.cols}×${snapshot.rows}, got (${x},${y}).`, durationMs: Date.now() - startTime };
+  }
+
+  let summary: string;
+
+  if (action === 'click') {
+    const btnCode = MOUSE_BUTTONS[button];
+    if (btnCode === undefined) {
+      return { toolCallId, toolName, success: false, output: '', error: `Invalid button: "${button}". Must be "left", "right", or "middle".`, durationMs: Date.now() - startTime };
+    }
+
+    // SGR mouse protocol: press = \x1b[<btn;x;yM, release = \x1b[<btn;x;ym
+    const press = `\x1b[<${btnCode};${x};${y}M`;
+    const release = `\x1b[<${btnCode};${x};${y}m`;
+
+    const sent = writeToTerminal(paneId, press + release);
+    if (!sent) {
+      return { toolCallId, toolName, success: false, output: '', error: `Terminal not writable: ${sessionId}`, durationMs: Date.now() - startTime };
+    }
+    summary = `Clicked ${button} button at (${x},${y})`;
+  } else {
+    // scroll — button param is not used
+    if (direction !== 'up' && direction !== 'down') {
+      return { toolCallId, toolName, success: false, output: '', error: 'Invalid direction. Must be "up" or "down".', durationMs: Date.now() - startTime };
+    }
+    const scrollCode = direction === 'up' ? MOUSE_SCROLL_UP : MOUSE_SCROLL_DOWN;
+    let scrollData = '';
+    for (let i = 0; i < count; i++) {
+      // SGR scroll: press event only (no release for scroll)
+      scrollData += `\x1b[<${scrollCode};${x};${y}M`;
+    }
+
+    const sent = writeToTerminal(paneId, scrollData);
+    if (!sent) {
+      return { toolCallId, toolName, success: false, output: '', error: `Terminal not writable: ${sessionId}`, durationMs: Date.now() - startTime };
+    }
+    summary = `Scrolled ${direction} ${count} step(s) at (${x},${y})`;
+  }
+
+  // Brief wait for TUI to react
+  const waitResult = await waitForTerminalOutput(sessionId, 2, 0.5, null, startTime);
+
+  const output = waitResult.output
+    ? `${summary}\n\nTerminal response:\n${waitResult.output}`
+    : `${summary}\n\nNo immediate terminal response.`;
+
+  const { text, truncated } = truncateOutput(output);
+
+  return {
+    toolCallId,
+    toolName,
+    success: true,
+    output: text,
+    truncated: truncated || waitResult.truncated,
     durationMs: Date.now() - startTime,
   };
 }

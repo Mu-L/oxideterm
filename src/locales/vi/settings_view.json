@@ -327,6 +327,8 @@
       "tool_use_group_connection_monitor": "Giám sát kết nối",
       "tool_use_group_session_manager": "Quản lý phiên",
       "tool_use_group_plugin_manager": "Quản lý plugin",
+      "tool_use_group_tui_interaction": "Tương tác TUI",
+      "experimental": "Thử nghiệm",
       "tool_use_subgroup_read_only": "Chỉ đọc",
       "tool_use_subgroup_write": "Ghi / Thực thi",
       "tool_use_approve_all": "Phê duyệt tất cả",

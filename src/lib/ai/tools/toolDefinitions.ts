@@ -437,6 +437,88 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
       required: ['session_id', 'commands'],
     },
   },
+  // ── TUI Interaction (Experimental) ──────────────────────────────────────
+  {
+    name: 'read_screen',
+    description:
+      '[Experimental] Read the current terminal viewport as a screen snapshot. Returns line-by-line text with cursor position, terminal dimensions, and whether a TUI app is active (alternate buffer). Use this before send_keys/send_mouse to understand the current screen state.',
+    parameters: {
+      type: 'object',
+      properties: {
+        session_id: {
+          type: 'string',
+          description: 'Target terminal session ID.',
+        },
+      },
+      required: ['session_id'],
+    },
+  },
+  {
+    name: 'send_keys',
+    description:
+      '[Experimental] Send a sequence of keystrokes to a terminal session. Supports plain text and special keys (Enter, Escape, Tab, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, F1-F12, Space, Insert). Use read_screen first to see current state, then send_keys to interact with TUI apps like vim, nano, htop, less.',
+    parameters: {
+      type: 'object',
+      properties: {
+        session_id: {
+          type: 'string',
+          description: 'Target terminal session ID.',
+        },
+        keys: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of keys to send. Each element is either plain text (sent as-is) or a special key name (case-insensitive): Enter, Escape, Tab, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, Insert, Space, F1-F12. Max 50 elements.',
+        },
+        delay_ms: {
+          type: 'number',
+          description: 'Delay between each key in milliseconds. Default 50. Range: 10-1000.',
+        },
+      },
+      required: ['session_id', 'keys'],
+    },
+  },
+  {
+    name: 'send_mouse',
+    description:
+      '[Experimental] Send a mouse event to a terminal session using SGR protocol. Only effective when the TUI app has mouse tracking enabled (e.g. htop, mc, tmux). Use read_screen first to verify alternate buffer is active. Coordinates are 1-based (row 1 = top, col 1 = left).',
+    parameters: {
+      type: 'object',
+      properties: {
+        session_id: {
+          type: 'string',
+          description: 'Target terminal session ID.',
+        },
+        action: {
+          type: 'string',
+          enum: ['click', 'scroll'],
+          description: 'Mouse action type.',
+        },
+        x: {
+          type: 'integer',
+          description: 'Column coordinate (1-based).',
+        },
+        y: {
+          type: 'integer',
+          description: 'Row coordinate (1-based).',
+        },
+        button: {
+          type: 'string',
+          enum: ['left', 'right', 'middle'],
+          description: 'Mouse button for click action. Default: left.',
+        },
+        direction: {
+          type: 'string',
+          enum: ['up', 'down'],
+          description: 'Scroll direction for scroll action.',
+        },
+        count: {
+          type: 'integer',
+          description: 'Number of scroll steps. Default: 1. Max: 20.',
+        },
+      },
+      required: ['session_id', 'action', 'x', 'y'],
+    },
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -782,6 +864,16 @@ export const READ_ONLY_TOOLS = new Set([
   'list_plugins',
 ]);
 
+/**
+ * Experimental tools — not included in "approve all" or "revoke all" bulk actions.
+ * Users must explicitly enable these in settings. Marked with [Experimental] badge.
+ */
+export const EXPERIMENTAL_TOOLS = new Set([
+  'read_screen',
+  'send_keys',
+  'send_mouse',
+]);
+
 /** Tools that modify state — require explicit user approval */
 export const WRITE_TOOLS = new Set([
   'terminal_exec',
@@ -798,6 +890,9 @@ export const WRITE_TOOLS = new Set([
   // Meta tools (write)
   'send_control_sequence',
   'batch_exec',
+  // TUI interaction (experimental, write)
+  'send_keys',
+  'send_mouse',
 ]);
 
 /** Tools that do NOT require any node context — work globally or read from local stores */
@@ -840,6 +935,10 @@ export const SESSION_ID_TOOLS = new Set([
   'await_terminal_output',
   'send_control_sequence',
   'batch_exec',
+  // TUI interaction (experimental)
+  'read_screen',
+  'send_keys',
+  'send_mouse',
 ]);
 
 /** Tools that only make sense for SSH connections (remote nodes) */
@@ -921,6 +1020,11 @@ export const TOOL_GROUPS: { groupKey: string; readOnly: string[]; write: string[
     groupKey: 'session',
     readOnly: ['list_tabs', 'list_sessions', 'get_terminal_buffer', 'search_terminal', 'await_terminal_output'],
     write: ['send_control_sequence', 'batch_exec'],
+  },
+  {
+    groupKey: 'tui_interaction',
+    readOnly: ['read_screen'],
+    write: ['send_keys', 'send_mouse'],
   },
   {
     groupKey: 'infrastructure',

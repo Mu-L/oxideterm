@@ -159,7 +159,10 @@
         "get_session_tree": "Arbre sessions",
         "list_plugins": "Lister les plugins",
         "send_control_sequence": "Envoyer un signal",
-        "batch_exec": "Exécution par lot"
+        "batch_exec": "Exécution par lot",
+        "read_screen": "Lire l'écran",
+        "send_keys": "Envoyer touches",
+        "send_mouse": "Envoyer souris"
       }
     },
     "tool_selector": {

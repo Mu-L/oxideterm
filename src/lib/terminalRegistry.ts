@@ -11,14 +11,18 @@
  * - Added selection getter for AI context injection
  */
 
+import type { ScreenSnapshot } from '@/types';
+
 type BufferGetter = () => string;
 type SelectionGetter = () => string;
 type TerminalWriter = (data: string) => void;
+type ScreenReader = () => ScreenSnapshot | null;
 
 interface TerminalEntry {
   getter: BufferGetter;
   selectionGetter?: SelectionGetter;                // Optional: get current selection
   writer?: TerminalWriter;                          // Optional: write data to terminal's transport
+  screenReader?: ScreenReader;                      // Optional: read viewport snapshot for TUI interaction
   registeredAt: number;
   tabId: string;
   sessionId: string;                                // Original session ID for reference
@@ -100,6 +104,7 @@ const MAX_AGE_MS = 5 * 60 * 1000;
  * @param getter - Function that returns the terminal buffer content
  * @param selectionGetter - Optional: Function that returns the current selection
  * @param writer - Optional: Function that writes data to the terminal's transport (WebSocket/PTY)
+ * @param screenReader - Optional: Function that returns a viewport snapshot for TUI interaction
  */
 export function registerTerminalBuffer(
   paneId: string, 
@@ -109,11 +114,13 @@ export function registerTerminalBuffer(
   getter: BufferGetter,
   selectionGetter?: SelectionGetter,
   writer?: TerminalWriter,
+  screenReader?: ScreenReader,
 ): void {
   registry.set(paneId, {
     getter,
     selectionGetter,
     writer,
+    screenReader,
     registeredAt: Date.now(),
     tabId,
     sessionId,
@@ -439,6 +446,30 @@ export function writeToTerminal(paneId: string, data: string): boolean {
   } catch (e) {
     console.error('[TerminalRegistry] Failed to write to terminal:', e);
     return false;
+  }
+}
+
+/**
+ * Read a terminal viewport snapshot for TUI interaction (experimental).
+ * Returns structured screen data including cursor position and buffer mode.
+ * @param paneId - The pane ID
+ * @returns ScreenSnapshot or null if no screenReader is registered
+ */
+export function readScreen(paneId: string): ScreenSnapshot | null {
+  const entry = registry.get(paneId);
+  if (!entry?.screenReader) return null;
+
+  if (Date.now() - entry.registeredAt > MAX_AGE_MS) {
+    console.warn('[TerminalRegistry] Entry expired, removing stale entry');
+    registry.delete(paneId);
+    return null;
+  }
+
+  try {
+    return entry.screenReader();
+  } catch (e) {
+    console.error('[TerminalRegistry] Failed to read screen:', e);
+    return null;
   }
 }
 

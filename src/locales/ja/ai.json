@@ -159,7 +159,10 @@
         "get_session_tree": "セッションツリー",
         "list_plugins": "プラグイン一覧",
         "send_control_sequence": "制御信号送信",
-        "batch_exec": "一括実行"
+        "batch_exec": "一括実行",
+        "read_screen": "画面読み取り",
+        "send_keys": "キー送信",
+        "send_mouse": "マウス操作"
       }
     },
     "tool_selector": {

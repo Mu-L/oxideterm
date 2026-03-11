@@ -427,6 +427,10 @@ const defaultAiSettings: AiSettings = {
       // Meta tools
       send_control_sequence: false,
       batch_exec: false,
+      // TUI interaction (experimental — disabled by default)
+      read_screen: false,
+      send_keys: false,
+      send_mouse: false,
     },
     disabledTools: [],
   },

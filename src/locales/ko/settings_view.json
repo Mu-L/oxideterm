@@ -327,6 +327,8 @@
       "tool_use_group_connection_monitor": "연결 모니터",
       "tool_use_group_session_manager": "세션 관리",
       "tool_use_group_plugin_manager": "플러그인 관리",
+      "tool_use_group_tui_interaction": "TUI 상호작용",
+      "experimental": "실험적",
       "tool_use_subgroup_read_only": "읽기 전용",
       "tool_use_subgroup_write": "쓰기 / 실행",
       "tool_use_approve_all": "모두 승인",

@@ -1,5 +1,5 @@
 import { memo, useState, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Terminal, FileText, FolderOpen, Search, GitBranch, Pen, Loader2, CheckCircle2, XCircle, AlertTriangle, Package, Network, Radio, CirclePlus, CircleStop, Activity, HardDrive, FolderSearch, FileCode, Code2, Info, ListTree, Settings, Puzzle, ShieldAlert, Check, X, Eye, Zap, Layers } from 'lucide-react';
+import { ChevronDown, ChevronRight, Terminal, FileText, FolderOpen, Search, GitBranch, Pen, Loader2, CheckCircle2, XCircle, AlertTriangle, Package, Network, Radio, CirclePlus, CircleStop, Activity, HardDrive, FolderSearch, FileCode, Code2, Info, ListTree, Settings, Puzzle, ShieldAlert, Check, X, Eye, Zap, Layers, Monitor, Keyboard, MousePointer2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/utils';
 import { useAiChatStore } from '../../store/aiChatStore';
@@ -63,6 +63,10 @@ const TOOL_ICONS: Record<string, React.ElementType> = {
   // Meta tools
   send_control_sequence: Zap,
   batch_exec: Layers,
+  // TUI interaction (experimental)
+  read_screen: Monitor,
+  send_keys: Keyboard,
+  send_mouse: MousePointer2,
 };
 
 function StatusIcon({ status }: { status: AiToolCall['status'] }) {

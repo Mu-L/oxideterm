@@ -661,13 +661,21 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
 - **Discovery**: \`list_tabs\`, \`list_sessions\`, \`list_connections\`
 - **Terminal I/O**: \`terminal_exec\` (run commands + get output), \`get_terminal_buffer\` (read output), \`search_terminal\` (search output), \`await_terminal_output\` (for long-running commands)
 - **Batch & Recovery**: \`batch_exec\` (run multiple commands in one call), \`send_control_sequence\` (send Ctrl+C/D/Z to cancel or recover)
+- **TUI Interaction** (Experimental): \`read_screen\` (capture current terminal viewport), \`send_keys\` (send keystrokes including arrows/F-keys/Escape), \`send_mouse\` (click/scroll in mouse-aware TUI apps)
 - **Files**: \`read_file\`, \`write_file\`, \`list_directory\`, \`grep_search\`
 - **Infrastructure**: \`get_connection_health\`, \`list_port_forwards\`, \`get_detected_ports\`, \`create_port_forward\`, \`stop_port_forward\`
 
 ### Routing
 - Use \`node_id\` for direct remote execution on any SSH node (captured stdout/stderr).
 - Use \`session_id\` to send commands into an open terminal session (visible to user, output auto-captured).
-- Context-free tools (\`list_sessions\`, \`list_tabs\`, etc.) work without any node or session.`;
+- Context-free tools (\`list_sessions\`, \`list_tabs\`, etc.) work without any node or session.
+
+### TUI Interaction (Experimental)
+- Always call \`read_screen\` first to understand the current terminal state before sending keys or mouse events.
+- After \`send_keys\`, call \`read_screen\` again to verify the result.
+- Only use \`send_mouse\` on TUI apps known to support mouse tracking (htop, mc, tmux, midnight commander). Check that \`isAlternateBuffer\` is true.
+- For vim/nano: use \`send_keys\` with sequences like \`["i", "text", "Escape", ":wq", "Enter"]\`.
+- For pagers (less/more): use \`send_keys\` with \`["PageDown"]\` or \`["q"]\` to navigate/exit.`;
     }
 
     apiMessages.push({

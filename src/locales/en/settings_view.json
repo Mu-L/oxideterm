@@ -327,6 +327,8 @@
       "tool_use_group_connection_monitor": "Connection Monitor",
       "tool_use_group_session_manager": "Session Manager",
       "tool_use_group_plugin_manager": "Plugin Manager",
+      "tool_use_group_tui_interaction": "TUI Interaction",
+      "experimental": "Experimental",
       "tool_use_subgroup_read_only": "Read-Only",
       "tool_use_subgroup_write": "Write / Execute",
       "tool_use_approve_all": "Approve All",

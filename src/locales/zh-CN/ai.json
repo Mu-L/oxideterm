@@ -159,7 +159,10 @@
         "get_session_tree": "会话树",
         "list_plugins": "列出插件",
         "send_control_sequence": "发送控制信号",
-        "batch_exec": "批量执行"
+        "batch_exec": "批量执行",
+        "read_screen": "读取屏幕",
+        "send_keys": "发送按键",
+        "send_mouse": "发送鼠标"
       }
     },
     "tool_selector": {

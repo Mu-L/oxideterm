@@ -1323,6 +1323,22 @@ export type AiToolCall = {
   result?: AiToolResult;
 };
 
+/** Snapshot of the terminal viewport for TUI interaction (experimental) */
+export type ScreenSnapshot = {
+  /** Each line of the visible viewport */
+  lines: string[];
+  /** Cursor column (0-based) */
+  cursorX: number;
+  /** Cursor row within viewport (0-based) */
+  cursorY: number;
+  /** Terminal rows */
+  rows: number;
+  /** Terminal columns */
+  cols: number;
+  /** Whether the terminal is in alternate buffer mode (TUI app active) */
+  isAlternateBuffer: boolean;
+};
+
 /** Result of a tool execution */
 export type AiToolResult = {
   /** The tool call ID this result corresponds to */

@@ -327,6 +327,8 @@
       "tool_use_group_connection_monitor": "連線監控",
       "tool_use_group_session_manager": "工作階段管理",
       "tool_use_group_plugin_manager": "外掛管理",
+      "tool_use_group_tui_interaction": "TUI 互動",
+      "experimental": "實驗性",
       "tool_use_subgroup_read_only": "唯讀",
       "tool_use_subgroup_write": "寫入 / 執行",
       "tool_use_approve_all": "全部核准",

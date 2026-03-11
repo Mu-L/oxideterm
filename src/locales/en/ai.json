@@ -159,7 +159,10 @@
         "get_session_tree": "Session Tree",
         "list_plugins": "List Plugins",
         "send_control_sequence": "Send Signal",
-        "batch_exec": "Batch Execute"
+        "batch_exec": "Batch Execute",
+        "read_screen": "Read Screen",
+        "send_keys": "Send Keys",
+        "send_mouse": "Send Mouse"
       }
     },
     "tool_selector": {

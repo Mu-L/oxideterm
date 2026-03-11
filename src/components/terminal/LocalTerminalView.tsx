@@ -698,6 +698,28 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       return term.getSelection() || '';
     };
 
+    // Screen reader for TUI interaction (experimental)
+    const getScreenSnapshot = (): import('@/types').ScreenSnapshot | null => {
+      const buffer = term.buffer.active;
+      const rows = term.rows;
+      const cols = term.cols;
+      const lines: string[] = [];
+
+      for (let i = 0; i < rows; i++) {
+        const line = buffer.getLine(buffer.baseY + i);
+        lines.push(line ? line.translateToString(false) : '');
+      }
+
+      return {
+        lines,
+        cursorX: buffer.cursorX + 1,  // Convert from 0-based to 1-based
+        cursorY: buffer.cursorY + 1,  // Convert from 0-based to 1-based
+        rows,
+        cols,
+        isAlternateBuffer: term.buffer.active.type === 'alternate',
+      };
+    };
+
     // Register buffer getter for AI context capture
     // Now uses paneId as key (for split pane support)
     registerTerminalBuffer(
@@ -714,6 +736,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
           console.error('[LocalTerminalView] Failed to write to PTY:', err);
         });
       },
+      getScreenSnapshot,  // Screen reader for TUI interaction
     );
 
     // Initial fit

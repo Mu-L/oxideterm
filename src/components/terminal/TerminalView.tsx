@@ -1225,6 +1225,32 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const getSelectionContent = (): string => {
       return terminalRef.current?.getSelection() || '';
     };
+
+    // Screen reader for TUI interaction (experimental)
+    const getScreenSnapshot = (): import('@/types').ScreenSnapshot | null => {
+      const t = terminalRef.current;
+      if (!t) return null;
+
+      const buffer = t.buffer.active;
+      const rows = t.rows;
+      const cols = t.cols;
+      const lines: string[] = [];
+
+      // Read only the visible viewport rows
+      for (let i = 0; i < rows; i++) {
+        const line = buffer.getLine(buffer.baseY + i);
+        lines.push(line ? line.translateToString(false) : '');
+      }
+
+      return {
+        lines,
+        cursorX: buffer.cursorX + 1,  // Convert from 0-based to 1-based
+        cursorY: buffer.cursorY + 1,  // Convert from 0-based to 1-based
+        rows,
+        cols,
+        isAlternateBuffer: t.buffer.active.type === 'alternate',
+      };
+    };
     
     // Register with paneId as key, not sessionId
     registerTerminalBuffer(
@@ -1244,6 +1270,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           ws.send(frame);
         }
       },
+      getScreenSnapshot,  // Screen reader for TUI interaction
     );
     
     // Font loading detection - ensure fonts are loaded before connecting

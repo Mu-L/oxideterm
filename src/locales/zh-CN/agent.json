@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "AI 代理",
+    "tabTitle": "AI 代理",
+    "autonomy": {
+      "supervised": "受控",
+      "balanced": "均衡",
+      "autonomous": "自主",
+      "supervised_desc": "所有工具调用都需要手动批准",
+      "balanced_desc": "只读工具自动批准，写操作需要批准",
+      "autonomous_desc": "所有工具自动批准，除了危险命令"
+    },
+    "input": {
+      "placeholder": "描述你的任务...（例如：\"检查所有服务器的磁盘使用情况\"）",
+      "shortcut": "⌘+Enter 开始",
+      "start": "开始"
+    },
+    "plan": {
+      "title": "计划"
+    },
+    "step": {
+      "plan": "规划",
+      "tool_call": "工具调用",
+      "observation": "观察",
+      "decision": "决策",
+      "error": "错误",
+      "approval_request": "批准请求",
+      "user_input": "用户输入",
+      "verify": "验证",
+      "summary": "总结",
+      "expand": "展开更多",
+      "collapse": "收起"
+    },
+    "log": {
+      "empty": "暂无活动任务。请描述一个目标以开始。"
+    },
+    "approval": {
+      "title": "{{count}} 个操作等待批准",
+      "approve_all": "全部批准",
+      "reject_all": "全部拒绝"
+    },
+    "status": {
+      "idle": "空闲",
+      "planning": "规划中...",
+      "executing": "执行中...",
+      "paused": "已暂停",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "awaiting_approval": "等待批准"
+    },
+    "control": {
+      "pause": "暂停",
+      "resume": "继续",
+      "cancel": "取消",
+      "round": "轮次 {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "任务完成",
+      "failed": "任务失败"
+    },
+    "history": {
+      "title": "历史记录 ({{count}})",
+      "back": "返回列表",
+      "view": "查看详情",
+      "rerun": "重新运行",
+      "delete": "删除",
+      "clear": "清空全部",
+      "rounds": "{{count}} 轮"
+    },
+    "toast": {
+      "task_completed": "Agent 任务已完成",
+      "task_failed": "Agent 任务失败",
+      "approval_needed": "Agent 需要审批",
+      "context_overflow": "上下文已达上限，任务已停止",
+      "max_rounds": "已达最大轮次，任务可能未完成",
+      "no_progress": "Agent 已停止：多轮无进展"
+    }
+  }
+}

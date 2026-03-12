@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "Tác nhân AI",
+    "tabTitle": "Tác nhân AI",
+    "autonomy": {
+      "supervised": "Giám sát",
+      "balanced": "Cân bằng",
+      "autonomous": "Tự chủ",
+      "supervised_desc": "Tất cả các cuộc gọi công cụ đều cần phê duyệt thủ công",
+      "balanced_desc": "Các công cụ chỉ đọc được tự động phê duyệt, các thao tác ghi cần phê duyệt",
+      "autonomous_desc": "Tất cả các công cụ được tự động phê duyệt trừ các lệnh nguy hiểm"
+    },
+    "input": {
+      "placeholder": "Mô tả nhiệm vụ của bạn... (ví dụ: \"Kiểm tra dung lượng đĩa trên tất cả các máy chủ\")",
+      "shortcut": "⌘+Enter để bắt đầu",
+      "start": "Bắt đầu"
+    },
+    "plan": {
+      "title": "Kế hoạch"
+    },
+    "step": {
+      "plan": "Lập kế hoạch",
+      "tool_call": "Gọi công cụ",
+      "observation": "Quan sát",
+      "decision": "Quyết định",
+      "error": "Lỗi",
+      "approval_request": "Yêu cầu phê duyệt",
+      "user_input": "Nhập liệu",
+      "verify": "Xác minh",
+      "summary": "Tóm tắt",
+      "expand": "Xem thêm",
+      "collapse": "Thu gọn"
+    },
+    "log": {
+      "empty": "Không có nhiệm vụ đang hoạt động. Mô tả mục tiêu để bắt đầu."
+    },
+    "approval": {
+      "title": "{{count}} hành động đang chờ phê duyệt",
+      "approve_all": "Phê duyệt tất cả",
+      "reject_all": "Từ chối tất cả"
+    },
+    "status": {
+      "idle": "Rảnh",
+      "planning": "Đang lập kế hoạch...",
+      "executing": "Đang thực thi...",
+      "paused": "Đã tạm dừng",
+      "completed": "Hoàn thành",
+      "failed": "Thất bại",
+      "cancelled": "Đã hủy",
+      "awaiting_approval": "Đang chờ phê duyệt"
+    },
+    "control": {
+      "pause": "Tạm dừng",
+      "resume": "Tiếp tục",
+      "cancel": "Hủy",
+      "round": "Vòng {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "Nhiệm vụ hoàn thành",
+      "failed": "Nhiệm vụ thất bại"
+    },
+    "history": {
+      "title": "Lịch sử ({{count}})",
+      "back": "Quay lại danh sách",
+      "view": "Xem chi tiết",
+      "rerun": "Chạy lại",
+      "delete": "Xóa",
+      "clear": "Xóa tất cả",
+      "rounds": "{{count}} vòng"
+    },
+    "toast": {
+      "task_completed": "Nhiệm vụ đại lý hoàn thành",
+      "task_failed": "Nhiệm vụ đại lý thất bại",
+      "approval_needed": "Đại lý cần phê duyệt",
+      "context_overflow": "Đạt giới hạn ngữ cảnh, nhiệm vụ đã dừng",
+      "max_rounds": "Đạt số vòng tối đa, nhiệm vụ có thể chưa hoàn thiện",
+      "no_progress": "Đại lý đã dừng: không có tiến triển sau nhiều vòng"
+    }
+  }
+}

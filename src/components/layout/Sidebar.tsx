@@ -15,6 +15,7 @@ import {
   Network,
   Database,
   Sparkles,
+  Bot,
   Square,
   PanelLeftClose,
   PanelLeft,
@@ -668,6 +669,7 @@ export const Sidebar = () => {
     { kind: 'tab', key: 'connection_monitor', icon: Activity, titleKey: 'sidebar.panels.connection_monitor' },
     { kind: 'tab', key: 'topology', icon: Network, titleKey: 'sidebar.panels.connection_matrix' },
     { kind: 'toggle', key: 'ai', icon: Sparkles, titleKey: 'sidebar.panels.ai' },
+    { kind: 'tab', key: 'ai_agent', icon: Bot, titleKey: 'agent.tabTitle' },
     // Plugin-registered sidebar panels
     ...pluginPanelDefs,
   ];

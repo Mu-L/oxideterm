@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "AI Agent",
+    "tabTitle": "AI Agent",
+    "autonomy": {
+      "supervised": "Supervised",
+      "balanced": "Balanced",
+      "autonomous": "Autonomous",
+      "supervised_desc": "All tool calls require manual approval",
+      "balanced_desc": "Read-only tools auto-approved, write operations require approval",
+      "autonomous_desc": "All tools auto-approved except dangerous commands"
+    },
+    "input": {
+      "placeholder": "Describe your task... (e.g. \"Check disk usage on all servers\")",
+      "shortcut": "⌘+Enter to start",
+      "start": "Start"
+    },
+    "plan": {
+      "title": "Plan"
+    },
+    "step": {
+      "plan": "Planning",
+      "tool_call": "Tool Call",
+      "observation": "Observation",
+      "decision": "Decision",
+      "error": "Error",
+      "approval_request": "Approval",
+      "user_input": "User Input",
+      "verify": "Verify",
+      "summary": "Summary",
+      "expand": "Show more",
+      "collapse": "Show less"
+    },
+    "log": {
+      "empty": "No active task. Describe a goal to get started."
+    },
+    "approval": {
+      "title": "{{count}} action(s) awaiting approval",
+      "approve_all": "Approve All",
+      "reject_all": "Reject All"
+    },
+    "status": {
+      "idle": "Idle",
+      "planning": "Planning...",
+      "executing": "Executing...",
+      "paused": "Paused",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "awaiting_approval": "Awaiting Approval"
+    },
+    "control": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "cancel": "Cancel",
+      "round": "Round {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "Task Completed",
+      "failed": "Task Failed"
+    },
+    "history": {
+      "title": "History ({{count}})",
+      "back": "Back to list",
+      "view": "View details",
+      "rerun": "Re-run task",
+      "delete": "Delete",
+      "clear": "Clear all",
+      "rounds": "{{count}} rounds"
+    },
+    "toast": {
+      "task_completed": "Agent task completed",
+      "task_failed": "Agent task failed",
+      "approval_needed": "Agent needs approval",
+      "context_overflow": "Context limit reached, task stopped",
+      "max_rounds": "Max rounds reached, task may be incomplete",
+      "no_progress": "Agent stopped: no progress after multiple rounds"
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "KI-Agent",
+    "tabTitle": "KI-Agent",
+    "autonomy": {
+      "supervised": "Überwacht",
+      "balanced": "Ausgewogen",
+      "autonomous": "Autonom",
+      "supervised_desc": "Alle Werkzeugaufrufe erfordern manuelle Genehmigung",
+      "balanced_desc": "Lesezugriffe werden automatisch genehmigt, Schreibvorgänge erfordern Genehmigung",
+      "autonomous_desc": "Alle Werkzeuge werden automatisch genehmigt, außer gefährliche Befehle"
+    },
+    "input": {
+      "placeholder": "Beschreiben Sie Ihre Aufgabe... (z.B. 'Festplattennutzung auf allen Servern prüfen')",
+      "shortcut": "⌘+Enter zum Starten",
+      "start": "Starten"
+    },
+    "plan": {
+      "title": "Plan"
+    },
+    "step": {
+      "plan": "Planung",
+      "tool_call": "Werkzeugaufruf",
+      "observation": "Beobachtung",
+      "decision": "Entscheidung",
+      "error": "Fehler",
+      "approval_request": "Genehmigungsanfrage",
+      "user_input": "Benutzereingabe",
+      "verify": "Überprüfen",
+      "summary": "Zusammenfassung",
+      "expand": "Mehr anzeigen",
+      "collapse": "Weniger anzeigen"
+    },
+    "log": {
+      "empty": "Keine aktive Aufgabe. Beschreiben Sie ein Ziel, um zu beginnen."
+    },
+    "approval": {
+      "title": "{{count}} Aktion(en) warten auf Genehmigung",
+      "approve_all": "Alle genehmigen",
+      "reject_all": "Alle ablehnen"
+    },
+    "status": {
+      "idle": "Inaktiv",
+      "planning": "Planung...",
+      "executing": "Ausführung...",
+      "paused": "Pausiert",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen",
+      "awaiting_approval": "Warte auf Genehmigung"
+    },
+    "control": {
+      "pause": "Pause",
+      "resume": "Fortsetzen",
+      "cancel": "Abbrechen",
+      "round": "Runde {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "Aufgabe abgeschlossen",
+      "failed": "Aufgabe fehlgeschlagen"
+    },
+    "history": {
+      "title": "Verlauf ({{count}})",
+      "back": "Zurück zur Liste",
+      "view": "Details anzeigen",
+      "rerun": "Erneut ausführen",
+      "delete": "Löschen",
+      "clear": "Alles löschen",
+      "rounds": "{{count}} Runden"
+    },
+    "toast": {
+      "task_completed": "Agent-Aufgabe abgeschlossen",
+      "task_failed": "Agent-Aufgabe fehlgeschlagen",
+      "approval_needed": "Agent benötigt Genehmigung",
+      "context_overflow": "Kontextlimit erreicht, Aufgabe gestoppt",
+      "max_rounds": "Max. Runden erreicht, Aufgabe möglicherweise unvollständig",
+      "no_progress": "Agent gestoppt: Kein Fortschritt nach mehreren Runden"
+    }
+  }
+}

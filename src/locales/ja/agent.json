@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "AI エージェント",
+    "tabTitle": "AI エージェント",
+    "autonomy": {
+      "supervised": "監視付き",
+      "balanced": "バランス",
+      "autonomous": "自律",
+      "supervised_desc": "すべてのツール呼び出しに手動承認が必要",
+      "balanced_desc": "読み取り専用ツールは自動承認、書き込み操作は承認が必要",
+      "autonomous_desc": "危険なコマンドを除き、すべてのツールが自動承認"
+    },
+    "input": {
+      "placeholder": "タスクを記述してください...（例：「全サーバーのディスク使用量を確認」）",
+      "shortcut": "⌘+Enter で開始",
+      "start": "開始"
+    },
+    "plan": {
+      "title": "プラン"
+    },
+    "step": {
+      "plan": "計画",
+      "tool_call": "ツール呼び出し",
+      "observation": "観察",
+      "decision": "決定",
+      "error": "エラー",
+      "approval_request": "承認リクエスト",
+      "user_input": "ユーザー入力",
+      "verify": "検証",
+      "summary": "要約",
+      "expand": "すべて表示",
+      "collapse": "折りたたむ"
+    },
+    "log": {
+      "empty": "アクティブなタスクはありません。目標を記述して開始してください。"
+    },
+    "approval": {
+      "title": "{{count}} 件のアクションが承認待ち",
+      "approve_all": "すべて承認",
+      "reject_all": "すべて拒否"
+    },
+    "status": {
+      "idle": "アイドル",
+      "planning": "計画中...",
+      "executing": "実行中...",
+      "paused": "一時停止",
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル",
+      "awaiting_approval": "承認待ち"
+    },
+    "control": {
+      "pause": "一時停止",
+      "resume": "再開",
+      "cancel": "キャンセル",
+      "round": "ラウンド {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "タスク完了",
+      "failed": "タスク失敗"
+    },
+    "history": {
+      "title": "履歴 ({{count}})",
+      "back": "一覧に戻る",
+      "view": "詳細を見る",
+      "rerun": "再実行",
+      "delete": "削除",
+      "clear": "すべてクリア",
+      "rounds": "{{count}} ラウンド"
+    },
+    "toast": {
+      "task_completed": "エージェントタスク完了",
+      "task_failed": "エージェントタスク失敗",
+      "approval_needed": "エージェントの承認が必要です",
+      "context_overflow": "コンテキスト制限に達しました。タスクを停止しました",
+      "max_rounds": "最大ラウンドに達しました。タスクが未完了の可能性があります",
+      "no_progress": "エージェント停止：複数ラウンド進捗なし"
+    }
+  }
+}

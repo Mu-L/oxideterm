@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "AI 代理",
+    "tabTitle": "AI 代理",
+    "autonomy": {
+      "supervised": "受控",
+      "balanced": "均衡",
+      "autonomous": "自主",
+      "supervised_desc": "所有工具呼叫都需要手動批准",
+      "balanced_desc": "唯讀工具自動批准，寫入操作需要批准",
+      "autonomous_desc": "所有工具自動批准，除了危險命令"
+    },
+    "input": {
+      "placeholder": "描述你的任務...（例如：「檢查所有伺服器的磁碟使用情況」）",
+      "shortcut": "⌘+Enter 開始",
+      "start": "開始"
+    },
+    "plan": {
+      "title": "計劃"
+    },
+    "step": {
+      "plan": "規劃",
+      "tool_call": "工具呼叫",
+      "observation": "觀察",
+      "decision": "決策",
+      "error": "錯誤",
+      "approval_request": "批准請求",
+      "user_input": "使用者輸入",
+      "verify": "驗證",
+      "summary": "總結",
+      "expand": "展開更多",
+      "collapse": "收起"
+    },
+    "log": {
+      "empty": "暫無活動任務。請描述一個目標以開始。"
+    },
+    "approval": {
+      "title": "{{count}} 個操作等待批准",
+      "approve_all": "全部批准",
+      "reject_all": "全部拒絕"
+    },
+    "status": {
+      "idle": "閒置",
+      "planning": "規劃中...",
+      "executing": "執行中...",
+      "paused": "已暫停",
+      "completed": "已完成",
+      "failed": "失敗",
+      "cancelled": "已取消",
+      "awaiting_approval": "等待批准"
+    },
+    "control": {
+      "pause": "暫停",
+      "resume": "繼續",
+      "cancel": "取消",
+      "round": "輪次 {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "任務完成",
+      "failed": "任務失敗"
+    },
+    "history": {
+      "title": "歷史記錄 ({{count}})",
+      "back": "返回列表",
+      "view": "查看詳情",
+      "rerun": "重新執行",
+      "delete": "刪除",
+      "clear": "清除全部",
+      "rounds": "{{count}} 輪"
+    },
+    "toast": {
+      "task_completed": "Agent 任務已完成",
+      "task_failed": "Agent 任務失敗",
+      "approval_needed": "Agent 需要審批",
+      "context_overflow": "上下文已達上限，任務已停止",
+      "max_rounds": "已達最大輪次，任務可能未完成",
+      "no_progress": "Agent 已停止：多輪無進展"
+    }
+  }
+}

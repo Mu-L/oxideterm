@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "Agent IA",
+    "tabTitle": "Agent IA",
+    "autonomy": {
+      "supervised": "Supervisé",
+      "balanced": "Équilibré",
+      "autonomous": "Autonome",
+      "supervised_desc": "Tous les appels d'outils nécessitent une approbation manuelle",
+      "balanced_desc": "Les outils en lecture seule sont approuvés automatiquement, les écritures nécessitent une approbation",
+      "autonomous_desc": "Tous les outils sont approuvés automatiquement sauf les commandes dangereuses"
+    },
+    "input": {
+      "placeholder": "Décrivez votre tâche... (ex : « Vérifier l'utilisation disque sur tous les serveurs »)",
+      "shortcut": "⌘+Entrée pour démarrer",
+      "start": "Démarrer"
+    },
+    "plan": {
+      "title": "Plan"
+    },
+    "step": {
+      "plan": "Planification",
+      "tool_call": "Appel d'outil",
+      "observation": "Observation",
+      "decision": "Décision",
+      "error": "Erreur",
+      "approval_request": "Demande d'approbation",
+      "user_input": "Entrée utilisateur",
+      "verify": "Vérifier",
+      "summary": "Résumé",
+      "expand": "Voir plus",
+      "collapse": "Réduire"
+    },
+    "log": {
+      "empty": "Aucune tâche active. Décrivez un objectif pour commencer."
+    },
+    "approval": {
+      "title": "{{count}} action(s) en attente d'approbation",
+      "approve_all": "Tout approuver",
+      "reject_all": "Tout rejeter"
+    },
+    "status": {
+      "idle": "Inactif",
+      "planning": "Planification...",
+      "executing": "Exécution...",
+      "paused": "En pause",
+      "completed": "Terminé",
+      "failed": "Échoué",
+      "cancelled": "Annulé",
+      "awaiting_approval": "En attente d'approbation"
+    },
+    "control": {
+      "pause": "Pause",
+      "resume": "Reprendre",
+      "cancel": "Annuler",
+      "round": "Tour {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "Tâche terminée",
+      "failed": "Tâche échouée"
+    },
+    "history": {
+      "title": "Historique ({{count}})",
+      "back": "Retour à la liste",
+      "view": "Voir les détails",
+      "rerun": "Relancer",
+      "delete": "Supprimer",
+      "clear": "Tout effacer",
+      "rounds": "{{count}} tours"
+    },
+    "toast": {
+      "task_completed": "Tâche de l'agent terminée",
+      "task_failed": "Tâche de l'agent échouée",
+      "approval_needed": "L'agent a besoin d'approbation",
+      "context_overflow": "Limite de contexte atteinte, tâche arrêtée",
+      "max_rounds": "Nombre max de tours atteint, tâche peut être incomplète",
+      "no_progress": "Agent arrêté : aucun progrès après plusieurs tours"
+    }
+  }
+}

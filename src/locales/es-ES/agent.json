@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "Agente IA",
+    "tabTitle": "Agente IA",
+    "autonomy": {
+      "supervised": "Supervisado",
+      "balanced": "Equilibrado",
+      "autonomous": "Autónomo",
+      "supervised_desc": "Todas las llamadas a herramientas requieren aprobación manual",
+      "balanced_desc": "Las herramientas de solo lectura se aprueban automáticamente, las escrituras requieren aprobación",
+      "autonomous_desc": "Todas las herramientas se aprueban automáticamente excepto los comandos peligrosos"
+    },
+    "input": {
+      "placeholder": "Describe tu tarea... (ej: \"Verificar el uso de disco en todos los servidores\")",
+      "shortcut": "⌘+Enter para iniciar",
+      "start": "Iniciar"
+    },
+    "plan": {
+      "title": "Plan"
+    },
+    "step": {
+      "plan": "Planificación",
+      "tool_call": "Llamada a herramienta",
+      "observation": "Observación",
+      "decision": "Decisión",
+      "error": "Error",
+      "approval_request": "Solicitud de aprobación",
+      "user_input": "Entrada del usuario",
+      "verify": "Verificar",
+      "summary": "Resumen",
+      "expand": "Ver más",
+      "collapse": "Ver menos"
+    },
+    "log": {
+      "empty": "No hay tareas activas. Describe un objetivo para comenzar."
+    },
+    "approval": {
+      "title": "{{count}} acción(es) esperando aprobación",
+      "approve_all": "Aprobar todo",
+      "reject_all": "Rechazar todo"
+    },
+    "status": {
+      "idle": "Inactivo",
+      "planning": "Planificando...",
+      "executing": "Ejecutando...",
+      "paused": "Pausado",
+      "completed": "Completado",
+      "failed": "Fallido",
+      "cancelled": "Cancelado",
+      "awaiting_approval": "Esperando aprobación"
+    },
+    "control": {
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "cancel": "Cancelar",
+      "round": "Ronda {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "Tarea completada",
+      "failed": "Tarea fallida"
+    },
+    "history": {
+      "title": "Historial ({{count}})",
+      "back": "Volver a la lista",
+      "view": "Ver detalles",
+      "rerun": "Volver a ejecutar",
+      "delete": "Eliminar",
+      "clear": "Borrar todo",
+      "rounds": "{{count}} rondas"
+    },
+    "toast": {
+      "task_completed": "Tarea del agente completada",
+      "task_failed": "Tarea del agente fallida",
+      "approval_needed": "El agente necesita aprobación",
+      "context_overflow": "Límite de contexto alcanzado, tarea detenida",
+      "max_rounds": "Máximo de rondas alcanzado, la tarea puede estar incompleta",
+      "no_progress": "Agente detenido: sin progreso tras varias rondas"
+    }
+  }
+}

@@ -493,7 +493,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
 
     // Handle global/singleton tabs
-    if (type === 'settings' || type === 'connection_monitor' || type === 'connection_pool' || type === 'topology' || type === 'file_manager' || type === 'session_manager' || type === 'plugin_manager' || type === 'graphics' || type === 'launcher') {
+    if (type === 'settings' || type === 'connection_monitor' || type === 'connection_pool' || type === 'topology' || type === 'file_manager' || type === 'session_manager' || type === 'plugin_manager' || type === 'graphics' || type === 'launcher' || type === 'ai_agent') {
       const existingTab = get().tabs.find(t => t.type === type);
       if (existingTab) {
         set({ activeTabId: existingTab.id });
@@ -527,6 +527,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       } else if (type === 'launcher') {
         title = i18n.t('launcher.tabTitle', 'Launcher');
         icon = '🚀';
+      } else if (type === 'ai_agent') {
+        title = i18n.t('agent.tabTitle', 'AI Agent');
+        icon = '🤖';
       }
 
       const newTab: Tab = {

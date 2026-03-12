@@ -1,0 +1,80 @@
+{
+  "agent": {
+    "title": "AI 에이전트",
+    "tabTitle": "AI 에이전트",
+    "autonomy": {
+      "supervised": "감독",
+      "balanced": "균형",
+      "autonomous": "자율",
+      "supervised_desc": "모든 도구 호출에 수동 승인이 필요합니다",
+      "balanced_desc": "읽기 전용 도구는 자동 승인되고, 쓰기 작업은 승인이 필요합니다",
+      "autonomous_desc": "위험한 명령을 제외한 모든 도구가 자동 승인됩니다"
+    },
+    "input": {
+      "placeholder": "작업을 설명하세요... (예: \"모든 서버의 디스크 사용량 확인\")",
+      "shortcut": "⌘+Enter로 시작",
+      "start": "시작"
+    },
+    "plan": {
+      "title": "계획"
+    },
+    "step": {
+      "plan": "계획",
+      "tool_call": "도구 호출",
+      "observation": "관찰",
+      "decision": "결정",
+      "error": "오류",
+      "approval_request": "승인 요청",
+      "user_input": "사용자 입력",
+      "verify": "검증",
+      "summary": "요약",
+      "expand": "더 보기",
+      "collapse": "접기"
+    },
+    "log": {
+      "empty": "활성 작업이 없습니다. 목표를 설명하여 시작하세요."
+    },
+    "approval": {
+      "title": "{{count}}개의 작업이 승인 대기 중",
+      "approve_all": "모두 승인",
+      "reject_all": "모두 거부"
+    },
+    "status": {
+      "idle": "대기 중",
+      "planning": "계획 중...",
+      "executing": "실행 중...",
+      "paused": "일시 중지",
+      "completed": "완료",
+      "failed": "실패",
+      "cancelled": "취소됨",
+      "awaiting_approval": "승인 대기"
+    },
+    "control": {
+      "pause": "일시 중지",
+      "resume": "재개",
+      "cancel": "취소",
+      "round": "라운드 {{current}}/{{max}}"
+    },
+    "summary": {
+      "completed": "작업 완료",
+      "failed": "작업 실패"
+    },
+    "history": {
+      "title": "기록 ({{count}})",
+      "back": "목록으로",
+      "view": "상세 보기",
+      "rerun": "다시 실행",
+      "delete": "삭제",
+      "clear": "모두 지우기",
+      "rounds": "{{count}} 라운드"
+    },
+    "toast": {
+      "task_completed": "에이전트 작업 완료",
+      "task_failed": "에이전트 작업 실패",
+      "approval_needed": "에이전트 승인 필요",
+      "context_overflow": "컨텍스트 한도 도달, 작업 중지됨",
+      "max_rounds": "최대 라운드 도달, 작업이 불완전할 수 있음",
+      "no_progress": "에이전트 중지: 여러 라운드 동안 진행 없음"
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { Sidebar } from './Sidebar';
 import { AiSidebar } from './AiSidebar';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { EventLogPanel } from './EventLogPanel';
 import { TabBar } from './TabBar';
 import { useAppStore, getSession } from '../../store/appStore';
@@ -35,6 +36,7 @@ const PluginTabRenderer = lazy(() => import('../plugin/PluginTabRenderer').then(
 const PluginManagerView = lazy(() => import('../plugin/PluginManagerView').then(m => ({ default: m.PluginManagerView })));
 const GraphicsView = lazy(() => import('../graphics/GraphicsView').then(m => ({ default: m.GraphicsView })));
 const LauncherView = lazy(() => import('../launcher/LauncherView').then(m => ({ default: m.LauncherView })));
+const AgentPanel = lazy(() => import('../ai/AgentPanel').then(m => ({ default: m.AgentPanel })));
 
 // Loading fallback for lazy components
 const ViewLoader = () => {
@@ -377,6 +379,15 @@ export const AppLayout = () => {
                       <Suspense fallback={<ViewLoader />}>
                         <LauncherView />
                       </Suspense>
+                    </TabBgWrapper>
+                  )}
+                  {tab.type === 'ai_agent' && (
+                    <TabBgWrapper tabType="ai_agent">
+                      <ErrorBoundary>
+                        <Suspense fallback={<ViewLoader />}>
+                          <AgentPanel />
+                        </Suspense>
+                      </ErrorBoundary>
                     </TabBgWrapper>
                   )}
                 </TabActiveProvider>

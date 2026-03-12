@@ -2002,6 +2002,7 @@ export const SettingsView = () => {
                                                             value={provider.baseUrl}
                                                             onChange={(e) => updateProvider(provider.id, { baseUrl: e.target.value })}
                                                             className="bg-theme-bg h-8 text-xs"
+                                                            placeholder={provider.type === 'openai_compatible' ? 'http://localhost:1234/v1' : undefined}
                                                         />
                                                     </div>
                                                     <div className="grid gap-1">
@@ -2027,7 +2028,7 @@ export const SettingsView = () => {
                                                             disabled={refreshingModels === provider.id}
                                                             onClick={async () => {
                                                                 // Guard: check key before fetching models
-                                                                if (provider.type !== 'ollama') {
+                                                                if (provider.type !== 'ollama' && provider.type !== 'openai_compatible') {
                                                                     try {
                                                                         const hasKey = await api.hasAiProviderApiKey(provider.id);
                                                                         if (!hasKey) {

@@ -7,6 +7,7 @@
 
 import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent, AiToolDefinition } from '../providers';
 import { getModelContextWindow } from '../tokenUtils';
+import { aiFetch, aiFetchStreaming } from '../aiFetch';
 
 /** Timeout for individual /api/show calls (ms) */
 const OLLAMA_SHOW_TIMEOUT = 2000;
@@ -67,13 +68,15 @@ export const ollamaProvider: AiStreamProvider = {
   async *streamCompletion(
     config: AiRequestConfig,
     messages: ChatMessage[],
-    signal: AbortSignal
+    _signal: AbortSignal
   ): AsyncGenerator<AiStreamEvent> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
     // Use Ollama's OpenAI-compatible endpoint
     const url = `${cleanBaseUrl}/v1/chat/completions`;
 
-    let response: Response;
+    let streamOk: boolean;
+    let streamStatus: number;
+    let reader: ReadableStreamDefaultReader<Uint8Array>;
     try {
       const body: Record<string, unknown> = {
         model: config.model,
@@ -85,26 +88,40 @@ export const ollamaProvider: AiStreamProvider = {
         body.tools = convertTools(config.tools);
       }
 
-      response = await fetch(url, {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {}),
+      };
+
+      const { response: statusPromise, body: streamBody } = aiFetchStreaming(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {}),
-        },
+        headers,
         body: JSON.stringify(body),
-        signal,
       });
+
+      const resp = await statusPromise;
+      streamOk = resp.ok;
+      streamStatus = resp.status;
+      reader = streamBody.getReader();
     } catch (e) {
       yield { type: 'error', message: 'Cannot connect to Ollama. Make sure Ollama is running (ollama serve).' };
       return;
     }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `Ollama error: ${response.status}`;
+    if (!streamOk) {
+      const errDecoder = new TextDecoder();
+      let errorText = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          errorText += errDecoder.decode(value, { stream: true });
+        }
+      } catch { /* stream error */ }
+      let errorMessage = `Ollama error: ${streamStatus}`;
 
       // Special handling for connection refused (Ollama not running)
-      if (response.status === 0 || errorText.includes('ECONNREFUSED')) {
+      if (streamStatus === 0 || errorText.includes('ECONNREFUSED')) {
         errorMessage = 'Cannot connect to Ollama. Make sure Ollama is running (ollama serve).';
       } else {
         try {
@@ -116,12 +133,6 @@ export const ollamaProvider: AiStreamProvider = {
       }
 
       yield { type: 'error', message: errorMessage };
-      return;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      yield { type: 'error', message: 'No response body' };
       return;
     }
 
@@ -199,16 +210,16 @@ export const ollamaProvider: AiStreamProvider = {
   async fetchModels(config: { baseUrl: string; apiKey: string }): Promise<string[]> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
     // Try Ollama native /api/tags first
-    let resp: Response;
+    let resp: { ok: boolean; status: number; body: string };
     try {
-      resp = await fetch(`${cleanBaseUrl}/api/tags`, {
+      resp = await aiFetch(`${cleanBaseUrl}/api/tags`, {
         headers: config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {},
       });
     } catch (e) {
       throw new Error('Cannot connect to Ollama. Make sure Ollama is running (ollama serve).');
     }
     if (!resp.ok) throw new Error(`Failed to fetch models: ${resp.status}`);
-    const data = await resp.json();
+    const data = JSON.parse(resp.body);
     if (!Array.isArray(data.models)) return [];
     return data.models
       .map((m: { name: string }) => m.name)
@@ -218,16 +229,16 @@ export const ollamaProvider: AiStreamProvider = {
   async fetchModelDetails(config: { baseUrl: string; apiKey: string }): Promise<Record<string, number>> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
     // First get all model names
-    let resp: Response;
+    let resp: { ok: boolean; status: number; body: string };
     try {
-      resp = await fetch(`${cleanBaseUrl}/api/tags`, {
+      resp = await aiFetch(`${cleanBaseUrl}/api/tags`, {
         headers: config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {},
       });
     } catch {
       return {};
     }
     if (!resp.ok) return {};
-    const data = await resp.json();
+    const data = JSON.parse(resp.body);
     if (!Array.isArray(data.models)) return {};
 
     const result: Record<string, number> = {};
@@ -249,17 +260,15 @@ export const ollamaProvider: AiStreamProvider = {
     if (toQuery.length > 0) {
       const queryResults = await Promise.allSettled(
         toQuery.map(async (name) => {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), OLLAMA_SHOW_TIMEOUT);
           try {
-            const showResp = await fetch(`${cleanBaseUrl}/api/show`, {
+            const showResp = await aiFetch(`${cleanBaseUrl}/api/show`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name }),
-              signal: controller.signal,
+              timeoutMs: OLLAMA_SHOW_TIMEOUT,
             });
             if (showResp.ok) {
-              const showData = await showResp.json();
+              const showData = JSON.parse(showResp.body);
               const ctx = showData.model_info?.['general.context_length']
                 ?? showData.model_info?.context_length
                 ?? showData.parameters?.num_ctx;
@@ -268,8 +277,8 @@ export const ollamaProvider: AiStreamProvider = {
               }
             }
             return null;
-          } finally {
-            clearTimeout(timeout);
+          } catch {
+            return null;
           }
         })
       );

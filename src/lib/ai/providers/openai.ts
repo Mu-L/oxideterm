@@ -6,6 +6,7 @@
  */
 
 import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent, AiToolDefinition } from '../providers';
+import { aiFetch, aiFetchStreaming } from '../aiFetch';
 
 /**
  * Convert AiToolDefinition[] to OpenAI function calling format.
@@ -60,7 +61,7 @@ export const openaiProvider: AiStreamProvider = {
   async *streamCompletion(
     config: AiRequestConfig,
     messages: ChatMessage[],
-    signal: AbortSignal
+    _signal: AbortSignal
   ): AsyncGenerator<AiStreamEvent> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
     const url = `${cleanBaseUrl}/chat/completions`;
@@ -76,19 +77,34 @@ export const openaiProvider: AiStreamProvider = {
       body.tools = convertTools(config.tools);
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
+    const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
-      },
+      };
+    if (config.apiKey) {
+      headers['Authorization'] = `Bearer ${config.apiKey}`;
+    }
+
+    const { response: statusPromise, body: streamBody } = aiFetchStreaming(url, {
+      method: 'POST',
+      headers,
       body: JSON.stringify(body),
-      signal,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `API error: ${response.status}`;
+    const { ok, status } = await statusPromise;
+
+    if (!ok) {
+      // Read error body from stream
+      const errReader = streamBody.getReader();
+      const errDecoder = new TextDecoder();
+      let errorText = '';
+      try {
+        while (true) {
+          const { done, value } = await errReader.read();
+          if (done) break;
+          errorText += errDecoder.decode(value, { stream: true });
+        }
+      } catch { /* stream error */ }
+      let errorMessage = `API error: ${status}`;
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error?.message || errorJson.message || errorMessage;
@@ -99,7 +115,7 @@ export const openaiProvider: AiStreamProvider = {
       return;
     }
 
-    const reader = response.body?.getReader();
+    const reader = streamBody.getReader();
     if (!reader) {
       yield { type: 'error', message: 'No response body' };
       return;
@@ -191,11 +207,11 @@ export const openaiProvider: AiStreamProvider = {
 
   async fetchModels(config: { baseUrl: string; apiKey: string }): Promise<string[]> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-    const resp = await fetch(`${cleanBaseUrl}/models`, {
-      headers: { 'Authorization': `Bearer ${config.apiKey}` },
+    const resp = await aiFetch(`${cleanBaseUrl}/models`, {
+      headers: config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {},
     });
     if (!resp.ok) throw new Error(`Failed to fetch models: ${resp.status}`);
-    const data = await resp.json();
+    const data = JSON.parse(resp.body);
     if (!Array.isArray(data.data)) return [];
     // Return chat-capable models, sorted alphabetically
     const chatModels = data.data
@@ -213,11 +229,11 @@ export const openaiProvider: AiStreamProvider = {
 
   async fetchModelDetails(config: { baseUrl: string; apiKey: string }): Promise<Record<string, number>> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-    const resp = await fetch(`${cleanBaseUrl}/models`, {
-      headers: { 'Authorization': `Bearer ${config.apiKey}` },
+    const resp = await aiFetch(`${cleanBaseUrl}/models`, {
+      headers: config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {},
     });
     if (!resp.ok) return {};
-    const data = await resp.json();
+    const data = JSON.parse(resp.body);
     if (!Array.isArray(data.data)) return {};
     const result: Record<string, number> = {};
     for (const m of data.data) {
@@ -241,28 +257,31 @@ export const openaiCompatibleProvider: AiStreamProvider = {
 
   async fetchModels(config: { baseUrl: string; apiKey: string }): Promise<string[]> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-    const resp = await fetch(`${cleanBaseUrl}/models`, {
+    const resp = await aiFetch(`${cleanBaseUrl}/models`, {
       headers: config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {},
     });
     if (!resp.ok) throw new Error(`Failed to fetch models: ${resp.status}`);
-    const data = await resp.json();
-    if (!Array.isArray(data.data)) return [];
-    return data.data.map((m: { id: string }) => m.id).sort();
+    const data = JSON.parse(resp.body);
+    // OpenAI format: { data: [{ id }] }, LM Studio native: { models: [{ key, display_name }] }
+    const models = Array.isArray(data.data) ? data.data : Array.isArray(data.models) ? data.models : [];
+    return models.map((m: { id?: string; key?: string }) => m.id ?? m.key ?? '').filter(Boolean).sort();
   },
 
   async fetchModelDetails(config: { baseUrl: string; apiKey: string }): Promise<Record<string, number>> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-    const resp = await fetch(`${cleanBaseUrl}/models`, {
+    const resp = await aiFetch(`${cleanBaseUrl}/models`, {
       headers: config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {},
     });
     if (!resp.ok) return {};
-    const data = await resp.json();
-    if (!Array.isArray(data.data)) return {};
+    const data = JSON.parse(resp.body);
+    const models = Array.isArray(data.data) ? data.data : Array.isArray(data.models) ? data.models : [];
     const result: Record<string, number> = {};
-    for (const m of data.data) {
+    for (const m of models) {
+      const id = m.id ?? m.key;
+      if (!id) continue;
       const ctx = m.context_window ?? m.context_length;
       if (typeof ctx === 'number' && ctx > 0) {
-        result[m.id] = ctx;
+        result[id] = ctx;
       }
     }
     return result;

@@ -3,6 +3,7 @@
 //! This module contains all Tauri commands exposed to the frontend.
 
 pub mod ai_chat;
+pub mod ai_http;
 pub mod appearance;
 pub mod archive;
 pub mod config;
@@ -32,6 +33,7 @@ pub mod sftp;
 pub mod ssh;
 
 pub use ai_chat::*;
+pub use ai_http::*;
 pub use appearance::*;
 pub use archive::*;
 pub use connect_v2::*;

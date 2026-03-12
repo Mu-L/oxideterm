@@ -558,13 +558,13 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
       if (providerId) {
         apiKey = await api.getAiProviderApiKey(providerId);
       }
-      // Ollama doesn't require an API key
-      if (!apiKey && providerType !== 'ollama') {
+      // Ollama and OpenAI-compatible (e.g. LM Studio) don't require an API key
+      if (!apiKey && providerType !== 'ollama' && providerType !== 'openai_compatible') {
         set({ error: i18n.t('ai.model_selector.api_key_not_found') });
         return;
       }
     } catch (e) {
-      if (providerType !== 'ollama') {
+      if (providerType !== 'ollama' && providerType !== 'openai_compatible') {
         set({ error: i18n.t('ai.model_selector.failed_to_get_api_key') });
         return;
       }
@@ -1700,9 +1700,9 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       if (providerId) {
         apiKey = await api.getAiProviderApiKey(providerId);
       }
-      if (!apiKey && providerType !== 'ollama') return;
+      if (!apiKey && providerType !== 'ollama' && providerType !== 'openai_compatible') return;
     } catch {
-      if (providerType !== 'ollama') return;
+      if (providerType !== 'ollama' && providerType !== 'openai_compatible') return;
     }
 
     // Build summary request
@@ -1843,9 +1843,9 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       if (providerId) {
         apiKey = await api.getAiProviderApiKey(providerId);
       }
-      if (!apiKey && providerType !== 'ollama') return;
+      if (!apiKey && providerType !== 'ollama' && providerType !== 'openai_compatible') return;
     } catch {
-      if (providerType !== 'ollama') return;
+      if (providerType !== 'ollama' && providerType !== 'openai_compatible') return;
     }
 
     // Determine split point: keep the most recent messages that fit in the keep budget.

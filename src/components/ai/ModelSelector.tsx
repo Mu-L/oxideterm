@@ -11,6 +11,7 @@ import { ChevronDown, Check, Key, Circle, Settings, RefreshCw } from 'lucide-rea
 import { useSettingsStore } from '../../store/settingsStore';
 import { useToastStore } from '../../hooks/useToast';
 import { api } from '../../lib/api';
+import { aiFetch } from '../../lib/ai/aiFetch';
 import { cn } from '../../lib/utils';
 import type { AiProvider } from '../../types';
 
@@ -33,17 +34,13 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
   const activeProvider = aiSettings.providers.find((p) => p.id === aiSettings.activeProviderId);
   const activeModel = aiSettings.activeModel || activeProvider?.defaultModel || '';
 
-  const checkOllamaOnline = useCallback(async (baseUrl: string) => {
+  const checkLocalProviderOnline = useCallback(async (baseUrl: string, endpoint: string) => {
     const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
     try {
-      const resp = await fetch(`${cleanBaseUrl}/api/tags`, { signal: controller.signal });
+      const resp = await aiFetch(`${cleanBaseUrl}${endpoint}`, { timeoutMs: 3000 });
       return resp.ok;
     } catch {
       return false;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }, []);
 
@@ -52,9 +49,27 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
     const status: Record<string, boolean> = {};
     const online: Record<string, boolean> = {};
     for (const provider of aiSettings.providers) {
+      if (!provider.enabled) {
+        status[provider.id] = false;
+        online[provider.id] = false;
+        continue;
+      }
       if (provider.type === 'ollama') {
         status[provider.id] = true; // Ollama doesn't need a key
-        online[provider.id] = await checkOllamaOnline(provider.baseUrl);
+        try {
+          online[provider.id] = await checkLocalProviderOnline(provider.baseUrl, '/api/tags');
+        } catch (err) {
+          console.warn(`[ModelSelector] Failed to check Ollama (${provider.id}):`, err);
+          online[provider.id] = false;
+        }
+      } else if (provider.type === 'openai_compatible') {
+        status[provider.id] = true;
+        try {
+          online[provider.id] = await checkLocalProviderOnline(provider.baseUrl, '/models');
+        } catch (err) {
+          console.warn(`[ModelSelector] Failed to check compatible provider (${provider.id}):`, err);
+          online[provider.id] = false;
+        }
       } else {
         try {
           // Only check provider-specific key - no fallback to legacy key for UI display
@@ -68,7 +83,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
     }
     setKeyStatus(status);
     setProviderOnline(online);
-  }, [aiSettings.providers, checkOllamaOnline]);
+  }, [aiSettings.providers, checkLocalProviderOnline]);
 
   // Check on mount so the trigger button indicator is accurate
   useEffect(() => {
@@ -110,7 +125,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
 
     // Guard: check if provider needs a key and doesn't have one
     const provider = aiSettings.providers.find(p => p.id === providerId);
-    if (provider && provider.type !== 'ollama' && !keyStatus[providerId]) {
+    if (provider && provider.type !== 'ollama' && provider.type !== 'openai_compatible' && !keyStatus[providerId]) {
       useToastStore.getState().addToast({
         title: t('ai.model_selector.no_key_warning'),
         variant: 'warning',
@@ -174,8 +189,9 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
             {aiSettings.providers
               .filter((p) => p.enabled)
               .map((provider) => {
-                const hasKey = provider.type === 'ollama' || !!keyStatus[provider.id];
-                const isOnline = provider.type !== 'ollama' || providerOnline[provider.id] !== false;
+                const hasKey = provider.type === 'ollama' || provider.type === 'openai_compatible' || !!keyStatus[provider.id];
+                const isLocalProvider = provider.type === 'ollama' || provider.type === 'openai_compatible';
+                const isOnline = !isLocalProvider || providerOnline[provider.id] !== false;
                 return (
                   <div key={provider.id}>
                     {/* Provider header */}
@@ -197,7 +213,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
                             <RefreshCw className={cn("w-2.5 h-2.5", refreshing === provider.id && "animate-spin")} />
                           </button>
                         )}
-                        {provider.type === 'ollama' && (
+                        {isLocalProvider && (
                           <span className={cn(
                             "text-[9px] flex items-center gap-0.5",
                             isOnline ? "text-emerald-400" : "text-theme-text-muted"
@@ -206,7 +222,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
                             {isOnline ? 'OK' : t('ai.model_selector.offline')}
                           </span>
                         )}
-                        {provider.type !== 'ollama' && (
+                        {!isLocalProvider && (
                           <span className={cn(
                             "text-[9px] flex items-center gap-0.5",
                             hasKey ? "text-emerald-400" : "text-amber-400"
@@ -219,7 +235,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
                     </div>
 
                     {/* No API key: show configure hint instead of models */}
-                    {provider.type === 'ollama' && !isOnline ? (
+                    {isLocalProvider && !isOnline ? (
                       <div className="px-3 py-2 text-[10px] text-theme-text-muted italic">
                         {t('ai.model_selector.offline')}
                       </div>

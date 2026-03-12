@@ -606,6 +606,9 @@ pub fn run() {
         commands::ai_chat_clear_all,
         commands::ai_chat_replace_conversation_messages,
         commands::ai_chat_get_stats,
+        // AI HTTP proxy commands (CORS bypass)
+        commands::ai_fetch,
+        commands::ai_fetch_stream,
         // Plugin system commands
         commands::list_plugins,
         commands::read_plugin_file,
@@ -877,6 +880,9 @@ pub fn run() {
         commands::ai_chat_clear_all,
         commands::ai_chat_replace_conversation_messages,
         commands::ai_chat_get_stats,
+        // AI HTTP proxy commands (CORS bypass)
+        commands::ai_fetch,
+        commands::ai_fetch_stream,
         // Plugin system commands
         commands::list_plugins,
         commands::read_plugin_file,

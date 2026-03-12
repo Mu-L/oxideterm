@@ -6,6 +6,7 @@
  */
 
 import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent, AiToolDefinition } from '../providers';
+import { aiFetch, aiFetchStreaming } from '../aiFetch';
 
 /**
  * Convert standard ChatMessage format to Gemini API format.
@@ -81,11 +82,11 @@ export const geminiProvider: AiStreamProvider = {
   async *streamCompletion(
     config: AiRequestConfig,
     messages: ChatMessage[],
-    signal: AbortSignal
+    _signal: AbortSignal
   ): AsyncGenerator<AiStreamEvent> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
     // Gemini uses API key as query param, not Bearer token
-    const url = `${cleanBaseUrl}/models/${config.model}:streamGenerateContent?alt=sse&key=${config.apiKey}`;
+    const url = `${cleanBaseUrl}/models/${encodeURIComponent(config.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(config.apiKey)}`;
 
     const { systemInstruction, contents } = convertMessages(messages);
 
@@ -100,16 +101,26 @@ export const geminiProvider: AiStreamProvider = {
       body.tools = convertTools(config.tools);
     }
 
-    const response = await fetch(url, {
+    const { response: statusPromise, body: streamBody } = aiFetchStreaming(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `Gemini API error: ${response.status}`;
+    const { ok, status } = await statusPromise;
+
+    if (!ok) {
+      const errReader = streamBody.getReader();
+      const errDecoder = new TextDecoder();
+      let errorText = '';
+      try {
+        while (true) {
+          const { done, value } = await errReader.read();
+          if (done) break;
+          errorText += errDecoder.decode(value, { stream: true });
+        }
+      } catch { /* stream error */ }
+      let errorMessage = `Gemini API error: ${status}`;
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error?.message || errorMessage;
@@ -120,7 +131,7 @@ export const geminiProvider: AiStreamProvider = {
       return;
     }
 
-    const reader = response.body?.getReader();
+    const reader = streamBody.getReader();
     if (!reader) {
       yield { type: 'error', message: 'No response body' };
       return;
@@ -173,11 +184,11 @@ export const geminiProvider: AiStreamProvider = {
 
   async fetchModels(config: { baseUrl: string; apiKey: string }): Promise<string[]> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-    const resp = await fetch(
+    const resp = await aiFetch(
       `${cleanBaseUrl}/v1beta/models?key=${config.apiKey}`
     );
     if (!resp.ok) throw new Error(`Failed to fetch models: ${resp.status}`);
-    const data = await resp.json();
+    const data = JSON.parse(resp.body);
     if (!Array.isArray(data.models)) return [];
     return data.models
       .filter((m: { supportedGenerationMethods?: string[] }) =>
@@ -189,11 +200,11 @@ export const geminiProvider: AiStreamProvider = {
 
   async fetchModelDetails(config: { baseUrl: string; apiKey: string }): Promise<Record<string, number>> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-    const resp = await fetch(
+    const resp = await aiFetch(
       `${cleanBaseUrl}/v1beta/models?key=${config.apiKey}`
     );
     if (!resp.ok) return {};
-    const data = await resp.json();
+    const data = JSON.parse(resp.body);
     if (!Array.isArray(data.models)) return {};
     const result: Record<string, number> = {};
     for (const m of data.models) {

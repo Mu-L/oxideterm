@@ -8,6 +8,7 @@
  */
 
 import type { AiStreamProvider, AiRequestConfig, ChatMessage, AiStreamEvent, AiToolDefinition } from '../providers';
+import { aiFetch, aiFetchStreaming } from '../aiFetch';
 
 /**
  * Convert standard ChatMessage format to Anthropic's Messages API format.
@@ -106,7 +107,7 @@ export const anthropicProvider: AiStreamProvider = {
   async *streamCompletion(
     config: AiRequestConfig,
     messages: ChatMessage[],
-    signal: AbortSignal
+    _signal: AbortSignal
   ): AsyncGenerator<AiStreamEvent> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
     const url = `${cleanBaseUrl}/v1/messages`;
@@ -129,21 +130,30 @@ export const anthropicProvider: AiStreamProvider = {
       body.tools = convertTools(config.tools);
     }
 
-    const response = await fetch(url, {
+    const { response: statusPromise, body: streamBody } = aiFetchStreaming(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': config.apiKey,
         'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify(body),
-      signal,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `Anthropic API error: ${response.status}`;
+    const { ok, status } = await statusPromise;
+
+    if (!ok) {
+      const errReader = streamBody.getReader();
+      const errDecoder = new TextDecoder();
+      let errorText = '';
+      try {
+        while (true) {
+          const { done, value } = await errReader.read();
+          if (done) break;
+          errorText += errDecoder.decode(value, { stream: true });
+        }
+      } catch { /* stream error */ }
+      let errorMessage = `Anthropic API error: ${status}`;
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error?.message || errorMessage;
@@ -154,7 +164,7 @@ export const anthropicProvider: AiStreamProvider = {
       return;
     }
 
-    const reader = response.body?.getReader();
+    const reader = streamBody.getReader();
     if (!reader) {
       yield { type: 'error', message: 'No response body' };
       return;
@@ -239,15 +249,14 @@ export const anthropicProvider: AiStreamProvider = {
   },
   async fetchModels(config: { baseUrl: string; apiKey: string }): Promise<string[]> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-    const resp = await fetch(`${cleanBaseUrl}/v1/models`, {
+    const resp = await aiFetch(`${cleanBaseUrl}/v1/models`, {
       headers: {
         'x-api-key': config.apiKey,
         'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
       },
     });
     if (!resp.ok) throw new Error(`Failed to fetch models: ${resp.status}`);
-    const data = await resp.json();
+    const data = JSON.parse(resp.body);
     if (!Array.isArray(data.data)) return [];
     return data.data
       .map((m: { id: string }) => m.id)
@@ -257,15 +266,14 @@ export const anthropicProvider: AiStreamProvider = {
 
   async fetchModelDetails(config: { baseUrl: string; apiKey: string }): Promise<Record<string, number>> {
     const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-    const resp = await fetch(`${cleanBaseUrl}/v1/models`, {
+    const resp = await aiFetch(`${cleanBaseUrl}/v1/models`, {
       headers: {
         'x-api-key': config.apiKey,
         'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
       },
     });
     if (!resp.ok) return {};
-    const data = await resp.json();
+    const data = JSON.parse(resp.body);
     if (!Array.isArray(data.data)) return {};
     const result: Record<string, number> = {};
     for (const m of data.data) {

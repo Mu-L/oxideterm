@@ -571,7 +571,7 @@ function migrateAiProviders(settings: PersistedSettingsV2): PersistedSettingsV2 
       baseUrl: cfg.baseUrl,
       defaultModel: cfg.defaultModel,
       models: cfg.models,
-      enabled: true,
+      enabled: cfg.type !== 'ollama',
       createdAt: Date.now(),
     })
   );
@@ -1203,11 +1203,13 @@ export const useSettingsStore = create<SettingsStore>()(
       // Resolve API key (provider-specific only)
       const { api } = await import('../lib/api');
       let apiKey = '';
-      if (provider.type !== 'ollama') {
+      if (provider.type !== 'ollama' && provider.type !== 'openai_compatible') {
         try { apiKey = await api.getAiProviderApiKey(providerId) || ''; } catch { /* */ }
         if (!apiKey) {
           throw new Error('API key not found for provider');
         }
+      } else {
+        try { apiKey = await api.getAiProviderApiKey(providerId) || ''; } catch { /* */ }
       }
 
       const models = await impl.fetchModels({ baseUrl: provider.baseUrl, apiKey });

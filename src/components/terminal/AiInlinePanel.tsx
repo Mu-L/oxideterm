@@ -296,13 +296,17 @@ export const AiInlinePanel: React.FC<AiInlinePanelProps> = ({
 
       // Resolve API key
       let apiKey = '';
-      if (activeProvider.type !== 'ollama') {
+      if (activeProvider.type !== 'ollama' && activeProvider.type !== 'openai_compatible') {
         try {
           apiKey = await api.getAiProviderApiKey(activeProvider.id) || '';
         } catch { /* ignore */ }
         if (!apiKey) {
           throw new Error(t('terminal.ai.api_key_required'));
         }
+      } else {
+        try {
+          apiKey = await api.getAiProviderApiKey(activeProvider.id) || '';
+        } catch { /* ignore */ }
       }
 
       // 1. Get OS metadata (aware of SSH remote env)

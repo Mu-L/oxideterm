@@ -15,6 +15,7 @@ import {
   getActivePaneMetadata, 
   getActiveTerminalBuffer,
   getActiveTerminalSelection,
+  getActiveCwd,
   gatherAllPaneContexts,
 } from './terminalRegistry';
 import { useAppStore } from '../store/appStore';
@@ -44,6 +45,9 @@ export interface EnvironmentSnapshot {
   
   /** Session ID of the active terminal */
   sessionId: string | null;
+  
+  /** Current working directory from OSC 7 shell integration */
+  cwd: string | null;
   
   /** Connection details for SSH terminals */
   connection: {
@@ -268,6 +272,7 @@ export function gatherSidebarContext(config = DEFAULT_CONTEXT_CONFIG): SidebarCo
     activeTabType: activeTab?.type ?? null,
     activeNodeId: activeTab?.nodeId ?? null,
     sessionId: metadata?.sessionId ?? null,
+    cwd: getActiveCwd(),
     connection: null,
     remoteEnv: undefined, // Will be set if SSH connection has detected env
     remoteOSHint: null,
@@ -457,6 +462,10 @@ function formatSystemPromptSegment(
   // Environment header
   parts.push('## Environment');
   parts.push(`- Local OS: ${env.localOS}`);
+  
+  if (env.cwd) {
+    parts.push(`- Current working directory: ${env.cwd}`);
+  }
   
   if (env.terminalType === 'terminal' && env.connection) {
     parts.push(`- Terminal: SSH to ${env.connection.formatted}`);

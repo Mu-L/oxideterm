@@ -28,6 +28,10 @@ export type McpServerConfig = {
   env?: Record<string, string>;
   /** Whether this server is enabled */
   enabled: boolean;
+  /** SSE: Bearer token for Authorization header */
+  authToken?: string;
+  /** Automatically retry connection on disconnect (SSE only) */
+  retryOnDisconnect?: boolean;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -80,6 +84,25 @@ export type McpCallToolResult = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Resources
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type McpResource = {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+};
+
+export type McpResourceContent = {
+  uri: string;
+  mimeType?: string;
+  text?: string;
+  /** Base64-encoded binary data */
+  blob?: string;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Runtime State
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -90,6 +113,8 @@ export type McpServerState = {
   status: McpServerStatus;
   error?: string;
   tools: McpToolSchema[];
+  /** Resources advertised by this server */
+  resources: McpResource[];
   /** For stdio transport: server ID returned by Rust backend */
   runtimeId?: string;
 };

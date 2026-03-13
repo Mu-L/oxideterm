@@ -8,11 +8,14 @@ import {
   connectMcpServer,
   disconnectMcpServer,
   callMcpTool,
+  readMcpResource,
   refreshMcpTools,
 } from './mcpClient';
 import type {
   McpServerConfig,
   McpServerState,
+  McpResource,
+  McpResourceContent,
   McpCallToolResult,
   McpToolSchema,
 } from './mcpTypes';
@@ -38,6 +41,10 @@ type McpRegistryState = {
   findServerForTool: (toolName: string) => { server: McpServerState; originalName: string } | undefined;
   /** Refresh tools list for a server */
   refreshTools: (configId: string) => Promise<void>;
+  /** Get all resources from all connected servers */
+  getAllMcpResources: () => Array<McpResource & { serverId: string; serverName: string }>;
+  /** Read a specific resource from a server */
+  readResource: (serverId: string, uri: string) => Promise<McpResourceContent>;
 };
 
 function getServerConfigs(): McpServerConfig[] {
@@ -50,6 +57,37 @@ function mcpToolToAiTool(tool: McpToolSchema, serverName: string): AiToolDefinit
     description: `[MCP: ${serverName}] ${tool.description ?? tool.name}`,
     parameters: tool.inputSchema as Record<string, unknown>,
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Auto-Retry with Exponential Backoff
+// ═══════════════════════════════════════════════════════════════════════════
+
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 1000;
+const retryCounters = new Map<string, number>();
+
+function scheduleRetry(configId: string, connectFn: (id: string) => Promise<void>): void {
+  const attempt = (retryCounters.get(configId) ?? 0) + 1;
+  if (attempt > MAX_RETRIES) {
+    console.warn(`[MCP] Giving up retry for ${configId} after ${MAX_RETRIES} attempts`);
+    retryCounters.delete(configId);
+    return;
+  }
+  retryCounters.set(configId, attempt);
+  const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+  console.info(`[MCP] Scheduling retry #${attempt} for ${configId} in ${delay}ms`);
+  setTimeout(() => {
+    connectFn(configId).then(() => {
+      // On success, reset counter
+      const server = useMcpRegistry.getState().servers.get(configId);
+      if (server?.status === 'connected') {
+        retryCounters.delete(configId);
+      }
+    }).catch(() => {
+      // connectFn already handles errors internally
+    });
+  }, delay);
 }
 
 /** Rebuild the toolIndex from current server states */
@@ -81,11 +119,11 @@ export const useMcpRegistry = create<McpRegistryState>((set, get) => ({
     // Set connecting state
     set(state => {
       const servers = new Map(state.servers);
-      servers.set(configId, { config, status: 'connecting', tools: [] });
+      servers.set(configId, { config, status: 'connecting', tools: [], resources: [] });
       return { servers };
     });
 
-    const initial: McpServerState = { config, status: 'connecting', tools: [] };
+    const initial: McpServerState = { config, status: 'connecting', tools: [], resources: [] };
     const result = await connectMcpServer(initial);
 
     set(state => {
@@ -93,6 +131,11 @@ export const useMcpRegistry = create<McpRegistryState>((set, get) => ({
       servers.set(configId, result);
       return { servers, toolIndex: rebuildToolIndex(servers) };
     });
+
+    // Schedule auto-retry on SSE connect failure if configured
+    if (result.status === 'error' && config.retryOnDisconnect && config.transport === 'sse') {
+      scheduleRetry(configId, get().connect);
+    }
   },
 
   disconnect: async (configId: string) => {
@@ -155,5 +198,24 @@ export const useMcpRegistry = create<McpRegistryState>((set, get) => ({
       servers.set(configId, { ...current, tools });
       return { servers, toolIndex: rebuildToolIndex(servers) };
     });
+  },
+
+  getAllMcpResources: () => {
+    const result: Array<McpResource & { serverId: string; serverName: string }> = [];
+    for (const server of get().servers.values()) {
+      if (server.status !== 'connected') continue;
+      for (const res of server.resources) {
+        result.push({ ...res, serverId: server.config.id, serverName: server.config.name });
+      }
+    }
+    return result;
+  },
+
+  readResource: async (serverId: string, uri: string) => {
+    const server = get().servers.get(serverId);
+    if (!server || server.status !== 'connected') {
+      throw new Error(`MCP server ${serverId} is not connected`);
+    }
+    return readMcpResource(server, uri);
   },
 }));

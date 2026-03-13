@@ -491,7 +491,10 @@
       "args": "Argomenti (uno per riga)",
       "url": "URL del server",
       "cancel": "Annulla",
-      "add": "Aggiungi"
+      "add": "Aggiungi",
+      "auth_token": "Token di autenticazione",
+      "auth_token_placeholder": "Token Bearer (opzionale)",
+      "retry_on_disconnect": "Riconnetti automaticamente"
     },
     "reconnect": {
       "title": "Riconnessione automatica",

@@ -491,7 +491,10 @@
       "args": "인수 (줄당 하나)",
       "url": "서버 URL",
       "cancel": "취소",
-      "add": "추가"
+      "add": "추가",
+      "auth_token": "인증 토큰",
+      "auth_token_placeholder": "Bearer 토큰 (선택 사항)",
+      "retry_on_disconnect": "연결 끊김 시 자동 재시도"
     },
     "reconnect": {
       "title": "자동 재연결",

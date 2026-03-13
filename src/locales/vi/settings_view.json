@@ -491,7 +491,10 @@
       "args": "Tham số (mỗi dòng một tham số)",
       "url": "URL máy chủ",
       "cancel": "Hủy",
-      "add": "Thêm"
+      "add": "Thêm",
+      "auth_token": "Token xác thực",
+      "auth_token_placeholder": "Token Bearer (tuỳ chọn)",
+      "retry_on_disconnect": "Tự động kết nối lại khi mất kết nối"
     },
     "reconnect": {
       "title": "Tự động kết nối lại",

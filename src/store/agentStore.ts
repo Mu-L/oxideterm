@@ -6,7 +6,8 @@
  */
 
 import { create } from 'zustand';
-import type { AgentTask, AgentStep, AgentApproval, AutonomyLevel, AgentTaskStatus, AgentPlan } from '../types';
+import { api } from '../lib/api';
+import type { AgentTask, AgentStep, AgentApproval, AutonomyLevel, AgentTaskStatus, AgentPlan, TabType } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
@@ -39,8 +40,8 @@ interface AgentStore {
   abortController: AbortController | null;
 
   // ─── Task Lifecycle ─────────────────────────────────────────────────────
-  /** Start a new agent task */
-  startTask: (goal: string, providerId: string, model: string) => AgentTask;
+  /** Start a new agent task. contextTabType inherits tool context from the last active tab. */
+  startTask: (goal: string, providerId: string, model: string, contextTabType?: TabType | null) => AgentTask;
   /** Pause the current task */
   pauseTask: () => void;
   /** Resume a paused task */
@@ -89,6 +90,8 @@ interface AgentStore {
   removeFromHistory: (taskId: string) => void;
   /** Clear all task history */
   clearHistory: () => void;
+  /** Load task history from persistent storage (call on app init) */
+  initHistory: () => Promise<void>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -135,7 +138,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
 
   // ─── Task Lifecycle ─────────────────────────────────────────────────────
 
-  startTask: (goal, providerId, model) => {
+  startTask: (goal, providerId, model, contextTabType) => {
     // Cancel any running task first
     const current = get();
     if (current.isRunning && current.abortController) {
@@ -153,6 +156,10 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
       set((s) => ({
         taskHistory: [taskToArchive, ...s.taskHistory].slice(0, 50),
       }));
+      // Persist archived task
+      api.agentHistorySave(taskToArchive.id, JSON.stringify(taskToArchive)).catch((e) => {
+        console.warn('[AgentStore] Failed to persist archived task:', e);
+      });
     }
 
     const autonomyLevel = get().autonomyLevel;
@@ -171,6 +178,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
       completedAt: null,
       summary: null,
       error: null,
+      contextTabType: contextTabType ?? null,
     };
 
     const abortController = new AbortController();
@@ -301,12 +309,19 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     }
     set((s) => {
       if (!s.activeTask) return s;
+      const updatedTask = {
+        ...s.activeTask,
+        status,
+        completedAt: finished ? Date.now() : s.activeTask.completedAt,
+      };
+      // Persist finished tasks to backend
+      if (finished) {
+        api.agentHistorySave(updatedTask.id, JSON.stringify(updatedTask)).catch((e) => {
+          console.warn('[AgentStore] Failed to persist task history:', e);
+        });
+      }
       return {
-        activeTask: {
-          ...s.activeTask,
-          status,
-          completedAt: finished ? Date.now() : s.activeTask.completedAt,
-        },
+        activeTask: updatedTask,
         isRunning: !finished && status !== 'paused' && status !== 'awaiting_approval',
         ...(finished ? { pendingApprovals: [] } : {}),
       };
@@ -392,9 +407,32 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
       taskHistory: s.taskHistory.filter((t) => t.id !== taskId),
       viewingTask: s.viewingTask?.id === taskId ? null : s.viewingTask,
     }));
+    api.agentHistoryDelete(taskId).catch((e) => {
+      console.warn('[AgentStore] Failed to delete task from backend:', e);
+    });
   },
 
   clearHistory: () => {
     set({ taskHistory: [], viewingTask: null });
+    api.agentHistoryClear().catch((e) => {
+      console.warn('[AgentStore] Failed to clear history in backend:', e);
+    });
+  },
+
+  initHistory: async () => {
+    try {
+      const jsonList = await api.agentHistoryList(50);
+      const tasks: AgentTask[] = [];
+      for (const json of jsonList) {
+        try {
+          tasks.push(JSON.parse(json) as AgentTask);
+        } catch {
+          console.warn('[AgentStore] Skipping unparseable task from backend');
+        }
+      }
+      set({ taskHistory: tasks });
+    } catch (e) {
+      console.warn('[AgentStore] Failed to load task history from backend:', e);
+    }
   },
 }));

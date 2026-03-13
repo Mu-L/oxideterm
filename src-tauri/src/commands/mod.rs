@@ -2,6 +2,7 @@
 //!
 //! This module contains all Tauri commands exposed to the frontend.
 
+pub mod agent_history;
 pub mod ai_chat;
 pub mod ai_http;
 pub mod appearance;
@@ -32,6 +33,7 @@ pub mod session_tree;
 pub mod sftp;
 pub mod ssh;
 
+pub use agent_history::*;
 pub use ai_chat::*;
 pub use ai_http::*;
 pub use appearance::*;

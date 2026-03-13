@@ -491,7 +491,10 @@
       "args": "引数（1行に1つ）",
       "url": "サーバー URL",
       "cancel": "キャンセル",
-      "add": "追加"
+      "add": "追加",
+      "auth_token": "認証トークン",
+      "auth_token_placeholder": "Bearerトークン（任意）",
+      "retry_on_disconnect": "切断時に自動再接続"
     },
     "reconnect": {
       "title": "自動再接続",

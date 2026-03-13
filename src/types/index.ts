@@ -1544,6 +1544,8 @@ export type AgentTask = {
   summary: string | null;
   /** Error message if failed */
   error: string | null;
+  /** Tab type at task creation time — determines which tab-specific tools are available */
+  contextTabType?: TabType | null;
 };
 
 /** A pending approval request for the agent */

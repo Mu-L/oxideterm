@@ -164,7 +164,9 @@
         "batch_exec": "一括実行",
         "read_screen": "画面読み取り",
         "send_keys": "キー送信",
-        "send_mouse": "マウス操作"
+        "send_mouse": "マウス操作",
+        "list_mcp_resources": "MCPリソース",
+        "read_mcp_resource": "MCPリソース読取"
       }
     },
     "tool_selector": {

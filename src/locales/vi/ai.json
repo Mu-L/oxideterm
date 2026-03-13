@@ -164,7 +164,9 @@
         "batch_exec": "Thực thi hàng loạt",
         "read_screen": "Đọc màn hình",
         "send_keys": "Gửi phím",
-        "send_mouse": "Gửi chuột"
+        "send_mouse": "Gửi chuột",
+        "list_mcp_resources": "Tài nguyên MCP",
+        "read_mcp_resource": "Đọc tài nguyên MCP"
       }
     },
     "tool_selector": {

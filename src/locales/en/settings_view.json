@@ -491,7 +491,10 @@
       "args": "Arguments (one per line)",
       "url": "Server URL",
       "cancel": "Cancel",
-      "add": "Add"
+      "add": "Add",
+      "auth_token": "Auth Token",
+      "auth_token_placeholder": "Bearer token (optional)",
+      "retry_on_disconnect": "Auto-retry on disconnect"
     },
     "reconnect": {
       "title": "Auto-Reconnect",

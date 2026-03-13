@@ -164,7 +164,9 @@
         "batch_exec": "일괄 실행",
         "read_screen": "화면 읽기",
         "send_keys": "키 전송",
-        "send_mouse": "마우스 전송"
+        "send_mouse": "마우스 전송",
+        "list_mcp_resources": "MCP 리소스",
+        "read_mcp_resource": "MCP 리소스 읽기"
       }
     },
     "tool_selector": {

@@ -164,7 +164,9 @@
         "batch_exec": "Batch Execute",
         "read_screen": "Read Screen",
         "send_keys": "Send Keys",
-        "send_mouse": "Send Mouse"
+        "send_mouse": "Send Mouse",
+        "list_mcp_resources": "MCP Resources",
+        "read_mcp_resource": "Read MCP Resource"
       }
     },
     "tool_selector": {

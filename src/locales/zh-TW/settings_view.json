@@ -491,7 +491,10 @@
       "args": "參數（每行一個）",
       "url": "伺服器 URL",
       "cancel": "取消",
-      "add": "新增"
+      "add": "新增",
+      "auth_token": "認證令牌",
+      "auth_token_placeholder": "Bearer 令牌（可選）",
+      "retry_on_disconnect": "斷線後自動重連"
     },
     "reconnect": {
       "title": "自動重連",

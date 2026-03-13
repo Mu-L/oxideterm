@@ -1371,6 +1371,32 @@ export const api = {
     if (USE_MOCK) return;
     return invoke('mcp_close_server', { serverId });
   },
+
+  // ─── Agent History Persistence ──────────────────────────────────────
+
+  /** Save an agent task to persistent storage */
+  agentHistorySave: async (taskId: string, taskJson: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('agent_history_save', { taskId, taskJson });
+  },
+
+  /** List recent agent tasks as JSON strings (newest first) */
+  agentHistoryList: async (limit: number): Promise<string[]> => {
+    if (USE_MOCK) return [];
+    return invoke('agent_history_list', { limit });
+  },
+
+  /** Delete a single agent task by ID */
+  agentHistoryDelete: async (taskId: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('agent_history_delete', { taskId });
+  },
+
+  /** Clear all agent task history */
+  agentHistoryClear: async (): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('agent_history_clear');
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

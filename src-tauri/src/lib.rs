@@ -86,6 +86,7 @@ use session::{AutoReconnectService, SessionRegistry};
 use sftp::session::SftpRegistry;
 use sftp::{ProgressStore, RedbProgressStore, TransferManager};
 use ssh::SshConnectionRegistry;
+use state::agent_history::AgentHistoryStore;
 use state::ai_chat::AiChatStore;
 use state::StateStore;
 use std::fs::OpenOptions;
@@ -210,6 +211,36 @@ pub fn run() {
                 let msg = format!(
                     "Failed to initialize AI chat store at {:?}: {}. AI chat persistence disabled.",
                     ai_chat_db_path, e
+                );
+                tracing::warn!("{}", msg);
+                write_startup_log(&msg);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Initialize agent history store for task persistence
+    let agent_history_db_path = match config::storage::config_dir() {
+        Ok(dir) => dir.join("agent_history.redb"),
+        Err(_) => std::path::PathBuf::from(""),
+    };
+
+    let agent_history_store = if !agent_history_db_path.as_os_str().is_empty() {
+        match AgentHistoryStore::new(agent_history_db_path.clone()) {
+            Ok(store) => {
+                tracing::info!("Agent history store initialized at {:?}", agent_history_db_path);
+                write_startup_log(&format!(
+                    "Agent history store initialized at {:?}",
+                    agent_history_db_path
+                ));
+                Some(Arc::new(store))
+            }
+            Err(e) => {
+                let msg = format!(
+                    "Failed to initialize agent history store at {:?}: {}. Agent history persistence disabled.",
+                    agent_history_db_path, e
                 );
                 tracing::warn!("{}", msg);
                 write_startup_log(&msg);
@@ -345,6 +376,13 @@ pub fn run() {
     // Conditionally add AI chat store (may be None if initialization failed)
     let builder = if let Some(ai_store) = ai_chat_store {
         builder.manage(ai_store)
+    } else {
+        builder
+    };
+
+    // Conditionally add agent history store
+    let builder = if let Some(agent_store) = agent_history_store {
+        builder.manage(agent_store)
     } else {
         builder
     };
@@ -606,6 +644,11 @@ pub fn run() {
         commands::ai_chat_clear_all,
         commands::ai_chat_replace_conversation_messages,
         commands::ai_chat_get_stats,
+        // Agent history persistence commands
+        commands::agent_history_save,
+        commands::agent_history_list,
+        commands::agent_history_delete,
+        commands::agent_history_clear,
         // AI HTTP proxy commands (CORS bypass)
         commands::ai_fetch,
         commands::ai_fetch_stream,
@@ -880,6 +923,11 @@ pub fn run() {
         commands::ai_chat_clear_all,
         commands::ai_chat_replace_conversation_messages,
         commands::ai_chat_get_stats,
+        // Agent history persistence commands
+        commands::agent_history_save,
+        commands::agent_history_list,
+        commands::agent_history_delete,
+        commands::agent_history_clear,
         // AI HTTP proxy commands (CORS bypass)
         commands::ai_fetch,
         commands::ai_fetch_stream,

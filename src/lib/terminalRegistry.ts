@@ -27,6 +27,8 @@ interface TerminalEntry {
   tabId: string;
   sessionId: string;                                // Original session ID for reference
   terminalType: 'terminal' | 'local_terminal';      // SSH or Local
+  /** Current working directory captured from OSC 7 shell integration */
+  cwd?: string;
 }
 
 // Registry now uses paneId as key (supports split panes)
@@ -275,6 +277,50 @@ export function touchTerminalEntry(paneId: string): void {
   if (entry) {
     entry.registeredAt = Date.now();
   }
+}
+
+/**
+ * Update the current working directory for a pane (set from OSC 7 handler)
+ * @param paneId - The pane ID
+ * @param cwd - The current working directory path
+ */
+export function updateCwd(paneId: string, cwd: string): void {
+  const entry = registry.get(paneId);
+  if (entry) {
+    entry.cwd = cwd;
+  }
+}
+
+/**
+ * Get the current working directory for a pane
+ * @param paneId - The pane ID
+ * @returns CWD string or null if not available
+ */
+export function getCwd(paneId: string): string | null {
+  return registry.get(paneId)?.cwd ?? null;
+}
+
+/**
+ * Get the CWD for the currently active pane
+ * @returns CWD string or null if no active pane or no CWD
+ */
+export function getActiveCwd(): string | null {
+  if (!activePaneId) return null;
+  return getCwd(activePaneId);
+}
+
+/**
+ * Get CWD by session ID (searches all panes for a match)
+ * @param sessionId - The terminal session ID
+ * @returns CWD string or null
+ */
+export function getCwdBySessionId(sessionId: string): string | null {
+  for (const entry of registry.values()) {
+    if (entry.sessionId === sessionId && entry.cwd) {
+      return entry.cwd;
+    }
+  }
+  return null;
 }
 
 /**

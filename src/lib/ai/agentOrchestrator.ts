@@ -11,12 +11,14 @@
  */
 
 import { useAgentStore, registerApprovalResolver, removeApprovalResolver } from '../../store/agentStore';
+import { useAppStore } from '../../store/appStore';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { getProvider } from './providerRegistry';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
 import { getToolsForContext, isCommandDenied, executeTool, READ_ONLY_TOOLS } from './tools';
 import { estimateTokens, getModelContextWindow, responseReserve } from './tokenUtils';
+import { getActiveCwd } from '../terminalRegistry';
 import { nodeGetState, nodeAgentStatus } from '../api';
 import { api } from '../api';
 import i18n from '../../i18n';
@@ -340,10 +342,11 @@ export async function runAgent(task: AgentTask, signal: AbortSignal): Promise<vo
     const aiProvider = getProvider(provider.type);
     const apiKey = await getApiKeyForProvider(provider.id, provider.type);
 
-    // ── Get available tools ──────────────────────────────────────────────
+    // ── Get available tools (inherit tab context from task creation) ─────
     const disabledToolNames = settings.ai.toolUse?.disabledTools ?? [];
     const disabledSet = new Set(disabledToolNames);
-    const tools = getToolsForContext(null, true, disabledSet);
+    const hasAnySSH = useAppStore.getState().sessions.size > 0;
+    const tools = getToolsForContext(task.contextTabType ?? null, hasAnySSH, disabledSet);
 
     // ── Build initial context ────────────────────────────────────────────
     const sessionsDesc = await getSessionsDescription();
@@ -354,12 +357,18 @@ export async function runAgent(task: AgentTask, signal: AbortSignal): Promise<vo
     const messages: ChatMessage[] = [];
 
     // ── Phase 1: Planning ────────────────────────────────────────────────
-    const systemPrompt = buildAgentSystemPrompt({
+    // Resolve terminal CWD via OSC 7 shell integration
+    const cwd = getActiveCwd();
+
+    let systemPrompt = buildAgentSystemPrompt({
       autonomyLevel: task.autonomyLevel,
       maxRounds: task.maxRounds,
       currentRound: 0,
       availableSessions: sessionsDesc,
     });
+    if (cwd) {
+      systemPrompt += `\nCurrent working directory: ${cwd}`;
+    }
 
     messages.push({ role: 'system', content: systemPrompt });
     messages.push({ role: 'user', content: `Task: ${task.goal}` });

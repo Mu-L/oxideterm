@@ -164,7 +164,9 @@
         "batch_exec": "批次執行",
         "read_screen": "讀取螢幕",
         "send_keys": "傳送按鍵",
-        "send_mouse": "傳送滑鼠"
+        "send_mouse": "傳送滑鼠",
+        "list_mcp_resources": "MCP 資源",
+        "read_mcp_resource": "讀取 MCP 資源"
       }
     },
     "tool_selector": {

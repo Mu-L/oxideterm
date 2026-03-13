@@ -819,6 +819,36 @@ export const PLUGIN_TOOL_DEFS: AiToolDefinition[] = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MCP Resource Tools — Available when any MCP server exposes resources
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const MCP_RESOURCE_TOOL_DEFS: AiToolDefinition[] = [
+  {
+    name: 'list_mcp_resources',
+    description: 'List all resources available from connected MCP servers. Returns URI, name, description, and MIME type for each resource.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'read_mcp_resource',
+    description: 'Read the content of a specific MCP resource by its URI. Returns text or base64-encoded binary data.',
+    parameters: {
+      type: 'object',
+      properties: {
+        server_id: {
+          type: 'string',
+          description: 'The MCP server ID that owns this resource.',
+        },
+        uri: {
+          type: 'string',
+          description: 'The resource URI to read (as returned by list_mcp_resources).',
+        },
+      },
+      required: ['server_id', 'uri'],
+    },
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Safety Classification
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -862,6 +892,9 @@ export const READ_ONLY_TOOLS = new Set([
   'get_session_tree',
   // Plugin manager (read-only)
   'list_plugins',
+  // MCP resources (read-only)
+  'list_mcp_resources',
+  'read_mcp_resource',
 ]);
 
 /**
@@ -926,6 +959,9 @@ export const CONTEXT_FREE_TOOLS = new Set([
   'get_session_tree',
   // Plugin manager tools
   'list_plugins',
+  // MCP resource tools
+  'list_mcp_resources',
+  'read_mcp_resource',
 ]);
 
 /** Tools that use session_id parameter instead of node_id */
@@ -1071,6 +1107,11 @@ export const TOOL_GROUPS: { groupKey: string; readOnly: string[]; write: string[
     readOnly: ['list_plugins'],
     write: [],
   },
+  {
+    groupKey: 'mcp',
+    readOnly: ['list_mcp_resources', 'read_mcp_resource'],
+    write: [],
+  },
 ];
 
 /**
@@ -1093,6 +1134,7 @@ export function getToolsForContext(
     ...MONITOR_TOOL_DEFS,
     ...SESSION_MGR_TOOL_DEFS,
     ...PLUGIN_TOOL_DEFS,
+    ...MCP_RESOURCE_TOOL_DEFS,
   ];
   
   return allTools.filter(t => {

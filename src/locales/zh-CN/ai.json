@@ -164,7 +164,9 @@
         "batch_exec": "批量执行",
         "read_screen": "读取屏幕",
         "send_keys": "发送按键",
-        "send_mouse": "发送鼠标"
+        "send_mouse": "发送鼠标",
+        "list_mcp_resources": "MCP 资源",
+        "read_mcp_resource": "读取 MCP 资源"
       }
     },
     "tool_selector": {

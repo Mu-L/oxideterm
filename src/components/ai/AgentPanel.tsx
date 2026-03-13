@@ -34,6 +34,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { useAgentStore } from '../../store/agentStore';
+import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { runAgent } from '../../lib/ai/agentOrchestrator';
 import { cn } from '../../lib/utils';
@@ -779,7 +780,8 @@ export const AgentPanel = () => {
   const handleStart = useCallback(
     (goal: string) => {
       if (!providerId || !model) return;
-      const task = startTask(goal, providerId, model);
+      const contextTabType = useAppStore.getState().lastNonAgentTabType;
+      const task = startTask(goal, providerId, model, contextTabType);
       // Get the abort controller from the store
       const controller = useAgentStore.getState().abortController;
       if (controller) {

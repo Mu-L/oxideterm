@@ -233,6 +233,10 @@ export async function executeTool(
         return await execSftpStat(args, resolved, startTime, toolCallId);
       case 'sftp_get_cwd':
         return await execSftpGetCwd(resolved, startTime, toolCallId);
+      case 'list_mcp_resources':
+        return await execListMcpResources(startTime, toolCallId);
+      case 'read_mcp_resource':
+        return await execReadMcpResource(args, startTime, toolCallId);
       default: {
         // Check if this is an MCP tool (prefixed with mcp::)
         if (toolName.startsWith('mcp::')) {
@@ -2069,6 +2073,46 @@ function formatTreeEntries(entries: AgentFileEntry[], indent: string): string {
       return prefix + children;
     })
     .join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MCP Resource Tools
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function execListMcpResources(startTime: number, toolCallId: string): Promise<AiToolResult> {
+  const { useMcpRegistry } = await import('../mcp');
+  const resources = useMcpRegistry.getState().getAllMcpResources();
+  if (resources.length === 0) {
+    return { toolCallId, toolName: 'list_mcp_resources', success: true, output: 'No MCP resources available. Either no MCP servers are connected, or none expose resources.', durationMs: Date.now() - startTime };
+  }
+  const lines = resources.map(r =>
+    `[${r.serverName}] ${r.name} (${r.uri})${r.mimeType ? ` [${r.mimeType}]` : ''}${r.description ? ` — ${r.description}` : ''}  server_id=${r.serverId}`
+  );
+  return { toolCallId, toolName: 'list_mcp_resources', success: true, output: lines.join('\n'), durationMs: Date.now() - startTime };
+}
+
+async function execReadMcpResource(
+  args: Record<string, unknown>,
+  startTime: number,
+  toolCallId: string,
+): Promise<AiToolResult> {
+  const serverId = String(args.server_id ?? '');
+  const uri = String(args.uri ?? '');
+  if (!serverId || !uri) {
+    return { toolCallId, toolName: 'read_mcp_resource', success: false, output: '', error: 'Both server_id and uri are required.', durationMs: Date.now() - startTime };
+  }
+  const { useMcpRegistry } = await import('../mcp');
+  const content = await useMcpRegistry.getState().readResource(serverId, uri);
+  const text = content.text ?? (content.blob ? `[base64 binary, ${content.blob.length} chars, mime=${content.mimeType ?? 'unknown'}]` : '(empty)');
+  const output = text.slice(0, MAX_OUTPUT_BYTES);
+  return {
+    toolCallId,
+    toolName: 'read_mcp_resource',
+    success: true,
+    output,
+    durationMs: Date.now() - startTime,
+    truncated: text.length > MAX_OUTPUT_BYTES,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

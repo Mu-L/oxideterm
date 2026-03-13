@@ -52,6 +52,8 @@ interface AppStore {
   readonly sidebarCollapsed: boolean;
   readonly sidebarActiveSection: SidebarSection;
   modals: ModalsState;
+  /** Last active tab type that is not 'ai_agent' — used by Agent to inherit tool context */
+  lastNonAgentTabType: TabType | null;
   /** Pre-fill data consumed by NewConnectionModal on open */
   quickConnectData: QuickConnectData;
   savedConnections: ConnectionInfo[];
@@ -180,6 +182,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   tabHistory: [],
   tabHistoryCursor: -1,
   _isNavigating: false,
+  lastNonAgentTabType: null,
   // Sidebar state is now delegated to settingsStore
   // These getters provide backwards compatibility for components that read from appStore
   get sidebarCollapsed() {
@@ -807,6 +810,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setActiveTab: (tabId) => {
     const state = get();
+
+    // Track the last non-agent tab type so Agent can inherit tool context
+    const targetTab = state.tabs.find(t => t.id === tabId);
+    const patch: Partial<AppStore> = { activeTabId: tabId };
+    if (targetTab && targetTab.type !== 'ai_agent') {
+      patch.lastNonAgentTabType = targetTab.type;
+    }
+
     // Push to navigation history unless we're navigating via back/forward
     if (!state._isNavigating && tabId !== state.activeTabId) {
       // Truncate any forward history beyond cursor
@@ -818,9 +829,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       newHistory.push(tabId);
       // Cap history size at 50
       if (newHistory.length > 50) newHistory.splice(0, newHistory.length - 50);
-      set({ activeTabId: tabId, tabHistory: newHistory, tabHistoryCursor: newHistory.length - 1 });
+      set({ ...patch, tabHistory: newHistory, tabHistoryCursor: newHistory.length - 1 });
     } else {
-      set({ activeTabId: tabId });
+      set(patch);
     }
   },
 

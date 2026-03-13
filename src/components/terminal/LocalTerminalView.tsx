@@ -548,6 +548,22 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     term.loadAddon(unicode11Addon);
     term.unicode.activeVersion = '11';
 
+    // OSC 7 shell integration: capture current working directory
+    // Shells emit \x1b]7;file://hostname/path\x07 on directory change
+    term.parser.registerOscHandler(7, (data: string) => {
+      try {
+        const cwd = data.startsWith('file://') ? decodeURIComponent(new URL(data).pathname) : data;
+        if (cwd) {
+          import('../../lib/terminalRegistry').then(({ updateCwd }) => {
+            updateCwd(effectivePaneId, cwd);
+          });
+        }
+      } catch {
+        // Malformed URL — ignore silently
+      }
+      return false;
+    });
+
     void installTerminalClipboardSupport(term).then((addon) => {
       if (clipboardInitCancelled) {
         addon.dispose();

@@ -2039,7 +2039,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
             sessionId: sidebarContext.env.sessionId,
             connectionName: sidebarContext.env.connection?.formatted || null,
             remoteOs: sidebarContext.env.remoteOSHint,
-            cwd: null, // Not captured in current context
+            cwd: sidebarContext.env.cwd,
             selection: sidebarContext.terminal.selection,
             bufferTail: sidebarContext.terminal.buffer,
           }

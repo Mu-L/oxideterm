@@ -116,6 +116,15 @@ function App() {
     };
   }, []);
 
+  // Load agent task history from backend persistence
+  useEffect(() => {
+    import('./store/agentStore').then(({ useAgentStore }) => {
+      useAgentStore.getState().initHistory();
+    }).catch((e) => {
+      console.warn('Failed to load agent history:', e);
+    });
+  }, []);
+
   // Sync SFTP settings to backend on app startup
   useEffect(() => {
     const syncSftpSettings = async () => {

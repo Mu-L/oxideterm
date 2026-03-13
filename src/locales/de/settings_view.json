@@ -491,7 +491,10 @@
       "args": "Argumente (eins pro Zeile)",
       "url": "Server-URL",
       "cancel": "Abbrechen",
-      "add": "Hinzufügen"
+      "add": "Hinzufügen",
+      "auth_token": "Auth-Token",
+      "auth_token_placeholder": "Bearer-Token (optional)",
+      "retry_on_disconnect": "Automatisch bei Trennung erneut verbinden"
     },
     "reconnect": {
       "title": "Automatische Wiederverbindung",

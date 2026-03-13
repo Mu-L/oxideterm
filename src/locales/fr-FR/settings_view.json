@@ -491,7 +491,10 @@
       "args": "Arguments (un par ligne)",
       "url": "URL du serveur",
       "cancel": "Annuler",
-      "add": "Ajouter"
+      "add": "Ajouter",
+      "auth_token": "Jeton d'authentification",
+      "auth_token_placeholder": "Jeton Bearer (optionnel)",
+      "retry_on_disconnect": "Reconnexion automatique"
     },
     "reconnect": {
       "title": "Reconnexion automatique",

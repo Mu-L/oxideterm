@@ -28,7 +28,8 @@ import {
   DialogHeader,
   DialogFooter,
 } from '../ui/dialog';
-import { Plus, Trash2, Radio, CircleStop, RefreshCw, Wrench, Loader2, CheckCircle2 } from 'lucide-react';
+import { Switch } from '../ui/switch';
+import { Plus, Trash2, Radio, CircleStop, RefreshCw, Wrench, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 function generateId(): string {
   return `mcp-${crypto.randomUUID()}`;
@@ -68,6 +69,7 @@ export function McpServersPanel() {
   const refreshTools = useMcpRegistry((s) => s.refreshTools);
 
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showAuthToken, setShowAuthToken] = useState(false);
   const [newServer, setNewServer] = useState<Partial<McpServerConfig>>({
     transport: 'stdio',
     enabled: true,
@@ -88,9 +90,12 @@ export function McpServersPanel() {
       args: newServer.args?.length ? newServer.args : undefined,
       env: newServer.env && Object.keys(newServer.env).length > 0 ? newServer.env : undefined,
       enabled: true,
+      authToken: newServer.authToken || undefined,
+      retryOnDisconnect: newServer.retryOnDisconnect,
     };
     updateAi('mcpServers', [...mcpServers, config]);
     setNewServer({ transport: 'stdio', enabled: true });
+    setShowAuthToken(false);
     setShowAddDialog(false);
   }, [newServer, mcpServers, updateAi]);
 
@@ -289,14 +294,45 @@ export function McpServersPanel() {
             )}
 
             {newServer.transport === 'sse' && (
-              <div className="space-y-2">
-                <Label>{t('settings_view.mcp.url')}</Label>
-                <Input
-                  value={newServer.url ?? ''}
-                  onChange={(e) => setNewServer(prev => ({ ...prev, url: e.target.value }))}
-                  placeholder="http://localhost:3000"
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label>{t('settings_view.mcp.url')}</Label>
+                  <Input
+                    value={newServer.url ?? ''}
+                    onChange={(e) => setNewServer(prev => ({ ...prev, url: e.target.value }))}
+                    placeholder="http://localhost:3000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('settings_view.mcp.auth_token')}</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type={showAuthToken ? 'text' : 'password'}
+                      value={newServer.authToken ?? ''}
+                      onChange={(e) => setNewServer(prev => ({ ...prev, authToken: e.target.value }))}
+                      placeholder={t('settings_view.mcp.auth_token_placeholder')}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      onClick={() => setShowAuthToken(v => !v)}
+                      className="h-9 w-9 p-0 shrink-0"
+                    >
+                      {showAuthToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="retry-toggle">{t('settings_view.mcp.retry_on_disconnect')}</Label>
+                  <Switch
+                    id="retry-toggle"
+                    checked={newServer.retryOnDisconnect ?? false}
+                    onCheckedChange={(v) => setNewServer(prev => ({ ...prev, retryOnDisconnect: v }))}
+                  />
+                </div>
+              </>
             )}
           </div>
 

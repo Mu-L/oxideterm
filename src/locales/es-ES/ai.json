@@ -164,7 +164,9 @@
         "batch_exec": "Ejecución por lotes",
         "read_screen": "Leer pantalla",
         "send_keys": "Enviar teclas",
-        "send_mouse": "Enviar ratón"
+        "send_mouse": "Enviar ratón",
+        "list_mcp_resources": "Recursos MCP",
+        "read_mcp_resource": "Leer recurso MCP"
       }
     },
     "tool_selector": {

@@ -491,7 +491,10 @@
       "args": "参数（每行一个）",
       "url": "服务器 URL",
       "cancel": "取消",
-      "add": "添加"
+      "add": "添加",
+      "auth_token": "认证令牌",
+      "auth_token_placeholder": "Bearer 令牌（可选）",
+      "retry_on_disconnect": "断开后自动重连"
     },
     "reconnect": {
       "title": "自动重连",

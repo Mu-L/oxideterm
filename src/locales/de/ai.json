@@ -164,7 +164,9 @@
         "batch_exec": "Stapelausführung",
         "read_screen": "Bildschirm lesen",
         "send_keys": "Tasten senden",
-        "send_mouse": "Maus senden"
+        "send_mouse": "Maus senden",
+        "list_mcp_resources": "MCP-Ressourcen",
+        "read_mcp_resource": "MCP-Ressource lesen"
       }
     },
     "tool_selector": {

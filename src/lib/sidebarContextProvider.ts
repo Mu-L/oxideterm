@@ -161,6 +161,8 @@ function getLocalOS(): 'macOS' | 'Windows' | 'Linux' {
   return 'Linux';
 }
 
+import { tabTypeLabel } from './ai/tabTypeLabel';
+
 /**
  * Extract last N lines from buffer
  */
@@ -512,6 +514,11 @@ function formatSystemPromptSegment(
   parts.push('## Environment');
   parts.push(`- Local OS: ${env.localOS}`);
   
+  // Explicit active tab type — so LLM knows UI context
+  if (env.activeTabType) {
+    parts.push(`- Active tab: ${tabTypeLabel(env.activeTabType)}`);
+  }
+  
   if (env.cwd) {
     parts.push(`- Current working directory: ${env.cwd}`);
   }
@@ -698,4 +705,33 @@ export function getEnvironmentInfo(): EnvironmentSnapshot {
     maxSelectionChars: 0 
   });
   return context.env;
+}
+
+/**
+ * Build a compact context reminder for injection after conversation history.
+ * Placed right before the LLM's next response to ensure it sees current state,
+ * even when conversation history discusses a different tab/terminal.
+ */
+export function buildContextReminder(ctx: SidebarContext | null): string | null {
+  if (!ctx) return null;
+  const { env } = ctx;
+  const parts: string[] = [];
+
+  if (env.activeTabType) {
+    parts.push(`Active tab: ${tabTypeLabel(env.activeTabType)}`);
+  }
+
+  if (env.terminalType === 'terminal' && env.connection) {
+    parts.push(`Terminal: SSH to ${env.connection.formatted}`);
+    if (env.sessionId) parts.push(`session_id: ${env.sessionId}`);
+  } else if (env.terminalType === 'local_terminal') {
+    parts.push(`Terminal: Local (${env.localOS})`);
+    if (env.sessionId) parts.push(`session_id: ${env.sessionId}`);
+  } else {
+    parts.push('No active terminal');
+  }
+
+  if (env.cwd) parts.push(`cwd: ${env.cwd}`);
+
+  return `[Current context: ${parts.join(' | ')}. When the user's question is about the current environment, use this context rather than earlier conversation history.]`;
 }

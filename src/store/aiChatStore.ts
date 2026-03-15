@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { nodeAgentStatus, nodeGetState } from '../lib/api';
 import { useSettingsStore } from './settingsStore';
 import { useSessionTreeStore } from './sessionTreeStore';
-import { gatherSidebarContext, type SidebarContext } from '../lib/sidebarContextProvider';
+import { gatherSidebarContext, buildContextReminder, type SidebarContext } from '../lib/sidebarContextProvider';
 import { getProvider } from '../lib/ai/providerRegistry';
 import { estimateTokens, estimateToolDefinitionsTokens, trimHistoryToTokenBudget, getModelContextWindow, responseReserve } from '../lib/ai/tokenUtils';
 import type { ChatMessage as ProviderChatMessage } from '../lib/ai/providers';
@@ -748,6 +748,15 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       if ((msg.role === 'user' || msg.role === 'assistant') && msg.content.trim() !== '') {
         apiMessages.push({ role: msg.role, content: msg.content });
       }
+    }
+
+    // Inject a compact context reminder after all history messages.
+    // This prevents stale context from confusing the LLM about which
+    // tab/terminal is active when the user switches mid-conversation.
+    // Token cost is ~30-50 tokens — negligible vs typical 100k+ context windows.
+    const contextReminder = buildContextReminder(sidebarContext);
+    if (contextReminder) {
+      apiMessages.push({ role: 'system', content: contextReminder });
     }
 
     // Track trimmed messages for UI notification

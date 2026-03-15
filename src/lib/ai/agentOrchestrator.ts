@@ -20,7 +20,8 @@ import { buildPlannerSystemPrompt } from './agentPlanner';
 import { buildReviewerSystemPrompt, buildReviewPrompt, parseReview, DEFAULT_REVIEW_INTERVAL } from './agentReviewer';
 import { getToolsForContext, isCommandDenied, executeTool, READ_ONLY_TOOLS } from './tools';
 import { estimateTokens, getModelContextWindow, responseReserve } from './tokenUtils';
-import { getActiveCwd } from '../terminalRegistry';
+import { getActiveCwd, getActivePaneMetadata } from '../terminalRegistry';
+import { platform } from '../platform';
 import { nodeGetState, nodeAgentStatus } from '../api';
 import { api } from '../api';
 import i18n from '../../i18n';
@@ -500,15 +501,48 @@ export async function runAgent(task: AgentTask, signal: AbortSignal): Promise<vo
     // Snapshot CWD at task creation, so it won't drift if user switches panes
     const cwd = getActiveCwd();
 
+    // Snapshot environment context at task creation
+    const paneMetadata = getActivePaneMetadata();
+    const appStateSnap = useAppStore.getState();
+    const activeTabSnap = appStateSnap.tabs.find(t => t.id === appStateSnap.activeTabId);
+    const activeTabType = activeTabSnap?.type ?? null;
+    const terminalType = paneMetadata?.terminalType ?? null;
+    const localOS = platform.isMac ? 'macOS' : platform.isWindows ? 'Windows' : 'Linux';
+
+    // Resolve connection info for SSH terminals
+    let connectionInfo: string | undefined;
+    let remoteEnvDesc: string | undefined;
+    if (terminalType === 'terminal' && paneMetadata?.sessionId) {
+      const session = appStateSnap.sessions.get(paneMetadata.sessionId);
+      if (session?.connectionId) {
+        const conn = appStateSnap.connections.get(session.connectionId);
+        if (conn) {
+          connectionInfo = `${conn.username}@${conn.host}`;
+          if (conn.remoteEnv) {
+            const { osType, osVersion, arch, kernel, shell } = conn.remoteEnv;
+            const parts: string[] = [osType];
+            if (osVersion) parts.push(osVersion);
+            if (arch) parts.push(arch);
+            if (kernel) parts.push(`kernel ${kernel}`);
+            if (shell) parts.push(`shell ${shell}`);
+            remoteEnvDesc = parts.join(', ');
+          }
+        }
+      }
+    }
+
     let systemPrompt = buildAgentSystemPrompt({
       autonomyLevel: task.autonomyLevel,
       maxRounds: task.maxRounds,
       currentRound: 0,
       availableSessions: sessionsDesc,
+      activeTabType,
+      terminalType,
+      connectionInfo,
+      localOS,
+      remoteEnvDesc,
+      cwd: cwd ?? undefined,
     });
-    if (cwd) {
-      systemPrompt += `\nCurrent working directory: ${cwd}`;
-    }
 
     messages.push({ role: 'system', content: systemPrompt });
     messages.push({ role: 'user', content: `Task: ${task.goal}` });
@@ -659,7 +693,9 @@ export async function runAgent(task: AgentTask, signal: AbortSignal): Promise<vo
       // Refresh tools to pick up tab switches (e.g. after open_tab / open_session_tab)
       tools = resolveTools();
 
-      // Update system prompt with current round
+      // Update system prompt with current round (refresh env context for tab switches)
+      const roundAppState = useAppStore.getState();
+      const roundActiveTab = roundAppState.tabs.find(t => t.id === roundAppState.activeTabId);
       messages[0] = {
         role: 'system',
         content: buildAgentSystemPrompt({
@@ -667,6 +703,12 @@ export async function runAgent(task: AgentTask, signal: AbortSignal): Promise<vo
           maxRounds: task.maxRounds,
           currentRound: round,
           availableSessions: sessionsDesc,
+          activeTabType: roundActiveTab?.type ?? null,
+          terminalType,
+          connectionInfo,
+          localOS,
+          remoteEnvDesc,
+          cwd: cwd ?? undefined,
         }),
       };
 

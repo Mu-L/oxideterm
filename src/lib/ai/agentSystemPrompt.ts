@@ -6,7 +6,8 @@
  * instructions for structured planning and self-verification.
  */
 
-import type { AutonomyLevel } from '../../types';
+import type { AutonomyLevel, TabType } from '../../types';
+import { tabTypeLabel } from './tabTypeLabel';
 
 /** Build the agent system prompt with dynamic context */
 export function buildAgentSystemPrompt(options: {
@@ -14,8 +15,23 @@ export function buildAgentSystemPrompt(options: {
   maxRounds: number;
   currentRound: number;
   availableSessions: string;
+  /** Currently active tab type in the UI */
+  activeTabType?: TabType | null;
+  /** Whether the active terminal is remote SSH or local */
+  terminalType?: 'terminal' | 'local_terminal' | null;
+  /** Formatted connection string, e.g. "user@host" */
+  connectionInfo?: string;
+  /** Local operating system */
+  localOS?: string;
+  /** Pre-formatted remote environment details */
+  remoteEnvDesc?: string;
+  /** Current working directory */
+  cwd?: string;
 }): string {
-  const { autonomyLevel, maxRounds, currentRound, availableSessions } = options;
+  const {
+    autonomyLevel, maxRounds, currentRound, availableSessions,
+    activeTabType, terminalType, connectionInfo, localOS, remoteEnvDesc, cwd,
+  } = options;
 
   const approvalNote = autonomyLevel === 'supervised'
     ? 'All tool calls require user approval before execution.'
@@ -66,6 +82,9 @@ When the task is complete (or cannot be completed), respond with a summary:
 }
 \`\`\`
 
+## Current Context
+${buildCurrentContextSection(activeTabType, terminalType, connectionInfo, localOS, remoteEnvDesc, cwd)}
+
 ## Available Sessions
 ${availableSessions || 'No active sessions. You can use context-free tools like list_sessions to discover available targets.'}
 
@@ -75,4 +94,43 @@ For remote execution: use terminal_exec with session_id or node_id.
 For file operations: use read_file, write_file, list_directory.
 For infrastructure: use list_port_forwards, create_port_forward.
 For monitoring: use get_connection_health, get_resource_metrics.`;
+}
+
+function buildCurrentContextSection(
+  activeTabType?: TabType | null,
+  terminalType?: 'terminal' | 'local_terminal' | null,
+  connectionInfo?: string,
+  localOS?: string,
+  remoteEnvDesc?: string,
+  cwd?: string,
+): string {
+  const lines: string[] = [];
+
+  if (activeTabType) {
+    lines.push(`- Active tab: **${tabTypeLabel(activeTabType)}**`);
+  } else {
+    lines.push('- Active tab: None');
+  }
+
+  if (terminalType === 'terminal' && connectionInfo) {
+    lines.push(`- Terminal type: Remote SSH (${connectionInfo})`);
+  } else if (terminalType === 'local_terminal') {
+    lines.push(`- Terminal type: Local shell`);
+  } else {
+    lines.push('- Terminal type: No active terminal');
+  }
+
+  if (localOS) {
+    lines.push(`- Local OS: ${localOS}`);
+  }
+
+  if (remoteEnvDesc) {
+    lines.push(`- Remote environment: ${remoteEnvDesc}`);
+  }
+
+  if (cwd) {
+    lines.push(`- Working directory: ${cwd}`);
+  }
+
+  return lines.join('\n');
 }

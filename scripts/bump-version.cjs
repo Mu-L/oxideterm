@@ -10,7 +10,7 @@
  *   - package.json
  *   - src-tauri/Cargo.toml
  *   - src-tauri/tauri.conf.json
- *   - README.md, README.zh-CN.md, README.fr.md (optional badges)
+ *   - README.md and docs/readme/README.*.md (optional badges)
  */
 
 const fs = require('fs');
@@ -24,8 +24,12 @@ const FILES = {
   cargoToml: path.join(ROOT_DIR, 'src-tauri', 'Cargo.toml'),
   tauriConf: path.join(ROOT_DIR, 'src-tauri', 'tauri.conf.json'),
   readme: path.join(ROOT_DIR, 'README.md'),
-  readmeZh: path.join(ROOT_DIR, 'README.zh-CN.md'),
-  readmeFr: path.join(ROOT_DIR, 'README.fr.md'),
+  readmeZhCN: path.join(ROOT_DIR, 'docs', 'readme', 'README.zh-CN.md'),
+  readmeZhHant: path.join(ROOT_DIR, 'docs', 'readme', 'README.zh-Hant.md'),
+  readmeJa: path.join(ROOT_DIR, 'docs', 'readme', 'README.ja.md'),
+  readmeKo: path.join(ROOT_DIR, 'docs', 'readme', 'README.ko.md'),
+  readmeFr: path.join(ROOT_DIR, 'docs', 'readme', 'README.fr.md'),
+  readmeVi: path.join(ROOT_DIR, 'docs', 'readme', 'README.vi.md'),
 };
 
 function validateVersion(version) {
@@ -149,8 +153,12 @@ Options:
   // Update README badges
   const readmeFiles = [
     { path: FILES.readme, name: 'README.md' },
-    { path: FILES.readmeZh, name: 'README.zh-CN.md' },
-    { path: FILES.readmeFr, name: 'README.fr.md' },
+    { path: FILES.readmeZhCN, name: 'docs/readme/README.zh-CN.md' },
+    { path: FILES.readmeZhHant, name: 'docs/readme/README.zh-Hant.md' },
+    { path: FILES.readmeJa, name: 'docs/readme/README.ja.md' },
+    { path: FILES.readmeKo, name: 'docs/readme/README.ko.md' },
+    { path: FILES.readmeFr, name: 'docs/readme/README.fr.md' },
+    { path: FILES.readmeVi, name: 'docs/readme/README.vi.md' },
   ];
 
   for (const readme of readmeFiles) {

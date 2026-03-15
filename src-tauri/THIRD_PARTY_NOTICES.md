@@ -1,7 +1,7 @@
 # Third-Party Notices (Backend / Rust)
 
 This file lists third-party crates used by the Rust backend and their detected licenses (including transitive dependencies).
-Generated: 2026-03-14T15:42:48.928Z
+Generated: 2026-03-15T21:02:40.164Z
 
 ## Summary
 - MIT: 628

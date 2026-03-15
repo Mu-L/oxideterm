@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src-tauri/icons/icon.ico" alt="OxideTerm" width="128" height="128">
+  <img src="../../src-tauri/icons/icon.ico" alt="OxideTerm" width="128" height="128">
 </p>
 
 <h1 align="center">⚡ OxideTerm</h1>
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.fr.md">Français</a>
+  <a href="../../README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.zh-Hant.md">繁體中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | <a href="README.fr.md">Français</a> | <a href="README.vi.md">Tiếng Việt</a>
 </p>
 
 ---

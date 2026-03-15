@@ -386,7 +386,7 @@ export const ChatMessage = memo(function ChatMessage({
                 }}
                 className="flex items-center gap-1 text-[11px] text-theme-text-muted/40 
                   hover:text-theme-text-muted py-0.5 px-1.5
-                  hover:bg-theme-border/10 opacity-0 group-hover/msg:opacity-100 transition-opacity"
+                  hover:bg-theme-border/10 transition-colors"
                 title={t('ai.message.copy')}
               >
                 {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}

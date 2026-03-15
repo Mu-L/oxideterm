@@ -461,21 +461,29 @@ export async function runAgent(task: AgentTask, signal: AbortSignal): Promise<vo
     const reviewerConfig = await resolveRoleConfig(reviewerRoleConfig, executorFallback);
     const reviewInterval = reviewerRoleConfig?.enabled ? (reviewerRoleConfig.interval ?? DEFAULT_REVIEW_INTERVAL) : 0;
 
-    // ── Get available tools (inherit tab context from task creation) ─────
+    // ── Tool resolution (refreshed each round to track tab switches) ────
     const disabledToolNames = settings.ai.toolUse?.disabledTools ?? [];
     const disabledSet = new Set(disabledToolNames);
-    const hasAnySSH = useAppStore.getState().sessions.size > 0;
-    let tools = getToolsForContext(task.contextTabType ?? null, hasAnySSH, disabledSet);
 
-    // Merge MCP tools from connected servers (respecting disabled list)
+    // Pre-load MCP registry once
     const { useMcpRegistry } = await import('./mcp');
-    const mcpTools = useMcpRegistry.getState().getAllMcpToolDefinitions();
-    if (mcpTools.length > 0) {
-      const filteredMcpTools = mcpTools.filter(t => !disabledSet.has(t.name));
-      if (filteredMcpTools.length > 0) {
-        tools = [...tools, ...filteredMcpTools];
+
+    /** Resolve tools for the current active tab type, merging MCP tools. */
+    const resolveTools = () => {
+      const appState = useAppStore.getState();
+      const activeTab = appState.tabs.find(t => t.id === appState.activeTabId);
+      const activeTabType = activeTab?.type ?? null;
+      const hasAnySSH = appState.sessions.size > 0;
+      let resolved = getToolsForContext(activeTabType, hasAnySSH, disabledSet);
+      const mcpTools = useMcpRegistry.getState().getAllMcpToolDefinitions();
+      if (mcpTools.length > 0) {
+        const filtered = mcpTools.filter(t => !disabledSet.has(t.name));
+        if (filtered.length > 0) resolved = [...resolved, ...filtered];
       }
-    }
+      return resolved;
+    };
+
+    let tools = resolveTools();
 
     // ── Build initial context ────────────────────────────────────────────
     const sessionsDesc = await getSessionsDescription();
@@ -647,6 +655,9 @@ export async function runAgent(task: AgentTask, signal: AbortSignal): Promise<vo
 
       store().incrementRound();
       _cachedToolContext = null; // Invalidate per-round to pick up focus changes
+
+      // Refresh tools to pick up tab switches (e.g. after open_tab / open_session_tab)
+      tools = resolveTools();
 
       // Update system prompt with current round
       messages[0] = {

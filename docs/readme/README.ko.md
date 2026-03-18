@@ -28,6 +28,13 @@
   <img src="../screenshots/overview/ko.png" alt="OxideTerm 개요" width="800">
 </p>
 
+<p align="center">
+  <video src="../media/ai-terminal-demo.mp4" width="800" autoplay loop muted playsinline>
+    Your browser does not support the video tag.
+  </video>
+</p>
+<p align="center"><em>🤖 AI 어시스턴트 — "로컬 터미널을 열고 pwd 실행"</em></p>
+
 ## OxideTerm이란?
 
 OxideTerm은 로컬 셸, 원격 SSH 세션, 파일 관리, 코드 편집, AI 어시스턴트를 하나의 Rust 네이티브 바이너리로 통합한 **크로스 플랫폼 터미널 애플리케이션**입니다. Electron 래퍼가 **아닙니다** — 백엔드 전체가 Rust로 작성되었으며, Tauri 2.0을 통해 20~35 MB의 네이티브 실행 파일로 제공됩니다.

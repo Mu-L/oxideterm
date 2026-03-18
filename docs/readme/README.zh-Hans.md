@@ -28,6 +28,13 @@
   <img src="../screenshots/overview/zhHans.png" alt="OxideTerm 概览" width="800">
 </p>
 
+<p align="center">
+  <video src="../media/ai-terminal-demo.mp4" width="800" autoplay loop muted playsinline>
+    Your browser does not support the video tag.
+  </video>
+</p>
+<p align="center"><em>🤖 AI 助手 —「打开一个本地终端并运行 pwd」</em></p>
+
 ## OxideTerm 是什么？
 
 OxideTerm 是一款**跨平台终端应用**，将本地 Shell、远程 SSH 会话、文件管理、代码编辑和 AI 助手整合进一个 Rust 原生二进制文件中。它**不是** Electron 套壳——后端完全由 Rust 编写，通过 Tauri 2.0 打包为约 20-35 MB 的原生可执行文件。

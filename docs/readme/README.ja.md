@@ -28,6 +28,13 @@
   <img src="../screenshots/overview/ja.png" alt="OxideTerm 概要" width="800">
 </p>
 
+<p align="center">
+  <video src="../media/ai-terminal-demo.mp4" width="800" autoplay loop muted playsinline>
+    Your browser does not support the video tag.
+  </video>
+</p>
+<p align="center"><em>🤖 AI アシスタント —「ローカルターミナルを開いて pwd を実行」</em></p>
+
 ## OxideTermとは？
 
 OxideTermは、ローカルシェル、リモートSSHセッション、ファイル管理、コード編集、AI支援を単一のRustネイティブバイナリに統合した**クロスプラットフォームターミナルアプリケーション**です。Electronラッパー**ではありません** — バックエンド全体がRustで書かれており、Tauri 2.0経由で20〜35 MBのネイティブ実行ファイルとして提供されます。

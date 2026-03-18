@@ -28,6 +28,13 @@
   <img src="../screenshots/overview/vi.png" alt="Tổng quan OxideTerm" width="800">
 </p>
 
+<p align="center">
+  <video src="../media/ai-terminal-demo.mp4" width="800" autoplay loop muted playsinline>
+    Your browser does not support the video tag.
+  </video>
+</p>
+<p align="center"><em>🤖 Trợ lý AI — "Mở terminal cục bộ và chạy pwd"</em></p>
+
 ## OxideTerm là gì?
 
 OxideTerm là một **ứng dụng terminal đa nền tảng** kết hợp shell cục bộ, phiên SSH từ xa, quản lý tệp, chỉnh sửa mã nguồn và hỗ trợ AI vào một tệp nhị phân gốc duy nhất được viết bằng Rust. Đây **không** phải là một wrapper Electron — toàn bộ backend được viết bằng Rust, đóng gói thành tệp thực thi gốc chỉ 20-35 MB thông qua Tauri 2.0.

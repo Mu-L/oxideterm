@@ -28,6 +28,13 @@
   <img src="../screenshots/overview/fr.png" alt="Aperçu d'OxideTerm" width="800">
 </p>
 
+<p align="center">
+  <video src="../media/ai-terminal-demo.mp4" width="800" autoplay loop muted playsinline>
+    Your browser does not support the video tag.
+  </video>
+</p>
+<p align="center"><em>🤖 Assistant IA — « Ouvrir un terminal local et exécuter pwd »</em></p>
+
 ## Qu'est-ce qu'OxideTerm ?
 
 OxideTerm est une **application terminal multiplateforme** qui unifie shells locaux, sessions SSH distantes, gestion de fichiers, édition de code et assistance IA dans un seul binaire natif Rust. Ce n'est **pas** un wrapper Electron — le backend entier est écrit en Rust, livré sous forme d'exécutable natif d'environ 20-35 Mo via Tauri 2.0.

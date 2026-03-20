@@ -169,7 +169,21 @@ IA a doppia modalità con design orientato alla privacy:
 - **Compatibile**: OpenAI, Ollama, DeepSeek, OneAPI, qualsiasi endpoint `/v1/chat/completions`
 - **Sicuro**: chiavi API nel portachiavi del sistema operativo (macOS Keychain / Windows Credential Manager); su macOS, le letture sono protette da **Touch ID** tramite `LAContext` — senza entitlement o firma del codice richiesta
 
-### 💻 Modalità IDE — Editing Remoto
+### � Base di Conoscenza RAG per le Operazioni (v0.20)
+
+Generazione aumentata dal recupero, locale prioritario, per documentazione operativa:
+
+- **Collezioni di documenti**: importa runbook, SOP e guide di deployment in Markdown/TXT in collezioni con ambito globale o per connessione
+- **Ricerca ibrida**: indice BM25 per parole chiave + similarità coseno vettoriale, fusi tramite Reciprocal Rank Fusion (RRF)
+- **Chunking consapevole del Markdown**: suddivisione per gerarchia di titoli, preservando i percorsi di sezione (es. "Deployment > Docker > Risoluzione problemi")
+- **Supporto CJK**: tokenizzatore bigramma per cinese/giapponese/coreano + tokenizzazione per spazi per script latini
+- **Integrazione IA**: lo strumento `search_docs` recupera automaticamente il contesto documentale rilevante durante le conversazioni IA — nessun trigger manuale necessario
+- **Modifica esterna**: apri documenti nell'editor di sistema, sincronizzazione automatica al ritorno del focus della finestra con blocco ottimistico della versione
+- **Reindicizzazione con progresso**: ricostruzione completa BM25 con barra di progresso in tempo reale e supporto alla cancellazione
+- **Pipeline di embedding**: il frontend genera vettori tramite il provider IA, memorizzati nel backend per il recupero ibrido
+- **Archiviazione**: database embedded redb, 9 tabelle, serializzazione MessagePack con compressione automatica per chunk di grandi dimensioni
+
+### �💻 Modalità IDE — Editing Remoto
 
 Editor CodeMirror 6 su SFTP — nessuna installazione lato server richiesta per impostazione predefinita; Linux supporta un agente remoto leggero opzionale per funzionalità avanzate:
 
@@ -317,7 +331,7 @@ Nonostante le diverse sorgenti di stato, la logica di rendering è unificata att
 | **File** | Browser SFTP a doppio pannello, drag-and-drop, anteprima (immagini/video/audio/PDF/codice/hex), coda trasferimenti |
 | **IDE** | Albero file, editor CodeMirror, multi-scheda, stato Git, risoluzione conflitti, terminale integrato |
 | **Forwarding** | Locale (-L), Remoto (-R), SOCKS5 dinamico (-D), auto-ripristino, segnalazione di morte, I/O lock-free |
-| **IA** | Pannello inline + chat laterale, streaming SSE, inserimento codice, oltre 40 strumenti, integrazione server MCP, contesto multi-sorgente, OpenAI/Ollama/DeepSeek |
+| **IA** | Pannello inline + chat laterale, streaming SSE, inserimento codice, oltre 40 strumenti, integrazione server MCP, contesto multi-sorgente, base di conoscenza RAG, OpenAI/Ollama/DeepSeek |
 | **Plugin** | Caricamento ESM a runtime, 8 namespace API, 24 UI Kit, sandboxed, circuit breaker |
 | **WSL Graphics** ⚠️ | Visualizzatore VNC integrato (Sperimentale): modalità desktop (9 ambienti) + modalità applicazione (GUI singola), rilevamento WSLg, Xtigervnc + noVNC, riconnessione, feature-gated |
 | **Sicurezza** | Crittografia .oxide, portachiavi SO, memoria `zeroize`, TOFU per chiavi host |
@@ -486,8 +500,9 @@ OxideTerm/
 
 ## Roadmap
 
-### 🚧 In Corso
+### 🚧 In Corso (v0.20)
 
+- [ ] Base di conoscenza RAG — collezioni di documenti locali con ricerca ibrida BM25 + vettoriale, recupero integrato con IA
 - [ ] Ricerca sessioni e cambio rapido
 
 ### 📋 Pianificato

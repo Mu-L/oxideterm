@@ -169,7 +169,21 @@ AI chế độ kép với thiết kế ưu tiên quyền riêng tư:
 - **Tương thích**: OpenAI, Ollama, DeepSeek, OneAPI, mọi endpoint `/v1/chat/completions`
 - **Bảo mật**: API keys trong OS keychain (macOS Keychain / Windows Credential Manager); trên macOS, thao tác đọc được bảo vệ bằng **Touch ID** qua `LAContext` — không cần entitlements hay code-signing
 
-### 💻 Chế độ IDE — Chỉnh sửa từ xa
+### � Cơ sở Kiến thức RAG cho Vận hành (v0.20)
+
+Hệ thống tạo sinh tăng cường bằng truy xuất, ưu tiên cục bộ, dành cho tài liệu vận hành:
+
+- **Bộ sưu tập tài liệu**: nhập runbook, SOP và hướng dẫn triển khai dạng Markdown/TXT vào các bộ sưu tập có phạm vi toàn cục hoặc theo kết nối
+- **Tìm kiếm lai**: chỉ mục từ khóa BM25 + độ tương đồng cosin vector, kết hợp qua Reciprocal Rank Fusion (RRF)
+- **Phân đoạn nhận biết Markdown**: tách theo cấp bậc tiêu đề, giữ lại đường dẫn phần (ví dụ: "Triển khai > Docker > Xử lý sự cố")
+- **Hỗ trợ CJK**: bộ phân tách bigram cho tiếng Trung/Nhật/Hàn + phân tách khoảng trắng cho các ký tự Latin
+- **Tích hợp AI**: công cụ `search_docs` tự động truy xuất ngữ cảnh tài liệu liên quan trong cuộc hội thoại AI — không cần kích hoạt thủ công
+- **Chỉnh sửa bên ngoài**: mở tài liệu trong trình soạn thảo hệ thống, tự động đồng bộ khi cửa sổ lấy lại tiêu điểm với khóa phiên bản lạc quan
+- **Tái lập chỉ mục với tiến trình**: xây dựng lại BM25 hoàn toàn với thanh tiến trình thời gian thực và hỗ trợ hủy bỏ
+- **Pipeline nhúng**: frontend tạo vector qua nhà cung cấp AI, lưu trữ trong backend cho truy xuất lai
+- **Lưu trữ**: cơ sở dữ liệu nhúng redb, 9 bảng, tuần tự hóa MessagePack với nén tự động cho các đoạn lớn
+
+### �💻 Chế độ IDE — Chỉnh sửa từ xa
 
 Trình soạn thảo CodeMirror 6 qua SFTP — mặc định không cần cài đặt phía server; Linux hỗ trợ tùy chọn agent từ xa nhẹ để nâng cao khả năng:
 
@@ -317,7 +331,7 @@ Mặc dù nguồn trạng thái khác nhau, logic kết xuất được thống 
 | **Tệp** | Trình duyệt SFTP hai panel, kéo thả, xem trước (ảnh/video/audio/PDF/mã nguồn/hex), hàng đợi truyền tải |
 | **IDE** | Cây tệp, trình soạn thảo CodeMirror, đa tab, trạng thái Git, giải quyết xung đột, terminal tích hợp |
 | **Chuyển tiếp** | Local (-L), Remote (-R), Dynamic SOCKS5 (-D), tự động khôi phục, báo cáo kết thúc, I/O không khóa |
-| **AI** | Bảng nội tuyến + chat bên lề, streaming SSE, chèn mã, 40+ công cụ sử dụng, tích hợp MCP server, ngữ cảnh đa nguồn, OpenAI/Ollama/DeepSeek |
+| **AI** | Bảng nội tuyến + chat bên lề, streaming SSE, chèn mã, 40+ công cụ sử dụng, tích hợp MCP server, ngữ cảnh đa nguồn, cơ sở kiến thức RAG, OpenAI/Ollama/DeepSeek |
 | **Plugin** | Tải ESM runtime, 8 API namespaces, 24 UI Kit, sandbox, circuit breaker |
 | **WSL Graphics** ⚠️ | Trình xem VNC tích hợp (Thử nghiệm): Chế độ Desktop (9 DE) + Chế độ App (ứng dụng GUI đơn), phát hiện WSLg, Xtigervnc + noVNC, kết nối lại, gắn feature gate |
 | **Bảo mật** | Mã hóa .oxide, OS keychain, xóa bộ nhớ `zeroize`, TOFU host key |
@@ -486,8 +500,9 @@ OxideTerm/
 
 ## Lộ trình
 
-### 🚧 Đang phát triển
+### 🚧 Đang phát triển (v0.20)
 
+- [ ] Cơ sở kiến thức RAG — bộ sưu tập tài liệu cục bộ với tìm kiếm lai BM25 + vector, truy xuất tích hợp AI
 - [ ] Tìm kiếm phiên & chuyển đổi nhanh
 
 ### 📋 Kế hoạch

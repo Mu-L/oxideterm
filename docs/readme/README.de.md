@@ -169,7 +169,21 @@ Dual-Mode-KI mit datenschutzorientiertem Design:
 - **Kompatibel**: OpenAI, Ollama, DeepSeek, OneAPI, jeder `/v1/chat/completions`-Endpunkt
 - **Sicher**: API-Schlüssel im Betriebssystem-Schlüsselbund (macOS Keychain / Windows Credential Manager); unter macOS wird der Lesezugriff durch **Touch ID** über `LAContext` geschützt — keine Entitlements oder Code-Signierung erforderlich
 
-### 💻 IDE-Modus — Remote-Bearbeitung
+### � RAG-Betriebswissensdatenbank (v0.20)
+
+Local-first Retrieval-Augmented Generation für Betriebsdokumentation:
+
+- **Dokumentensammlungen**: Importieren Sie Markdown/TXT-Runbooks, SOPs und Deployment-Anleitungen in bereichsbezogene Sammlungen (global oder pro Verbindung)
+- **Hybridsuche**: BM25-Schlüsselwortindex + Vektor-Kosinusähnlichkeit, vereint durch Reciprocal Rank Fusion (RRF)
+- **Markdown-bewusstes Chunking**: Aufteilung nach Überschriftenhierarchie, Beibehaltung der Abschnittspfade (z.B. „Deployment > Docker > Fehlerbehebung")
+- **CJK-Unterstützung**: Bigramm-Tokenizer für Chinesisch/Japanisch/Koreanisch + Leerzeichen-Tokenisierung für lateinische Schriften
+- **KI-Integration**: Das `search_docs`-Tool ruft während KI-Gesprächen automatisch relevanten Dokumentenkontext ab — kein manuelles Auslösen erforderlich
+- **Externe Bearbeitung**: Dokumente im Systemeditor öffnen, automatische Synchronisierung bei Fensterfokus mit optimistischer Versionssperre
+- **Neuindexierung mit Fortschritt**: Vollständiger BM25-Neuaufbau mit Echtzeit-Fortschrittsbalken und Abbruch-Unterstützung
+- **Embedding-Pipeline**: Frontend generiert Vektoren über KI-Anbieter, im Backend gespeichert für hybride Suche
+- **Speicher**: redb eingebettete Datenbank, 9 Tabellen, MessagePack-Serialisierung mit automatischer Komprimierung für große Chunks
+
+### �💻 IDE-Modus — Remote-Bearbeitung
 
 CodeMirror 6 Editor über SFTP — standardmäßig keine serverseitige Installation erforderlich; Linux unterstützt einen optionalen leichtgewichtigen Remote-Agent für erweiterte Funktionen:
 
@@ -317,7 +331,7 @@ Trotz verschiedener Zustandsquellen ist die Rendering-Logik durch die Komponente
 | **Dateien** | Dualer SFTP-Browser, Drag-and-Drop, Vorschau (Bilder/Video/Audio/PDF/Code/Hex), Transfer-Warteschlange |
 | **IDE** | Dateibaum, CodeMirror-Editor, Multi-Tab, Git-Status, Konfliktlösung, integriertes Terminal |
 | **Weiterleitung** | Lokal (-L), Remote (-R), Dynamisches SOCKS5 (-D), Auto-Wiederherstellung, Ausfallberichterstattung, lock-freie I/O |
-| **KI** | Inline-Panel + Seitenleisten-Chat, SSE-Streaming, Code-Einfügung, 40+ Werkzeugnutzung, MCP-Server-Integration, Multi-Quellen-Kontext, OpenAI/Ollama/DeepSeek |
+| **KI** | Inline-Panel + Seitenleisten-Chat, SSE-Streaming, Code-Einfügung, 40+ Werkzeugnutzung, MCP-Server-Integration, Multi-Quellen-Kontext, RAG-Wissensdatenbank, OpenAI/Ollama/DeepSeek |
 | **Plugins** | ESM-Laufzeit-Laden, 8 API-Namensräume, 24 UI-Kit, Sandbox-Ausführung, Circuit Breaker |
 | **WSL Graphics** ⚠️ | Integrierter VNC-Viewer (Experimentell): Desktop-Modus (9 DEs) + App-Modus (einzelne GUI-App), WSLg-Erkennung, Xtigervnc + noVNC, Reconnect, Feature-gated |
 | **Sicherheit** | .oxide-Verschlüsselung, Betriebssystem-Schlüsselbund, `zeroize`-Speicher, Host-Key-TOFU |
@@ -486,8 +500,9 @@ OxideTerm/
 
 ## Fahrplan
 
-### 🚧 In Arbeit
+### 🚧 In Arbeit (v0.20)
 
+- [ ] RAG-Betriebswissensdatenbank — lokale Dokumentensammlungen mit BM25 + Vektor-Hybridsuche, KI-integrierte Suche
 - [ ] Sitzungssuche & Schnellwechsel
 
 ### 📋 Geplant

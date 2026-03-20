@@ -165,7 +165,21 @@ IA dual-mode, priorité à la vie privée :
 - **Compatible** : OpenAI, Ollama, DeepSeek, OneAPI, tout endpoint `/v1/chat/completions`
 - **Sécurisé** : clés API dans le trousseau système ; sous macOS, la lecture des clés est protégée par **Touch ID** via `LAContext` (`LocalAuthentication.framework`), sans entitlement ni signature de code requis
 
-### 💻 Mode IDE — Édition distante
+### � Base de connaissances RAG pour les opérations (v0.20)
+
+Génération augmentée par récupération, locale en priorité, pour la documentation opérationnelle :
+
+- **Collections de documents** : importez des runbooks, SOP et guides de déploiement en Markdown/TXT dans des collections à portée globale ou par connexion
+- **Recherche hybride** : index BM25 par mots-clés + similarité cosinus vectorielle, fusionnés via Reciprocal Rank Fusion (RRF)
+- **Découpage Markdown intelligent** : séparation par hiérarchie de titres, conservation du chemin de section (ex. « Déploiement > Docker > Dépannage »)
+- **Support CJK** : tokeniseur bigramme pour le chinois/japonais/coréen + tokenisation par espaces pour les scripts latins
+- **Intégration IA** : l'outil `search_docs` récupère automatiquement le contexte documentaire pertinent pendant les conversations IA — aucun déclenchement manuel nécessaire
+- **Édition externe** : ouvrez les documents dans l'éditeur système, synchronisation automatique au refocus de la fenêtre avec verrouillage optimiste de version
+- **Réindexation avec progression** : reconstruction complète du BM25 avec barre de progression en temps réel et support d'annulation
+- **Pipeline d'embeddings** : le frontend génère les vecteurs via le fournisseur IA, stockés dans le backend pour la récupération hybride
+- **Stockage** : base de données embarquée redb, 9 tables, sérialisation MessagePack avec compression automatique pour les gros fragments
+
+### �💻 Mode IDE — Édition distante
 
 Éditeur CodeMirror 6 via SFTP — aucune installation côté serveur requise par défaut ; Linux prend en charge un agent distant optionnel pour des capacités étendues :
 
@@ -310,7 +324,7 @@ Malgré des sources d’état différentes, la logique de rendu est unifiée via
 | **Fichiers** | Navigateur SFTP double panneau, glisser-déposer, aperçu (images/vidéo/audio/PDF/code/hex), file de transfert |
 | **IDE** | Arborescence, éditeur CodeMirror, multi-onglets, statut Git, résolution de conflits, terminal intégré |
 | **Redirection** | Locale (-L), distante (-R), SOCKS5 dynamique (-D), auto-restauration, rapport de décès, I/O sans verrou |
-| **IA** | Panneau inline + chat latéral, SSE streaming, insertion de code, 40+ outils, intégration serveurs MCP, contexte multi-sources, OpenAI/Ollama/DeepSeek |
+| **IA** | Panneau inline + chat latéral, SSE streaming, insertion de code, 40+ outils, intégration serveurs MCP, contexte multi-sources, base de connaissances RAG, OpenAI/Ollama/DeepSeek |
 | **Plugins** | Chargement ESM runtime, 8 espaces API, 24 UI Kit, exécution sandboxée, disjoncteur |
 | **WSL Graphics** ⚠️ | Visionneuse VNC intégrée (Expérimental) : mode Bureau (9 DE) + mode Application (GUI unique), détection WSLg, Xtigervnc + noVNC, reconnexion, feature-gated |
 | **Sécurité** | Chiffrement .oxide, trousseau système, `zeroize` mémoire, TOFU clé d'hôte |
@@ -477,8 +491,9 @@ OxideTerm/
 
 ## Feuille de route
 
-### 🚧 En cours
+### 🚧 En cours (v0.20)
 
+- [ ] Base de connaissances RAG — collections de documents locales avec recherche hybride BM25 + vectorielle, récupération intégrée à l'IA
 - [ ] Recherche & changement rapide de sessions
 
 ### 📋 Planifié

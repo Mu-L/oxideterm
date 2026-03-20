@@ -169,7 +169,21 @@ IA em modo duplo com design focado em privacidade:
 - **Compatível**: OpenAI, Ollama, DeepSeek, OneAPI, qualquer endpoint `/v1/chat/completions`
 - **Seguro**: chaves de API no chaveiro do sistema operacional (macOS Keychain / Windows Credential Manager); no macOS, leituras são protegidas pelo **Touch ID** via `LAContext` — sem necessidade de entitlements ou assinatura de código
 
-### 💻 Modo IDE — Edição Remota
+### � Base de Conhecimento RAG para Operações (v0.20)
+
+Geração aumentada por recuperação, local primeiro, para documentação operacional:
+
+- **Coleções de documentos**: importe runbooks, SOPs e guias de implantação em Markdown/TXT em coleções com escopo global ou por conexão
+- **Busca híbrida**: índice BM25 por palavras-chave + similaridade cosseno vetorial, fundidos via Reciprocal Rank Fusion (RRF)
+- **Fragmentação consciente de Markdown**: divisão por hierarquia de cabeçalhos, preservando caminhos de seção (ex. "Implantação > Docker > Solução de problemas")
+- **Suporte CJK**: tokenizador bigrama para chinês/japonês/coreano + tokenização por espaços para scripts latinos
+- **Integração IA**: a ferramenta `search_docs` recupera automaticamente contexto documental relevante durante conversas de IA — sem acionamento manual
+- **Edição externa**: abra documentos no editor do sistema, sincronização automática ao refocar a janela com bloqueio otimista de versão
+- **Reindexação com progresso**: reconstrução completa do BM25 com barra de progresso em tempo real e suporte a cancelamento
+- **Pipeline de embeddings**: o frontend gera vetores via provedor de IA, armazenados no backend para recuperação híbrida
+- **Armazenamento**: banco de dados embutido redb, 9 tabelas, serialização MessagePack com compressão automática para chunks grandes
+
+### �💻 Modo IDE — Edição Remota
 
 Editor CodeMirror 6 via SFTP — sem necessidade de instalação no servidor por padrão; Linux suporta um agente remoto leve opcional para funcionalidades avançadas:
 
@@ -317,7 +331,7 @@ Apesar das diferentes fontes de estado, a lógica de renderização é unificada
 | **Arquivos** | Navegador SFTP de painel duplo, arrastar-e-soltar, pré-visualização (imagens/vídeo/áudio/PDF/código/hex), fila de transferências |
 | **IDE** | Árvore de arquivos, editor CodeMirror, multi-abas, status Git, resolução de conflitos, terminal integrado |
 | **Encaminhamento** | Local (-L), Remoto (-R), SOCKS5 dinâmico (-D), auto-restauração, relatório de término, I/O lock-free |
-| **IA** | Painel inline + chat lateral, streaming SSE, inserção de código, mais de 40 ferramentas, integração com servidor MCP, contexto multi-fonte, OpenAI/Ollama/DeepSeek |
+| **IA** | Painel inline + chat lateral, streaming SSE, inserção de código, mais de 40 ferramentas, integração com servidor MCP, contexto multi-fonte, base de conhecimento RAG, OpenAI/Ollama/DeepSeek |
 | **Plugins** | Carregamento ESM em runtime, 8 namespaces de API, 24 UI Kit, sandboxed, circuit breaker |
 | **WSL Graphics** ⚠️ | Visualizador VNC integrado (Experimental): modo desktop (9 ambientes) + modo aplicação (GUI única), detecção WSLg, Xtigervnc + noVNC, reconexão, feature-gated |
 | **Segurança** | Criptografia .oxide, chaveiro do SO, memória `zeroize`, TOFU para chaves de host |
@@ -486,8 +500,9 @@ OxideTerm/
 
 ## Roteiro
 
-### 🚧 Em Andamento
+### 🚧 Em Andamento (v0.20)
 
+- [ ] Base de conhecimento RAG — coleções de documentos locais com busca híbrida BM25 + vetorial, recuperação integrada com IA
 - [ ] Busca de sessões e troca rápida
 
 ### 📋 Planejado

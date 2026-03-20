@@ -169,7 +169,21 @@ Dual-mode AI with privacy-first design:
 - **Compatible**: OpenAI, Ollama, DeepSeek, OneAPI, any `/v1/chat/completions` endpoint
 - **Secure**: API keys in OS keychain (macOS Keychain / Windows Credential Manager); on macOS, reads are gated behind **Touch ID** via `LAContext` — no entitlements or code-signing required
 
-### 💻 IDE Mode — Remote Editing
+### � RAG Operations Knowledge Base (v0.20)
+
+Local-first retrieval-augmented generation for operations documentation:
+
+- **Document collections**: import Markdown/TXT runbooks, SOPs, and deployment guides into scoped collections (global or per-connection)
+- **Hybrid search**: BM25 keyword index + vector cosine similarity, fused via Reciprocal Rank Fusion (RRF)
+- **Markdown-aware chunking**: splits by heading hierarchy, preserves section paths (e.g. "Deployment > Docker > Troubleshooting")
+- **CJK support**: bigram tokenizer for Chinese/Japanese/Korean alongside whitespace tokenization for Latin scripts
+- **AI integration**: `search_docs` tool automatically retrieves relevant documentation context during AI conversations — no manual triggering needed
+- **External editing**: open documents in system editor, auto-sync on window refocus with optimistic version locking
+- **Reindex with progress**: full BM25 rebuild with real-time progress bar and cancellation support
+- **Embedding pipeline**: frontend generates vectors via AI provider, stored in backend for hybrid retrieval
+- **Storage**: redb embedded database, 9 tables, MessagePack serialization with automatic compression for large chunks
+
+### �💻 IDE Mode — Remote Editing
 
 CodeMirror 6 editor over SFTP — no server-side installation required by default; Linux supports an optional lightweight remote agent for enhanced capabilities:
 
@@ -317,7 +331,7 @@ Despite different state sources, rendering logic is unified through `TerminalVie
 | **Files** | Dual-pane SFTP browser, drag-drop, preview (images/video/audio/PDF/code/hex), transfer queue |
 | **IDE** | File tree, CodeMirror editor, multi-tab, Git status, conflict resolution, integrated terminal |
 | **Forwarding** | Local (-L), Remote (-R), Dynamic SOCKS5 (-D), auto-restore, death reporting, lock-free I/O |
-| **AI** | Inline panel + sidebar chat, streaming SSE, code insertion, 40+ tool use, MCP server integration, multi-source context, OpenAI/Ollama/DeepSeek |
+| **AI** | Inline panel + sidebar chat, streaming SSE, code insertion, 40+ tool use, MCP server integration, multi-source context, RAG knowledge base, OpenAI/Ollama/DeepSeek |
 | **Plugins** | Runtime ESM loading, 8 API namespaces, 24 UI Kit, sandboxed, circuit breaker |
 | **WSL Graphics** ⚠️ | Built-in VNC viewer (Experimental): Desktop mode (9 DEs) + App mode (single GUI app), WSLg detection, Xtigervnc + noVNC, reconnect, feature-gated |
 | **Security** | .oxide encryption, OS keychain, `zeroize` memory, host key TOFU |
@@ -486,8 +500,9 @@ OxideTerm/
 
 ## Roadmap
 
-### 🚧 In Progress
+### 🚧 In Progress (v0.20)
 
+- [ ] RAG operations knowledge base — local document collections with hybrid BM25 + vector search, AI-integrated retrieval
 - [ ] Session search & quick-switch
 
 ### 📋 Planned

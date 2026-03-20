@@ -33,6 +33,7 @@ type RagStoreState = {
   selectedCollectionId: string | null;
   documents: RagDocument[];
   stats: RagCollectionStats | null;
+  statsStale: boolean;
   searchResults: RagSearchResult[];
   isLoading: boolean;
   error: string | null;
@@ -66,6 +67,7 @@ export const useRagStore = create<RagStoreState>()((set, get) => ({
   selectedCollectionId: null,
   documents: [],
   stats: null,
+  statsStale: false,
   searchResults: [],
   isLoading: false,
   error: null,
@@ -110,9 +112,9 @@ export const useRagStore = create<RagStoreState>()((set, get) => ({
         ragListDocuments(collectionId),
         ragGetCollectionStats(collectionId),
       ]);
-      set({ documents, stats, isLoading: false });
+      set({ documents, stats, isLoading: false, statsStale: false });
     } catch (e) {
-      set({ error: String(e), isLoading: false });
+      set({ error: String(e), isLoading: false, statsStale: true });
     }
   },
 
@@ -122,8 +124,10 @@ export const useRagStore = create<RagStoreState>()((set, get) => ({
     // Refresh stats
     try {
       const stats = await ragGetCollectionStats(collectionId);
-      set({ stats });
-    } catch { /* non-critical */ }
+      set({ stats, statsStale: false });
+    } catch {
+      set({ statsStale: true });
+    }
     return doc;
   },
 
@@ -146,8 +150,10 @@ export const useRagStore = create<RagStoreState>()((set, get) => ({
     if (selectedCollectionId) {
       try {
         const stats = await ragGetCollectionStats(selectedCollectionId);
-        set({ stats });
-      } catch { /* non-critical */ }
+        set({ stats, statsStale: false });
+      } catch {
+        set({ statsStale: true });
+      }
     }
   },
 
@@ -171,8 +177,10 @@ export const useRagStore = create<RagStoreState>()((set, get) => ({
     set((s) => ({ documents: [...s.documents, doc] }));
     try {
       const stats = await ragGetCollectionStats(collectionId);
-      set({ stats });
-    } catch { /* non-critical */ }
+      set({ stats, statsStale: false });
+    } catch {
+      set({ statsStale: true });
+    }
     return doc;
   },
 
@@ -210,8 +218,10 @@ export const useRagStore = create<RagStoreState>()((set, get) => ({
     if (selectedCollectionId) {
       try {
         const stats = await ragGetCollectionStats(selectedCollectionId);
-        set({ stats });
-      } catch { /* non-critical */ }
+        set({ stats, statsStale: false });
+      } catch {
+        set({ statsStale: true });
+      }
     }
 
     return { updated: true, docId: editingDocId };

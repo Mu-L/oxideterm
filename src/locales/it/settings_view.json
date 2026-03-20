@@ -563,7 +563,9 @@
       "doc_no_changes": "Nessuna modifica rilevata",
       "error_open_external": "Impossibile aprire l'editor esterno",
       "error_sync": "Sincronizzazione delle modifiche non riuscita",
-      "error_create_document": "Impossibile creare il documento"
+      "error_create_document": "Impossibile creare il documento",
+      "embedding_partial_failure": "{{failed}} di {{total}} frammenti non sono stati incorporati",
+      "stats_stale": "Le statistiche potrebbero non essere aggiornate"
     }
   }
 }

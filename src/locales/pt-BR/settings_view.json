@@ -563,7 +563,9 @@
       "doc_no_changes": "Nenhuma alteração detectada",
       "error_open_external": "Falha ao abrir editor externo",
       "error_sync": "Falha ao sincronizar alterações do documento",
-      "error_create_document": "Falha ao criar documento"
+      "error_create_document": "Falha ao criar documento",
+      "embedding_partial_failure": "{{failed}} de {{total}} trechos falharam ao gerar embeddings",
+      "stats_stale": "As estatísticas podem estar desatualizadas"
     }
   }
 }

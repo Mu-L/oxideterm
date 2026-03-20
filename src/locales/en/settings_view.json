@@ -563,7 +563,9 @@
       "doc_no_changes": "No changes detected",
       "error_open_external": "Failed to open external editor",
       "error_sync": "Failed to sync document changes",
-      "error_create_document": "Failed to create document"
+      "error_create_document": "Failed to create document",
+      "embedding_partial_failure": "{{failed}} of {{total}} chunks failed to embed",
+      "stats_stale": "Stats may be out of date"
     }
   }
 }

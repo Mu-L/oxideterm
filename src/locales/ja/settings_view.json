@@ -563,7 +563,9 @@
       "doc_no_changes": "変更は検出されませんでした",
       "error_open_external": "外部エディタを開けませんでした",
       "error_sync": "ドキュメントの変更を同期できませんでした",
-      "error_create_document": "ドキュメントの作成に失敗しました"
+      "error_create_document": "ドキュメントの作成に失敗しました",
+      "embedding_partial_failure": "{{total}} 個のチャンクのうち {{failed}} 個の埋め込みに失敗しました",
+      "stats_stale": "統計情報が最新でない可能性があります"
     }
   }
 }

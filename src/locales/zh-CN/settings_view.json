@@ -563,7 +563,9 @@
       "doc_no_changes": "未检测到更改",
       "error_open_external": "无法打开外部编辑器",
       "error_sync": "同步文档更改失败",
-      "error_create_document": "创建文档失败"
+      "error_create_document": "创建文档失败",
+      "embedding_partial_failure": "{{total}} 个片段中有 {{failed}} 个嵌入失败",
+      "stats_stale": "统计信息可能不是最新的"
     }
   }
 }

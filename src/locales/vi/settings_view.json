@@ -563,7 +563,9 @@
       "doc_no_changes": "Không phát hiện thay đổi",
       "error_open_external": "Không thể mở trình soạn thảo bên ngoài",
       "error_sync": "Đồng bộ thay đổi tài liệu thất bại",
-      "error_create_document": "Tạo tài liệu thất bại"
+      "error_create_document": "Tạo tài liệu thất bại",
+      "embedding_partial_failure": "{{failed}} trong {{total}} đoạn không thể nhúng",
+      "stats_stale": "Thống kê có thể chưa được cập nhật"
     }
   }
 }

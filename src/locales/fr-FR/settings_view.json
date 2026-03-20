@@ -563,7 +563,9 @@
       "doc_no_changes": "Aucune modification détectée",
       "error_open_external": "Impossible d'ouvrir l'éditeur externe",
       "error_sync": "Échec de la synchronisation des modifications",
-      "error_create_document": "Échec de la création du document"
+      "error_create_document": "Échec de la création du document",
+      "embedding_partial_failure": "{{failed}} sur {{total}} fragments n'ont pas pu être intégrés",
+      "stats_stale": "Les statistiques peuvent ne pas être à jour"
     }
   }
 }

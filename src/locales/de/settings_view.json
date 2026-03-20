@@ -563,7 +563,9 @@
       "doc_no_changes": "Keine Änderungen erkannt",
       "error_open_external": "Externer Editor konnte nicht geöffnet werden",
       "error_sync": "Dokumentänderungen konnten nicht synchronisiert werden",
-      "error_create_document": "Dokument konnte nicht erstellt werden"
+      "error_create_document": "Dokument konnte nicht erstellt werden",
+      "embedding_partial_failure": "{{failed}} von {{total}} Chunks konnten nicht eingebettet werden",
+      "stats_stale": "Statistiken sind möglicherweise nicht aktuell"
     }
   }
 }

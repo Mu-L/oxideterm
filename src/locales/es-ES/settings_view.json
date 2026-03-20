@@ -563,7 +563,9 @@
       "doc_no_changes": "No se detectaron cambios",
       "error_open_external": "No se pudo abrir el editor externo",
       "error_sync": "Error al sincronizar los cambios del documento",
-      "error_create_document": "Error al crear el documento"
+      "error_create_document": "Error al crear el documento",
+      "embedding_partial_failure": "{{failed}} de {{total}} fragmentos no pudieron ser incrustados",
+      "stats_stale": "Las estadísticas pueden no estar actualizadas"
     }
   }
 }

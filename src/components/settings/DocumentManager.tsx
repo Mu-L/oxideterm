@@ -81,6 +81,7 @@ export function DocumentManager() {
     selectedCollectionId,
     documents,
     stats,
+    statsStale,
     isLoading,
     error,
     editingDocId,
@@ -102,7 +103,7 @@ export function DocumentManager() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
   const [newCollectionScope, setNewCollectionScope] = useState<'global'>('global');
-  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [embeddingProgress, setEmbeddingProgress] = useState<{ current: number; total: number } | null>(null);
   const [reindexing, setReindexing] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'collection' | 'document'; id: string; name: string } | null>(null);
@@ -169,8 +170,9 @@ export function DocumentManager() {
 
       const paths = Array.isArray(selected) ? selected : [selected];
       if (paths.length === 0) return;
-      setImporting(true);
-      for (const filePath of paths) {
+      setImportProgress({ current: 0, total: paths.length });
+      for (let i = 0; i < paths.length; i++) {
+        const filePath = paths[i];
         // Check file size before reading
         const fileStat = await stat(filePath);
         if (fileStat.size > MAX_IMPORT_FILE_SIZE) {
@@ -182,11 +184,12 @@ export function DocumentManager() {
         const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
         const format = ext === 'md' || ext === 'markdown' ? 'markdown' : 'plaintext';
         await addDocument(selectedCollectionId, fileName, content, format, filePath);
+        setImportProgress({ current: i + 1, total: paths.length });
       }
     } catch (e) {
       toastError(t('settings_view.knowledge.error_import'), e instanceof Error ? e.message : String(e));
     } finally {
-      setImporting(false);
+      setImportProgress(null);
     }
   }, [selectedCollectionId, addDocument, toastError, t]);
 
@@ -228,28 +231,40 @@ export function DocumentManager() {
       if (pending.length === 0) return;
 
       setEmbeddingProgress({ current: 0, total: pending.length });
+      let failedCount = 0;
 
       for (let i = 0; i < pending.length; i += BATCH_SIZE) {
         const batch = pending.slice(i, i + BATCH_SIZE);
         const texts = batch.map((p) => p.content);
 
-        const vectors = await provider.embedTexts(
-          {
-            baseUrl: providerConfig.baseUrl,
-            apiKey,
-            model: embeddingModel,
-          },
-          texts,
-        );
+        try {
+          const vectors = await provider.embedTexts(
+            {
+              baseUrl: providerConfig.baseUrl,
+              apiKey,
+              model: embeddingModel,
+            },
+            texts,
+          );
 
-        const embeddings = batch.map((p, idx) => ({
-          chunkId: p.chunkId,
-          vector: vectors[idx],
-        }));
+          const embeddings = batch.map((p, idx) => ({
+            chunkId: p.chunkId,
+            vector: vectors[idx],
+          }));
 
-        await storeEmbeddings(embeddings, embeddingModel);
+          await storeEmbeddings(embeddings, embeddingModel);
+        } catch {
+          failedCount += batch.length;
+        }
         processed += batch.length;
         setEmbeddingProgress({ current: processed, total: pending.length });
+      }
+
+      if (failedCount > 0) {
+        toastError(
+          t('settings_view.knowledge.error_generate_embeddings'),
+          t('settings_view.knowledge.embedding_partial_failure', { failed: failedCount, total: pending.length }),
+        );
       }
     } catch (e) {
       toastError(t('settings_view.knowledge.error_generate_embeddings'), e instanceof Error ? e.message : String(e));
@@ -412,14 +427,16 @@ export function DocumentManager() {
                 size="sm"
                 variant="outline"
                 onClick={handleImportFiles}
-                disabled={importing}
+                disabled={!!importProgress}
               >
-                {importing ? (
+                {importProgress ? (
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                 ) : (
                   <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
                 )}
-                {t('settings_view.knowledge.import_files')}
+                {importProgress
+                  ? `${importProgress.current}/${importProgress.total}`
+                  : t('settings_view.knowledge.import_files')}
               </Button>
               <Button
                 size="sm"
@@ -462,7 +479,7 @@ export function DocumentManager() {
 
           {/* Stats */}
           {stats && (
-            <StatsBar stats={stats} t={t} />
+            <StatsBar stats={stats} statsStale={statsStale} t={t} />
           )}
 
           <Separator className="my-4" />
@@ -716,7 +733,7 @@ function DocumentRow({
   );
 }
 
-function StatsBar({ stats, t }: { stats: RagCollectionStats; t: (key: string) => string }) {
+function StatsBar({ stats, statsStale, t }: { stats: RagCollectionStats; statsStale: boolean; t: (key: string) => string }) {
   const embeddedPct = stats.chunkCount > 0
     ? Math.round((stats.embeddedChunkCount / stats.chunkCount) * 100)
     : 0;
@@ -735,6 +752,11 @@ function StatsBar({ stats, t }: { stats: RagCollectionStats; t: (key: string) =>
       {stats.lastUpdated > 0 && (
         <span>
           {t('settings_view.knowledge.stat_updated')} {formatDate(stats.lastUpdated)}
+        </span>
+      )}
+      {statsStale && (
+        <span className="text-yellow-500" title={t('settings_view.knowledge.stats_stale')}>
+          ⚠
         </span>
       )}
     </div>

@@ -137,6 +137,18 @@
     "propCalculating": "計算中...",
     "propCalcChecksum": "MD5 / SHA-256 を計算",
     "progressFile": "{{name}} をコピー中...",
-    "progressPreparing": "準備中..."
+    "progressPreparing": "準備中...",
+    "officeLegacyWordNotSupported": "旧形式 Word (.doc) はサポートされていません",
+    "officeConvertToDocx": ".docx に変換するかダウンロードして表示してください",
+    "officeLoadingWord": "Word 文書を読み込み中...",
+    "officeFailedLoadWord": "Word 文書の読み込みに失敗しました",
+    "officeLoadingSpreadsheet": "スプレッドシートを読み込み中...",
+    "officeFailedLoadSpreadsheet": "スプレッドシートの読み込みに失敗しました",
+    "officeFileLabel": "ファイル：{{filename}}",
+    "officeFormatNotSupported": "{{format}} のプレビューはサポートされていません",
+    "officeDownloadToView": "{{filename}} をダウンロードして表示してください",
+    "officeLoadingDocument": "文書を読み込み中...",
+    "officeFailedLoadDocument": "文書の読み込みに失敗しました",
+    "officeUnsupportedType": "サポートされていない Office 文書タイプ"
   }
 }

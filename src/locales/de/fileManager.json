@@ -139,6 +139,18 @@
     "propCalculating": "Wird berechnet...",
     "propCalcChecksum": "MD5 / SHA-256 berechnen",
     "progressFile": "{{name}} wird kopiert...",
-    "progressPreparing": "Vorbereitung..."
+    "progressPreparing": "Vorbereitung...",
+    "officeLegacyWordNotSupported": "Altes Word-Format (.doc) wird nicht unterstützt",
+    "officeConvertToDocx": "Bitte in .docx konvertieren oder herunterladen",
+    "officeLoadingWord": "Word-Dokument wird geladen...",
+    "officeFailedLoadWord": "Word-Dokument konnte nicht geladen werden",
+    "officeLoadingSpreadsheet": "Tabelle wird geladen...",
+    "officeFailedLoadSpreadsheet": "Tabelle konnte nicht geladen werden",
+    "officeFileLabel": "Datei: {{filename}}",
+    "officeFormatNotSupported": "{{format}}-Vorschau wird nicht unterstützt",
+    "officeDownloadToView": "Bitte {{filename}} herunterladen, um es anzuzeigen",
+    "officeLoadingDocument": "Dokument wird geladen...",
+    "officeFailedLoadDocument": "Dokument konnte nicht geladen werden",
+    "officeUnsupportedType": "Nicht unterstützter Office-Dokumenttyp"
   }
 }

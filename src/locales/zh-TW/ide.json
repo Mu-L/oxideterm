@@ -123,6 +123,7 @@
       "noSession": "沒有 SFTP 工作階段",
       "unsavedChanges": "有未儲存的變更"    },
     "tree": {
-      "truncated": "還有 {{count}} 個項目未顯示"    }
+      "truncated": "還有 {{count}} 個項目未顯示"    },
+    "searchQueryTooLong": "搜尋查詢過長"
   }
 }

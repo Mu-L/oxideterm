@@ -4,6 +4,7 @@
  */
 
 import React, { useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import Prism from 'prismjs';
 import { useSettingsStore } from '../../store/settingsStore';
 import { getFontFamilyCSS } from './fontUtils';
@@ -115,7 +116,7 @@ export const CodeHighlight: React.FC<CodeHighlightProps> = ({
               <span
                 className="line-content flex-1"
                 style={{ whiteSpace: 'pre' }}
-                dangerouslySetInnerHTML={{ __html: lineHtml }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(lineHtml) }}
               />
             </div>
           ))}

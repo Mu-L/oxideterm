@@ -88,6 +88,7 @@
         "running": "進行中",
         "services": "個服務已恢復"
       }
-    }
+    },
+    "failedFetchStats": "取得統計資訊失敗"
   }
 }

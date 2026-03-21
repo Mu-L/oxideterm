@@ -123,6 +123,7 @@
       "noSession": "SFTPセッションがありません",
       "unsavedChanges": "未保存の変更があります"    },
     "tree": {
-      "truncated": "他 {{count}} 件は表示されていません"    }
+      "truncated": "他 {{count}} 件は表示されていません"    },
+    "searchQueryTooLong": "検索クエリが長すぎます"
   }
 }

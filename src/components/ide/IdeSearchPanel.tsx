@@ -203,7 +203,7 @@ export function IdeSearchPanel({ open, onClose }: IdeSearchPanelProps) {
         const shellSafe = escapedQuery.replace(/'/g, "'\\''");
         
         if (shellSafe.length > 8192) {
-          setError('Search query too long');
+          setError(t('ide.searchQueryTooLong', 'Search query too long'));
           return;
         }
         

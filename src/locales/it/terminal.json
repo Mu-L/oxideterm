@@ -105,8 +105,11 @@
       "max_panes_reached": "Numero massimo di pannelli raggiunto ({{max}})",
       "focus_next": "Focus Pannello Successivo",
       "focus_previous": "Focus Pannello Precedente",
-      "cannot_close_last": "Impossibile chiudere l'ultimo pannello"
+      "cannot_close_last": "Impossibile chiudere l'ultimo pannello",
+      "ssh_split_coming_soon": "Divisione terminale SSH in arrivo"
     },
+    "typeLocal": "LOCALE",
+    "typeSsh": "SSH",
     "mouse_mode_hint": "⇧ Shift + Trascina per selezionare",
     "broadcast": {
       "broadcast_input": "Input broadcast",

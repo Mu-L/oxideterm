@@ -139,6 +139,18 @@
     "propCalculating": "Calculating...",
     "propCalcChecksum": "Calculate MD5 / SHA-256",
     "progressFile": "Copying {{name}}...",
-    "progressPreparing": "Preparing..."
+    "progressPreparing": "Preparing...",
+    "officeLegacyWordNotSupported": "Legacy Word format (.doc) not supported",
+    "officeConvertToDocx": "Please convert to .docx or download to view",
+    "officeLoadingWord": "Loading Word document...",
+    "officeFailedLoadWord": "Failed to load Word document",
+    "officeLoadingSpreadsheet": "Loading spreadsheet...",
+    "officeFailedLoadSpreadsheet": "Failed to load spreadsheet",
+    "officeFileLabel": "File: {{filename}}",
+    "officeFormatNotSupported": "{{format}} preview not supported",
+    "officeDownloadToView": "Please download {{filename}} to view",
+    "officeLoadingDocument": "Loading document...",
+    "officeFailedLoadDocument": "Failed to load document",
+    "officeUnsupportedType": "Unsupported Office document type"
   }
 }

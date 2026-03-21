@@ -123,6 +123,7 @@
       "noSession": "Pas de session SFTP",
       "unsavedChanges": "A des modifications non enregistrées"    },
     "tree": {
-      "truncated": "+{{count}} éléments supplémentaires non affichés"    }
+      "truncated": "+{{count}} éléments supplémentaires non affichés"    },
+    "searchQueryTooLong": "Requête de recherche trop longue"
   }
 }

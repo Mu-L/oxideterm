@@ -84,7 +84,7 @@ export const SplitPaneToolbar: React.FC<SplitPaneToolbarProps> = ({
         )}
         title={
           isSshTerminal
-            ? 'SSH terminal split coming soon'
+            ? t('terminal.pane.ssh_split_coming_soon', 'SSH terminal split coming soon')
             : canSplit
               ? t('terminal.pane.split_horizontal')
               : t('terminal.pane.max_panes_reached', { max: MAX_PANES_PER_TAB })
@@ -105,7 +105,7 @@ export const SplitPaneToolbar: React.FC<SplitPaneToolbarProps> = ({
         )}
         title={
           isSshTerminal
-            ? 'SSH terminal split coming soon'
+            ? t('terminal.pane.ssh_split_coming_soon', 'SSH terminal split coming soon')
             : canSplit
               ? t('terminal.pane.split_vertical')
               : t('terminal.pane.max_panes_reached', { max: MAX_PANES_PER_TAB })

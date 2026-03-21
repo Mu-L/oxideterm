@@ -139,6 +139,18 @@
     "propCalculating": "计算中...",
     "propCalcChecksum": "计算 MD5 / SHA-256",
     "progressFile": "正在复制 {{name}}...",
-    "progressPreparing": "准备中..."
+    "progressPreparing": "准备中...",
+    "officeLegacyWordNotSupported": "旧版 Word 格式 (.doc) 不受支持",
+    "officeConvertToDocx": "请转换为 .docx 或下载后查看",
+    "officeLoadingWord": "正在加载 Word 文档...",
+    "officeFailedLoadWord": "Word 文档加载失败",
+    "officeLoadingSpreadsheet": "正在加载电子表格...",
+    "officeFailedLoadSpreadsheet": "电子表格加载失败",
+    "officeFileLabel": "文件：{{filename}}",
+    "officeFormatNotSupported": "{{format}} 预览不受支持",
+    "officeDownloadToView": "请下载 {{filename}} 后查看",
+    "officeLoadingDocument": "正在加载文档...",
+    "officeFailedLoadDocument": "文档加载失败",
+    "officeUnsupportedType": "不支持的 Office 文档类型"
   }
 }

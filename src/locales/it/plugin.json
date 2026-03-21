@@ -61,6 +61,8 @@
     "create_plugin_error": "Creazione plugin non riuscita: {{error}}",
     "view_logs": "Registri",
     "clear_logs": "Cancella",
-    "no_logs": "Nessun registro"
+    "no_logs": "Nessun registro",
+    "tab_not_available": "Vista scheda plugin non disponibile",
+    "tab_crashed": "La scheda del plugin si è bloccata"
   }
 }

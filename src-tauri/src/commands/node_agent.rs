@@ -50,8 +50,7 @@ pub async fn node_agent_deploy(
         .map_err(|e| e.to_string())?;
 
     // Check if already deployed
-    if agent_registry.has_agent(&resolved.connection_id) {
-        let session = agent_registry.get(&resolved.connection_id).unwrap();
+    if let Some(session) = agent_registry.get(&resolved.connection_id) {
         return Ok(session.status());
     }
 

@@ -8,6 +8,8 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import DOMPurify from 'dompurify';
 import { FileText, Table, FileJson, Loader2 } from 'lucide-react';
 
 // Dynamic import types for Office libraries
@@ -81,6 +83,7 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
  * Word Document Preview (.docx only, .doc not supported)
  */
 function WordPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; filename: string }) {
+  const { t } = useTranslation();
   // Check for legacy .doc format
   const isLegacyFormat = filename.toLowerCase().endsWith('.doc');
 
@@ -88,8 +91,8 @@ function WordPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; file
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <FileText className="h-12 w-12 text-zinc-500" />
-        <p className="text-zinc-400">Legacy Word format (.doc) not supported</p>
-        <p className="text-sm text-zinc-500">Please convert to .docx or download to view</p>
+        <p className="text-zinc-400">{t('fileManager.officeLegacyWordNotSupported', 'Legacy Word format (.doc) not supported')}</p>
+        <p className="text-sm text-zinc-500">{t('fileManager.officeConvertToDocx', 'Please convert to .docx or download to view')}</p>
       </div>
     );
   }
@@ -120,7 +123,7 @@ function WordPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; file
     return (
       <div className="flex items-center justify-center h-64 text-zinc-400 gap-2">
         <Loader2 className="h-5 w-5 animate-spin" />
-        Loading Word document...
+        {t('fileManager.officeLoadingWord', 'Loading Word document...')}
       </div>
     );
   }
@@ -129,7 +132,7 @@ function WordPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; file
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <FileText className="h-12 w-12 text-zinc-500" />
-        <p className="text-zinc-400">Failed to load Word document</p>
+        <p className="text-zinc-400">{t('fileManager.officeFailedLoadWord', 'Failed to load Word document')}</p>
         <p className="text-sm text-zinc-500">{error}</p>
       </div>
     );
@@ -138,7 +141,7 @@ function WordPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; file
   return (
     <div
       className="prose prose-invert prose-sm max-w-none p-6 overflow-auto"
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
     />
   );
 }
@@ -147,6 +150,7 @@ function WordPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; file
  * Excel Spreadsheet Preview (.xlsx, .xls)
  */
 function ExcelPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; filename: string }) {
+  const { t } = useTranslation();
   const [xlsxModule, setXlsxModule] = useState<XLSXModule | null>(null);
   const [workbook, setWorkbook] = useState<ReturnType<XLSXModule['read']> | null>(null);
   const [activeSheet, setActiveSheet] = useState(0);
@@ -181,7 +185,7 @@ function ExcelPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; fil
     return (
       <div className="flex items-center justify-center h-64 text-zinc-400 gap-2">
         <Loader2 className="h-5 w-5 animate-spin" />
-        Loading spreadsheet...
+        {t('fileManager.officeLoadingSpreadsheet', 'Loading spreadsheet...')}
       </div>
     );
   }
@@ -190,9 +194,9 @@ function ExcelPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; fil
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <Table className="h-12 w-12 text-zinc-500" />
-        <p className="text-zinc-400">Failed to load spreadsheet</p>
+        <p className="text-zinc-400">{t('fileManager.officeFailedLoadSpreadsheet', 'Failed to load spreadsheet')}</p>
         {error && <p className="text-sm text-zinc-500">{error}</p>}
-        <p className="text-xs text-zinc-600 mt-2">File: {filename}</p>
+        <p className="text-xs text-zinc-600 mt-2">{t('fileManager.officeFileLabel', { defaultValue: 'File: {{filename}}', filename })}</p>
       </div>
     );
   }
@@ -238,7 +242,7 @@ function ExcelPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; fil
       {/* Spreadsheet content */}
       <div
         className="flex-1 overflow-auto p-4"
-        dangerouslySetInnerHTML={{ __html: styledHtml }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(styledHtml) }}
         style={{
           fontSize: '13px',
         }}
@@ -251,14 +255,15 @@ function ExcelPreview({ arrayBuffer, filename }: { arrayBuffer: ArrayBuffer; fil
  * PowerPoint Preview (.pptx not supported, .ppt legacy format also not supported)
  */
 function PowerPointPreview({ filename }: { filename: string }) {
+  const { t } = useTranslation();
   const isLegacyFormat = filename.toLowerCase().endsWith('.ppt');
   const formatName = isLegacyFormat ? 'Legacy PowerPoint format (.ppt)' : 'PowerPoint';
 
   return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
       <FileJson className="h-12 w-12 text-zinc-500" />
-      <p className="text-zinc-400">{formatName} preview not supported</p>
-      <p className="text-sm text-zinc-500">Please download {filename} to view</p>
+      <p className="text-zinc-400">{t('fileManager.officeFormatNotSupported', { defaultValue: '{{format}} preview not supported', format: formatName })}</p>
+      <p className="text-sm text-zinc-500">{t('fileManager.officeDownloadToView', { defaultValue: 'Please download {{filename}} to view', filename })}</p>
     </div>
   );
 }
@@ -273,6 +278,7 @@ export const OfficePreview: React.FC<OfficePreviewProps> = ({
   filename,
   className,
 }) => {
+  const { t } = useTranslation();
   const officeType = useMemo(() => getOfficeType(mimeType, filename), [mimeType, filename]);
   const [arrayBuffer, setArrayBuffer] = useState<ArrayBuffer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -306,7 +312,7 @@ export const OfficePreview: React.FC<OfficePreviewProps> = ({
     return (
       <div className={className}>
         <div className="flex items-center justify-center h-64 text-zinc-400">
-          Loading document...
+          {t('fileManager.officeLoadingDocument', 'Loading document...')}
         </div>
       </div>
     );
@@ -317,7 +323,7 @@ export const OfficePreview: React.FC<OfficePreviewProps> = ({
       <div className={className}>
         <div className="flex flex-col items-center justify-center h-64 gap-4">
           <FileText className="h-12 w-12 text-zinc-500" />
-          <p className="text-zinc-400">Failed to load document</p>
+          <p className="text-zinc-400">{t('fileManager.officeFailedLoadDocument', 'Failed to load document')}</p>
           {error && <p className="text-sm text-zinc-500">{error}</p>}
         </div>
       </div>
@@ -329,7 +335,7 @@ export const OfficePreview: React.FC<OfficePreviewProps> = ({
       <div className={className}>
         <div className="flex flex-col items-center justify-center h-64 gap-4">
           <FileJson className="h-12 w-12 text-zinc-500" />
-          <p className="text-zinc-400">Unsupported Office document type</p>
+          <p className="text-zinc-400">{t('fileManager.officeUnsupportedType', 'Unsupported Office document type')}</p>
           <p className="text-sm text-zinc-500">{mimeType}</p>
         </div>
       </div>

@@ -139,6 +139,18 @@
     "propCalculating": "계산 중...",
     "propCalcChecksum": "MD5 / SHA-256 계산",
     "progressFile": "{{name}} 복사 중...",
-    "progressPreparing": "준비 중..."
+    "progressPreparing": "준비 중...",
+    "officeLegacyWordNotSupported": "이전 Word 형식 (.doc)은 지원되지 않습니다",
+    "officeConvertToDocx": ".docx로 변환하거나 다운로드하여 확인하세요",
+    "officeLoadingWord": "Word 문서 로딩 중...",
+    "officeFailedLoadWord": "Word 문서 로딩 실패",
+    "officeLoadingSpreadsheet": "스프레드시트 로딩 중...",
+    "officeFailedLoadSpreadsheet": "스프레드시트 로딩 실패",
+    "officeFileLabel": "파일: {{filename}}",
+    "officeFormatNotSupported": "{{format}} 미리보기가 지원되지 않습니다",
+    "officeDownloadToView": "{{filename}}을(를) 다운로드하여 확인하세요",
+    "officeLoadingDocument": "문서 로딩 중...",
+    "officeFailedLoadDocument": "문서 로딩 실패",
+    "officeUnsupportedType": "지원되지 않는 Office 문서 유형"
   }
 }

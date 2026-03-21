@@ -139,6 +139,18 @@
     "propCalculating": "Calculando...",
     "propCalcChecksum": "Calcular MD5 / SHA-256",
     "progressFile": "Copiando {{name}}...",
-    "progressPreparing": "Preparando..."
+    "progressPreparing": "Preparando...",
+    "officeLegacyWordNotSupported": "El formato Word antiguo (.doc) no es compatible",
+    "officeConvertToDocx": "Convierta a .docx o descargue para ver",
+    "officeLoadingWord": "Cargando documento Word...",
+    "officeFailedLoadWord": "Error al cargar el documento Word",
+    "officeLoadingSpreadsheet": "Cargando hoja de cálculo...",
+    "officeFailedLoadSpreadsheet": "Error al cargar la hoja de cálculo",
+    "officeFileLabel": "Archivo: {{filename}}",
+    "officeFormatNotSupported": "Vista previa de {{format}} no compatible",
+    "officeDownloadToView": "Descargue {{filename}} para ver",
+    "officeLoadingDocument": "Cargando documento...",
+    "officeFailedLoadDocument": "Error al cargar el documento",
+    "officeUnsupportedType": "Tipo de documento Office no compatible"
   }
 }

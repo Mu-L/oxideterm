@@ -139,6 +139,18 @@
     "propCalculating": "Calcolo in corso...",
     "propCalcChecksum": "Calcola MD5 / SHA-256",
     "progressFile": "Copia di {{name}}...",
-    "progressPreparing": "Preparazione..."
+    "progressPreparing": "Preparazione...",
+    "officeLegacyWordNotSupported": "Il formato Word legacy (.doc) non è supportato",
+    "officeConvertToDocx": "Convertire in .docx o scaricare per visualizzare",
+    "officeLoadingWord": "Caricamento documento Word...",
+    "officeFailedLoadWord": "Impossibile caricare il documento Word",
+    "officeLoadingSpreadsheet": "Caricamento foglio di calcolo...",
+    "officeFailedLoadSpreadsheet": "Impossibile caricare il foglio di calcolo",
+    "officeFileLabel": "File: {{filename}}",
+    "officeFormatNotSupported": "Anteprima {{format}} non supportata",
+    "officeDownloadToView": "Scaricare {{filename}} per visualizzare",
+    "officeLoadingDocument": "Caricamento documento...",
+    "officeFailedLoadDocument": "Impossibile caricare il documento",
+    "officeUnsupportedType": "Tipo di documento Office non supportato"
   }
 }

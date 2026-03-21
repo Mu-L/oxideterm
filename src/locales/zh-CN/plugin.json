@@ -61,6 +61,8 @@
       "loading": "加载中…",
       "error": "错误",
       "disabled": "已禁用"
-    }
+    },
+    "tab_not_available": "插件标签页视图不可用",
+    "tab_crashed": "插件标签页崩溃"
   }
 }

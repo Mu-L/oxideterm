@@ -139,6 +139,18 @@
     "propCalculating": "Calcul en cours...",
     "propCalcChecksum": "Calculer MD5 / SHA-256",
     "progressFile": "Copie de {{name}}...",
-    "progressPreparing": "Préparation..."
+    "progressPreparing": "Préparation...",
+    "officeLegacyWordNotSupported": "Le format Word ancien (.doc) n'est pas pris en charge",
+    "officeConvertToDocx": "Veuillez convertir en .docx ou télécharger pour visualiser",
+    "officeLoadingWord": "Chargement du document Word...",
+    "officeFailedLoadWord": "Échec du chargement du document Word",
+    "officeLoadingSpreadsheet": "Chargement du tableur...",
+    "officeFailedLoadSpreadsheet": "Échec du chargement du tableur",
+    "officeFileLabel": "Fichier : {{filename}}",
+    "officeFormatNotSupported": "Aperçu {{format}} non pris en charge",
+    "officeDownloadToView": "Veuillez télécharger {{filename}} pour visualiser",
+    "officeLoadingDocument": "Chargement du document...",
+    "officeFailedLoadDocument": "Échec du chargement du document",
+    "officeUnsupportedType": "Type de document Office non pris en charge"
   }
 }

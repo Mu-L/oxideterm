@@ -123,6 +123,7 @@
       "noSession": "SFTP 세션 없음",
       "unsavedChanges": "저장되지 않은 변경사항이 있습니다"    },
     "tree": {
-      "truncated": "{{count}}개 항목이 더 있으나 표시되지 않음"    }
+      "truncated": "{{count}}개 항목이 더 있으나 표시되지 않음"    },
+    "searchQueryTooLong": "검색 쿼리가 너무 깁니다"
   }
 }

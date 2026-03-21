@@ -175,7 +175,7 @@ const BroadcastDropdown: React.FC<BroadcastDropdownProps> = ({
                       : 'bg-blue-500/15 text-blue-400',
                   )}
                 >
-                  {entry.terminalType === 'local_terminal' ? 'LOCAL' : 'SSH'}
+                  {entry.terminalType === 'local_terminal' ? t('terminal.typeLocal') : t('terminal.typeSsh')}
                 </span>
               </DropdownMenuCheckboxItem>
             ))}

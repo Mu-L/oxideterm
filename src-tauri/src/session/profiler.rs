@@ -23,8 +23,10 @@
 //! - P6: First port scan is silent (establishes baseline, no event emitted)
 
 use std::collections::{HashSet, VecDeque};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use parking_lot::RwLock;
 
 use russh::client::Msg;
 use russh::{Channel, ChannelMsg};
@@ -253,17 +255,17 @@ impl ResourceProfiler {
 
     /// Get the latest metrics snapshot
     pub async fn latest(&self) -> Option<ResourceMetrics> {
-        self.latest.read().unwrap().clone()
+        self.latest.read().clone()
     }
 
     /// Get metrics history for sparkline rendering
     pub async fn history(&self) -> Vec<ResourceMetrics> {
-        self.history.read().unwrap().iter().cloned().collect()
+        self.history.read().iter().cloned().collect()
     }
 
     /// Get current profiler state
     pub async fn state(&self) -> ProfilerState {
-        *self.state.read().unwrap()
+        *self.state.read()
     }
 
     /// Stop the profiler
@@ -280,12 +282,12 @@ impl ResourceProfiler {
 
     /// Get the latest detected listening ports
     pub fn detected_ports(&self) -> Vec<DetectedPort> {
-        self.detected_ports.read().unwrap().clone()
+        self.detected_ports.read().clone()
     }
 
     /// Add a port to the ignore list (user dismissed the notification)
     pub fn ignore_port(&self, port: u16) {
-        self.ignored_ports.write().unwrap().insert(port);
+        self.ignored_ports.write().insert(port);
     }
 }
 
@@ -335,7 +337,7 @@ async fn sampling_loop(
                 "Profiler failed to open shell channel for {}: {}",
                 connection_id, e
             );
-            *state.write().unwrap() = ProfilerState::Degraded;
+            *state.write() = ProfilerState::Degraded;
             // Emit degraded metrics so frontend knows
             let metrics = make_empty_metrics(MetricsSource::RttOnly);
             store_metrics(&latest, &history, &metrics);
@@ -349,7 +351,7 @@ async fn sampling_loop(
             _ = interval.tick() => {
                 // Degraded mode: only emit RTT-only metrics
                 if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
-                    let mut s = state.write().unwrap();
+                    let mut s = state.write();
                     if *s != ProfilerState::Degraded {
                         *s = ProfilerState::Degraded;
                         warn!(
@@ -398,7 +400,7 @@ async fn sampling_loop(
                         if is_initial_scan {
                             // P6: first scan is silent — establish baseline
                             prev_ports = current_port_numbers;
-                            *detected_ports.write().unwrap() = current_ports;
+                            *detected_ports.write() = current_ports;
                             is_initial_scan = false;
                             trace!("Port detection baseline for {}: {} ports", connection_id, prev_ports.len());
                         } else {
@@ -414,7 +416,7 @@ async fn sampling_loop(
 
                             if !new_port_numbers.is_empty() || !closed_port_numbers.is_empty() {
                                 // Filter out ignored ports and port 22 (SSH)
-                                let ignored = ignored_ports.read().unwrap();
+                                let ignored = ignored_ports.read();
                                 let new_ports: Vec<DetectedPort> = current_ports
                                     .iter()
                                     .filter(|p| {
@@ -462,7 +464,7 @@ async fn sampling_loop(
                             // and full DetectedPort data for metadata freshness
                             // (bind_addr / process_name / pid may change even if port set is stable)
                             prev_ports = current_port_numbers;
-                            *detected_ports.write().unwrap() = current_ports;
+                            *detected_ports.write() = current_ports;
                         }
                         } // end if sample_complete
                     }
@@ -498,7 +500,7 @@ async fn sampling_loop(
 
     // Close the persistent channel
     let _ = shell_channel.close().await;
-    *state.write().unwrap() = ProfilerState::Stopped;
+    *state.write() = ProfilerState::Stopped;
     debug!("Resource profiler stopped for {}", connection_id);
 }
 
@@ -1213,8 +1215,8 @@ fn store_metrics(
     history: &Arc<RwLock<VecDeque<ResourceMetrics>>>,
     metrics: &ResourceMetrics,
 ) {
-    *latest.write().unwrap() = Some(metrics.clone());
-    let mut hist = history.write().unwrap();
+    *latest.write() = Some(metrics.clone());
+    let mut hist = history.write();
     if hist.len() >= HISTORY_CAPACITY {
         hist.pop_front();
     }

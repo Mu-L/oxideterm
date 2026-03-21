@@ -61,6 +61,8 @@
     "create_plugin_error": "Échec de création du plugin : {{error}}",
     "view_logs": "Journaux",
     "clear_logs": "Effacer",
-    "no_logs": "Aucun journal"
+    "no_logs": "Aucun journal",
+    "tab_not_available": "Vue d'onglet du plugin non disponible",
+    "tab_crashed": "L'onglet du plugin a planté"
   }
 }

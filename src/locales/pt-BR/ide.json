@@ -125,6 +125,7 @@
     },
     "tree": {
       "truncated": "+{{count}} itens adicionais não exibidos"
-    }
+    },
+    "searchQueryTooLong": "Consulta de pesquisa muito longa"
   }
 }

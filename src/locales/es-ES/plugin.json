@@ -61,6 +61,8 @@
     "create_plugin_error": "Error al crear plugin: {{error}}",
     "view_logs": "Registros",
     "clear_logs": "Limpiar",
-    "no_logs": "Sin registros"
+    "no_logs": "Sin registros",
+    "tab_not_available": "Vista de pestaña del plugin no disponible",
+    "tab_crashed": "La pestaña del plugin ha fallado"
   }
 }

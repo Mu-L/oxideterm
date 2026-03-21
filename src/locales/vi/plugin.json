@@ -61,6 +61,8 @@
     "create_plugin_error": "Tạo plugin thất bại: {{error}}",
     "view_logs": "Nhật ký",
     "clear_logs": "Xóa",
-    "no_logs": "Chưa có nhật ký"
+    "no_logs": "Chưa có nhật ký",
+    "tab_not_available": "Chế độ xem tab plugin không khả dụng",
+    "tab_crashed": "Tab plugin đã gặp lỗi"
   }
 }

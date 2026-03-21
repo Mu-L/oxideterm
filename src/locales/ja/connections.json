@@ -88,6 +88,7 @@
         "running": "実行中",
         "services": "個のサービスを復元"
       }
-    }
+    },
+    "failedFetchStats": "統計情報の取得に失敗しました"
   }
 }

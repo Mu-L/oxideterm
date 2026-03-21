@@ -5,6 +5,7 @@
  * Looks up the component from pluginStore.tabViews by pluginTabId.
  */
 
+import { useTranslation } from 'react-i18next';
 import { usePluginStore } from '../../store/pluginStore';
 import { ErrorBoundary } from '../ErrorBoundary';
 import type { Tab } from '../../types';
@@ -15,6 +16,7 @@ type PluginTabRendererProps = {
 };
 
 export function PluginTabRenderer({ pluginTabId }: PluginTabRendererProps) {
+  const { t } = useTranslation();
   const tabView = usePluginStore((state) => state.tabViews.get(pluginTabId));
 
   if (!tabView) {
@@ -22,7 +24,7 @@ export function PluginTabRenderer({ pluginTabId }: PluginTabRendererProps) {
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center space-y-2">
           <p className="text-lg">🧩</p>
-          <p>Plugin tab view not available</p>
+          <p>{t('plugin.tab_not_available', 'Plugin tab view not available')}</p>
           <p className="text-xs opacity-60">{pluginTabId}</p>
         </div>
       </div>
@@ -37,7 +39,7 @@ export function PluginTabRenderer({ pluginTabId }: PluginTabRendererProps) {
         <div className="flex items-center justify-center h-full text-destructive">
           <div className="text-center space-y-2">
             <p className="text-lg">⚠️</p>
-            <p>Plugin tab crashed</p>
+            <p>{t('plugin.tab_crashed', 'Plugin tab crashed')}</p>
             <p className="text-xs opacity-60">{pluginTabId}</p>
           </div>
         </div>

@@ -696,7 +696,7 @@ impl WsBridge {
                 // Check for timeout
                 let now_millis = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_millis() as u64;
                 let last = state_hb.last_seen_millis();
                 let elapsed_secs = (now_millis - last) / 1000;
@@ -1125,7 +1125,7 @@ impl WsBridge {
                 // Check if connection is dead
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_millis() as u64;
                 let last = state_hb.last_seen_millis();
                 if now.saturating_sub(last) > HEARTBEAT_TIMEOUT_SECS * 1000 {
@@ -1401,7 +1401,7 @@ impl WsBridge {
 
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_millis() as u64;
                 let last = state_hb.last_seen_millis();
                 if now.saturating_sub(last) > HEARTBEAT_TIMEOUT_SECS * 1000 {

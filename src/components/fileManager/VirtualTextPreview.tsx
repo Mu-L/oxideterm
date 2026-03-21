@@ -4,6 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
 import Prism from 'prismjs';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
@@ -351,7 +352,7 @@ export const VirtualTextPreview: React.FC<VirtualTextPreviewProps> = ({
           <div
             className="flex-1"
             style={codeStyle}
-            dangerouslySetInnerHTML={{ __html: codeHtml }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(codeHtml) }}
           />
         </div>
 

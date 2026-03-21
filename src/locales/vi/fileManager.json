@@ -139,6 +139,18 @@
     "propCalculating": "Đang tính...",
     "propCalcChecksum": "Tính MD5 / SHA-256",
     "progressFile": "Đang sao chép {{name}}...",
-    "progressPreparing": "Đang chuẩn bị..."
+    "progressPreparing": "Đang chuẩn bị...",
+    "officeLegacyWordNotSupported": "Định dạng Word cũ (.doc) không được hỗ trợ",
+    "officeConvertToDocx": "Vui lòng chuyển đổi sang .docx hoặc tải xuống để xem",
+    "officeLoadingWord": "Đang tải tài liệu Word...",
+    "officeFailedLoadWord": "Tải tài liệu Word thất bại",
+    "officeLoadingSpreadsheet": "Đang tải bảng tính...",
+    "officeFailedLoadSpreadsheet": "Tải bảng tính thất bại",
+    "officeFileLabel": "Tệp: {{filename}}",
+    "officeFormatNotSupported": "Xem trước {{format}} không được hỗ trợ",
+    "officeDownloadToView": "Vui lòng tải {{filename}} xuống để xem",
+    "officeLoadingDocument": "Đang tải tài liệu...",
+    "officeFailedLoadDocument": "Tải tài liệu thất bại",
+    "officeUnsupportedType": "Loại tài liệu Office không được hỗ trợ"
   }
 }

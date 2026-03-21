@@ -61,6 +61,8 @@
     "create_plugin_error": "プラグイン作成に失敗：{{error}}",
     "view_logs": "ログ",
     "clear_logs": "クリア",
-    "no_logs": "ログなし"
+    "no_logs": "ログなし",
+    "tab_not_available": "プラグインタブビューは利用できません",
+    "tab_crashed": "プラグインタブがクラッシュしました"
   }
 }

@@ -61,6 +61,8 @@
     "create_plugin_error": "플러그인 생성 실패: {{error}}",
     "view_logs": "로그",
     "clear_logs": "지우기",
-    "no_logs": "로그 없음"
+    "no_logs": "로그 없음",
+    "tab_not_available": "플러그인 탭 뷰를 사용할 수 없습니다",
+    "tab_crashed": "플러그인 탭이 충돌했습니다"
   }
 }

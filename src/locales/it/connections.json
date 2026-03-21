@@ -88,6 +88,7 @@
         "running": "In esecuzione",
         "services": "servizio/i ripristinato/i"
       }
-    }
+    },
+    "failedFetchStats": "Impossibile recuperare le statistiche"
   }
 }

@@ -88,6 +88,7 @@
         "running": "Đang chạy",
         "services": "dịch vụ đã khôi phục"
       }
-    }
+    },
+    "failedFetchStats": "Không thể lấy thống kê"
   }
 }

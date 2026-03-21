@@ -61,6 +61,8 @@
       "loading": "Loading...",
       "error": "Error",
       "disabled": "Disabled"
-    }
+    },
+    "tab_not_available": "Plugin tab view not available",
+    "tab_crashed": "Plugin tab crashed"
   }
 }

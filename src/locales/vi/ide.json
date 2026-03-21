@@ -125,6 +125,7 @@
     },
     "tree": {
       "truncated": "+{{count}} mục khác không được hiển thị"
-    }
+    },
+    "searchQueryTooLong": "Truy vấn tìm kiếm quá dài"
   }
 }

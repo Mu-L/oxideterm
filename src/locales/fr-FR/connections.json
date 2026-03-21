@@ -88,6 +88,7 @@
         "running": "En cours",
         "services": "service(s) restauré(s)"
       }
-    }
+    },
+    "failedFetchStats": "Échec de la récupération des statistiques"
   }
 }

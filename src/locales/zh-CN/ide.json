@@ -125,6 +125,7 @@
     },
     "tree": {
       "truncated": "还有 {{count}} 个项未显示"
-    }
+    },
+    "searchQueryTooLong": "搜索查询过长"
   }
 }

@@ -61,6 +61,8 @@
     "create_plugin_error": "Plugin-Erstellung fehlgeschlagen: {{error}}",
     "view_logs": "Protokolle",
     "clear_logs": "Löschen",
-    "no_logs": "Keine Protokolle"
+    "no_logs": "Keine Protokolle",
+    "tab_not_available": "Plugin-Tab-Ansicht nicht verfügbar",
+    "tab_crashed": "Plugin-Tab ist abgestürzt"
   }
 }

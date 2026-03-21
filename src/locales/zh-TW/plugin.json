@@ -61,6 +61,8 @@
     "create_plugin_error": "建立外掛失敗：{{error}}",
     "view_logs": "日誌",
     "clear_logs": "清除",
-    "no_logs": "暫無日誌"
+    "no_logs": "暫無日誌",
+    "tab_not_available": "外掛分頁檢視不可用",
+    "tab_crashed": "外掛分頁已崩潰"
   }
 }

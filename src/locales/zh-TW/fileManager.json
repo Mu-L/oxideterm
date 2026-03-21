@@ -139,6 +139,18 @@
     "propCalculating": "計算中...",
     "propCalcChecksum": "計算 MD5 / SHA-256",
     "progressFile": "正在複製 {{name}}...",
-    "progressPreparing": "準備中..."
+    "progressPreparing": "準備中...",
+    "officeLegacyWordNotSupported": "舊版 Word 格式 (.doc) 不受支援",
+    "officeConvertToDocx": "請轉換為 .docx 或下載後檢視",
+    "officeLoadingWord": "正在載入 Word 文件...",
+    "officeFailedLoadWord": "Word 文件載入失敗",
+    "officeLoadingSpreadsheet": "正在載入試算表...",
+    "officeFailedLoadSpreadsheet": "試算表載入失敗",
+    "officeFileLabel": "檔案：{{filename}}",
+    "officeFormatNotSupported": "{{format}} 預覽不受支援",
+    "officeDownloadToView": "請下載 {{filename}} 後檢視",
+    "officeLoadingDocument": "正在載入文件...",
+    "officeFailedLoadDocument": "文件載入失敗",
+    "officeUnsupportedType": "不支援的 Office 文件類型"
   }
 }

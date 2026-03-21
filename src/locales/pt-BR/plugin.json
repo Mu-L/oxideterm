@@ -61,6 +61,8 @@
     "create_plugin_error": "Falha ao criar plugin: {{error}}",
     "view_logs": "Logs",
     "clear_logs": "Limpar",
-    "no_logs": "Sem logs"
+    "no_logs": "Sem logs",
+    "tab_not_available": "Visualização da aba do plugin não disponível",
+    "tab_crashed": "A aba do plugin travou"
   }
 }

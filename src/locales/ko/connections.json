@@ -88,6 +88,7 @@
         "running": "실행 중",
         "services": "개 서비스 복원"
       }
-    }
+    },
+    "failedFetchStats": "통계를 가져오지 못했습니다"
   }
 }

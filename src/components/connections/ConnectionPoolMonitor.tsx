@@ -90,7 +90,7 @@ export function ConnectionPoolMonitor({
       setStats(data);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch stats');
+      setError(e instanceof Error ? e.message : t('connections.failedFetchStats', 'Failed to fetch stats'));
     } finally {
       setLoading(false);
     }

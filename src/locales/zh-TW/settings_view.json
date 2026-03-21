@@ -373,6 +373,8 @@
       "description": "配置內建程式碼編輯器的行為。",
       "auto_save": "自動儲存",
       "auto_save_hint": "切換分頁或失去焦點時自動儲存檔案。",
+      "word_wrap": "自動換行",
+      "word_wrap_hint": "將長行自動換行顯示，而非水平滾動。",
       "agent_title": "遠端代理",
       "agent_description": "OxideTerm 可將輕量級代理程式部署至遠端主機，以提升 IDE 效能。代理提供 POSIX 原生檔案操作、即時檔案監視和快速搜尋 — 全部在遠端伺服器本地執行。",
       "agent_feature_atomic": "原子檔案寫入（網路中斷不會遺失資料）",

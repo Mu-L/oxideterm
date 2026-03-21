@@ -1158,12 +1158,21 @@ html {
 .cm-editor {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  text-rendering: geometricPrecision;
+  contain: layout style;
 }
 
-/* Smooth cursor blink animation */
+.cm-editor .cm-scroller {
+  will-change: transform;
+}
+
+.cm-editor .cm-content {
+  contain: layout style paint;
+}
+
+/* Smooth cursor blink + movement animation */
 .cm-editor .cm-cursor {
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, left 0.04s ease-out, top 0.04s ease-out;
 }
 
 /* Match bracket highlight polish */

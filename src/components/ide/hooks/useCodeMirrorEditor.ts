@@ -1,6 +1,6 @@
 // src/components/ide/hooks/useCodeMirrorEditor.ts
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, drawSelection, highlightActiveLine, highlightSpecialChars, dropCursor, crosshairCursor, rectangularSelection } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, drawSelection, highlightActiveLine, highlightSpecialChars, dropCursor, crosshairCursor, rectangularSelection, placeholder } from '@codemirror/view';
 import { EditorState, EditorSelection, Extension, Transaction, Compartment } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { indentOnInput, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
@@ -71,16 +71,23 @@ function buildOxideTheme(fontFamily: string, fontSize: number, lineHeight: numbe
       backgroundColor: 'transparent !important',
       WebkitFontSmoothing: 'antialiased',
       MozOsxFontSmoothing: 'grayscale',
-      textRendering: 'optimizeLegibility',
+      textRendering: 'geometricPrecision',
       fontFeatureSettings: '"liga" 1, "calt" 1',
+      scrollbarGutter: 'stable',
     },
   '.cm-content': {
     minHeight: '100%',
     backgroundColor: 'transparent !important',
+    letterSpacing: '0.015em',
+    wordSpacing: '0',
+  },
+  '.cm-lineNumbers .cm-gutterElement': {
+    fontVariantNumeric: 'tabular-nums',
   },
   '.cm-gutters': {
     backgroundColor: 'var(--theme-bg-panel)',
-    borderRight: '1px solid var(--theme-border)',
+    boxShadow: 'inset -1px 0 0 var(--theme-border)',
+    border: 'none',
     color: 'var(--theme-text-muted)',
     opacity: 0.7,
   },
@@ -90,7 +97,8 @@ function buildOxideTheme(fontFamily: string, fontSize: number, lineHeight: numbe
     opacity: 0.8,
   },
   '.cm-activeLine': {
-    backgroundColor: 'color-mix(in srgb, var(--theme-accent) 5%, transparent)',
+    backgroundColor: 'color-mix(in srgb, var(--theme-accent) 7%, transparent)',
+    transition: 'background-color 0.1s ease',
   },
   '&.cm-focused .cm-cursor': {
     borderLeftColor: 'var(--theme-accent)',
@@ -99,12 +107,15 @@ function buildOxideTheme(fontFamily: string, fontSize: number, lineHeight: numbe
   '&.cm-focused .cm-selectionBackground, ::selection': {
     backgroundColor: 'color-mix(in srgb, var(--theme-accent) 20%, transparent)',
   },
-  // 自定义选区渲染（drawSelection 启用后）
   '.cm-selectionLayer .cm-selectionBackground': {
     backgroundColor: 'color-mix(in srgb, var(--theme-accent) 20%, transparent)',
+    borderRadius: '2px',
+    transition: 'background-color 0.1s',
   },
   '&.cm-focused .cm-selectionLayer .cm-selectionBackground': {
     backgroundColor: 'color-mix(in srgb, var(--theme-accent) 25%, transparent)',
+    borderRadius: '2px',
+    transition: 'background-color 0.1s',
   },
   // 缩进参考线样式
   '.cm-indentation-marker': {
@@ -226,9 +237,6 @@ function wordAtPos(state: EditorState, pos: number): { word: string; from: numbe
   };
 }
 
-// Compartment for dynamic theme reconfiguration
-const themeCompartment = new Compartment();
-
 export function useCodeMirrorEditor(options: UseCodeMirrorEditorOptions): UseCodeMirrorEditorResult {
   const {
     initialContent,
@@ -244,6 +252,8 @@ export function useCodeMirrorEditor(options: UseCodeMirrorEditorOptions): UseCod
 
   const viewRef = useRef<EditorView | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const themeCompartment = useRef(new Compartment()).current;
+  const wordWrapCompartment = useRef(new Compartment()).current;
   const [isReady, setIsReady] = useState(false);
 
   // 保存最新的回调引用，避免闭包问题
@@ -318,6 +328,9 @@ export function useCodeMirrorEditor(options: UseCodeMirrorEditorOptions): UseCod
         search(),
         oneDark,
         themeCompartment.of(initialTheme),
+        wordWrapCompartment.of(settings.ide?.wordWrap ? EditorView.lineWrapping : []),
+        placeholder('…'),
+        EditorView.exceptionSink.of((e) => console.warn('CM6:', e)),
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,
@@ -436,28 +449,39 @@ export function useCodeMirrorEditor(options: UseCodeMirrorEditorOptions): UseCod
         terminalLineHeight: state.settings.terminal.lineHeight,
         ideFontSize: state.settings.ide?.fontSize ?? null,
         ideLineHeight: state.settings.ide?.lineHeight ?? null,
+        wordWrap: state.settings.ide?.wordWrap ?? false,
       }),
       (curr, prev) => {
-        if (
-          curr.fontFamily === prev.fontFamily &&
-          curr.customFontFamily === prev.customFontFamily &&
-          curr.terminalFontSize === prev.terminalFontSize &&
-          curr.terminalLineHeight === prev.terminalLineHeight &&
-          curr.ideFontSize === prev.ideFontSize &&
-          curr.ideLineHeight === prev.ideLineHeight
-        ) return;
-
         const view = viewRef.current;
-        if (!view) return;
+        if (!view || !view.dom.parentElement) return;
 
-        const fontStack = getFontFamily(curr.fontFamily, curr.customFontFamily);
-        const fontSize = curr.ideFontSize ?? curr.terminalFontSize;
-        const lineHeight = curr.ideLineHeight ?? curr.terminalLineHeight;
-        view.dispatch({
-          effects: themeCompartment.reconfigure(
-            buildOxideTheme(fontStack, fontSize, lineHeight),
-          ),
-        });
+        // Word-wrap toggled
+        if (curr.wordWrap !== prev.wordWrap) {
+          view.dispatch({
+            effects: wordWrapCompartment.reconfigure(
+              curr.wordWrap ? EditorView.lineWrapping : [],
+            ),
+          });
+        }
+
+        // Theme / font changed
+        if (
+          curr.fontFamily !== prev.fontFamily ||
+          curr.customFontFamily !== prev.customFontFamily ||
+          curr.terminalFontSize !== prev.terminalFontSize ||
+          curr.terminalLineHeight !== prev.terminalLineHeight ||
+          curr.ideFontSize !== prev.ideFontSize ||
+          curr.ideLineHeight !== prev.ideLineHeight
+        ) {
+          const fontStack = getFontFamily(curr.fontFamily, curr.customFontFamily);
+          const fontSize = curr.ideFontSize ?? curr.terminalFontSize;
+          const lineHeight = curr.ideLineHeight ?? curr.terminalLineHeight;
+          view.dispatch({
+            effects: themeCompartment.reconfigure(
+              buildOxideTheme(fontStack, fontSize, lineHeight),
+            ),
+          });
+        }
       },
     );
     return unsub;

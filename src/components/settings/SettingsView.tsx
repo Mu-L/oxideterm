@@ -2695,6 +2695,22 @@ export const SettingsView = () => {
                                 </div>
                             </div>
 
+                            {/* Word Wrap */}
+                            <div className="rounded-lg border border-theme-border bg-theme-bg-panel/50 p-5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <Label className="text-theme-text">{t('settings_view.ide.word_wrap', 'Word Wrap')}</Label>
+                                        <p className="text-xs text-theme-text-muted mt-0.5">
+                                            {t('settings_view.ide.word_wrap_hint', 'Wrap long lines instead of horizontal scrolling.')}
+                                        </p>
+                                    </div>
+                                    <Checkbox
+                                        checked={ide?.wordWrap ?? false}
+                                        onCheckedChange={(checked) => updateIde('wordWrap', checked === true)}
+                                    />
+                                </div>
+                            </div>
+
                             {/* Editor Font & Spacing */}
                             <div className="rounded-lg border border-theme-border bg-theme-bg-panel/50 p-5 space-y-4">
                                 <h4 className="text-sm font-medium text-theme-text uppercase tracking-wider">

@@ -373,6 +373,8 @@
       "description": "Verhalten des integrierten Code-Editors konfigurieren.",
       "auto_save": "Automatisches Speichern",
       "auto_save_hint": "Dateien beim Tab-Wechsel oder bei Fokusverlust automatisch speichern.",
+      "word_wrap": "Zeilenumbruch",
+      "word_wrap_hint": "Lange Zeilen umbrechen statt horizontal zu scrollen.",
       "agent_title": "Remote-Agent",
       "agent_description": "OxideTerm kann eine leichtgewichtige Agent-Binärdatei auf Remote-Hosts bereitstellen, um die IDE-Leistung zu verbessern. Der Agent bietet POSIX-native Dateioperationen, Echtzeit-Dateiüberwachung und schnelle Suche — alles lokal auf dem Remote-Server ausgeführt.",
       "agent_feature_atomic": "Atomare Dateischreibvorgänge (kein Datenverlust bei Netzwerkunterbrechung)",

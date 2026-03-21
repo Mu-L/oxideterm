@@ -373,6 +373,8 @@
       "description": "Configure o comportamento do editor de código integrado.",
       "auto_save": "Salvamento automático",
       "auto_save_hint": "Salvar arquivos automaticamente ao trocar de aba ou perder o foco.",
+      "word_wrap": "Quebra de linha",
+      "word_wrap_hint": "Quebrar linhas longas em vez de rolar horizontalmente.",
       "agent_title": "Agente remoto",
       "agent_description": "O OxideTerm pode implantar um binário de agente leve em hosts remotos para melhorar o desempenho do IDE. O agente fornece operações de arquivo nativas POSIX, monitoramento de arquivos em tempo real e pesquisa rápida — tudo executado localmente no servidor remoto.",
       "agent_feature_atomic": "Escrita atômica de arquivos (sem perda de dados em caso de interrupção de rede)",

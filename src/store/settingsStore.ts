@@ -256,6 +256,7 @@ export interface IdeSettings {
   fontSize: number | null;    // null = follow terminal setting (8-32)
   lineHeight: number | null;  // null = follow terminal setting (0.8-3.0)
   agentMode: 'ask' | 'enabled' | 'disabled';  // Remote agent deployment policy
+  wordWrap: boolean;  // Enable word wrapping for long lines
 }
 
 /** Auto-reconnect strategy settings */
@@ -475,6 +476,7 @@ const defaultIdeSettings: IdeSettings = {
   fontSize: null,
   lineHeight: null,
   agentMode: 'ask',
+  wordWrap: false,
 };
 
 const defaultReconnectSettings: ReconnectSettings = {

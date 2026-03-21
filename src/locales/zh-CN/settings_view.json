@@ -373,6 +373,8 @@
       "description": "配置内置代码编辑器的行为。",
       "auto_save": "自动保存",
       "auto_save_hint": "切换标签页或失去焦点时自动保存文件。",
+      "word_wrap": "自动换行",
+      "word_wrap_hint": "将长行自动换行显示，而非水平滚动。",
       "agent_title": "远程代理",
       "agent_description": "OxideTerm 可以将轻量级代理程序部署到远程主机，以提升 IDE 性能。代理提供 POSIX 原生文件操作、实时文件监视和快速搜索 — 全部在远程服务器本地运行。",
       "agent_feature_atomic": "原子文件写入（网络中断不会丢失数据）",

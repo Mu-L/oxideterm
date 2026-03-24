@@ -1,7 +1,8 @@
-# OxideTerm 架构设计 (v1.8.0)
+# OxideTerm 架构设计 (v1.9.1)
 
-> **版本**: v1.8.0 (2026-02-10)
-> **上次更新**: 2026-02-10
+> **版本**: v1.9.1（与 [SYSTEM_INVARIANTS.md](./SYSTEM_INVARIANTS.md) 架构约束版本对齐）
+> **上次更新**: 2026-03-24
+> **应用发行版**（package / Cargo）: 0.20.1
 > 本文档描述 OxideTerm 的系统架构、设计决策和核心组件。
 
 ## 目录
@@ -17,15 +18,20 @@
 9. **[Oxide 文件加密格式](#oxide-文件加密格式)**
 10. [前端架构](#前端架构-react)
 11. **[运行时插件系统 (v1.6.2)](#运行时插件系统-v162)**
-12. **[多 Store 架构 (v1.4.0)](#多-store-架构)**
-13. **[异常链路架构 (v1.4.0)](#异常链路架构)**
+12. **[多 Store 架构 (v1.6.2)](#多-store-架构)**
+13. **[连接自愈与重连架构 (First-Class)](#连接自愈与重连架构-first-class)**
 14. [AI 侧边栏聊天 (v1.3.0)](#ai-侧边栏聊天-v130)
-15. [SSH 连接池](#ssh-连接池)
-16. [数据流与协议](#数据流与协议)
-17. [会话生命周期](#会话生命周期)
-18. [重连机制](#重连机制)
-19. [安全设计](#安全设计)
-20. [性能优化](#性能优化)
+15. [RAG 与本地知识库](#rag-与本地知识库)
+16. [MCP 与 AI 工具网关](#mcp-与-ai-工具网关)
+17. [远端 Agent 子系统](#远端-agent-子系统)
+18. [其他原生扩展摘录](#其他原生扩展摘录)
+19. [会话生命周期 (v1.4.0)](#会话生命周期-v140)
+20. [安全设计](#安全设计)
+21. [性能优化](#性能优化)
+22. [后端滚动缓冲区 (v1.3.0)](#后端滚动缓冲区-v130)
+23. [SSH 连接池](#ssh-连接池)
+24. [数据流与协议](#数据流与协议)
+25. [心跳检测与前端重连编排 (v1.6.2)](#心跳检测与前端重连编排-v162)
 
 ---
 
@@ -81,7 +87,7 @@ flowchart TB
         Router["IPC Command Router"]
 
         subgraph Features ["Feature Gates"]
-            LocalFeat["Feature: local-terminal"]
+            LocalFeat["local-terminal · wsl-graphics (Win)"]
         end
 
         subgraph RemoteEngine ["Remote Engine (SSH)"]
@@ -142,7 +148,7 @@ OxideTerm 将通信分为两个平面：
 **特点：**
 - 二进制帧传输，无 JSON 序列化开销
 - 绕过 Tauri IPC，直接 WebSocket 连接
-- 心跳保活，30秒间隔，300秒超时断开（本地 WebSocket，足够容忍 App Nap）
+- 心跳保活：协议层心跳间隔与帧类型见 [PROTOCOL.md](./PROTOCOL.md)；**本地 WebSocket 桥**在 `bridge/server.rs` 中对客户端无响应设有 **300s** 超时（容忍 macOS App Nap 等）；**SSH 层**另有独立保活（连接池侧，与 Ws 桥超时解耦）
 - 支持数据、调整大小、心跳等多种帧类型
 
 #### 数据平面 (Local: Tauri IPC)
@@ -184,121 +190,48 @@ OxideTerm 将通信分为两个平面：
 ```
 src-tauri/src/
 ├── main.rs                 # 应用入口
-├── lib.rs                  # 库入口，注册 Tauri 命令
+├── lib.rs                  # 库入口：状态注册、Tauri 命令表、生命周期
+├── update_manager.rs       # 可恢复更新安装（与 tauri-plugin-updater 协同）
+├── terminal_bg.rs          # 终端背景图资源清单与 IPC
 │
-├── ssh/                    # SSH 客户端核心
+├── agent/                  # 远端 IDE Agent（经 SSH 部署；JSON-RPC）。与 ssh/agent.rs「系统 SSH Agent」无关
 │   ├── mod.rs
-│   ├── client.rs           # SSH 连接建立
-│   ├── session.rs          # 会话管理 (Handle Owner Task)
-│   ├── config.rs           # SSH Config 解析
-│   ├── proxy.rs            # 代理跳板支持
-│   ├── error.rs            # SSH 错误类型
-│   ├── agent.rs            # SSH Agent (仅 UI/Types，核心待实现)
-│   ├── keyboard_interactive.rs  # 2FA/KBI 认证
-│   ├── known_hosts.rs      # 主机密钥验证
-│   ├── preflight.rs        # 连接预检 (TOFU 主机密钥验证)
-│   ├── handle_owner.rs     # Handle 控制器
-│   └── connection_registry.rs  # 连接池
+│   ├── deploy.rs           # 部署/移除远端二进制
+│   ├── protocol.rs         # RPC 消息类型
+│   ├── registry.rs         # AgentRegistry / 会话
+│   └── transport.rs        # SSH exec 信道上的传输
 │
-├── local/                  # 本地终端模块 (Feature: local-terminal)
-│   ├── mod.rs              # 模块导出
-│   ├── pty.rs              # PTY 封装 (portable-pty)
-│   ├── session.rs          # 本地终端会话
-│   ├── registry.rs         # 本地终端注册表
-│   └── shell.rs            # Shell 扫描与检测
-│
-├── bridge/                 # WebSocket 桥接
+├── bridge/                 # WebSocket 桥接（数据平面）
 │   ├── mod.rs
-│   ├── server.rs           # WS 服务器
+│   ├── server.rs           # WS 服务器（含本地心跳超时策略）
 │   ├── protocol.rs         # 帧协议定义
 │   └── manager.rs          # 连接管理
 │
-├── session/                # 会话管理
+├── commands/               # Tauri 控制平面命令（节选按主题分组；以目录下实际文件为准）
 │   ├── mod.rs
-│   ├── registry.rs         # 全局会话注册表
-│   ├── state.rs            # 会话状态机
-│   ├── health.rs           # 健康检查
-│   ├── reconnect.rs        # 重连逻辑
-│   ├── auto_reconnect.rs   # 自动重连任务
-│   ├── auth.rs             # 认证流程
-│   ├── events.rs           # 事件定义
-│   ├── parser.rs           # 输出解析
-│   ├── scroll_buffer.rs    # 滚动缓冲区 (100,000 行)
-│   ├── search.rs           # 终端搜索
-│   ├── tree.rs             # 会话树管理
-│   ├── topology_graph.rs   # 拓扑图
-│   ├── env_detector.rs     # 远程环境检测
-│   ├── profiler.rs         # 资源性能分析
-│   └── types.rs            # 类型定义
+│   ├── connect_v2.rs / session_tree.rs / network.rs / health.rs / ssh.rs / kbi.rs
+│   ├── local.rs
+│   ├── config.rs / oxide_export.rs / oxide_import.rs
+│   ├── scroll.rs
+│   ├── sftp.rs / forwarding.rs / ide.rs
+│   ├── node_sftp.rs / node_forwarding.rs / node_agent.rs
+│   ├── ai_chat.rs / ai_http.rs / rag.rs / mcp.rs / agent_history.rs
+│   ├── plugin.rs / plugin_server.rs / plugin_registry.rs
+│   └── archive.rs / appearance.rs
 │
-├── sftp/                   # SFTP 实现
-│   ├── mod.rs
-│   ├── session.rs          # SFTP 会话
-│   ├── types.rs            # 文件类型定义
-│   ├── error.rs            # SFTP 错误
-│   ├── path_utils.rs       # 路径处理工具
-│   ├── progress.rs         # 传输进度跟踪
-│   ├── retry.rs            # 断点续传支持
-│   └── transfer.rs         # 传输任务管理
-│
-├── forwarding/             # 端口转发
-│   ├── mod.rs
-│   ├── manager.rs          # 转发规则管理
-│   ├── local.rs            # 本地转发 (-L)
-│   ├── remote.rs           # 远程转发 (-R)
-│   ├── events.rs           # 转发事件发射器
-│   └── dynamic.rs          # 动态转发 (-D, SOCKS5)
-│
-├── config/                 # 配置管理
-│   ├── mod.rs
-│   ├── storage.rs          # 配置存储 (~/.oxideterm/connections.json)
-│   ├── keychain.rs         # 系统密钥链 (macOS/Windows/Linux)
-│   ├── ssh_config.rs       # ~/.ssh/config 解析
-│   ├── vault.rs            # 加密凭证存储
-│   └── types.rs            # 配置类型
-│
-├── oxide_file/             # .oxide 文件加密格式
-│   ├── mod.rs              # 模块导出
-│   ├── format.rs           # 文件格式定义
-│   ├── crypto.rs           # ChaCha20-Poly1305 + Argon2 加密
-│   └── error.rs            # 错误类型
-│
-├── state/                  # 全局状态管理
-│   ├── mod.rs
-│   ├── store.rs            # 持久化存储 (redb)
-│   ├── session.rs          # 会话状态
-│   ├── forwarding.rs       # 转发状态
-│   └── ai_chat.rs          # AI 聊天状态持久化
-│
-├── router/                 # Oxide-Next 节点路由器
-│   ├── mod.rs
-│   ├── emitter.rs          # NodeEventEmitter
-│   ├── sequencer.rs        # NodeEventSequencer
-│   └── types.rs            # 路由类型
-│
-└── commands/               # Tauri 命令
-    ├── mod.rs
-    ├── connect_v2.rs       # 连接命令 (主要连接流程)
-    ├── local.rs            # 本地终端命令
-    ├── ssh.rs              # SSH 通用命令
-    ├── config.rs           # 配置命令
-    ├── sftp.rs             # SFTP 命令
-    ├── forwarding.rs       # 转发命令
-    ├── health.rs           # 健康检查命令
-    ├── ide.rs              # IDE 模式命令
-    ├── kbi.rs              # KBI/2FA 命令
-    ├── network.rs          # 网络状态命令
-    ├── oxide_export.rs     # .oxide 导出
-    ├── oxide_import.rs     # .oxide 导入
-    ├── scroll.rs           # 滚动缓冲区命令
-    ├── session_tree.rs     # 会话树命令
-    ├── ai_chat.rs          # AI 聊天命令
-    ├── archive.rs          # 归档操作命令
-    ├── plugin.rs           # 插件管理命令
-    ├── node_forwarding.rs  # Node 转发命令
-    ├── node_sftp.rs        # Node SFTP 命令
-    ├── plugin_registry.rs  # 插件注册表命令
-    └── plugin_server.rs    # 插件服务端
+├── config/                 # 配置、密钥链、SSH config、vault
+├── forwarding/             # 端口转发 (-L/-R/-D)
+├── graphics/               # WSL 图形（feature wsl-graphics，Windows；VNC/WSLg 相关）
+├── launcher/               # 平台应用启动器（如 macOS 枚举与启动）
+├── local/                  # 本地 PTY（feature local-terminal）
+├── oxide_file/             # .oxide 加密导入导出格式
+├── rag/                    # 本地 RAG：分块、嵌入、BM25、持久化集合
+├── router/                 # Oxide-Next：nodeId 路由、NodeEvent 发射/定序
+├── session/                # 会话注册表、树、拓扑、滚动缓冲、搜索、重连辅助等
+├── sftp/                   # SFTP 会话、传输、tar 等大文件路径
+├── ssh/                    # SSH 核心：client、session、config、proxy、preflight、known_hosts、handle_owner、connection_registry 等
+│   └── agent.rs            # 系统 SSH Agent（AgentSigner + russh）；与顶层 `agent/` 远端 IDE Agent 区分
+├── state/                  # redb 持久化：会话元数据、转发、ai_chat、agent_history
 ```
 
 ### 核心组件关系图
@@ -409,21 +342,23 @@ classDiagram
 
 ### Feature Gate 机制
 
-OxideTerm v1.1.0 引入了模块化构建系统，核心 PTY 功能被封装在 `local-terminal` feature 中：
+OxideTerm 使用 Cargo feature 裁剪原生依赖（桌面默认全开，移动/精简构建可关）：
 
 ```toml
-# src-tauri/Cargo.toml
+# src-tauri/Cargo.toml（摘录）
 [features]
-default = ["local-terminal"]
+default = ["local-terminal", "wsl-graphics"]
 local-terminal = ["dep:portable-pty"]
+wsl-graphics = []
 
 [dependencies]
 portable-pty = { version = "0.8", optional = true }
 ```
 
 **用途**：
-- ✅ 桌面端：完整本地终端支持
-- ⚠️ 移动端：通过 `--no-default-features` 剥离 PTY 依赖，生成仅包含 SSH/SFTP 的轻量级内核
+- ✅ **local-terminal**：本地 PTY（`portable-pty` / ConPTY 等）
+- ✅ **wsl-graphics**：Windows 上 WSL 图形相关能力（无额外 crate 依赖；实现侧按平台编译）
+- ⚠️ 精简构建：`cargo build --no-default-features` 可剥离默认 feature（例如仅保留 SSH/SFTP 类能力时按需选择）
 
 ### PTY 线程安全封装
 
@@ -1183,6 +1118,11 @@ flowchart TB
         PluginStore["pluginStore.ts<br/>(UI Registry)<br/>Tabs & Panels"]
         SettingsStore["settingsStore.ts<br/>(Config)<br/>Theme & Preferences"]
         AiChatStore["aiChatStore.ts<br/>(AI)<br/>Chat conversations"]
+        RagStore["ragStore.ts<br/>(RAG)<br/>Collections & retrieval"]
+        AgentStore["agentStore.ts<br/>(Agent UI)<br/>Tooling / tasks"]
+        RecordingStore["recordingStore.ts<br/>(Recording)<br/>Session capture"]
+        UpdateStore["updateStore.ts<br/>(Updater)<br/>Download / install UI"]
+        MoreStores["More: broadcast / commandPalette /<br/>eventLog / launcher /<br/>profiler …"]
 
         SessionTree -- "3. Refresh Signal" --> AppStore
         AppStore -- "Fact: ConnectionId" --> IdeStore
@@ -1191,6 +1131,7 @@ flowchart TB
         ReconnectOrch -- "Orchestrate" --> SessionTree
         ReconnectOrch -- "Restore" --> IdeStore
         ReconnectOrch -- "Restore" --> Transfer
+        AiChatStore -.->|"context"| RagStore
     end
 
     subgraph Backend ["Backend Layer"]
@@ -1476,6 +1417,58 @@ streamChatCompletion() (OpenAI API)
 // 多行命令包装
 const bracketedPaste = `\x1b[200~${command}\x1b[201~`;
 ```
+
+---
+
+## RAG 与本地知识库
+
+**定位**：为 OxideSens 提供**可检索的本地知识库**（向量 + 关键词），数据与索引落在本机应用数据目录，经 Tauri 命令暴露给前端。
+
+**后端模块** [`src-tauri/src/rag/`](../../src-tauri/src/rag/)：
+
+- **分块与类型**：`chunker`、`types`
+- **嵌入**：`embedding`（离线/批处理与查询路径）
+- **稀疏检索**：`bm25`
+- **持久化集合**：`store`（与 `lib.rs` 中 `RagStore` 状态注入配合）
+- **命令入口**：[`commands/rag.rs`](../../src-tauri/src/commands/rag.rs)（集合与文档 CRUD、检索、重索引等）
+
+**前端**：`ragStore.ts` 与 AI 侧组装上下文；强一致性与安全边界仍以 [SYSTEM_INVARIANTS.md](./SYSTEM_INVARIANTS.md) 为准。
+
+---
+
+## MCP 与 AI 工具网关
+
+**定位**：**控制平面**扩展——在宿主内启动外部 **Model Context Protocol** 服务进程（stdio / SSE），将工具能力接入 OxideSens，与终端数据平面的 WebSocket **解耦**。
+
+**实现要点**：
+
+- 命令入口：[`commands/mcp.rs`](../../src-tauri/src/commands/mcp.rs)（spawn、请求转发、关闭）
+- 子进程与 JSON-RPC 生命周期由后端统一管理；**凭证与环境变量**属高敏感面，须在设置与审计上保持最小暴露（参见安全相关文档与代码注释）
+
+不涉及终端二进制帧协议；协议细节以 MCP 规范与实现为准。
+
+---
+
+## 远端 Agent 子系统
+
+**定位**：可选的 **远端 IDE 增强**：在 SSH 目标上部署轻量 Agent，经 **JSON-RPC over SSH exec** 提供文件树、搜索、Git 状态等能力；**不可用则回退 SFTP** 路径。
+
+**后端模块** [`src-tauri/src/agent/`](../../src-tauri/src/agent/)：`deploy`、`transport`、`protocol`、`registry`。
+
+**命令**：[`commands/node_agent.rs`](../../src-tauri/src/commands/node_agent.rs) 与 `node_*` 系列一致，按 **nodeId** 解析资源（与 NodeRouter 模型对齐，见 SYSTEM_INVARIANTS）。
+
+**注意**：顶层模块名 `agent/` 表示**远端** Agent；**系统 SSH Agent** 仅在 `ssh/agent.rs`。
+
+---
+
+## 其他原生扩展摘录
+
+| 区域 | 职责摘要 |
+|------|-----------|
+| [`graphics/`](../../src-tauri/src/graphics/) | **WSL 图形**（`wsl-graphics` feature，Windows）：会话与 VNC/WSLg 相关命令见 `graphics/commands.rs` |
+| [`launcher/`](../../src-tauri/src/launcher/) | **平台应用启动器**：枚举/启动本机应用（实现随平台分支） |
+| [`terminal_bg.rs`](../../src-tauri/src/terminal_bg.rs) | **终端背景图**：资源上传、清单与绑定 |
+| [`update_manager.rs`](../../src-tauri/src/update_manager.rs) | **可恢复更新**：与 `tauri-plugin-updater` 协同的安装状态机 |
 
 ---
 
@@ -1941,4 +1934,4 @@ graph LR
 
 ---
 
-*本文档持续更新，反映最新架构变更*
+*本文档持续更新，反映最新架构变更。**约束性不变量**以 [SYSTEM_INVARIANTS.md](./SYSTEM_INVARIANTS.md) 为准；**终端数据平面帧与心跳语义**以 [PROTOCOL.md](./PROTOCOL.md) 为准。*

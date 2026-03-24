@@ -1,9 +1,10 @@
 use crate::rag::error::RagError;
+use crate::rag::hnsw::{hnsw_index_path, PersistedHnswIndex};
 use crate::rag::types::*;
 use redb::{Database, ReadableTable, TableDefinition};
 use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 use tracing::{debug, info, warn};
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -38,6 +39,8 @@ const COMPRESSION_THRESHOLD: usize = 4096;
 
 pub struct RagStore {
     db: Arc<Database>,
+    data_dir: PathBuf,
+    hnsw_index: Arc<RwLock<Option<PersistedHnswIndex>>>,
 }
 
 impl RagStore {
@@ -73,8 +76,16 @@ impl RagStore {
         }
         txn.commit()?;
 
+        // Try to load persisted HNSW index
+        let hnsw = PersistedHnswIndex::load(&hnsw_index_path(&data_dir));
+        if let Some(ref idx) = hnsw {
+            info!("Loaded HNSW index: {} points", idx.meta.point_count);
+        }
+
         Ok(Self {
             db: Arc::new(db),
+            data_dir: data_dir.to_path_buf(),
+            hnsw_index: Arc::new(RwLock::new(hnsw)),
         })
     }
 
@@ -175,6 +186,10 @@ impl RagStore {
 
         // BM25 postings will be cleaned up via reindex
         info!("Deleted collection {} ({} docs)", collection_id, doc_ids.len());
+
+        // Invalidate HNSW index since embeddings were removed
+        self.invalidate_hnsw_index();
+
         Ok(())
     }
 
@@ -336,6 +351,10 @@ impl RagStore {
         }
         txn.commit()?;
         debug!("Removed document {}", doc_id);
+
+        // Invalidate HNSW index since embeddings changed
+        self.invalidate_hnsw_index();
+
         Ok(())
     }
 
@@ -517,6 +536,68 @@ impl RagStore {
             }
         }
         Ok(result)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // HNSW Index Management
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Get a reference to the HNSW index lock.
+    pub fn hnsw_index(&self) -> &Arc<RwLock<Option<PersistedHnswIndex>>> {
+        &self.hnsw_index
+    }
+
+    /// Get the data directory path.
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
+    /// Retrieve all stored embeddings (full table scan). Used for HNSW rebuild.
+    pub fn get_all_embeddings(&self) -> Result<Vec<EmbeddingRecord>, RagError> {
+        let txn = self.db.begin_read()?;
+        let t = txn.open_table(EMBEDDINGS_TABLE)?;
+        let mut result = Vec::new();
+        for entry in t.iter()? {
+            let (_, v) = entry?;
+            let record: EmbeddingRecord = rmp_serde::from_slice(v.value())?;
+            result.push(record);
+        }
+        debug!("Loaded {} embeddings for HNSW rebuild", result.len());
+        Ok(result)
+    }
+
+    /// Rebuild the HNSW index from all stored embeddings and persist to disk.
+    pub fn rebuild_hnsw_index(&self) -> Result<(), RagError> {
+        let embeddings = self.get_all_embeddings()?;
+
+        let new_index = PersistedHnswIndex::build(&embeddings);
+
+        // Persist to file if we have an index
+        if let Some(ref idx) = new_index {
+            idx.save(&hnsw_index_path(&self.data_dir))?;
+        }
+
+        // Swap into memory
+        let mut guard = self.hnsw_index.write().map_err(|e| {
+            RagError::HnswIndex(format!("lock poisoned: {e}"))
+        })?;
+        *guard = new_index;
+
+        Ok(())
+    }
+
+    /// Invalidate (clear) the in-memory HNSW index, marking it as stale.
+    /// The next search will fall back to brute-force until rebuild.
+    pub fn invalidate_hnsw_index(&self) {
+        match self.hnsw_index.write() {
+            Ok(mut guard) => {
+                *guard = None;
+                debug!("HNSW index invalidated");
+            }
+            Err(e) => {
+                warn!("Failed to invalidate HNSW index (lock poisoned): {}", e);
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -807,6 +888,10 @@ impl RagStore {
             old_chunk_ids.len(),
             new_chunks.len()
         );
+
+        // Invalidate HNSW index since embeddings changed
+        self.invalidate_hnsw_index();
+
         Ok(updated_meta)
     }
 }

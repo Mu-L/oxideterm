@@ -1,6 +1,8 @@
 use crate::rag::error::RagError;
 use crate::rag::store::RagStore;
 use crate::rag::types::EmbeddingRecord;
+use std::collections::HashSet;
+use tracing::debug;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Vector Search
@@ -16,6 +18,10 @@ pub struct VectorHit {
 /// Search by cosine similarity against stored embeddings.
 /// `query_vector` comes from the provider's embedding API.
 /// Only chunks within `collection_ids` are considered.
+///
+/// If an HNSW index is provided and its dimensions match, uses approximate
+/// nearest neighbor search (O(log n)). Otherwise falls back to brute-force
+/// cosine scan (O(n)).
 pub fn search_vector(
     store: &RagStore,
     query_vector: &[f32],
@@ -32,8 +38,40 @@ pub fn search_vector(
         return Ok(Vec::new());
     }
 
+    // Try HNSW path first
+    if let Ok(guard) = store.hnsw_index().read() {
+        if let Some(ref index) = *guard {
+            if index.is_compatible(query_vector.len()) {
+                let allowed: HashSet<String> = chunk_ids.iter().cloned().collect();
+                let results = index.search(query_vector, top_k, Some(&allowed));
+                debug!(
+                    "HNSW search returned {} results (allowed set: {}, top_k: {})",
+                    results.len(),
+                    allowed.len(),
+                    top_k
+                );
+                if !results.is_empty() {
+                    return Ok(results);
+                }
+                // If HNSW returned nothing (all filtered out), fall through to brute-force
+            }
+        }
+    }
+
+    // Brute-force fallback
+    search_vector_bruteforce(store, query_vector, &chunk_ids, top_k)
+}
+
+/// Brute-force cosine similarity scan (original O(n) path).
+fn search_vector_bruteforce(
+    store: &RagStore,
+    query_vector: &[f32],
+    chunk_ids: &[String],
+    top_k: usize,
+) -> Result<Vec<VectorHit>, RagError> {
+
     // Fetch embeddings for these chunks
-    let embeddings = store.get_embeddings_for_chunks(&chunk_ids)?;
+    let embeddings = store.get_embeddings_for_chunks(chunk_ids)?;
     if embeddings.is_empty() {
         return Ok(Vec::new());
     }
@@ -80,12 +118,15 @@ pub fn get_pending_embeddings(
 }
 
 /// Store embedding results from the provider.
+/// Invalidates the HNSW index since the embedding set has changed.
 pub fn store_embeddings(
     store: &RagStore,
     embeddings: Vec<EmbeddingRecord>,
 ) -> Result<usize, RagError> {
     let count = embeddings.len();
     store.store_embeddings_batch(&embeddings)?;
+    // Mark HNSW index as stale — will be rebuilt asynchronously
+    store.invalidate_hnsw_index();
     Ok(count)
 }
 

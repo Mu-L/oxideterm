@@ -692,6 +692,7 @@ pub fn run() {
         commands::rag_update_document,
         commands::rag_create_blank_document,
         commands::rag_open_document_external,
+        commands::rag_rebuild_hnsw_index,
         // AI HTTP proxy commands (CORS bypass)
         commands::ai_fetch,
         commands::ai_fetch_stream,
@@ -990,6 +991,7 @@ pub fn run() {
         commands::rag_update_document,
         commands::rag_create_blank_document,
         commands::rag_open_document_external,
+        commands::rag_rebuild_hnsw_index,
         // AI HTTP proxy commands (CORS bypass)
         commands::ai_fetch,
         commands::ai_fetch_stream,

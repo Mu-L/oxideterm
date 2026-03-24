@@ -412,6 +412,25 @@ pub async fn rag_store_embeddings(
     }
 
     let count = embedding::store_embeddings(&store, records).map_err(|e| e.to_string())?;
+
+    // Spawn blocking HNSW index rebuild (non-blocking to caller)
+    // Guard prevents multiple concurrent rebuilds from overlapping
+    static HNSW_REBUILD_RUNNING: std::sync::LazyLock<std::sync::atomic::AtomicBool> =
+        std::sync::LazyLock::new(|| std::sync::atomic::AtomicBool::new(false));
+
+    if !HNSW_REBUILD_RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        let store_clone = store.inner().clone();
+        tokio::task::spawn_blocking(move || {
+            let result = store_clone.rebuild_hnsw_index();
+            HNSW_REBUILD_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+            if let Err(e) = result {
+                tracing::warn!("Async HNSW rebuild failed: {}", e);
+            }
+        });
+    } else {
+        tracing::debug!("HNSW rebuild already in progress, skipping");
+    }
+
     Ok(count)
 }
 
@@ -680,4 +699,27 @@ pub async fn rag_open_document_external(
 
     info!("Opened document '{}' externally at {:?}", meta.title, file_path);
     Ok(path_str)
+}
+
+#[tauri::command]
+pub async fn rag_rebuild_hnsw_index(
+    store: State<'_, Arc<RagStore>>,
+) -> Result<String, String> {
+    let store_clone = store.inner().clone();
+    tokio::task::spawn_blocking(move || store_clone.rebuild_hnsw_index())
+        .await
+        .map_err(|e| format!("spawn_blocking failed: {e}"))?
+        .map_err(|e| e.to_string())?;
+
+    let msg = if let Ok(guard) = store.hnsw_index().read() {
+        match &*guard {
+            Some(idx) => format!("HNSW index rebuilt: {} points, {} dimensions", idx.meta.point_count, idx.meta.dimensions),
+            None => "HNSW index cleared (no embeddings)".to_string(),
+        }
+    } else {
+        "HNSW index rebuilt".to_string()
+    };
+
+    info!("{}", msg);
+    Ok(msg)
 }

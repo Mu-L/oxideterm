@@ -40,6 +40,9 @@ pub enum RagError {
 
     #[error("Version conflict: expected {expected}, found {actual}")]
     VersionConflict { expected: u64, actual: u64 },
+
+    #[error("HNSW index error: {0}")]
+    HnswIndex(String),
 }
 
 impl From<rmp_serde::encode::Error> for RagError {

@@ -118,6 +118,9 @@ minisign-verify = "0.2"
 redb = "2.1"
 rmp-serde = "1"
 
+# ANN vector search (HNSW index for RAG embeddings)
+instant-distance = { version = "0.6.1", features = ["with-serde"] }
+
 # Compression (for AI chat buffer snapshots)
 zstd = "0.13"
 

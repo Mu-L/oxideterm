@@ -1,100 +1,106 @@
-# OxideTerm 使用指南 (v1.9.1)
+# OxideTerm 使用指南
 
-> 从入门到精通，全面掌握 OxideTerm 的核心功能和最佳实践。
->
-> **v1.9.1 主要特性**：重连编排器、Oxide-Next 单键架构、AI 侧边栏 & 内联助手、插件系统、WSL 图形转发、本地终端。
+> 从入门到日常高效使用：**操作步骤与快捷键**以本文为准；连接池、拓扑、重连、SFTP/转发架构与不变量见合订参考 [OXIDETERM_CORE_REFERENCE.md](./OXIDETERM_CORE_REFERENCE.md)。
 
-## 📋 目录
-
-1. [快速开始](#快速开始)
-2. [基础操作](#基础操作)
-3. [连接管理](#连接管理)
-4. [终端功能](#终端功能)
-5. [SFTP 文件管理](#sftp-文件管理)
-6. [端口转发](#端口转发)
-7. [高级功能](#高级功能)
-8. [快捷键速查](#快捷键速查)
-9. [最佳实践](#最佳实践)
-10. [故障排查](#故障排查)
+> **文档版本**: v1.9.1 | **应用参考版本**: 0.20.1 | **最后更新**: 2026-03-24
 
 ---
 
-## 🚀 快速开始
+## 目录
+
+1. [快速开始](#快速开始)
+2. [设置与页签](#设置与页签)
+3. [基础操作](#基础操作)
+4. [连接管理](#连接管理)
+5. [终端功能](#终端功能)
+6. [SFTP 文件管理](#sftp-文件管理)
+7. [端口转发](#端口转发)
+8. [扩展能力（插件 / 图形 / 主题）](#user-guide-extensions)
+9. [高级功能](#高级功能)
+10. [快捷键速查](#快捷键速查)
+11. [最佳实践](#最佳实践)
+12. [故障排查](#故障排查)
+13. [相关文档](#相关文档)
+
+---
+
+## 快速开始
 
 ### 首次运行
 
-1. **启动 OxideTerm**
-   - macOS: 应用程序文件夹
-   - Windows: 开始菜单或桌面快捷方式
-   - Linux: `oxideterm` 命令
+1. **启动 OxideTerm**  
+   - macOS：应用程序文件夹  
+   - Windows：开始菜单或桌面快捷方式  
+   - Linux：发行版提供的启动方式或包内命令（如 `oxideterm`）
 
-2. **创建第一个连接**
-   - 点击左侧边栏 **"New Connection"** 按钮
-   - 填写服务器信息：
-     - Name: `My Server`
-     - Host: `example.com`
-     - Port: `22`
-     - Username: `admin`
-     - Authentication: 选择密码或密钥
+2. **创建第一个连接**  
+   - 在侧边栏使用 **新建连接**（或 `Ctrl+N` / `⌘N`）  
+   - 填写服务器信息，例如：  
+     - Name: `My Server`  
+     - Host: `example.com`  
+     - Port: `22`  
+     - Username: `admin`  
+     - Authentication: 密码、密钥、SSH Agent 或证书（按界面选项）
 
-3. **连接到服务器**
-   - 双击保存的连接
-   - 输入密码（如果使用密码认证）
-   - 终端窗口会自动打开
+3. **连接**  
+   - 在会话树中连接目标节点并打开终端；按提示完成认证后，终端标签页会打开。
 
 ---
 
-## 🎮 基础操作
+## 设置与页签
+
+- **打开设置**：`Ctrl+,`（Windows/Linux）或 `⌘,`（macOS）；也可从命令面板或侧边栏进入。  
+- **界面形态**：设置以**页签**组织（例如终端、外观、AI、插件等），便于在同一窗口内切换，而非零散弹窗。  
+- **快捷键总表**：设置内 **帮助 / 关于** 中的快捷键列表与 [src/lib/shortcuts.ts](../../src/lib/shortcuts.ts) 一致；下文 [快捷键速查](#快捷键速查) 为摘要版。  
+- **应用与编辑器主题**：终端配色与字体在 **Terminal** 相关页签；应用级主题与自定义变量见 [CUSTOM_THEMES.md](./CUSTOM_THEMES.md)。
+
+---
+
+## 基础操作
 
 ### 创建终端
 
 #### 本地终端
 
-快速开启本地终端（无需 SSH）：
-
-- **快捷键**: `Ctrl+T` (Windows/Linux) 或 `⌘T` (macOS) - 默认 Shell
-- **Shell 选择器**: `Ctrl+Shift+T` (Windows/Linux) 或 `⌘+Shift+T` (macOS)
-- **侧边栏**: Connections → Local Terminal
-- **用途**: 本地开发、测试、脚本执行
+- **快捷键**：`Ctrl+T`（Windows/Linux）或 `⌘T`（macOS）— 默认 Shell  
+- **Shell 选择器**：`Ctrl+Shift+T` / `⌘⇧T`  
+- **侧边栏**：在会话树中选择本地终端相关入口  
 
 #### SSH 终端
 
-连接到远程服务器：
+1. 在会话树中连接目标节点后新建或选择终端子项  
+2. 或使用 **新建连接** 流程后再打开终端  
 
-1. **方法 1**: 双击已保存的连接
-2. **方法 2**: 右键菜单 → "Connect"
-3. **方法 3**: 双击连接组展开/折叠
+### 标签页
 
-### 标签管理
-
-> **注意**: 标签页切换快捷键目前正在开发中。
+- **切换标签**：`Ctrl+Tab` / `Ctrl+Shift+Tab`（Windows/Linux），macOS 上为 `⌘}` / `⌘{`（与设置内说明一致）  
+- **跳到第 N 个标签**：`Ctrl+1`–`Ctrl+9` / `⌘1`–`⌘9`  
+- **关闭当前标签**：`Ctrl+W` / `⌘W`  
 
 ### 会话树导航
 
-OxideTerm 使用树形结构组织会话：
+OxideTerm 用树形结构组织连接、终端、SFTP、钻入节点等：
 
 ```
-┌── 📁 Production
-│   ├── 🖥️  Web Server
-│   │   └── 🟢 Active Session
-│   └── 🖥️  Database Server
-├── 📁 Development
-│   └── 🖥️  Dev Machine
-└── 💻 Local Terminal
+├── 分组 / 预设
+│   ├── 连接节点
+│   │   ├── 终端
+│   │   ├── SFTP
+│   │   └── …
+│   └── …
+└── 本地终端
 ```
 
-**操作**：
-- 点击展开/折叠分组
-- 右键显示上下文菜单
-- 拖拽排序（开发中）
+- 点击行可展开/折叠；**右键**打开上下文菜单（连接、断开、SFTP、转发、IDE 等）。  
+- 会话树内**拖拽排序**若未在您的版本中提供，请以实际客户端为准；整理结构可使用分组与编辑连接。
 
 ---
 
-## 🔌 连接管理
+## 连接管理
 
 ### 保存连接
 
-#### 1. 基本配置
+基本字段示例：
 
 ```
 Name: Production Server
@@ -104,112 +110,36 @@ Username: admin
 Group: Production
 ```
 
-#### 2. 认证方式
+### 认证方式
 
-**密码认证**：
-- 选择 "Password"
-- 输入密码（存储在系统钥匙串，安全加密）
+- **密码**：由系统钥匙串保存（勿写入明文配置文件）。  
+- **SSH 密钥**：选择私钥路径；若有 Passphrase 会安全存储。  
+- **SSH Agent**：依赖系统 SSH Agent 与已加载密钥。  
+- **证书**：按界面选择私钥与证书文件。  
 
-**密钥认证**：
-- 选择 "SSH Key"
-- 选择私钥文件（例如：`~/.ssh/id_rsa`）
-- 如有密码，输入 Passphrase
+### ProxyJump（跳板）
 
-**SSH Agent**：
-- 选择 "SSH Agent"
-- 确保 SSH Agent 正在运行并加载了密钥
+支持在连接或链路中配置 **Proxy Chain**（单跳或多跳），等价于 `ssh -J` 链式跳板。拓扑与自动路由、级联故障行为见合订文档：
 
-**证书认证**：
-- 选择 "Certificate"
-- 选择私钥和证书文件
-
-### ProxyJump (跳板机)
-
-#### 单跳配置
-
-```
-项目配置：
-  Name: Internal Server
-  Host: db.internal
-  Port: 22
-  Username: dbadmin
-  
-  Proxy Chain:
-    ├── Host: bastion.example.com
-    ├── Port: 22
-    ├── Username: admin
-    └── Auth: SSH Agent
-```
-
-**等价 SSH 命令**：
-```bash
-ssh -J admin@bastion.example.com dbadmin@db.internal
-```
-
-#### 多跳配置
-
-```
-项目配置：
-  Name: HPC Compute Node
-  Host: node123.cluster
-  
-  Proxy Chain:
-    ├── Hop 1: login.university.edu (port 22)
-    ├── Hop 2: gateway.cluster (port 22)
-    └── Target: node123.cluster
-```
-
-**等价 SSH 命令**：
-```bash
-ssh -J student@login.university.edu,admin@gateway.cluster researcher@node123.cluster
-```
+详见：[OXIDETERM_CORE_REFERENCE.md — 2. 网络拓扑与 ProxyJump](./OXIDETERM_CORE_REFERENCE.md#2-网络拓扑与-proxyjump)
 
 ### 连接分组
 
-**创建分组**：
-- 右键侧边栏 → New Group
-- 输入组名（例如：`Production`, `Staging`, `Development`）
-
-**分组管理**：
-- 拖拽连接到分组
-- 折叠/展开分组
-- 组内连接自动继承标签颜色
+- 使用右键菜单创建 **分组**，将连接归类到 Production / Staging 等。  
+- 折叠不常用分组以保持侧边栏清晰。  
 
 ---
 
-## 🖥️ 终端功能
+## 终端功能
 
-### 搜索（Ctrl+F / ⌘F）
+### 搜索
 
-#### Visible Buffer 搜索
-
-搜索当前可见的终端输出：
-
-1. 按 `Ctrl+Shift+F` (Win) / `Ctrl+F` (Lin) 或 `⌘F`
-2. 输入搜索词
-3. 匹配项实时高亮
-4. 使用 `Enter` / `Shift+Enter` 导航
-
-**选项**：
-- **Aa**: 大小写敏感
-- **.***: 正则表达式
-- **Word**: 整词匹配
-
-#### Deep History 搜索
-
-搜索完整会话历史（最多 100,000 行）：
-
-1. 切换到 "Deep History" 标签
-2. 输入搜索词
-3. 按 `Enter` 执行搜索
-4. 点击结果跳转到对应位置
-
-**示例查询**：
-```
-查找错误日志：^(ERROR|FATAL):
-查找 IP 地址：\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b
-查找 Git 命令：^git (commit|push|pull)
-```
+1. **打开查找栏**（终端聚焦时）：  
+   - **Windows**：`Ctrl+Shift+F`（避免与终端内 `Ctrl+F` 冲突）  
+   - **macOS**：`⌘F`  
+   - **Linux**：通常为 **`Super`（徽标键）+ F**（与 `useTerminalKeyboard` 一致；勿与 shell 的 Ctrl 组合冲突）  
+2. **Visible Buffer**：当前屏内容实时高亮。  
+3. **Deep History**：在完整会话历史中异步搜索（默认可达数万行，上限见设置与 [TERMINAL_SEARCH.md](./TERMINAL_SEARCH.md)）。  
 
 详见：[TERMINAL_SEARCH.md](./TERMINAL_SEARCH.md)
 
@@ -217,565 +147,238 @@ ssh -J student@login.university.edu,admin@gateway.cluster researcher@node123.clu
 
 | 操作 | Windows/Linux | macOS |
 |------|---------------|-------|
-| **复制** | `Ctrl+Shift+C` 或选中自动复制 | `⌘+C` 或选中自动复制 |
-| **粘贴** | `Ctrl+Shift+V` 或右键 | `⌘+V` 或右键 |
+| **复制** | `Ctrl+Shift+C` 或选中自动复制 | `⌘C` 或选中自动复制 |
+| **粘贴** | `Ctrl+Shift+V` 或右键 | `⌘V` 或右键 |
 
-### 清屏
+### 清屏与滚动
 
-| 方法 | 快捷键/命令 |
-|------|------------|
-| **完全清屏** | `Ctrl+L` 或 `⌘+K` |
-| **Shell 清屏** | `clear` 命令 |
-| **重置终端** | 右键 → Reset Terminal |
-
-### 滚动
-
-| 操作 | 方法 |
+| 方法 | 说明 |
 |------|------|
-| **向上滚动** | 鼠标滚轮向上 或 `Page Up` |
-| **向下滚动** | 鼠标滚轮向下 或 `Page Down` |
-| **滚动到顶部** | `Home` |
-| **滚动到底部** | `End` |
+| 完全清屏 | 终端内常用 `Ctrl+L`；应用层清屏以界面说明为准 |
+| Shell `clear` | 由 shell 处理 |
+| 重置终端 | 右键上下文菜单中的重置选项（若有） |
 
 ### 字体与主题
 
-#### 设置字体
-
-1. 打开设置（侧边栏配置图标）
-2. 切换到 **Terminal** 标签
-3. 选择字体（推荐：JetBrains Mono, Fira Code）
-4. 调整字体大小（8-32）
-
-#### 切换主题
-
-OxideTerm 内置多个终端主题：
-
-- Catppuccin Mocha（默认）
-- Dracula
-- Gruvbox Dark
-- One Dark
-- Solarized Dark/Light
-- Tokyo Night
-
-**切换方法**：
-设置 → Terminal → Theme
+设置 → **Terminal** 页签：字体、字号、内置主题等。自定义主题引擎见 [CUSTOM_THEMES.md](./CUSTOM_THEMES.md)。
 
 ---
 
-## 📁 SFTP 文件管理
+## SFTP 文件管理
 
-### 打开 SFTP 浏览器
+### 打开方式
 
-#### 方法 1：从终端会话
+- 终端标签或连接节点 **右键** → 打开 SFTP  
+- 在会话树中对应节点下选择 SFTP 子项  
 
-右键终端标签 → Open SFTP
+### 用户可见行为
 
-#### 方法 2：从连接列表
+- **State Gating**：连接未就绪时界面会提示等待，避免误操作；恢复后自动可用。  
+- **Path Memory**：重连后尽量恢复上次工作目录（与编排器及连接状态相关）。  
 
-右键连接 → SFTP Browser
+传输队列、双栏操作与快捷键见设置内 **SFTP** 快捷键分类。
 
-### SFTP 特性
-
-#### State Gating（状态门禁）
-
-当连接不稳定时，SFTP 会自动显示等待遮罩，防止无效操作：
-
-```
-┌─────────────────────────────────────┐
-│          Waiting for connection...  │
-│          Current state: reconnecting│
-└─────────────────────────────────────┘
-```
-
-连接恢复后，SFTP 自动激活。
-
-#### Path Memory（路径记忆）
-
-重连后自动恢复之前的工作目录，无需手动导航。
-
-### 文件操作
-
-#### 上传文件
-
-1. **拖拽上传**: 将本地文件拖到右侧（远程）面板
-2. **工具栏上传**: 点击 "Upload" 按钮选择文件
-3. **快捷键**: `ArrowRight` (选中本地文件时)
-
-#### 下载文件
-
-1. **拖拽下载**: 将远程文件拖到左侧（本地）面板
-2. **右键菜单**: 右键文件 → Download
-3. **快捷键**: `ArrowLeft` (选中远程文件时)
-
-#### 其他操作
-
-| 操作 | 方法 |
-|------|------|
-| **新建文件夹** | 右键 → New Folder |
-| **重命名** | 右键 → Rename 或 `F2` |
-| **删除** | 右键 → Delete 或 `Delete` / `Backspace` |
-| **刷新** | 工具栏刷新按钮 |
-| **全选** | `Ctrl+A` / `⌘+A` |
-
-### 传输队列
-
-查看和管理文件传输：
-
-1. 点击底部 "Transfers" 面板
-2. 查看进度条和速度
-3. 点击 ❌ 取消传输
-4. 传输完成后自动移除
-
-**传输状态**：
-- 🟢 Transferring: 正在传输
-- ✅ Completed: 完成
-- ❌ Failed: 失败
-- ⏸️ Paused: 暂停（计划中）
-
-详见：[SFTP.md](./SFTP.md)
+详见：[OXIDETERM_CORE_REFERENCE.md — 5. SFTP 文件管理](./OXIDETERM_CORE_REFERENCE.md#5-sftp-文件管理)
 
 ---
 
-## 🔀 端口转发
+## 端口转发
 
-### Local Forward (-L)
+支持本地转发（`-L`）、远程转发（`-R`）、动态 SOCKS（`-D`）等，按节点在转发管理界面配置。
 
-**用途**: 将远程端口映射到本地
+**Link Resilience**：规则会随会话持久化，网络恢复并由重连管道重建后，转发由编排逻辑**尽量自动恢复**，一般无需手工重加。
 
-**示例**: 访问远程数据库
-
-```
-配置：
-  Local Address: 127.0.0.1:3306
-  Remote Host: localhost
-  Remote Port: 3306
-  
-效果：
-  本地访问 localhost:3306 → 转发到远程 localhost:3306
-```
-
-**应用场景**：
-- 访问远程数据库（MySQL, PostgreSQL）
-- 访问远程 Web 服务
-- 绕过防火墙访问内网服务
-
-### Remote Forward (-R)
-
-**用途**: 将本地端口映射到远程
-
-**示例**: 让远程服务器访问本地 Web 服务
-
-```
-配置：
-  Remote Address: 0.0.0.0:8080
-  Local Host: localhost
-  Local Port: 3000
-  
-效果：
-  远程访问 8080 → 转发到本地 3000
-```
-
-**应用场景**：
-- Webhook 调试
-- 远程演示本地应用
-- 反向代理
-
-### Dynamic Forward (-D, SOCKS5)
-
-**用途**: 创建 SOCKS5 代理
-
-**示例**: 使用 SSH 作为代理
-
-```
-配置：
-  Local Address: 127.0.0.1:1080
-  
-效果：
-  所有通过 localhost:1080 的流量都会经过 SSH 隧道
-```
-
-**配置浏览器**：
-1. 打开浏览器代理设置
-2. 设置 SOCKS5 代理: `localhost:1080`
-3. 所有浏览流量通过 SSH 加密
-
-### 端口转发 Link Resilience
-
-端口转发规则会被持久化，重连后由 Orchestrator **自动恢复**：
-
-```
-网络断开 → 显示警告 → 自动重连 → 规则自动恢复 → 继续使用
-```
-
-无需手动重新配置。
-
-详见：[PORT_FORWARDING.md](./PORT_FORWARDING.md)
+详见：[OXIDETERM_CORE_REFERENCE.md — 4. 端口转发](./OXIDETERM_CORE_REFERENCE.md#4-端口转发)
 
 ---
 
-## 🚀 高级功能
+<a id="user-guide-extensions"></a>
 
-### 自动重连 (Reconnect Orchestrator)
+## 扩展能力（插件 / 图形 / 主题）
 
-**功能**: 网络断开时自动恢复连接，由 `reconnectOrchestratorStore` 统一管理
+### 插件
 
-**特性**：
-- 最多重试 5 次，指数退避（1s → 15s max）
-- 重连成功后自动恢复 SFTP 路径、端口转发和 IDE 状态
-- 500ms 去抖窗口合并多个 link_down 事件
-- 终端无缝恢复输入（Key-Driven Reset）
+- 插件从用户目录加载，通过 **设置 → 插件** 管理；架构与安全边界见 [PLUGIN_SYSTEM.md](./PLUGIN_SYSTEM.md)，开发见 [PLUGIN_DEVELOPMENT.md](./PLUGIN_DEVELOPMENT.md)。
 
-**行为**：
-```
-正常使用 → 网络断开 → 显示 Input Lock → 自动重连 → 恢复使用
-```
+### WSL 图形转发
 
-**断线行为**：
-- **Terminal**: 输入锁定，显示 Overlay，保留历史
-- **SFTP**: 显示等待遮罩，重连后恢复路径
-- **Port Forward**: 暂停，重连后自动恢复
+- 在支持的构建与平台上，可通过图形转发在应用内查看远程图形会话；说明与限制见 [GRAPHICS_FORWARDING.zh-CN.md](./GRAPHICS_FORWARDING.zh-CN.md)（需启用相应 **Cargo feature**，见 [src-tauri/Cargo.toml](../../src-tauri/Cargo.toml)）。
 
-详见：[CONNECTION_POOL.md](./CONNECTION_POOL.md)
+### 主题
+
+- 终端主题与应用外观见设置；编辑器与 CSS 变量级定制见 [CUSTOM_THEMES.md](./CUSTOM_THEMES.md)。
+
+---
+
+## 高级功能
+
+### 自动重连（Reconnect Orchestrator）
+
+网络抖动或链路断开时，由前端 `reconnectOrchestratorStore` 等协同编排重试、Grace Period 与恢复（含 SFTP 路径、转发、IDE 等子系统的恢复策略）。用户侧常见现象：终端输入短暂锁定、遮罩提示、恢复后继续操作。
+
+详见：[OXIDETERM_CORE_REFERENCE.md — 3. 重连编排器](./OXIDETERM_CORE_REFERENCE.md#3-重连编排器)
 
 ### 连接池
 
-**功能**: 多个会话共享同一 SSH 连接
+同一底层 SSH 连接可承载多个终端、SFTP、转发等，减少重复认证与服务器负担。
 
-**示例**：
-```
-同一服务器 (prod.example.com:22):
-  ├── Terminal 1 (Shell)
-  ├── Terminal 2 (Logs)
-  ├── SFTP Browser
-  └── Port Forward (-L 3306)
-  
-实际 SSH 连接数: 1
-```
-
-**优势**：
-- ✅ 减少认证次数
-- ✅ 降低服务器负载
-- ✅ 节省网络资源
-- ✅ 统一重连管理
-
-### AI 内联助手
-
-**功能**: 直接在终端中与 AI 对话
-
-**使用方法**：
-1. 按 `Ctrl+Shift+I` (Win) / `Ctrl+I` (Lin) 或 `⌘I`
-2. 输入问题或选中文本
-3. AI 返回建议
-4. 选择 Insert / Execute / Copy
-
-**示例场景**：
-```
-场景 1: 错误诊断
-  选中错误输出 → Ctrl+I → "如何修复？"
-  
-场景 2: 命令生成
-  Ctrl+I → "查找大于100MB的文件"
-  AI: find . -type f -size +100M
-  
-场景 3: 日志分析
-  自动捕获可见缓冲区 → AI 分析问题
-```
-
-详见：[AI_INLINE_CHAT.md](./AI_INLINE_CHAT.md)
+详见：[OXIDETERM_CORE_REFERENCE.md — 1. SSH 连接池与状态管理](./OXIDETERM_CORE_REFERENCE.md#1-ssh-连接池与状态管理)
 
 ### 网络拓扑
 
-**功能**: 自动构建服务器拓扑图，计算最优路径
+自动拓扑与最优路径、ProxyJump 链、级联故障表现见：
 
-**示例**：
-```
-网络拓扑：
-  本地 → VPN Gateway → Internal Network → Database Server
-  
-自动路由：
-  任意连接到 Database Server 都会自动经过 VPN Gateway
-```
+详见：[OXIDETERM_CORE_REFERENCE.md — 2. 网络拓扑与 ProxyJump](./OXIDETERM_CORE_REFERENCE.md#2-网络拓扑与-proxyjump)
 
-**v1.4.0 级联故障处理**：
-当跳板机断开时，所有下游连接自动标记为断开，Orchestrator 尝试级联重连。
+### 远程 IDE / Agent
 
-详见：[NETWORK_TOPOLOGY.md](./NETWORK_TOPOLOGY.md)
+远程文件编辑、Remote Agent 部署与协议见合订文档中 **IDE** 与 **远程代理** 章节：
 
-### .oxide 文件导出
+- [6. 远程代理（Remote Agent）](./OXIDETERM_CORE_REFERENCE.md#6-远程代理remote-agent)  
+- [10. IDE 模式（轻量级远程开发）](./OXIDETERM_CORE_REFERENCE.md#10-ide-模式轻量级远程开发)
 
-**功能**: 加密导出连接配置，在设备间同步
+### OxideSens（AI）
 
-#### 导出连接
+- **内联助手**（终端内轻量对话、无工具调用）与 **侧边栏**（持久会话、工具、MCP、RAG 等）的配置与隐私说明见 [AICHAT.md](./AICHAT.md)。  
+- 打开内联面板：Windows `Ctrl+Shift+I`；macOS/Linux 终端聚焦时多为 **`Super`+`I` 或 `⌘I`**（与 [useTerminalKeyboard.ts](../../src/hooks/useTerminalKeyboard.ts) 一致）。  
+- 切换 **AI 侧边栏**：命令面板中对应命令（常见为 `Ctrl+Shift+A` / `⌘⇧A`，见命令面板快捷键列）。
 
-**步骤**：
-1. 右键连接 → Export to .oxide
-2. 选择要导出的连接（支持多选）
-3. **[v1.4.1 新增]** 查看导出概览：
-   - 🔒 密码认证连接数
-   - 🔑 密钥认证连接数
-   - 🤖 SSH Agent 认证连接数
-   - 📦 可选：勾选 **"Embed Private Keys"**（内嵌私钥文件）
-4. 设置强密码（至少 12 字符，包含大小写/数字/特殊字符）
-5. 保存 `.oxide` 文件
+### .oxide 加密导出/导入
 
-**[v1.4.1] 私钥内嵌功能**：
+用于在设备间迁移连接配置（ChaCha20-Poly1305、Argon2id 等）；导出时可选择是否内嵌私钥（**强密码**与文件保管责任在用户）。
 
-勾选 "Embed Private Keys" 选项后：
-- ✅ **完全可移植**：无需手动复制 `~/.ssh/` 目录
-- ✅ **跨设备迁移**：从 macOS 导出，在 Windows 导入时自动处理路径
-- ✅ **智能检测**：自动检测缺失的密钥文件并警告
-- ✅ **大小预览**：实时显示内嵌密钥后文件增加的大小
-- ⚠️ **注意**：文件会包含私钥原始内容，但全程 ChaCha20 加密保护
-
-**导出进度阶段（v1.4.1）**：
-1. 🔍 读取密钥文件...（如启用 embed_keys）
-2. 🔐 Argon2id 加密中...
-3. 💾 写入文件...
-4. ✅ 完成！
-
-#### 导入连接
-
-**步骤**：
-1. File → Import .oxide File
-2. 选择 `.oxide` 文件
-3. 输入密码
-4. **[v1.4.1]** 预览导入内容：
-   - 显示所有连接列表
-   - 标记重名冲突（将自动重命名）
-   - 显示内嵌密钥信息
-5. 确认导入
-
-**导入行为**：
-- 重名连接自动追加后缀（如 `Server (2)`）
-- 内嵌的私钥提取到 `~/.ssh/imported/`，权限自动设为 `600`
-- 密码和私钥口令安全存储到系统钥匙串
-
-**安全性**：
-- ✅ ChaCha20-Poly1305 AEAD 加密
-- ✅ Argon2id 密钥派生（256MB 内存，4 次迭代）
-- ✅ SHA-256 完整性校验
-- ✅ 支持云存储同步（Dropbox, Google Drive）
+**操作建议**：使用足够长的密码；含内嵌私钥的文件视为高敏感；导入后密钥落盘权限由应用处理。
 
 详见：[SERIALIZATION.md](./SERIALIZATION.md)
 
 ---
 
-## ⌨️ 快捷键速查
+## 快捷键速查
 
-### 全局快捷键
+下列与 **设置 → 帮助** 中的应用级列表一致（`getShortcutCategories`）。终端聚焦时，**查找 / 内联 AI** 在 Windows 与 macOS/Linux 的修饰键组合可能不同，已在上文 [终端功能 — 搜索](#终端功能) 与 [OxideSens](#oxidesensai) 说明。
 
-| 操作 | Windows/Linux | macOS |
-|------|---------------|-------|
-| **新建本地终端** | `Ctrl+T` | `⌘T` |
-| **打开 Shell 选择器** | `Ctrl+Shift+T` | `⌘+Shift+T` |
-| **关闭窗口** | `Alt+F4` | `⌘+Q` |
-
-### 终端快捷键
+### 应用与窗口
 
 | 操作 | Windows/Linux | macOS |
 |------|---------------|-------|
-| **复制** | `Ctrl+Shift+C` | `⌘+C` |
-| **粘贴** | `Ctrl+Shift+V` | `⌘+V` |
-| **搜索** | `Ctrl+Shift+F` (Win) / `Ctrl+F` (Lin) | `⌘+F` |
-| **清屏** | `Ctrl+L` | `⌘+K` |
-| **AI 助手** | `Ctrl+Shift+I` (Win) / `Ctrl+I` (Lin) | `⌘+I` |
+| 新建本地终端 | `Ctrl+T` | `⌘T` |
+| Shell 选择器 | `Ctrl+Shift+T` | `⌘⇧T` |
+| 关闭当前标签 | `Ctrl+W` | `⌘W` |
+| 下一标签 / 上一标签 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | `⌘}` / `⌘{` |
+| 跳到第 N 个标签 | `Ctrl+1`–`9` | `⌘1`–`⌘9` |
+| 新建 SSH 连接 | `Ctrl+N` | `⌘N` |
+| 命令面板 | `Ctrl+K` | `⌘K` |
+| 切换侧边栏 | `Ctrl+\\` | `⌘\\` |
+| 打开设置 | `Ctrl+,` | `⌘,` |
+| Zen 模式 | `Ctrl+Shift+Z` | `⌘⇧Z` |
+| 快捷键帮助 | `Ctrl+/` | `⌘/` |
 
-### 标签管理
+**命令面板中常见补充**（以客户端显示为准）：底部面板 `Ctrl+J` / `⌘J`；广播输入 `Ctrl+B` / `⌘B`；AI 侧边栏 `Ctrl+Shift+A` / `⌘⇧A`。
 
-目前标签页仅支持点击切换。快捷键支持正在开发中。
+### 终端内（设置「终端」类）
 
-### SFTP 快捷键
+| 操作 | Windows/Linux（设置表） | macOS |
+|------|-------------------------|-------|
+| 查找 | `Ctrl+Shift+F` | `⌘F` |
+| 内联 AI 面板 | `Ctrl+Shift+I` | `⌘I` |
+| 关闭面板 | `Esc` | `Esc` |
+
+> **Linux 终端聚焦**：实际拦截多为 **Super+F / Super+I**，与上表「Ctrl+Shift」可能不同，以避免占用终端 Ctrl 组合键。
+
+### 分屏
 
 | 操作 | Windows/Linux | macOS |
 |------|---------------|-------|
-| **上传** | `ArrowRight` | `ArrowRight` |
-| **下载** | `ArrowLeft` | `ArrowLeft` |
-| **删除** | `Delete` / `Backspace` | `Delete` / `Backspace` |
-| **重命名** | `F2` | `F2` |
-| **全选** | `Ctrl+A` | `⌘+A` |
+| 横向分屏 | `Ctrl+Shift+E` | `⌘⇧E` |
+| 纵向分屏 | `Ctrl+Shift+D` | `⌘⇧D` |
+| 关闭当前窗格 | `Ctrl+Shift+W` | `⌘⇧W` |
+| 在窗格间移动焦点 | `Ctrl+Alt+方向键` | `⌘⌥+方向键` |
+
+### SFTP（摘录）
+
+| 操作 | Windows/Linux | macOS |
+|------|---------------|-------|
+| 上传 / 下载 | `→` / `←` | `→` / `←` |
+| 全选 | `Ctrl+A` | `⌘A` |
+| 重命名 | `F2` | `F2` |
+| 删除 | `Delete` | `Delete` |
 
 ---
 
-## 💡 最佳实践
+## 最佳实践
 
-### 1. 组织连接
+### 组织连接
 
-**按环境分组**：
-```
-📁 Production
-📁 Staging
-📁 Development
-📁 Personal
-```
+- 按环境使用分组（Production / Staging / Development）。  
+- 使用可辨认的命名，例如 `Prod-Web-01`，避免泛用 `server1`。  
 
-**使用有意义的名称**：
-- ✅ `Prod-Web-Server-01`
-- ❌ `server1`
+### 安全
 
-### 2. 安全管理
+- 优先 **密钥** 认证并妥善保管 Passphrase。  
+- **.oxide** 与内嵌私钥导出：强密码、加密存储介质、最小扩散。  
+- API Key（AI 等）仅存钥匙串，勿写入仓库或明文配置。  
 
-**使用密钥认证**：
-- 生成专用密钥对：`ssh-keygen -t ed25519 -C "oxideterm"`
-- 设置密钥加密（Passphrase）
-- 避免使用密码认证
+### 性能
 
-**定期轮换密钥**：
-- 每 6-12 个月更新密钥
-- 使用不同密钥访问不同环境
+- 复用连接池：同主机多标签、SFTP、转发共享一条 SSH（行为见核心参考）。  
+- 本地工作优先使用 **本地终端**。  
+- 终端渲染可在设置中在 WebGL / Canvas 间切换以排查兼容问题。  
 
-**保护 .oxide 文件**：
-- 使用强密码（推荐 20+ 字符）
-- 存储在加密云盘（iCloud, OneDrive Vault）
-- 定期备份
+### 工作流
 
-### 3. 性能优化
-
-**减少连接数**：
-- 利用连接池复用
-- 同一服务器的多个终端共享连接
-
-**使用本地终端**：
-- 本地开发优先使用本地终端
-- 避免不必要的 SSH 连接
-
-**清理空闲连接**：
-- 关闭不用的终端
-- 设置合理的空闲超时（默认 30 分钟）
-
-### 4. 工作流优化
-
-**使用会话树**：
-- 按项目组织连接
-- 折叠不常用的分组
-
-**快捷键组合**：
-- `Ctrl+Shift+I` → AI 快速帮助
-- `Ctrl+F` → 搜索日志
-
-**利用 AI 助手**：
-- 错误诊断：选中错误 → `Ctrl+I`
-- 命令生成：`Ctrl+I` → 描述需求
-- 日志分析：自动捕获上下文
+- 善用 **命令面板** 搜索不常用能力。  
+- 大日志用 **Deep History** 搜索；日常用 Visible Buffer。  
+- OxideSens 侧边栏适合工具与知识库；内联适合快速问句（见 [AICHAT.md](./AICHAT.md)）。  
 
 ---
 
-## 🐛 故障排查
+## 故障排查
 
-### 连接问题
+### 连接
 
-#### 无法连接到服务器
+- **无法连接**：检查网络、`ping`/`mtr`、端口可达、防火墙、SSH 服务与认证方式。  
+- **频繁断开**：检查 NAT/中间盒超时；应用侧 keep-alive 与服务器 `ClientAlive` 类配置可协同调整。  
 
-**可能原因**：
-- 网络不可达
-- 防火墙阻止
-- SSH 服务未运行
-- 认证失败
+### SFTP
 
-**解决步骤**：
-1. 检查网络：`ping example.com`
-2. 检查端口：`telnet example.com 22`
-3. 验证认证：检查密码/密钥
-4. 查看日志：开发者工具 → Console
+- **长时间 “Waiting for connection”**：多为 State Gating；等待重连完成或查看会话树状态，必要时手动重连。  
+- **重连后路径未恢复**：确认版本与 [OXIDETERM_CORE_REFERENCE.md — 5. SFTP](./OXIDETERM_CORE_REFERENCE.md#5-sftp-文件管理) 所述行为；可尝试手动导航并反馈问题。  
 
-#### 连接断开频繁
+### 性能与显示
 
-**可能原因**：
-- 网络不稳定
-- NAT 超时
-- 服务器超时设置
+- **输入延迟**：排查网络延迟、服务端负载；尝试 Canvas 渲染、略减小字号。  
+- **颜色异常**：切换终端主题；远端 `TERM` 建议 `xterm-256color`（视环境而定）。  
 
-**解决方案**：
-1. 启用 keep-alive（默认已启用）
-2. 检查网络质量
-3. 联系服务器管理员调整超时
-
-### v1.4.0 特有问题
-
-#### SFTP 显示 "Waiting for connection"
-
-**原因**: State Gating 机制检测到连接未就绪
-
-**解决方案**：
-1. 等待自动重连完成
-2. 检查会话树中的连接状态
-3. 如果长时间卡住，尝试手动重连
-
-#### 重连后 SFTP 路径丢失
-
-**原因**: Path Memory 未正常工作
-
-**解决方案**：
-1. 确保使用最新版本
-2. 检查浏览器控制台是否有错误
-3. 尝试手动导航
-
-### 性能问题
-
-#### 终端输入延迟高
-
-**可能原因**：
-- 网络延迟
-- 服务器负载高
-- WebGL 渲染问题
-
-**解决方案**：
-1. 检查网络延迟：`ping example.com`
-2. 切换渲染器：设置 → Terminal → Renderer → Canvas
-3. 减小字体大小
-
-#### SFTP 传输速度慢
-
-**可能原因**：
-- 网络带宽限制
-- 大量小文件
-- 压缩开销
-
-**解决方案**：
-1. 使用有线网络
-2. 压缩后传输大量小文件
-3. 分批传输
-
-### 显示问题
-
-#### 颜色显示异常
-
-**原因**: 主题不兼容
-
-**解决方案**：
-1. 切换主题：设置 → Terminal → Theme
-2. 检查 `$TERM` 环境变量
-3. 设置 `TERM=xterm-256color`
+更多已知问题见 [knownissues.md](./knownissues.md)。
 
 ---
 
-## 📚 相关文档
+## 相关文档
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - 系统架构设计 (v1.4.0 Strong Sync)
-- [CONNECTION_POOL.md](./CONNECTION_POOL.md) - 连接池与自动重连
-- [NETWORK_TOPOLOGY.md](./NETWORK_TOPOLOGY.md) - 拓扑路由与 ProxyJump
-- [TERMINAL_SEARCH.md](./TERMINAL_SEARCH.md) - 终端搜索功能
-- [LOCAL_TERMINAL.md](./LOCAL_TERMINAL.md) - 本地终端指南
-- [AI_INLINE_CHAT.md](./AI_INLINE_CHAT.md) - AI 助手使用
-- [PORT_FORWARDING.md](./PORT_FORWARDING.md) - 端口转发配置
-- [SFTP.md](./SFTP.md) - SFTP 文件传输
-- [SERIALIZATION.md](./SERIALIZATION.md) - .oxide 文件格式
-- [SYSTEM_INVARIANTS.md](./SYSTEM_INVARIANTS.md) - 系统不变量
-
----
-
-## 🙋 获取帮助
-
-### 社区支持
-
-- **GitHub Issues**: https://github.com/AnalyseDeCircuit/oxideterm/issues
-- **Discussions**: https://github.com/AnalyseDeCircuit/oxideterm/discussions
-
-### 贡献
-
-欢迎贡献代码、文档或报告问题：
-- Fork 项目并提交 PR
-- 报告 Bug 或功能请求
+| 文档 | 说明 |
+|------|------|
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | 系统架构（文头版本 v1.9.1，与约束文档对齐） |
+| [SYSTEM_INVARIANTS.md](./SYSTEM_INVARIANTS.md) | 强同步、门禁、生命周期等不变量 |
+| [PROTOCOL.md](./PROTOCOL.md) | 终端数据平面（WebSocket 帧与心跳等） |
+| [OXIDETERM_CORE_REFERENCE.md](./OXIDETERM_CORE_REFERENCE.md) | 连接池、拓扑、重连、转发、SFTP、Agent、IDE 等合订参考 |
+| [AICHAT.md](./AICHAT.md) | OxideSens 内联与侧边栏 |
+| [TERMINAL_SEARCH.md](./TERMINAL_SEARCH.md) | 终端搜索双模式 |
+| [LOCAL_TERMINAL.md](./LOCAL_TERMINAL.md) | 本地 PTY 终端 |
+| [SERIALIZATION.md](./SERIALIZATION.md) | `.oxide` 格式与加解密要点 |
+| [PLUGIN_SYSTEM.md](./PLUGIN_SYSTEM.md) / [PLUGIN_DEVELOPMENT.md](./PLUGIN_DEVELOPMENT.md) | 插件运行时与开发 |
+| [CUSTOM_THEMES.md](./CUSTOM_THEMES.md) | 自定义主题 |
+| [GRAPHICS_FORWARDING.zh-CN.md](./GRAPHICS_FORWARDING.zh-CN.md) | WSL 图形转发 |
+| [DEVELOPMENT.md](./DEVELOPMENT.md) | 开发与构建入门 |
 
 ---
 
-*文档版本: v1.9.1 (Strong Sync + Key-Driven Reset + Orchestrator + Oxide-Next) | 最后更新: 2026-02-11*
+## 获取帮助
+
+- **GitHub Issues**: https://github.com/AnalyseDeCircuit/oxideterm/issues  
+- **Discussions**: https://github.com/AnalyseDeCircuit/oxideterm/discussions  
+
+欢迎通过 Issue / PR 反馈文档与产品问题。
+
+---
+
+*文档版本: v1.9.1 | 应用参考: 0.20.1 | 最后更新: 2026-03-24*

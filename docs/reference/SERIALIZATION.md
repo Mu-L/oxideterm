@@ -543,9 +543,9 @@ serde_json::Error
 
 ## 相关文档
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - 整体架构设计 (v1.4.0 Strong Sync)
-- [PORT_FORWARDING.md](./PORT_FORWARDING.md) - 端口转发与 Link Resilience
-- [SFTP.md](./SFTP.md) - SFTP 传输与路径记忆
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - 整体架构设计（文头版本与 SYSTEM_INVARIANTS 对齐）
+- [OXIDETERM_CORE_REFERENCE.md](./OXIDETERM_CORE_REFERENCE.md#4-端口转发) - 端口转发与 Link Resilience
+- [OXIDETERM_CORE_REFERENCE.md](./OXIDETERM_CORE_REFERENCE.md#5-sftp-文件管理) - SFTP 传输与路径记忆
 - [PROTOCOL.md](./PROTOCOL.md) - 前后端通信协议
 
 ---

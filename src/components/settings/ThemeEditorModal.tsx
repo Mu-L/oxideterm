@@ -250,8 +250,10 @@ export const ThemeEditorModal = ({ open, onOpenChange, editThemeId, baseThemeId 
     // Background
     bg: '#09090b', bgPanel: '#18181b', bgHover: '#27272a',
     bgActive: '#3f3f46', bgSecondary: '#1c1c20',
+    bgElevated: '#1f1f23', bgSunken: '#050506',
     // Text
     text: '#f4f4f5', textMuted: '#a1a1aa', textSecondary: '#71717a',
+    textHeading: '#fafafa',
     // Border
     border: '#27272a', borderStrong: '#3f3f46', divider: '#27272a',
     // Accent
@@ -259,6 +261,8 @@ export const ThemeEditorModal = ({ open, onOpenChange, editThemeId, baseThemeId 
     accentText: '#ffffff', accentSecondary: '#f97316',
     // Semantic
     success: '#22c55e', warning: '#eab308', error: '#ef4444', info: '#3b82f6',
+    // Selection
+    selection: 'rgba(234, 88, 12, 0.25)',
   });
   const [activeSection, setActiveSection] = useState<'terminal' | 'ui'>('terminal');
 

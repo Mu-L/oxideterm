@@ -12,10 +12,13 @@ export type AppUiColors = {
   bgHover: string;
   bgActive: string;
   bgSecondary: string;
+  bgElevated: string;
+  bgSunken: string;
   // ── Text Layer (文字层级) ──
   text: string;
   textMuted: string;
   textSecondary: string;
+  textHeading: string;
   // ── Border Layer (边框层级) ──
   border: string;
   borderStrong: string;
@@ -30,6 +33,8 @@ export type AppUiColors = {
   warning: string;
   error: string;
   info: string;
+  // ── Selection ──
+  selection: string;
 };
 
 /** A user-created custom theme (terminal colors + app UI colors) */
@@ -206,10 +211,13 @@ export function deriveUiColorsFromTerminal(t: ITheme): AppUiColors {
     bgHover: shift(bg, 30),
     bgActive: shift(bg, 40),
     bgSecondary: shift(bg, 10),
+    bgElevated: shift(bg, 22),
+    bgSunken: shift(bg, -10),
     // Text
     text: fg,
     textMuted: muted,
     textSecondary: mix(fg, muted, 0.5),
+    textHeading: shift(fg, 8),
     // Border
     border: shift(bg, 30),
     borderStrong: mix(cursor, fg, 0.6),
@@ -224,6 +232,8 @@ export function deriveUiColorsFromTerminal(t: ITheme): AppUiColors {
     warning: (t.yellow as string) || '#eab308',
     error: (t.red as string) || '#ef4444',
     info: (t.blue as string) || '#3b82f6',
+    // Selection
+    selection: `rgba(${parseInt(cursor.slice(1, 3), 16)}, ${parseInt(cursor.slice(3, 5), 16)}, ${parseInt(cursor.slice(5, 7), 16)}, 0.25)`,
   };
 }
 
@@ -235,10 +245,13 @@ const UI_CSS_PROPS: [keyof AppUiColors, string][] = [
   ['bgHover', '--theme-bg-hover'],
   ['bgActive', '--theme-bg-active'],
   ['bgSecondary', '--theme-bg-secondary'],
+  ['bgElevated', '--theme-bg-elevated'],
+  ['bgSunken', '--theme-bg-sunken'],
   // Text
   ['text', '--theme-text'],
   ['textMuted', '--theme-text-muted'],
   ['textSecondary', '--theme-text-secondary'],
+  ['textHeading', '--theme-text-heading'],
   // Border
   ['border', '--theme-border'],
   ['borderStrong', '--theme-border-strong'],
@@ -253,6 +266,8 @@ const UI_CSS_PROPS: [keyof AppUiColors, string][] = [
   ['warning', '--theme-warning'],
   ['error', '--theme-error'],
   ['info', '--theme-info'],
+  // Selection
+  ['selection', '--theme-selection'],
 ];
 
 /**

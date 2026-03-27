@@ -34,18 +34,20 @@
       "created": "Erstellt: {{time}}",
       "idle_hint": "Inaktiv - {{keepAlive}}",
       "keep_alive_enabled": "Keep Alive",
-      "disconnect_in": "Trennung in 30 Min."
+      "disconnect_in": "Trennung in {{min}} Min."
     },
     "keep_alive": {
       "enable_tooltip": "Keep Alive aktivieren (Nie trennen)",
-      "disable_tooltip": "Keep Alive deaktivieren (Nach 30 Min. Inaktivität trennen)",
+      "disable_tooltip": "Keep Alive deaktivieren (Nach {{min}} Min. Inaktivität trennen)",
       "legend_enabled": "Keep Alive: Nie automatisch trennen",
-      "legend_disabled": "Standard: Nach 30 Min. Inaktivität automatisch trennen"
+      "legend_disabled": "Standard: Nach {{min}} Min. Inaktivität automatisch trennen",
+      "global_never_tooltip": "Globale Einstellung: Kein Timeout"
     },
     "monitor": {
       "title": "Verbindungspool",
       "loading": "Statistiken werden geladen...",
       "idle_timeout": "Inaktiv: {{min}} Min.",
+      "idle_timeout_never": "Inaktiv: Kein Timeout",
       "capacity": "Kapazität: {{capacity}}",
       "active": "Aktiv",
       "idle": "Inaktiv",

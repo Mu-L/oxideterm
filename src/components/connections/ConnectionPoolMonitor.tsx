@@ -166,6 +166,9 @@ export function ConnectionPoolMonitor({
 
   // Full panel mode
   const idleTimeoutMin = Math.round(stats.idleTimeoutSecs / 60);
+  const idleTimeoutLabel = stats.idleTimeoutSecs === 0
+    ? t('connections.monitor.idle_timeout_never')
+    : t('connections.monitor.idle_timeout', { min: idleTimeoutMin });
   const capacityLabel = stats.poolCapacity === 0 ? '∞' : stats.poolCapacity.toString();
 
   return (
@@ -175,7 +178,7 @@ export function ConnectionPoolMonitor({
         <h3 className="text-sm font-semibold">{t('connections.monitor.title')}</h3>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Clock className="h-3.5 w-3.5" />
-          <span>{t('connections.monitor.idle_timeout', { min: idleTimeoutMin })}</span>
+          <span>{idleTimeoutLabel}</span>
           <span>•</span>
           <span>{t('connections.monitor.capacity', { capacity: capacityLabel })}</span>
         </div>

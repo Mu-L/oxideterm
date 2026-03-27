@@ -34,18 +34,20 @@
       "created": "Créé : {{time}}",
       "idle_hint": "Inactif - {{keepAlive}}",
       "keep_alive_enabled": "Maintien en vie",
-      "disconnect_in": "Déconnexion dans 30 min"
+      "disconnect_in": "Déconnexion dans {{min}} min"
     },
     "keep_alive": {
       "enable_tooltip": "Activer le maintien en vie (jamais déconnecter)",
-      "disable_tooltip": "Désactiver le maintien en vie (déconnecter après 30 min d'inactivité)",
+      "disable_tooltip": "Désactiver le maintien en vie (déconnecter après {{min}} min d'inactivité)",
       "legend_enabled": "Maintien en vie : jamais de déconnexion automatique",
-      "legend_disabled": "Standard : déconnexion automatique après 30 min d'inactivité"
+      "legend_disabled": "Standard : déconnexion automatique après {{min}} min d'inactivité",
+      "global_never_tooltip": "Paramètre global : pas de délai d'expiration"
     },
     "monitor": {
       "title": "Pool de connexions",
       "loading": "Chargement des statistiques...",
       "idle_timeout": "Inactif : {{min}} min",
+      "idle_timeout_never": "Inactif : jamais",
       "capacity": "Capacité : {{capacity}}",
       "active": "Actif",
       "idle": "Inactif",

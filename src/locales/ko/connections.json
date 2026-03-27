@@ -34,18 +34,20 @@
       "created": "생성: {{time}}",
       "idle_hint": "유휴 - {{keepAlive}}",
       "keep_alive_enabled": "Keep Alive",
-      "disconnect_in": "30분 후 연결 해제"
+      "disconnect_in": "{{min}}분 후 연결 해제"
     },
     "keep_alive": {
       "enable_tooltip": "Keep Alive 활성화 (자동 연결 해제 안함)",
-      "disable_tooltip": "Keep Alive 비활성화 (30분 유휴 후 연결 해제)",
+      "disable_tooltip": "Keep Alive 비활성화 ({{min}}분 유휴 후 연결 해제)",
       "legend_enabled": "Keep Alive: 자동 연결 해제 안함",
-      "legend_disabled": "표준: 30분 유휴 후 자동 연결 해제"
+      "legend_disabled": "표준: {{min}}분 유휴 후 자동 연결 해제",
+      "global_never_tooltip": "전역 설정: 시간 초과 없음"
     },
     "monitor": {
       "title": "연결 풀",
       "loading": "통계 로딩 중...",
       "idle_timeout": "유휴: {{min}}분",
+      "idle_timeout_never": "유휴: 시간 초과 없음",
       "capacity": "용량: {{capacity}}",
       "active": "활성",
       "idle": "유휴",

@@ -34,18 +34,20 @@
       "created": "Tạo lúc: {{time}}",
       "idle_hint": "Rảnh - {{keepAlive}}",
       "keep_alive_enabled": "Keep Alive",
-      "disconnect_in": "Ngắt kết nối sau 30 phút"
+      "disconnect_in": "Ngắt kết nối sau {{min}} phút"
     },
     "keep_alive": {
       "enable_tooltip": "Bật Keep Alive (Không bao giờ ngắt kết nối)",
-      "disable_tooltip": "Tắt Keep Alive (Ngắt kết nối sau 30 phút rảnh)",
+      "disable_tooltip": "Tắt Keep Alive (Ngắt kết nối sau {{min}} phút rảnh)",
       "legend_enabled": "Keep Alive: Không tự động ngắt kết nối",
-      "legend_disabled": "Tiêu chuẩn: Tự động ngắt kết nối sau 30 phút rảnh"
+      "legend_disabled": "Tiêu chuẩn: Tự động ngắt kết nối sau {{min}} phút rảnh",
+      "global_never_tooltip": "Cài đặt toàn cầu: không giới hạn thời gian"
     },
     "monitor": {
       "title": "Nhóm kết nối",
       "loading": "Đang tải thống kê...",
       "idle_timeout": "Rảnh: {{min}} phút",
+      "idle_timeout_never": "Rảnh: không giới hạn",
       "capacity": "Dung lượng: {{capacity}}",
       "active": "Hoạt động",
       "idle": "Rảnh",

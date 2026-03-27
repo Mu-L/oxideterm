@@ -34,18 +34,20 @@
       "created": "创建: {{time}}",
       "idle_hint": "空闲 - {{keepAlive}}",
       "keep_alive_enabled": "保持连接",
-      "disconnect_in": "30分钟后断开"
+      "disconnect_in": "{{min}}分钟后断开"
     },
     "keep_alive": {
       "enable_tooltip": "启用保持连接（永不断开）",
-      "disable_tooltip": "禁用保持连接（空闲30分钟后断开）",
+      "disable_tooltip": "禁用保持连接（空闲{{min}}分钟后断开）",
       "legend_enabled": "保持连接: 永不自动断开",
-      "legend_disabled": "标准: 空闲30分钟后自动断开"
+      "legend_disabled": "标准: 空闲{{min}}分钟后自动断开",
+      "global_never_tooltip": "全局设置: 永不超时"
     },
     "monitor": {
       "title": "连接池",
       "loading": "加载统计中...",
       "idle_timeout": "空闲: {{min}}分钟",
+      "idle_timeout_never": "空闲: 永不超时",
       "capacity": "容量: {{capacity}}",
       "active": "活动",
       "idle": "空闲",

@@ -13,6 +13,7 @@ import {
 import { useAppStore } from '../../store/appStore';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
+import { api } from '../../lib/api';
 import { SshConnectionInfo, SshConnectionState } from '../../types';
 import { useTabBgActive } from '../../hooks/useTabBackground';
 
@@ -63,7 +64,8 @@ const useFormatTime = () => {
 const ConnectionCard: React.FC<{
   connection: SshConnectionInfo;
   onToggleKeepAlive: (connectionId: string, keepAlive: boolean) => void;
-}> = ({ connection, onToggleKeepAlive }) => {
+  idleTimeoutSecs: number;
+}> = ({ connection, onToggleKeepAlive, idleTimeoutSecs }) => {
   const { t } = useTranslation();
   const formatState = useFormatState();
   const formatTime = useFormatTime();
@@ -71,6 +73,8 @@ const ConnectionCard: React.FC<{
   const { text: stateText, color: stateColor } = formatState(connection.state);
   const isIdle = connection.state === 'idle';
   const isActive = connection.state === 'active';
+  const globalNeverTimeout = idleTimeoutSecs === 0;
+  const idleTimeoutMin = Math.round(idleTimeoutSecs / 60);
   
   return (
     <div className={cn(
@@ -98,9 +102,16 @@ const ConnectionCard: React.FC<{
           size="icon"
           className="h-8 w-8"
           onClick={() => onToggleKeepAlive(connection.id, !connection.keepAlive)}
-          title={connection.keepAlive ? t('connections.keep_alive.disable_tooltip') : t('connections.keep_alive.enable_tooltip')}
+          disabled={globalNeverTimeout}
+          title={
+            globalNeverTimeout
+              ? t('connections.keep_alive.global_never_tooltip')
+              : connection.keepAlive
+                ? t('connections.keep_alive.disable_tooltip', { min: idleTimeoutMin })
+                : t('connections.keep_alive.enable_tooltip')
+          }
         >
-          {connection.keepAlive ? (
+          {globalNeverTimeout || connection.keepAlive ? (
             <Shield className="h-4 w-4 text-green-400" />
           ) : (
             <ShieldOff className="h-4 w-4 text-zinc-500" />
@@ -133,9 +144,9 @@ const ConnectionCard: React.FC<{
         {isIdle && (
           <span className="text-amber-400">
             {t('connections.panel.idle_hint', { 
-              keepAlive: connection.keepAlive 
+              keepAlive: (globalNeverTimeout || connection.keepAlive)
                 ? t('connections.panel.keep_alive_enabled') 
-                : t('connections.panel.disconnect_in') 
+                : t('connections.panel.disconnect_in', { min: idleTimeoutMin }) 
             })}
           </span>
         )}
@@ -155,16 +166,30 @@ export const ConnectionsPanel: React.FC = () => {
   } = useAppStore();
   
   const [loading, setLoading] = React.useState(false);
+  const [idleTimeoutSecs, setIdleTimeoutSecs] = React.useState(1800);
   
   // Load connection list
   useEffect(() => {
     refreshConnections();
   }, [refreshConnections]);
-  
+
+  const loadPoolConfig = React.useCallback(() => {
+    api.sshGetPoolConfig().then(config => {
+      setIdleTimeoutSecs(config.idleTimeoutSecs);
+    }).catch(err => {
+      console.error('Failed to load pool config:', err);
+    });
+  }, []);
+
+  useEffect(() => {
+    loadPoolConfig();
+  }, [loadPoolConfig]);
+
   const handleRefresh = async () => {
     setLoading(true);
     try {
       await refreshConnections();
+      loadPoolConfig();
     } finally {
       setLoading(false);
     }
@@ -216,6 +241,7 @@ export const ConnectionsPanel: React.FC = () => {
                 key={conn.id}
                 connection={conn}
                 onToggleKeepAlive={handleToggleKeepAlive}
+                idleTimeoutSecs={idleTimeoutSecs}
               />
             ))}
           </div>
@@ -230,7 +256,11 @@ export const ConnectionsPanel: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <ShieldOff className="h-4 w-4 text-zinc-500" />
-          <span>{t('connections.keep_alive.legend_disabled')}</span>
+          <span>{
+            idleTimeoutSecs === 0
+              ? t('connections.keep_alive.global_never_tooltip')
+              : t('connections.keep_alive.legend_disabled', { min: Math.round(idleTimeoutSecs / 60) })
+          }</span>
         </div>
       </div>
     </div>

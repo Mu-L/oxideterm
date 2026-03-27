@@ -77,6 +77,7 @@ const HEARTBEAT_FAIL_THRESHOLD: u32 = 2;
 
 /// 连接池配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectionPoolConfig {
     /// 空闲超时时间（秒）
     #[serde(default = "default_idle_timeout_secs")]

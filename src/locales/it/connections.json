@@ -34,18 +34,20 @@
       "created": "Creata: {{time}}",
       "idle_hint": "Inattiva - {{keepAlive}}",
       "keep_alive_enabled": "Keep Alive",
-      "disconnect_in": "Disconnessione in 30m"
+      "disconnect_in": "Disconnessione in {{min}}m"
     },
     "keep_alive": {
       "enable_tooltip": "Abilita Keep Alive (Mai disconnettere)",
-      "disable_tooltip": "Disabilita Keep Alive (Disconnetti dopo 30m inattività)",
+      "disable_tooltip": "Disabilita Keep Alive (Disconnetti dopo {{min}}m inattività)",
       "legend_enabled": "Keep Alive: Mai disconnettere automaticamente",
-      "legend_disabled": "Standard: Disconnetti automaticamente dopo 30 min inattività"
+      "legend_disabled": "Standard: Disconnetti automaticamente dopo {{min}} min inattività",
+      "global_never_tooltip": "Impostazione globale: nessun timeout"
     },
     "monitor": {
       "title": "Pool Connessioni",
       "loading": "Caricamento statistiche...",
       "idle_timeout": "Inattiva: {{min}}min",
+      "idle_timeout_never": "Inattiva: nessun timeout",
       "capacity": "Capacità: {{capacity}}",
       "active": "Attive",
       "idle": "Inattive",

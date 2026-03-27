@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.20.2-blue" alt="Versão">
+  <img src="https://img.shields.io/badge/version-0.20.3-blue" alt="Versão">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Plataforma">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="Licença">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">

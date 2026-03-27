@@ -164,7 +164,7 @@ DashMap 기반 참조 카운트 `SshConnectionRegistry`:
 
 - 여러 터미널, SFTP, 포트 포워드가 **하나의 물리적 SSH 연결** 공유
 - 연결별 독립 상태 머신 (connecting → active → idle → link_down → reconnecting)
-- 유휴 타임아웃 (30분), keep-alive (15초), 하트비트 장애 감지
+- 유휴 타임아웃 (설정 가능: 5분 / 15분 / 30분 / 1시간 / 없음), keep-alive (15초), 하트비트 장애 감지
 - WsBridge 로컬 하트비트: 30초 간격, 5분 타임아웃 (App Nap 허용)
 - 유휴 타임아웃 연결 해제 시 프론트엔드 알림을 위해 `connection_status_changed` 이벤트 전송
 - 캐스케이드 전파: 점프 호스트 다운 → 모든 다운스트림 노드 `link_down` 표시

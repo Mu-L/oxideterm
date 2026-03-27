@@ -164,7 +164,7 @@ Carga dinámica de plugins con API congelada y reforzada en seguridad:
 
 - Múltiples terminales, SFTP y reenvíos de puertos comparten **una sola conexión SSH física**
 - Máquinas de estado independientes por conexión (connecting → active → idle → link_down → reconnecting)
-- Tiempo de inactividad (30 min), keep-alive (15s), detección de fallos por heartbeat
+- Tiempo de inactividad (configurable: 5min / 15min / 30min / 1h / nunca), keep-alive (15s), detección de fallos por heartbeat
 - Heartbeat local del WsBridge: intervalo de 30s, timeout de 5 min (tolera App Nap)
 - La desconexión por inactividad emite `connection_status_changed` para notificar al frontend
 - Propagación en cascada: host de salto caído → todos los nodos aguas abajo marcados como `link_down`

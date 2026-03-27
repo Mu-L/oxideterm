@@ -164,7 +164,7 @@ Reference-counted `SshConnectionRegistry` with DashMap:
 
 - Multiple terminals, SFTP, port forwards share **one physical SSH connection**
 - Independent state machines per connection (connecting → active → idle → link_down → reconnecting)
-- Idle timeout (30 min), keep-alive (15s), heartbeat failure detection
+- Idle timeout (configurable: 5m / 15m / 30m / 1h / never), keep-alive (15s), heartbeat failure detection
 - WsBridge local heartbeat: 30s interval, 5 min timeout (tolerates App Nap)
 - Idle timeout disconnect emits `connection_status_changed` to notify frontend
 - Cascade propagation: jump host down → all downstream nodes marked `link_down`

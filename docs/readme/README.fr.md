@@ -164,7 +164,7 @@ Chargement dynamique de plugins avec API gelée et sécurisée :
 
 - Plusieurs terminaux, SFTP, redirections partagent **une seule connexion SSH physique**
 - Machines d'état indépendantes par connexion
-- Timeout d'inactivité (30 min), keep-alive (15s), détection de pannes par heartbeat
+- Timeout d'inactivité (configurable : 5min / 15min / 30min / 1h / jamais), keep-alive (15s), détection de pannes par heartbeat
 - Propagation en cascade : bastion down → tous les nœuds en aval marqués `link_down`
 
 ### 🔀 Redirection de ports — I/O sans verrou

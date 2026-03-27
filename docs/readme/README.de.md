@@ -164,7 +164,7 @@ Referenzgezählte `SshConnectionRegistry` mit DashMap:
 
 - Mehrere Terminals, SFTP, Portweiterleitungen teilen sich **eine einzige physische SSH-Verbindung**
 - Unabhängige Zustandsmaschinen pro Verbindung (connecting → active → idle → link_down → reconnecting)
-- Leerlauf-Timeout (30 Min.), Keep-Alive (15s), Heartbeat-Fehlererkennung
+- Leerlauf-Timeout (konfigurierbar: 5Min. / 15Min. / 30Min. / 1Std. / nie), Keep-Alive (15s), Heartbeat-Fehlererkennung
 - WsBridge lokaler Heartbeat: 30s-Intervall, 5 Min. Timeout (toleriert App Nap)
 - Leerlauf-Timeout-Trennung sendet `connection_status_changed` an das Frontend
 - Kaskadenpropagation: Jump-Host ausgefallen → alle nachgelagerten Knoten als `link_down` markiert

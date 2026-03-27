@@ -164,7 +164,7 @@ Tải plugin động với API được đóng băng và bảo mật:
 
 - Nhiều terminal, SFTP, chuyển tiếp cổng dùng chung **một kết nối SSH vật lý**
 - Máy trạng thái độc lập cho mỗi kết nối (connecting → active → idle → link_down → reconnecting)
-- Thời gian chờ nhàn rỗi (30 phút), keep-alive (15 giây), phát hiện lỗi heartbeat
+- Thời gian chờ nhàn rỗi (có thể cấu hình: 5 phút / 15 phút / 30 phút / 1 giờ / không giới hạn), keep-alive (15 giây), phát hiện lỗi heartbeat
 - WsBridge heartbeat cục bộ: chu kỳ 30 giây, thời gian chờ 5 phút (chịu được App Nap)
 - Ngắt kết nối khi hết thời gian nhàn rỗi phát sự kiện `connection_status_changed` để thông báo frontend
 - Lan truyền cascade: jump host gặp sự cố → tất cả node hạ nguồn được đánh dấu `link_down`

@@ -164,7 +164,7 @@ impl Signer for AgentSigner { /* 通過 Agent IPC 完成挑戰-回應簽章 */ }
 
 - 多終端、SFTP、連接埠轉發共享**同一條實體 SSH 連線**
 - 每連線獨立狀態機（connecting → active → idle → link_down → reconnecting）
-- 閒置逾時 (30 分鐘)、心跳保活 (15 秒)、心跳驅動的故障偵測
+- 閒置逾時（可設定：5 分鐘 / 15 分鐘 / 30 分鐘 / 1 小時 / 永不逾時）、心跳保活 (15 秒)、心跳驅動的故障偵測
 - WsBridge 本地心跳：30 秒間隔、5 分鐘逾時（容忍 App Nap）
 - 閒置逾時斷線發 `connection_status_changed` 事件通知前端
 - 級聯傳播：跳板機斷線 → 所有下游節點標記 `link_down`

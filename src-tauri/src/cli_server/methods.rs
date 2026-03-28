@@ -8,15 +8,16 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc;
 
 use super::protocol;
-use crate::bridge::BridgeManager;
+use crate::bridge::{BridgeManager, WsBridge};
 use crate::commands::config::ConfigState;
 use crate::commands::forwarding::ForwardingRegistry;
 use crate::commands::{HealthRegistry, ProfilerRegistry};
 use crate::session::SessionRegistry;
 use crate::sftp::session::SftpRegistry;
-use crate::ssh::SshConnectionRegistry;
+use crate::ssh::{ExtendedSessionHandle, SessionCommand, SshConnectionRegistry};
 
 /// Dispatch a JSON-RPC method call to the appropriate handler.
 pub async fn dispatch(
@@ -41,6 +42,7 @@ pub async fn dispatch(
         "open_tab" => open_tab(app, params).await,
         "focus_tab" => focus_tab(app, params).await,
         "list_local_terminals" => list_local_terminals(app).await,
+        "attach" => attach(app, params).await,
         _ => Err((
             protocol::ERR_METHOD_NOT_FOUND,
             format!("Method not found: {method}"),
@@ -1291,4 +1293,125 @@ async fn call_anthropic<W: AsyncWriteExt + Unpin>(
     }
 
     Ok(json!({ "text": full_text, "model": model, "done": true }))
+}
+
+/// Attach a CLI client to an existing session (SSH or local terminal).
+///
+/// Creates a new WsBridge for the CLI, allowing it to mirror the session
+/// while the GUI continues running independently. Both share the same
+/// underlying data channels (mpsc for input, broadcast for output).
+async fn attach(app: &tauri::AppHandle, params: Value) -> Result<Value, (i32, String)> {
+    let session_id = params
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .ok_or((protocol::ERR_INVALID_PARAMS, "session_id required".to_string()))?;
+
+    // Try SSH session first
+    if let Some(session_registry) = app.try_state::<Arc<SessionRegistry>>() {
+        if let (Some(cmd_tx), Some(output_tx)) = (
+            session_registry.get_cmd_tx(session_id),
+            session_registry.get_output_tx(session_id),
+        ) {
+            let scroll_buffer = session_registry
+                .with_session(session_id, |entry| entry.scroll_buffer.clone())
+                .ok_or((
+                    protocol::ERR_NOT_CONNECTED,
+                    format!("Session {session_id} not found"),
+                ))?;
+
+            let (cols, rows) = session_registry
+                .get_session_dims(session_id)
+                .unwrap_or((80, 24));
+
+            // Create an adapter channel that intercepts Close commands.
+            // This prevents ExtendedSessionHandle::drop() from killing
+            // the real SSH session when the CLI client disconnects.
+            let (adapter_tx, mut adapter_rx) = mpsc::channel::<SessionCommand>(1024);
+            let real_cmd_tx = cmd_tx.clone();
+            let sid_clone = session_id.to_string();
+            tokio::spawn(async move {
+                while let Some(cmd) = adapter_rx.recv().await {
+                    match cmd {
+                        SessionCommand::Close => {
+                            tracing::debug!(
+                                "CLI attach adapter: close for SSH {} (ignored)",
+                                sid_clone
+                            );
+                            break;
+                        }
+                        SessionCommand::Resize(_c, _r) => {
+                            tracing::debug!(
+                                "CLI attach adapter: resize ignored for mirror SSH {}",
+                                sid_clone
+                            );
+                        }
+                        other => {
+                            if real_cmd_tx.send(other).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                tracing::debug!("CLI attach adapter stopped for SSH session");
+            });
+
+            let handle = ExtendedSessionHandle {
+                id: session_id.to_string(),
+                cmd_tx: adapter_tx,
+                stdout_rx: output_tx.subscribe(),
+            };
+
+            let (_sid, port, token, _disconnect_rx) =
+                WsBridge::start_extended_with_disconnect(handle, scroll_buffer, true)
+                    .await
+                    .map_err(|e| (protocol::ERR_INTERNAL, format!("Bridge start failed: {e}")))?;
+
+            tracing::info!("CLI attach: SSH session {} → ws port {}", session_id, port);
+
+            return Ok(json!({
+                "ws_url": format!("ws://localhost:{}", port),
+                "ws_token": token,
+                "session_id": session_id,
+                "cols": cols,
+                "rows": rows,
+                "terminal_type": "ssh",
+            }));
+        }
+    }
+
+    // Try local terminal
+    #[cfg(feature = "local-terminal")]
+    {
+        if let Some(state) = app.try_state::<Arc<crate::commands::local::LocalTerminalState>>() {
+            let result = state.registry.attach_for_cli(session_id).await;
+            if let Ok((handle, scroll_buffer, cols, rows)) = result {
+                let (_sid, port, token, _disconnect_rx) =
+                    WsBridge::start_extended_with_disconnect(handle, scroll_buffer, true)
+                        .await
+                        .map_err(|e| {
+                            (protocol::ERR_INTERNAL, format!("Bridge start failed: {e}"))
+                        })?;
+
+                tracing::info!(
+                    "CLI attach: local terminal {} → ws port {}",
+                    session_id,
+                    port
+                );
+
+                return Ok(json!({
+                    "ws_url": format!("ws://localhost:{}", port),
+                    "ws_token": token,
+                    "session_id": session_id,
+                    "cols": cols,
+                    "rows": rows,
+                    "terminal_type": "local",
+                }));
+            }
+        }
+    }
+
+    Err((
+        protocol::ERR_NOT_CONNECTED,
+        format!("Session not found: {session_id}"),
+    ))
 }

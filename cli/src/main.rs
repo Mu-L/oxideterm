@@ -4,8 +4,11 @@
 //! (Unix Domain Socket on macOS/Linux, Named Pipe on Windows).
 
 mod connect;
+mod escape;
 mod output;
 mod protocol;
+mod terminal;
+mod wire;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
@@ -124,6 +127,12 @@ enum Commands {
 
     /// Focus an existing session tab
     Focus {
+        /// Session ID or name (omit to list available sessions)
+        target: Option<String>,
+    },
+
+    /// Attach to a running session (mirror terminal I/O)
+    Attach {
         /// Session ID or name (omit to list available sessions)
         target: Option<String>,
     },
@@ -487,6 +496,9 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<(), String> {
             let resp = conn.call("ping", serde_json::json!({}))?;
             out.print_json(&resp);
         }
+        Commands::Attach { target } => {
+            return run_attach(&mut conn, out, target.as_deref());
+        }
         Commands::Version | Commands::Completions { .. } => unreachable!(),
     }
 
@@ -613,4 +625,406 @@ fn read_stdin() -> Result<String, String> {
         .read_to_string(&mut buf)
         .map_err(|e| format!("Failed to read stdin: {e}"))?;
     Ok(buf)
+}
+
+/// Resolve a target to a session ID, checking both SSH and local sessions.
+fn resolve_any_session_id(
+    conn: &mut connect::IpcConnection,
+    target: &str,
+) -> Result<String, String> {
+    // Try SSH sessions first
+    if let Ok(id) = resolve_session_id(conn, target) {
+        return Ok(id);
+    }
+
+    // Try local terminals
+    let locals = conn
+        .call("list_local_terminals", serde_json::json!({}))
+        .unwrap_or(serde_json::json!([]));
+    if let Some(items) = locals.as_array() {
+        // Exact ID match
+        if let Some(s) = items.iter().find(|s| s.get("id").and_then(|v| v.as_str()) == Some(target)) {
+            return Ok(s["id"].as_str().unwrap().to_string());
+        }
+        // Shell name match
+        if let Some(s) = items.iter().find(|s| {
+            s.get("shell_name").and_then(|v| v.as_str()) == Some(target)
+                || s.get("shell_id").and_then(|v| v.as_str()) == Some(target)
+        }) {
+            return Ok(s["id"].as_str().unwrap().to_string());
+        }
+        // Partial ID match
+        if let Some(s) = items.iter().find(|s| {
+            s.get("id")
+                .and_then(|v| v.as_str())
+                .map(|id| id.starts_with(target))
+                .unwrap_or(false)
+        }) {
+            return Ok(s["id"].as_str().unwrap().to_string());
+        }
+    }
+
+    Err(format!("Session not found: {target}"))
+}
+
+/// Main entry point for `oxt attach`.
+fn run_attach(
+    conn: &mut connect::IpcConnection,
+    out: &output::OutputMode,
+    target: Option<&str>,
+) -> Result<(), String> {
+    // If no target, list available sessions
+    let session_id = match target {
+        Some(t) => resolve_any_session_id(conn, t)?,
+        None => {
+            let sessions = conn
+                .call("list_sessions", serde_json::json!({}))
+                .unwrap_or(serde_json::json!([]));
+            let locals = conn
+                .call("list_local_terminals", serde_json::json!({}))
+                .unwrap_or(serde_json::json!([]));
+            let ssh_items = sessions.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let local_items = locals.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let total = ssh_items.len() + local_items.len();
+
+            if total == 0 {
+                return Err("No active sessions to attach to.".to_string());
+            }
+            if total == 1 {
+                let id = if let Some(s) = ssh_items.first() {
+                    s.get("id").and_then(|v| v.as_str()).unwrap_or("")
+                } else {
+                    local_items[0]
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                };
+                eprintln!("Auto-attaching to only session: {id}");
+                id.to_string()
+            } else {
+                eprintln!("Multiple active sessions — specify a target:\n");
+                if !ssh_items.is_empty() {
+                    eprintln!("  SSH Sessions:");
+                    out.print_sessions(&sessions);
+                }
+                if !local_items.is_empty() {
+                    eprintln!("\n  Local Terminals:");
+                    out.print_local_terminals(&locals);
+                }
+                eprintln!("\nUsage: oxt attach <SESSION-ID-OR-NAME>");
+                std::process::exit(1);
+            }
+        }
+    };
+
+    // Call the attach RPC
+    let resp = conn.call("attach", serde_json::json!({ "session_id": session_id }))?;
+
+    let ws_url = resp
+        .get("ws_url")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing ws_url in response")?;
+    let ws_token = resp
+        .get("ws_token")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing ws_token in response")?;
+    let terminal_type = resp
+        .get("terminal_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("ssh");
+    let cols = resp.get("cols").and_then(|v| v.as_u64()).unwrap_or(80) as u16;
+    let rows = resp.get("rows").and_then(|v| v.as_u64()).unwrap_or(24) as u16;
+
+    eprintln!(
+        "Attaching to {} session {} ({}x{}) — type ~? for help, ~. to detach",
+        terminal_type, session_id, cols, rows
+    );
+
+    // Connect WebSocket. Use a short read timeout so ws.read() returns
+    // WouldBlock quickly when no data is available, keeping the event
+    // loop responsive.
+    let host_port = ws_url
+        .strip_prefix("ws://")
+        .ok_or("Invalid ws_url scheme")?;
+    let tcp_stream = std::net::TcpStream::connect(host_port)
+        .map_err(|e| format!("TCP connection failed: {e}"))?;
+    // Handshake needs enough time; set timeout after handshake.
+    let (mut ws, _response) =
+        tungstenite::client(format!("ws://{host_port}/"), &tcp_stream)
+            .map_err(|e| format!("WebSocket handshake failed: {e}"))?;
+
+    // Authenticate: send token as first text message
+    ws.send(tungstenite::Message::Text(ws_token.to_string()))
+        .map_err(|e| format!("WebSocket auth failed: {e}"))?;
+
+    // Now set a short read timeout for the event loop
+    tcp_stream
+        .set_read_timeout(Some(std::time::Duration::from_millis(10)))
+        .map_err(|e| format!("Failed to set read timeout: {e}"))?;
+
+    // Enter raw mode
+    let _raw_guard = terminal::RawModeGuard::enter()?;
+
+    // Send initial resize to match CLI terminal size
+    let (cli_cols, cli_rows) = terminal::get_terminal_size();
+    let mut resize_buf = Vec::new();
+    wire::encode_resize(cli_cols, cli_rows, &mut resize_buf);
+    ws.send(tungstenite::Message::Binary(resize_buf))
+        .map_err(|e| format!("Failed to send resize: {e}"))?;
+
+    // Single-threaded event loop using poll() on Unix.
+    // This avoids the Arc<Mutex<WebSocket>> contention that starved
+    // the writer thread in the previous two-thread design.
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::io::AsRawFd;
+
+        let stdin_fd = libc::STDIN_FILENO;
+        let ws_fd = tcp_stream.as_raw_fd();
+
+        // Set up SIGWINCH pipe for resize notifications
+        let mut sigwinch_fds = [0i32; 2];
+        if unsafe { libc::pipe(sigwinch_fds.as_mut_ptr()) } != 0 {
+            return Err("Failed to create SIGWINCH pipe".to_string());
+        }
+        let sigwinch_read_fd = sigwinch_fds[0];
+        let sigwinch_write_fd = sigwinch_fds[1];
+        unsafe {
+            let flags = libc::fcntl(sigwinch_read_fd, libc::F_GETFL);
+            libc::fcntl(sigwinch_read_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
+        terminal::install_sigwinch_handler(sigwinch_write_fd);
+
+        let mut escape = escape::EscapeDetector::new();
+        let mut stdout = std::io::stdout();
+        let mut last_activity = std::time::Instant::now();
+        const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(330);
+
+        'event_loop: loop {
+            // Check idle timeout
+            if last_activity.elapsed() > IDLE_TIMEOUT {
+                eprintln!("\r\nConnection timed out (no data received).\r\n");
+                break;
+            }
+
+            let mut pollfds = [
+                libc::pollfd { fd: stdin_fd, events: libc::POLLIN, revents: 0 },
+                libc::pollfd { fd: sigwinch_read_fd, events: libc::POLLIN, revents: 0 },
+                libc::pollfd { fd: ws_fd, events: libc::POLLIN, revents: 0 },
+            ];
+
+            let ret = unsafe { libc::poll(pollfds.as_mut_ptr(), 3, 100) };
+            if ret < 0 {
+                continue; // EINTR from signals
+            }
+
+            // ── WebSocket readable ──
+            if pollfds[2].revents & (libc::POLLIN | libc::POLLHUP) != 0 {
+                // Read as many complete messages as available
+                loop {
+                    match ws.read() {
+                        Ok(tungstenite::Message::Binary(data)) => {
+                            last_activity = std::time::Instant::now();
+                            let mut cursor = std::io::Cursor::new(&data);
+                            while cursor.position() < data.len() as u64 {
+                                match wire::decode_frame(&mut cursor) {
+                                    Ok(frame) => {
+                                        if let Some(payload) = wire::frame_data(&frame) {
+                                            let _ = stdout.write_all(payload);
+                                            let _ = stdout.flush();
+                                        } else if wire::is_heartbeat(&frame) {
+                                            let mut buf = Vec::new();
+                                            wire::encode_heartbeat(&mut buf);
+                                            let _ = ws.send(tungstenite::Message::Binary(buf));
+                                        } else if wire::is_error(&frame) {
+                                            let msg = String::from_utf8_lossy(&frame.payload);
+                                            eprintln!("\r\nServer error: {msg}\r\n");
+                                            break 'event_loop;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("\r\nFrame decode error: {e}\r\n");
+                                        break 'event_loop;
+                                    }
+                                }
+                            }
+                        }
+                        Ok(tungstenite::Message::Close(_)) => break 'event_loop,
+                        Err(tungstenite::Error::ConnectionClosed) => break 'event_loop,
+                        Err(tungstenite::Error::Io(ref e))
+                            if e.kind() == std::io::ErrorKind::WouldBlock =>
+                        {
+                            break; // no more data right now
+                        }
+                        Err(_) => break 'event_loop,
+                        _ => {} // ignore text, ping, pong
+                    }
+                }
+            }
+
+            // ── SIGWINCH ──
+            if pollfds[1].revents & libc::POLLIN != 0 {
+                let mut drain = [0u8; 64];
+                unsafe {
+                    libc::read(
+                        sigwinch_read_fd,
+                        drain.as_mut_ptr() as *mut libc::c_void,
+                        drain.len(),
+                    );
+                }
+                let (c, r) = terminal::get_terminal_size();
+                let mut buf = Vec::new();
+                wire::encode_resize(c, r, &mut buf);
+                if ws.send(tungstenite::Message::Binary(buf)).is_err() {
+                    break;
+                }
+            }
+
+            // ── stdin ──
+            if pollfds[0].revents & libc::POLLIN != 0 {
+                let mut buf = [0u8; 4096];
+                let n = unsafe {
+                    libc::read(stdin_fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len())
+                };
+                if n <= 0 {
+                    break;
+                }
+
+                let mut to_send = Vec::new();
+                for &byte in &buf[..n as usize] {
+                    match escape.feed(byte) {
+                        escape::EscapeAction::Forward(b) => to_send.push(b),
+                        escape::EscapeAction::ForwardTwo(a, b) => {
+                            to_send.push(a);
+                            to_send.push(b);
+                        }
+                        escape::EscapeAction::Detach => {
+                            eprintln!("\r\nDetached from session.");
+                            let _ = ws.close(None);
+                            // Clean up before return
+                            terminal::reset_sigwinch_handler();
+                            unsafe {
+                                libc::close(sigwinch_read_fd);
+                                libc::close(sigwinch_write_fd);
+                            }
+                            return Ok(());
+                        }
+                        escape::EscapeAction::ShowHelp => {
+                            let _ = stdout
+                                .write_all(escape::EscapeDetector::help_text().as_bytes());
+                            let _ = stdout.flush();
+                        }
+                        escape::EscapeAction::Consumed => {}
+                    }
+                }
+
+                if !to_send.is_empty() {
+                    let mut frame = Vec::new();
+                    wire::encode_data(&to_send, &mut frame);
+                    if ws.send(tungstenite::Message::Binary(frame)).is_err() {
+                        break;
+                    }
+                }
+            }
+
+            // ── Connection error on WS socket ──
+            if pollfds[2].revents & libc::POLLERR != 0 {
+                break;
+            }
+        }
+
+        // Clean up SIGWINCH handler and pipe fds
+        terminal::reset_sigwinch_handler();
+        unsafe {
+            libc::close(sigwinch_read_fd);
+            libc::close(sigwinch_write_fd);
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        use std::io::{Read, Write};
+        let mut escape = escape::EscapeDetector::new();
+        let mut stdin = std::io::stdin();
+        let mut stdout = std::io::stdout();
+        let mut last_activity = std::time::Instant::now();
+        const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(330);
+
+        loop {
+            if last_activity.elapsed() > IDLE_TIMEOUT {
+                eprintln!("\r\nConnection timed out (no data received).\r\n");
+                break;
+            }
+
+            // Try reading from WebSocket (non-blocking due to read timeout)
+            match ws.read() {
+                Ok(tungstenite::Message::Binary(data)) => {
+                    last_activity = std::time::Instant::now();
+                    let mut cursor = std::io::Cursor::new(&data);
+                    while cursor.position() < data.len() as u64 {
+                        if let Ok(frame) = wire::decode_frame(&mut cursor) {
+                            if let Some(payload) = wire::frame_data(&frame) {
+                                let _ = stdout.write_all(payload);
+                                let _ = stdout.flush();
+                            } else if wire::is_heartbeat(&frame) {
+                                let mut buf = Vec::new();
+                                wire::encode_heartbeat(&mut buf);
+                                let _ = ws.send(tungstenite::Message::Binary(buf));
+                            }
+                        }
+                    }
+                    continue; // prioritize draining WS
+                }
+                Ok(tungstenite::Message::Close(_)) | Err(tungstenite::Error::ConnectionClosed) => {
+                    break
+                }
+                Err(tungstenite::Error::Io(ref e))
+                    if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(_) => break,
+                _ => {}
+            }
+
+            // Try reading from stdin (blocking — Windows fallback)
+            let mut buf = [0u8; 4096];
+            match stdin.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let mut to_send = Vec::new();
+                    for &byte in &buf[..n] {
+                        match escape.feed(byte) {
+                            escape::EscapeAction::Forward(b) => to_send.push(b),
+                            escape::EscapeAction::ForwardTwo(a, b) => {
+                                to_send.push(a);
+                                to_send.push(b);
+                            }
+                            escape::EscapeAction::Detach => {
+                                eprintln!("\r\nDetached from session.");
+                                let _ = ws.close(None);
+                                return Ok(());
+                            }
+                            escape::EscapeAction::ShowHelp => {
+                                let _ = stdout.write_all(
+                                    escape::EscapeDetector::help_text().as_bytes(),
+                                );
+                                let _ = stdout.flush();
+                            }
+                            escape::EscapeAction::Consumed => {}
+                        }
+                    }
+                    if !to_send.is_empty() {
+                        let mut frame = Vec::new();
+                        wire::encode_data(&to_send, &mut frame);
+                        if ws.send(tungstenite::Message::Binary(frame)).is_err() {
+                            break;
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    }
+
+    eprintln!("\r\nConnection closed.");
+    Ok(())
 }

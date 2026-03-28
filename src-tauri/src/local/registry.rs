@@ -13,6 +13,8 @@ use crate::local::session::{
     BackgroundSessionInfo, LocalTerminalInfo, LocalTerminalSession, SessionError, SessionEvent,
 };
 use crate::local::shell::ShellInfo;
+use crate::session::ScrollBuffer;
+use crate::ssh::{ExtendedSessionHandle, SessionCommand};
 
 /// Maximum number of background (detached) sessions allowed
 const MAX_BACKGROUND_SESSIONS: usize = 5;
@@ -336,6 +338,73 @@ impl LocalTerminalRegistry {
             .get(session_id)
             .ok_or_else(|| SessionError::NotFound(session_id.to_string()))?;
         Ok(session.has_child_processes())
+    }
+
+    /// Attach a CLI client to a running local terminal session.
+    ///
+    /// Unlike `attach_session()`, this does NOT modify the session's detached state.
+    /// The GUI continues running normally while the CLI mirrors the session.
+    /// Returns an `ExtendedSessionHandle` and scroll buffer for use with `WsBridge`.
+    pub async fn attach_for_cli(
+        &self,
+        session_id: &str,
+    ) -> Result<(ExtendedSessionHandle, Arc<ScrollBuffer>, u16, u16), SessionError> {
+        let sessions = self.sessions.read().await;
+
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| SessionError::NotFound(session_id.to_string()))?;
+
+        if !session.is_running() {
+            return Err(SessionError::AlreadyClosed);
+        }
+
+        let cols = session.cols;
+        let rows = session.rows;
+        let scroll_buffer = session.scroll_buffer.clone();
+
+        // Clone the input channel and output broadcast sender
+        let input_tx = session
+            .input_tx
+            .as_ref()
+            .ok_or(SessionError::ChannelError)?
+            .clone();
+        let stdout_rx = session.output_tx.subscribe();
+
+        // Create a SessionCommand adapter channel.
+        // The CLI bridge sends SessionCommand values; we forward them
+        // to the local terminal's input_tx and pty resize.
+        let (cmd_tx, mut cmd_rx) = mpsc::channel::<SessionCommand>(1024);
+
+        let sid = session_id.to_string();
+        tokio::spawn(async move {
+            while let Some(cmd) = cmd_rx.recv().await {
+                match cmd {
+                    SessionCommand::Data(data) => {
+                        if input_tx.send(data).await.is_err() {
+                            tracing::debug!("CLI adapter: input channel closed for {}", sid);
+                            break;
+                        }
+                    }
+                    SessionCommand::Resize(_c, _r) => {
+                        tracing::debug!("CLI attach adapter: resize ignored for mirror local {}", sid);
+                    }
+                    SessionCommand::Close => {
+                        tracing::debug!("CLI adapter: close command for {} (ignored)", sid);
+                        break;
+                    }
+                }
+            }
+            tracing::debug!("CLI attach adapter stopped for session {}", sid);
+        });
+
+        let handle = ExtendedSessionHandle {
+            id: session_id.to_string(),
+            cmd_tx,
+            stdout_rx,
+        };
+
+        Ok((handle, scroll_buffer, cols, rows))
     }
 
     /// Close all sessions

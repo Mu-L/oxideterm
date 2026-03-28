@@ -16,6 +16,7 @@ clap_complete = "4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "6"
+tungstenite = { version = "0.24", features = ["handshake"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

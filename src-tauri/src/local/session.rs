@@ -74,7 +74,7 @@ pub struct LocalTerminalSession {
     /// Whether the session is running
     running: Arc<AtomicBool>,
     /// Channel to send data to the PTY
-    input_tx: Option<mpsc::Sender<Vec<u8>>>,
+    pub(crate) input_tx: Option<mpsc::Sender<Vec<u8>>>,
     /// Task handle for the data pump
     _data_pump_handle: Option<tokio::task::JoinHandle<()>>,
     /// Scroll buffer — stores recent output for replay on reattach

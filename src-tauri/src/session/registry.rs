@@ -518,6 +518,13 @@ impl SessionRegistry {
             .and_then(|entry| entry.handle_controller.clone())
     }
 
+    /// Get terminal dimensions (cols, rows) for a session
+    pub fn get_session_dims(&self, session_id: &str) -> Option<(u32, u32)> {
+        self.sessions
+            .get(session_id)
+            .map(|entry| (entry.config.cols, entry.config.rows))
+    }
+
     /// List all sessions
     pub fn list(&self) -> Vec<SessionInfo> {
         let mut sessions: Vec<_> = self

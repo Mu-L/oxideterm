@@ -305,6 +305,50 @@ impl Keychain {
         }
     }
 
+    /// Retrieve a secret from the keychain **without** biometric authentication.
+    ///
+    /// Used by the CLI server where Touch ID cannot display a prompt.
+    /// On macOS with biometric mode: reads directly via `security` CLI,
+    /// falling back to the `keyring` crate. No Touch ID gate.
+    /// On other platforms or non-biometric mode: identical to [`Self::get`].
+    pub fn get_without_biometrics(&self, id: &str) -> Result<String, KeychainError> {
+        #[cfg(target_os = "macos")]
+        if self.use_biometrics {
+            let username = whoami::username();
+            let account = format!("{}@{}", username, id);
+
+            // Try reading via security CLI (works without dialog for -A items)
+            match mac_keychain::get(&self.service, &account) {
+                Ok(secret) => {
+                    tracing::info!("Keychain get (no bio) via security CLI: id={}, len={}", id, secret.len());
+                    return Ok(secret);
+                }
+                Err(_) => {
+                    tracing::debug!("security CLI get failed for id={}, trying keyring fallback", id);
+                }
+            }
+
+            // Fallback: read via keyring crate
+            let entry = Entry::new(&self.service, &account)?;
+            match entry.get_password() {
+                Ok(secret) => {
+                    tracing::info!("Keychain get (no bio) via keyring fallback: id={}, len={}", id, secret.len());
+                    return Ok(secret);
+                }
+                Err(keyring::Error::NoEntry) => {
+                    return Err(KeychainError::NotFound(id.to_string()));
+                }
+                Err(e) => {
+                    tracing::error!("Keychain get (no bio) fallback failed: id={}, error={:?}", id, e);
+                    return Err(KeychainError::Keyring(e));
+                }
+            }
+        }
+
+        // Non-biometric mode: delegate to normal get()
+        self.get(id)
+    }
+
     /// Delete a secret from the keychain.
     ///
     /// No Touch ID prompt — deletion is always allowed.

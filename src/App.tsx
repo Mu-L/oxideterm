@@ -169,6 +169,54 @@ function App() {
     syncSftpSettings();
   }, []);
 
+  // Sync AI provider config to backend for CLI server access
+  useEffect(() => {
+    const syncAiProviders = async () => {
+      const { settings } = useSettingsStore.getState();
+      const ai = settings.ai;
+      if (ai?.providers) {
+        const { api } = await import('./lib/api');
+        try {
+          await api.syncAiProviders(
+            ai.providers.map(p => ({
+              id: p.id,
+              type: p.type,
+              baseUrl: p.baseUrl,
+              defaultModel: p.defaultModel,
+              enabled: p.enabled,
+            })),
+            ai.activeProviderId,
+          );
+        } catch (err) {
+          console.error('Failed to sync AI providers on startup:', err);
+        }
+      }
+    };
+    syncAiProviders();
+
+    // Re-sync when settings change
+    const unsub = useSettingsStore.subscribe(
+      (state) => state.settings.ai,
+      (ai) => {
+        if (ai?.providers) {
+          import('./lib/api').then(({ api }) => {
+            api.syncAiProviders(
+              ai.providers.map(p => ({
+                id: p.id,
+                type: p.type,
+                baseUrl: p.baseUrl,
+                defaultModel: p.defaultModel,
+                enabled: p.enabled,
+              })),
+              ai.activeProviderId,
+            ).catch(err => console.error('Failed to sync AI providers:', err));
+          });
+        }
+      },
+    );
+    return unsub;
+  }, []);
+
   // Initialize terminal background: re-grant asset scope & reconcile stored path
   useEffect(() => {
     const initBg = async () => {

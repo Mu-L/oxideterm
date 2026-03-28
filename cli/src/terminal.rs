@@ -77,6 +77,32 @@ pub fn get_terminal_size() -> (u16, u16) {
     }
 }
 
+/// Try to resize the CLI terminal window to match the session size
+/// using the xterm `\e[8;rows;cols t` escape sequence.
+/// Returns the actual size after the attempt.
+pub fn try_resize_terminal(cols: u16, rows: u16) -> (u16, u16) {
+    use std::io::Write;
+    let seq = format!("\x1b[8;{};{}t", rows, cols);
+    let _ = std::io::stdout().write_all(seq.as_bytes());
+    let _ = std::io::stdout().flush();
+    // Give the terminal emulator time to process
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    get_terminal_size()
+}
+
+/// Disable all mouse tracking modes on the CLI terminal.
+/// TUI apps (e.g. yazi) enable mouse tracking via escape sequences.
+/// If they exit without cleanup (Ctrl+C), mouse events from the CLI
+/// terminal get forwarded to the server shell as garbage text.
+pub fn disable_mouse_tracking() {
+    use std::io::Write;
+    // Disable: X10, normal, button-event, any-event, SGR extended, urxvt
+    let _ = std::io::stdout().write_all(
+        b"\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l",
+    );
+    let _ = std::io::stdout().flush();
+}
+
 /// Install a SIGWINCH handler that writes to the given pipe fd.
 ///
 /// When the terminal is resized, the handler writes a single byte to `write_fd`,

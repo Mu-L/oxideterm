@@ -15,6 +15,18 @@ use tauri::{Manager, State};
 /// Service name for AI provider API keys in system keychain
 const AI_KEYCHAIN_SERVICE: &str = "com.oxideterm.ai";
 
+/// AI provider configuration synced from frontend settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiProviderConfig {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub provider_type: String,
+    pub base_url: String,
+    pub default_model: String,
+    pub enabled: bool,
+}
+
 /// Shared config state
 pub struct ConfigState {
     storage: ConfigStorage,
@@ -26,6 +38,9 @@ pub struct ConfigState {
     /// subsequent `get_ai_provider_api_key` calls within the same app
     /// session do not re-trigger the biometric prompt.
     pub(crate) api_key_cache: RwLock<HashMap<String, String>>,
+    /// AI provider configurations synced from frontend settings.
+    /// Used by CLI server to resolve providers without accessing frontend localStorage.
+    pub(crate) ai_providers: RwLock<(Vec<AiProviderConfig>, Option<String>)>,
 }
 
 impl ConfigState {
@@ -40,6 +55,7 @@ impl ConfigState {
             keychain: Keychain::new(),
             ai_keychain: Keychain::with_biometrics(AI_KEYCHAIN_SERVICE),
             api_key_cache: RwLock::new(HashMap::new()),
+            ai_providers: RwLock::new((Vec::new(), None)),
         })
     }
 
@@ -1107,6 +1123,20 @@ fn try_migrate_vault_to_keychain(
             None
         }
     }
+}
+
+/// Sync AI provider configurations from frontend settings.
+/// Called on app startup and whenever AI settings change.
+#[tauri::command]
+pub async fn sync_ai_providers(
+    state: State<'_, Arc<ConfigState>>,
+    providers: Vec<AiProviderConfig>,
+    active_provider_id: Option<String>,
+) -> Result<(), String> {
+    let mut lock = state.ai_providers.write();
+    *lock = (providers, active_provider_id);
+    tracing::debug!("AI providers synced from frontend ({} providers)", lock.0.len());
+    Ok(())
 }
 
 /// Set API key for a specific AI provider — stored in OS keychain

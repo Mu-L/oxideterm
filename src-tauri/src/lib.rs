@@ -612,6 +612,7 @@ pub fn run() {
         commands::config::has_ai_api_key,
         commands::config::delete_ai_api_key,
         // AI Provider API key commands
+        commands::config::sync_ai_providers,
         commands::config::set_ai_provider_api_key,
         commands::config::get_ai_provider_api_key,
         commands::config::has_ai_provider_api_key,
@@ -922,6 +923,7 @@ pub fn run() {
         commands::config::has_ai_api_key,
         commands::config::delete_ai_api_key,
         // AI Provider API key commands
+        commands::config::sync_ai_providers,
         commands::config::set_ai_provider_api_key,
         commands::config::get_ai_provider_api_key,
         commands::config::has_ai_provider_api_key,

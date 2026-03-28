@@ -986,20 +986,38 @@ async fn ask<W: AsyncWriteExt + Unpin>(
 }
 
 /// Resolve AI provider from CLI params or auto-detect from keychain.
+///
+/// Resolution order:
+/// 1. If `--provider` given: match against synced frontend providers, then builtins
+/// 2. Auto-detect: try active provider from frontend settings first, then all synced
+///    providers, then builtin defaults
 async fn resolve_ai_provider(
     app: &tauri::AppHandle,
     config_state: &Arc<ConfigState>,
     provider_override: Option<&str>,
     model_override: Option<&str>,
 ) -> Result<(String, String, String, String), (i32, String)> {
+    // Read synced provider config from frontend
+    let (synced_providers, active_provider_id) = {
+        let lock = config_state.ai_providers.read();
+        lock.clone()
+    };
+
     if let Some(provider_type) = provider_override {
-        // Find matching builtin
+        // Try synced providers first (matches by type)
+        if let Some(p) = synced_providers.iter().find(|p| p.provider_type == provider_type && p.enabled) {
+            if let Ok(key) = get_provider_api_key(app, config_state, &p.id).await {
+                let model = model_override.unwrap_or(&p.default_model).to_string();
+                return Ok((p.provider_type.clone(), p.base_url.clone(), key, model));
+            }
+        }
+        // Fall back to builtin defaults
         let builtin = BUILTIN_PROVIDERS
             .iter()
-            .find(|p| p.provider_type == provider_type)
+            .find(|b| b.provider_type == provider_type)
             .ok_or((
                 protocol::ERR_INVALID_PARAMS,
-                format!("Unknown provider: {provider_type}. Available: openai, anthropic, gemini, ollama"),
+                format!("Unknown provider: {provider_type}. Available: openai, anthropic, gemini, ollama, openai_compatible"),
             ))?;
 
         let api_key = get_provider_api_key(app, config_state, builtin.keychain_id).await?;
@@ -1015,7 +1033,26 @@ async fn resolve_ai_provider(
         ));
     }
 
-    // Auto-detect: try each builtin in priority order
+    // Auto-detect: try active provider from frontend settings first
+    if let Some(ref active_id) = active_provider_id {
+        if let Some(p) = synced_providers.iter().find(|p| &p.id == active_id && p.enabled) {
+            if let Ok(key) = get_provider_api_key(app, config_state, &p.id).await {
+                let model = model_override.unwrap_or(&p.default_model).to_string();
+                return Ok((p.provider_type.clone(), p.base_url.clone(), key, model));
+            }
+        }
+    }
+
+    // Try all synced providers
+    for p in &synced_providers {
+        if !p.enabled { continue; }
+        if let Ok(key) = get_provider_api_key(app, config_state, &p.id).await {
+            let model = model_override.unwrap_or(&p.default_model).to_string();
+            return Ok((p.provider_type.clone(), p.base_url.clone(), key, model));
+        }
+    }
+
+    // Fall back to builtin defaults
     for builtin in BUILTIN_PROVIDERS {
         if let Ok(key) = get_provider_api_key(app, config_state, builtin.keychain_id).await {
             let model = model_override
@@ -1050,8 +1087,8 @@ async fn get_provider_api_key(
         }
     }
 
-    // Try keychain
-    match config_state.ai_keychain.get(provider_id) {
+    // Try keychain (skip Touch ID — CLI context cannot display biometric prompt)
+    match config_state.ai_keychain.get_without_biometrics(provider_id) {
         Ok(key) => {
             config_state.api_key_cache.write().insert(provider_id.to_string(), key.clone());
             Ok(key)

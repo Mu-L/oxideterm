@@ -1104,6 +1104,17 @@ export const api = {
     return invoke('list_ai_provider_keys');
   },
 
+  /**
+   * Sync AI provider configurations to backend for CLI server access.
+   */
+  syncAiProviders: async (
+    providers: { id: string; type: string; baseUrl: string; defaultModel: string; enabled: boolean }[],
+    activeProviderId: string | null,
+  ): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('sync_ai_providers', { providers, activeProviderId });
+  },
+
   // ============ Local Terminal (PTY) ============
 
   /**

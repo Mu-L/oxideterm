@@ -762,15 +762,29 @@ fn run_attach(
         .set_read_timeout(Some(std::time::Duration::from_millis(10)))
         .map_err(|e| format!("Failed to set read timeout: {e}"))?;
 
+    // ── Terminal size synchronization ──
+    // Mirror mode: the session keeps its current size (owned by GUI).
+    // We try to resize the CLI terminal to match, not the other way around.
+    let (cli_cols, cli_rows) = terminal::get_terminal_size();
+    if cli_cols != cols || cli_rows != rows {
+        let (new_cols, new_rows) = terminal::try_resize_terminal(cols, rows);
+        if new_cols != cols || new_rows != rows {
+            eprintln!(
+                "\x1b[33mWarning: size mismatch \u{2014} session is {}x{}, \
+                 CLI terminal is {}x{}.\r\n\
+                 TUI apps may render incorrectly. \
+                 Resize your terminal to {}x{} for best results.\x1b[0m",
+                cols, rows, new_cols, new_rows, cols, rows
+            );
+        }
+    }
+
     // Enter raw mode
     let _raw_guard = terminal::RawModeGuard::enter()?;
 
-    // Send initial resize to match CLI terminal size
-    let (cli_cols, cli_rows) = terminal::get_terminal_size();
-    let mut resize_buf = Vec::new();
-    wire::encode_resize(cli_cols, cli_rows, &mut resize_buf);
-    ws.send(tungstenite::Message::Binary(resize_buf))
-        .map_err(|e| format!("Failed to send resize: {e}"))?;
+    // Disable mouse tracking on the CLI terminal so mirrored TUI apps
+    // that enable it (yazi, etc.) don't cause mouse event feedback loops.
+    terminal::disable_mouse_tracking();
 
     // Single-threaded event loop using poll() on Unix.
     // This avoids the Arc<Mutex<WebSocket>> contention that starved
@@ -864,6 +878,8 @@ fn run_attach(
             }
 
             // ── SIGWINCH ──
+            // Mirror mode: don't resize the server session.
+            // Warn the user if CLI size doesn't match.
             if pollfds[1].revents & libc::POLLIN != 0 {
                 let mut drain = [0u8; 64];
                 unsafe {
@@ -874,10 +890,17 @@ fn run_attach(
                     );
                 }
                 let (c, r) = terminal::get_terminal_size();
-                let mut buf = Vec::new();
-                wire::encode_resize(c, r, &mut buf);
-                if ws.send(tungstenite::Message::Binary(buf)).is_err() {
-                    break;
+                if c != cols || r != rows {
+                    let _ = stdout.write_all(
+                        format!(
+                            "\x1b[s\x1b[{};1H\x1b[33m\
+                             [size mismatch: session {}x{}, terminal {}x{}]\
+                             \x1b[0m\x1b[K\x1b[u",
+                            r, cols, rows, c, r
+                        )
+                        .as_bytes(),
+                    );
+                    let _ = stdout.flush();
                 }
             }
 
@@ -904,6 +927,7 @@ fn run_attach(
                             let _ = ws.close(None);
                             // Clean up before return
                             terminal::reset_sigwinch_handler();
+                            terminal::disable_mouse_tracking();
                             unsafe {
                                 libc::close(sigwinch_read_fd);
                                 libc::close(sigwinch_write_fd);
@@ -936,6 +960,7 @@ fn run_attach(
 
         // Clean up SIGWINCH handler and pipe fds
         terminal::reset_sigwinch_handler();
+        terminal::disable_mouse_tracking();
         unsafe {
             libc::close(sigwinch_read_fd);
             libc::close(sigwinch_write_fd);
@@ -1026,5 +1051,6 @@ fn run_attach(
     }
 
     eprintln!("\r\nConnection closed.");
+    terminal::disable_mouse_tracking();
     Ok(())
 }

@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="版本">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="版本">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="平台">
-  <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="许可证">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="许可证">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">
   <img src="https://img.shields.io/badge/tauri-2.0-purple" alt="Tauri">
 </p>
@@ -357,19 +357,11 @@ cd src-tauri && cargo build --no-default-features --release
 
 ## 许可证
 
-**PolyForm Noncommercial 1.0.0** — 本软件仅授权用于**非商业用途**。
+**GPL-3.0** — 本软件是按照 [GNU 通用公共许可证 v3.0](https://www.gnu.org/licenses/gpl-3.0.html) 发布的自由软件。
 
-许可证明确允许：
+您可以在 GPL-3.0 条款下自由地使用、修改和分发本软件。任何衍生作品也必须在由同一许可证下发布。
 
-- **个人使用** — 研究、实验、为公共知识测试、个人学习、私人娱乐、爱好项目、业余追求——前提是**没有预期的商业应用**
-- **非商业组织** — 慈善机构、教育机构、公共研究机构、公共安全/卫生机构、环境保护组织和政府机构——**不论资金来源**
-- **合理使用** — 不限制您依据适用法律享有的合理使用权利
-
-**任何其他用途均需向许可方获取单独的商业许可。** 这包括但不限于：在营利性公司内使用（包括内部评估或测试）、自由职业者或承包商用于有偿工作，以及在商业环境中的任何分发。
-
-如果您不确定您的使用是否符合条件，请[提交 Issue](https://github.com/AnalyseDeCircuit/oxideterm/issues)。
-
-完整文本：[polyformproject.org/licenses/noncommercial/1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+完整文本：[GNU 通用公共许可证 v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 
 ---
 

@@ -114,4 +114,4 @@ Use [GitHub Issues](https://github.com/AnalyseDeCircuit/OxideTerm/issues) for ge
 
 ## License reminder
 
-The project is under **PolyForm Noncommercial 1.0.0**. By contributing (if ever accepted), you agree your contributions are licensed under the same terms unless explicitly stated otherwise.
+The project is under **GPL-3.0**. By contributing (if ever accepted), you agree your contributions are licensed under the same terms unless explicitly stated otherwise.

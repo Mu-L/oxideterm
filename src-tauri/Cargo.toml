@@ -1,9 +1,9 @@
 [package]
 name = "oxideterm"
-version = "0.21.0"
+version = "1.0.0"
 description = "A modern SSH terminal client built with Rust and Tauri"
 authors = ["OxideTerm Team"]
-license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
+license = "GPL-3.0-only"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

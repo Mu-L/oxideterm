@@ -15,11 +15,11 @@ allow = [
     "CC0-1.0",
     "Unicode-3.0",
     "Apache-2.0 WITH LLVM-exception",
-    "LicenseRef-PolyForm-Noncommercial-1.0.0",
+    "GPL-3.0",
 ]
 
-# oxideterm-agent uses PolyForm Noncommercial 1.0.0 (same as main project)
+# oxideterm-agent uses GPL-3.0 (same as main project)
 [[licenses.clarify]]
 name = "oxideterm-agent"
-expression = "LicenseRef-PolyForm-Noncommercial-1.0.0"
+expression = "GPL-3.0"
 license-files = []

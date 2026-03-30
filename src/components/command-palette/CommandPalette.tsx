@@ -26,6 +26,40 @@ import {
   Rows,
   Radio,
   Puzzle,
+  ChevronRight,
+  ChevronLeft,
+  XCircle,
+  Layers,
+  ArrowLeft,
+  ArrowRight,
+  FolderOpen,
+  Palette,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  RectangleHorizontal,
+  Minus,
+  Type,
+  ListTree,
+  Bookmark,
+  HardDrive,
+  ArrowUpDown,
+  Bot,
+  Unplug,
+  RefreshCw,
+  Ban,
+  Activity,
+  Stethoscope,
+  Clapperboard,
+  Paperclip,
+  Trash2,
+  Gauge,
+  PanelBottomClose,
+  SquareStack,
+  Focus,
+  Globe,
+  RotateCw,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Dialog,
@@ -50,7 +84,11 @@ import { usePluginStore } from '@/store/pluginStore';
 import { useEventLogStore } from '@/store/eventLogStore';
 import { connectToSaved } from '@/lib/connectToSaved';
 import { useToast } from '@/hooks/useToast';
-import type { ConnectionInfo } from '@/types';
+import { getAllThemeNames } from '@/lib/themes';
+import { api } from '@/lib/api';
+import { useReconnectOrchestratorStore } from '@/store/reconnectOrchestratorStore';
+import { useSessionTreeStore } from '@/store/sessionTreeStore';
+import type { ConnectionInfo, PaneNode } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -103,6 +141,18 @@ const SHORTCUT_MAP: Record<string, { mac: string; other: string }> = {
   'cmd:split_vertical': { mac: '⌘⇧D', other: 'Ctrl+Shift+D' },
   'cmd:broadcast_toggle': { mac: '⌘B', other: 'Ctrl+B' },
   'cmd:show_shortcuts': { mac: '⌘/', other: 'Ctrl+/' },
+  // Tab management
+  'cmd:next_tab': { mac: '⌘}', other: 'Ctrl+Tab' },
+  'cmd:prev_tab': { mac: '⌘{', other: 'Ctrl+Shift+Tab' },
+  'cmd:close_other_tabs': { mac: '⌘⇧W', other: 'Ctrl+Shift+W' },
+  'cmd:go_back': { mac: '⌘[', other: 'Alt+←' },
+  'cmd:go_forward': { mac: '⌘]', other: 'Alt+→' },
+  // Terminal
+  'cmd:shell_launcher': { mac: '⌘⇧T', other: 'Ctrl+Shift+T' },
+  // Font
+  'cmd:font_increase': { mac: '⌘+', other: 'Ctrl++' },
+  'cmd:font_decrease': { mac: '⌘-', other: 'Ctrl+-' },
+  'cmd:font_reset': { mac: '⌘0', other: 'Ctrl+0' },
 };
 
 // ─── Highlight helper ─────────────────────────────────────────────────
@@ -297,6 +347,414 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         section: 'help',
         icon: <Hand className="h-4 w-4" />,
         action: () => useSettingsStore.getState().resetOnboarding(),
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // Tab Management
+      // ═══════════════════════════════════════════════════════════════
+      {
+        id: 'cmd:next_tab',
+        label: t('command_palette.cmd_next_tab'),
+        section: 'commands',
+        icon: <ChevronRight className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:next_tab'],
+        action: () => useAppStore.getState().nextTab(),
+      },
+      {
+        id: 'cmd:prev_tab',
+        label: t('command_palette.cmd_prev_tab'),
+        section: 'commands',
+        icon: <ChevronLeft className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:prev_tab'],
+        action: () => useAppStore.getState().prevTab(),
+      },
+      {
+        id: 'cmd:close_other_tabs',
+        label: t('command_palette.cmd_close_other_tabs'),
+        section: 'commands',
+        icon: <XCircle className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:close_other_tabs'],
+        action: async () => {
+          const { tabs, activeTabId, closeTab } = useAppStore.getState();
+          if (!activeTabId) return;
+          const others = tabs.filter((tab) => tab.id !== activeTabId);
+          for (const tab of others) {
+            await closeTab(tab.id);
+          }
+        },
+      },
+      {
+        id: 'cmd:close_all_tabs',
+        label: t('command_palette.cmd_close_all_tabs'),
+        section: 'commands',
+        icon: <Layers className="h-4 w-4" />,
+        action: async () => {
+          const { tabs, closeTab } = useAppStore.getState();
+          for (const tab of [...tabs]) {
+            await closeTab(tab.id);
+          }
+        },
+      },
+      {
+        id: 'cmd:go_back',
+        label: t('command_palette.cmd_go_back'),
+        section: 'commands',
+        icon: <ArrowLeft className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:go_back'],
+        action: () => useAppStore.getState().navigateBack(),
+      },
+      {
+        id: 'cmd:go_forward',
+        label: t('command_palette.cmd_go_forward'),
+        section: 'commands',
+        icon: <ArrowRight className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:go_forward'],
+        action: () => useAppStore.getState().navigateForward(),
+      },
+      {
+        id: 'cmd:open_connection_manager',
+        label: t('command_palette.cmd_open_connection_manager'),
+        section: 'commands',
+        icon: <FolderOpen className="h-4 w-4" />,
+        action: () => useAppStore.getState().toggleModal('connectionManager', true),
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // Theme / Appearance
+      // ═══════════════════════════════════════════════════════════════
+      {
+        id: 'cmd:theme_next',
+        label: t('command_palette.cmd_theme_next'),
+        section: 'commands',
+        icon: <Palette className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          const names = getAllThemeNames();
+          const idx = names.indexOf(s.settings.terminal.theme);
+          s.updateTerminal('theme', names[(idx + 1) % names.length]);
+        },
+      },
+      {
+        id: 'cmd:theme_prev',
+        label: t('command_palette.cmd_theme_prev'),
+        section: 'commands',
+        icon: <Palette className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          const names = getAllThemeNames();
+          const idx = names.indexOf(s.settings.terminal.theme);
+          s.updateTerminal('theme', names[(idx - 1 + names.length) % names.length]);
+        },
+      },
+      {
+        id: 'cmd:font_increase',
+        label: t('command_palette.cmd_font_increase'),
+        section: 'commands',
+        icon: <ZoomIn className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:font_increase'],
+        action: () => {
+          const s = useSettingsStore.getState();
+          const cur = s.settings.terminal.fontSize;
+          if (cur < 32) s.updateTerminal('fontSize', cur + 1);
+        },
+      },
+      {
+        id: 'cmd:font_decrease',
+        label: t('command_palette.cmd_font_decrease'),
+        section: 'commands',
+        icon: <ZoomOut className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:font_decrease'],
+        action: () => {
+          const s = useSettingsStore.getState();
+          const cur = s.settings.terminal.fontSize;
+          if (cur > 8) s.updateTerminal('fontSize', cur - 1);
+        },
+      },
+      {
+        id: 'cmd:font_reset',
+        label: t('command_palette.cmd_font_reset'),
+        section: 'commands',
+        icon: <RotateCcw className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:font_reset'],
+        action: () => useSettingsStore.getState().updateTerminal('fontSize', 14),
+      },
+      {
+        id: 'cmd:cursor_block',
+        label: t('command_palette.cmd_cursor_block'),
+        section: 'commands',
+        icon: <RectangleHorizontal className="h-4 w-4" />,
+        action: () => useSettingsStore.getState().updateTerminal('cursorStyle', 'block'),
+      },
+      {
+        id: 'cmd:cursor_bar',
+        label: t('command_palette.cmd_cursor_bar'),
+        section: 'commands',
+        icon: <Minus className="h-4 w-4" />,
+        action: () => useSettingsStore.getState().updateTerminal('cursorStyle', 'bar'),
+      },
+      {
+        id: 'cmd:cursor_underline',
+        label: t('command_palette.cmd_cursor_underline'),
+        section: 'commands',
+        icon: <Type className="h-4 w-4" />,
+        action: () => useSettingsStore.getState().updateTerminal('cursorStyle', 'underline'),
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // Sidebar Navigation
+      // ═══════════════════════════════════════════════════════════════
+      {
+        id: 'cmd:sidebar_sessions',
+        label: t('command_palette.cmd_sidebar_sessions'),
+        section: 'commands',
+        icon: <ListTree className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          if (s.settings.sidebarUI.collapsed) s.toggleSidebar();
+          s.setSidebarSection('sessions');
+        },
+      },
+      {
+        id: 'cmd:sidebar_saved',
+        label: t('command_palette.cmd_sidebar_saved'),
+        section: 'commands',
+        icon: <Bookmark className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          if (s.settings.sidebarUI.collapsed) s.toggleSidebar();
+          s.setSidebarSection('saved');
+        },
+      },
+      {
+        id: 'cmd:sidebar_sftp',
+        label: t('command_palette.cmd_sidebar_sftp'),
+        section: 'commands',
+        icon: <HardDrive className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          if (s.settings.sidebarUI.collapsed) s.toggleSidebar();
+          s.setSidebarSection('sftp');
+        },
+      },
+      {
+        id: 'cmd:sidebar_forwards',
+        label: t('command_palette.cmd_sidebar_forwards'),
+        section: 'commands',
+        icon: <ArrowUpDown className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          if (s.settings.sidebarUI.collapsed) s.toggleSidebar();
+          s.setSidebarSection('forwards');
+        },
+      },
+      {
+        id: 'cmd:sidebar_connections',
+        label: t('command_palette.cmd_sidebar_connections'),
+        section: 'commands',
+        icon: <Server className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          if (s.settings.sidebarUI.collapsed) s.toggleSidebar();
+          s.setSidebarSection('connections');
+        },
+      },
+      {
+        id: 'cmd:sidebar_ai',
+        label: t('command_palette.cmd_sidebar_ai'),
+        section: 'commands',
+        icon: <Bot className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          if (s.settings.sidebarUI.aiSidebarCollapsed) s.toggleAiSidebar();
+        },
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // Connection Operations
+      // ═══════════════════════════════════════════════════════════════
+      {
+        id: 'cmd:disconnect_all',
+        label: t('command_palette.cmd_disconnect_all'),
+        section: 'commands',
+        icon: <Unplug className="h-4 w-4" />,
+        action: async () => {
+          const conns = useAppStore.getState().connections;
+          for (const [, conn] of conns) {
+            try { await api.sshDisconnect(conn.id); } catch { /* skip */ }
+          }
+          await useAppStore.getState().refreshConnections();
+        },
+      },
+      {
+        id: 'cmd:reconnect_all',
+        label: t('command_palette.cmd_reconnect_all'),
+        section: 'commands',
+        icon: <RefreshCw className="h-4 w-4" />,
+        action: () => {
+          // Trigger reconnect for all link-down nodes via orchestrator
+          const linkDownIds = useSessionTreeStore.getState().linkDownNodeIds;
+          const orchestrator = useReconnectOrchestratorStore.getState();
+          for (const nodeId of linkDownIds) {
+            orchestrator.scheduleReconnect(nodeId);
+          }
+        },
+      },
+      {
+        id: 'cmd:cancel_reconnect',
+        label: t('command_palette.cmd_cancel_reconnect'),
+        section: 'commands',
+        icon: <Ban className="h-4 w-4" />,
+        action: () => useReconnectOrchestratorStore.getState().cancelAll(),
+      },
+      {
+        id: 'cmd:open_connection_pool',
+        label: t('command_palette.cmd_open_connection_pool'),
+        section: 'commands',
+        icon: <Activity className="h-4 w-4" />,
+        action: () => useAppStore.getState().createTab('connection_pool'),
+      },
+      {
+        id: 'cmd:health_check',
+        label: t('command_palette.cmd_health_check'),
+        section: 'commands',
+        icon: <Stethoscope className="h-4 w-4" />,
+        action: async () => {
+          const status = await api.getAllHealthStatus();
+          const total = Object.keys(status).length;
+          const healthy = Object.values(status).filter((s) => s.status === 'Healthy').length;
+          toast({
+            title: t('command_palette.health_result', { healthy, total }),
+          });
+        },
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // Terminal Operations
+      // ═══════════════════════════════════════════════════════════════
+      {
+        id: 'cmd:shell_launcher',
+        label: t('command_palette.cmd_shell_launcher'),
+        section: 'commands',
+        icon: <Clapperboard className="h-4 w-4" />,
+        shortcut: SHORTCUT_MAP['cmd:shell_launcher'],
+        action: () => {
+          window.dispatchEvent(new CustomEvent('oxideterm:shell-launcher'));
+        },
+      },
+      {
+        id: 'cmd:detach_terminal',
+        label: t('command_palette.cmd_detach_terminal'),
+        section: 'commands',
+        icon: <Paperclip className="h-4 w-4" />,
+        action: async () => {
+          const { activeTabId, tabs } = useAppStore.getState();
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (tab?.type === 'local_terminal' && tab.sessionId) {
+            await useLocalTerminalStore.getState().detachTerminal(tab.sessionId);
+          }
+        },
+      },
+      {
+        id: 'cmd:cleanup_dead',
+        label: t('command_palette.cmd_cleanup_dead'),
+        section: 'commands',
+        icon: <Trash2 className="h-4 w-4" />,
+        action: async () => {
+          const removed = await useLocalTerminalStore.getState().cleanupDeadSessions();
+          toast({ title: t('command_palette.cleanup_result', { count: removed.length }) });
+        },
+      },
+      {
+        id: 'cmd:toggle_fps',
+        label: t('command_palette.cmd_toggle_fps'),
+        section: 'commands',
+        icon: <Gauge className="h-4 w-4" />,
+        action: () => {
+          const s = useSettingsStore.getState();
+          s.updateTerminal('showFpsOverlay', !s.settings.terminal.showFpsOverlay);
+        },
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // Pane Management
+      // ═══════════════════════════════════════════════════════════════
+      {
+        id: 'cmd:close_pane',
+        label: t('command_palette.cmd_close_pane'),
+        section: 'commands',
+        icon: <PanelBottomClose className="h-4 w-4" />,
+        action: () => {
+          const { activeTabId, tabs } = useAppStore.getState();
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (tab?.activePaneId && activeTabId) {
+            useAppStore.getState().closePane(activeTabId, tab.activePaneId);
+          }
+        },
+      },
+      {
+        id: 'cmd:reset_panes',
+        label: t('command_palette.cmd_reset_panes'),
+        section: 'commands',
+        icon: <SquareStack className="h-4 w-4" />,
+        action: () => {
+          const id = useAppStore.getState().activeTabId;
+          if (id) useAppStore.getState().resetToSinglePane(id);
+        },
+      },
+      {
+        id: 'cmd:focus_next_pane',
+        label: t('command_palette.cmd_focus_next_pane'),
+        section: 'commands',
+        icon: <Focus className="h-4 w-4" />,
+        action: () => {
+          const { activeTabId, tabs } = useAppStore.getState();
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (!tab?.rootPane || !activeTabId) return;
+          // Collect all leaf pane IDs from the tree
+          const collectLeafIds = (node: PaneNode): string[] =>
+            node.type === 'leaf' ? [node.id] : node.children.flatMap(collectLeafIds);
+          const leafIds = collectLeafIds(tab.rootPane);
+          if (leafIds.length < 2) return;
+          const curIdx = leafIds.indexOf(tab.activePaneId ?? '');
+          const nextIdx = (curIdx + 1) % leafIds.length;
+          useAppStore.getState().setActivePaneId(activeTabId, leafIds[nextIdx]);
+        },
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // Miscellaneous
+      // ═══════════════════════════════════════════════════════════════
+      {
+        id: 'cmd:open_plugin_manager',
+        label: t('command_palette.cmd_open_plugin_manager'),
+        section: 'commands',
+        icon: <Puzzle className="h-4 w-4" />,
+        action: () => useAppStore.getState().createTab('plugin_manager'),
+      },
+      {
+        id: 'cmd:open_topology',
+        label: t('command_palette.cmd_open_topology'),
+        section: 'commands',
+        icon: <Globe className="h-4 w-4" />,
+        action: () => useAppStore.getState().createTab('topology'),
+      },
+      {
+        id: 'cmd:reset_settings',
+        label: t('command_palette.cmd_reset_settings'),
+        section: 'commands',
+        icon: <AlertTriangle className="h-4 w-4" />,
+        action: () => {
+          if (window.confirm(t('command_palette.confirm_reset_settings'))) {
+            useSettingsStore.getState().resetToDefaults();
+          }
+        },
+      },
+      {
+        id: 'cmd:reload_window',
+        label: t('command_palette.cmd_reload_window'),
+        section: 'commands',
+        icon: <RotateCw className="h-4 w-4" />,
+        action: () => window.location.reload(),
       },
     ];
     return items.map((i) => ({ ...i, value: buildValue(i) }));

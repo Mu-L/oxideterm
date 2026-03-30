@@ -412,6 +412,15 @@ function App() {
           if (id) useAppStore.getState().closeTab(id);
           return;
         }
+        // Cmd+Shift+W — Close other tabs
+        if (key === 'w' && e.shiftKey) {
+          e.preventDefault();
+          const { tabs, activeTabId, closeTab } = useAppStore.getState();
+          if (!activeTabId) return;
+          const others = tabs.filter((tab) => tab.id !== activeTabId);
+          for (const tab of others) { closeTab(tab.id); }
+          return;
+        }
         // Cmd+N — New SSH connection
         if (key === 'n' && !e.shiftKey) {
           e.preventDefault();
@@ -468,6 +477,18 @@ function App() {
         if (e.key === '{') {
           e.preventDefault();
           useAppStore.getState().prevTab();
+          return;
+        }
+        // Cmd+[ — Navigate back
+        if (e.key === '[' && !e.shiftKey) {
+          e.preventDefault();
+          useAppStore.getState().navigateBack();
+          return;
+        }
+        // Cmd+] — Navigate forward
+        if (e.key === ']' && !e.shiftKey) {
+          e.preventDefault();
+          useAppStore.getState().navigateForward();
           return;
         }
         // Cmd+1-9 — Go to tab N

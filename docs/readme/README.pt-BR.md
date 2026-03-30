@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="Versão">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Versão">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Plataforma">
-  <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="Licença">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Licença">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">
   <img src="https://img.shields.io/badge/tauri-2.0-purple" alt="Tauri">
 </p>
@@ -357,19 +357,11 @@ cd src-tauri && cargo build --no-default-features --release
 
 ## Licença
 
-**PolyForm Noncommercial 1.0.0** — este software é licenciado exclusivamente para **uso não comercial**.
+**GPL-3.0** — este software é software livre licenciado sob a [Licença Pública Geral GNU v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
-A licença permite explicitamente:
+Você é livre para usar, modificar e distribuir este software sob os termos da GPL-3.0. Qualquer trabalho derivado também deve ser distribuído sob a mesma licença.
 
-- **Uso pessoal** — pesquisa, experimentação, testes para conhecimento público, estudo pessoal, entretenimento privado, projetos de hobby, atividades amadoras — desde que **não haja aplicação comercial prevista**
-- **Organizações não comerciais** — organizações beneficentes, instituições educacionais, organizações de pesquisa pública, organizações de segurança/saúde pública, organizações de proteção ambiental e instituições governamentais — **independente da fonte de financiamento**
-- **Uso justo** — seus direitos de uso justo sob a lei aplicável não são limitados
-
-**Qualquer outro uso requer uma licença comercial separada do licenciante.** Isso inclui, entre outros: o uso dentro de uma empresa com fins lucrativos (incluindo avaliação ou testes internos), o uso por freelancers ou contratados para trabalho remunerado, e qualquer distribuição em um contexto comercial.
-
-Se você não tem certeza se o seu uso se qualifica, por favor [abra uma issue](https://github.com/AnalyseDeCircuit/oxideterm/issues).
-
-Texto completo: [polyformproject.org/licenses/noncommercial/1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+Texto completo: [Licença Pública Geral GNU v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 
 ---
 

@@ -56,4 +56,4 @@ If you follow this policy and act in good faith (no data destruction, no abuse o
 ## More reading
 
 - Architecture and trust boundaries: `docs/reference/` (e.g. protocol, plugin system, AI docs).
-- License: [PolyForm Noncommercial 1.0.0](LICENSE) — does not waive security expectations for users.
+- License: [GPL-3.0](LICENSE) — does not waive security expectations for users.

@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="Phiên bản">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Phiên bản">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Nền tảng">
-  <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="Giấy phép">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Giấy phép">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">
   <img src="https://img.shields.io/badge/tauri-2.0-purple" alt="Tauri">
 </p>
@@ -357,19 +357,11 @@ cd src-tauri && cargo build --no-default-features --release
 
 ## Giấy phép
 
-**PolyForm Noncommercial 1.0.0** — phần mềm này được cấp phép chỉ cho **mục đích phi thương mại**.
+**GPL-3.0** — phần mềm này là phần mềm tự do được cấp phép theo [Giấy phép Công cộng GNU v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
-Giấy phép cho phép rõ ràng:
+Bạn được tự do sử dụng, sửa đổi và phân phối phần mềm này theo các điều khoản của GPL-3.0. Bất kỳ tác phẩm phái sinh nào cũng phải được phân phối theo cùng giấy phép.
 
-- **Sử dụng cá nhân** — nghiên cứu, thử nghiệm, kiểm tra cho kiến thức công cộng, học tập cá nhân, giải trí riêng tư, dự án sở thích, hoạt động nghiệp dư — với điều kiện **không có ứng dụng thương mại dự kiến nào**
-- **Tổ chức phi thương mại** — tổ chức từ thiện, cơ sở giáo dục, tổ chức nghiên cứu công, tổ chức an toàn/sức khỏe công cộng, tổ chức bảo vệ môi trường và cơ quan chính phủ — **bất kể nguồn tài trợ**
-- **Sử dụng hợp lý** — quyền sử dụng hợp lý của bạn theo luật áp dụng không bị giới hạn
-
-**Bất kỳ mục đích sử dụng nào khác đều yêu cầu giấy phép thương mại riêng từ bên cấp phép.** Điều này bao gồm nhưng không giới hạn: sử dụng trong công ty vì lợi nhuận (bao gồm đánh giá hoặc thử nghiệm nội bộ), sử dụng bởi freelancer hoặc nhà thầu cho công việc có trả phí, và bất kỳ phân phối nào trong bối cảnh thương mại.
-
-Nếu bạn không chắc chắn liệu mục đích sử dụng của bạn có đủ điều kiện hay không, vui lòng [mở một issue](https://github.com/AnalyseDeCircuit/oxideterm/issues).
-
-Toàn văn: [polyformproject.org/licenses/noncommercial/1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+Toàn văn: [Giấy phép Công cộng GNU v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 
 ---
 

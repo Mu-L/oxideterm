@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="バージョン">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="バージョン">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="プラットフォーム">
-  <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="ライセンス">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="ライセンス">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">
   <img src="https://img.shields.io/badge/tauri-2.0-purple" alt="Tauri">
 </p>
@@ -357,19 +357,11 @@ cd src-tauri && cargo build --no-default-features --release
 
 ## ライセンス
 
-**PolyForm Noncommercial 1.0.0** — 本ソフトウェアは**非商用利用のみ**にライセンスされています。
+**GPL-3.0** — 本ソフトウェアは [GNU 一般公衆利用許諾書 v3.0](https://www.gnu.org/licenses/gpl-3.0.html) のもとで公開されているフリーソフトウェアです。
 
-本ライセンスは以下を明示的に許可します：
+GPL-3.0 の条件のもとで、本ソフトウェアを自由に使用、修正、配布できます。派生物は同じライセンスのもとで配布する必要があります。
 
-- **個人利用** — 研究、実験、公知のためのテスト、個人学習、個人の娯楽、趣味のプロジェクト、アマチュアの追求 — ただし**商用利用の予定がない**場合に限る
-- **非商用組織** — 慈善団体、教育機関、公的研究機関、公衆安全・健康機関、環境保護団体、政府機関 — **資金源を問わず**
-- **フェアユース** — 該当法律に基づくフェアユースの権利は制限されません
-
-**その他のすべての利用にはライセンサーからの個別の商用ライセンスが必要です。** これには以下を含みますが、これに限定されません：営利企業内での利用（社内評価やテストを含む）、フリーランサーや請負業者による有償業務での利用、および商業的文脈での配布。
-
-利用が適格かどうか不明な場合は、[Issue を作成](https://github.com/AnalyseDeCircuit/oxideterm/issues)してください。
-
-全文：[polyformproject.org/licenses/noncommercial/1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+全文：[GNU 一般公衆利用許諾書 v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 
 ---
 

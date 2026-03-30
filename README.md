@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform">
-  <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="License">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">
   <img src="https://img.shields.io/badge/tauri-2.0-purple" alt="Tauri">
 </p>
@@ -357,19 +357,11 @@ cd src-tauri && cargo build --no-default-features --release
 
 ## License
 
-**PolyForm Noncommercial 1.0.0** — this software is licensed for **noncommercial use only**.
+**GPL-3.0** — this software is free software licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
-The license explicitly permits:
+You are free to use, modify, and distribute this software under the terms of the GPL-3.0. Any derivative work must also be distributed under the same license.
 
-- **Personal use** — research, experiment, testing for public knowledge, personal study, private entertainment, hobby projects, amateur pursuits — provided there is **no anticipated commercial application**
-- **Noncommercial organizations** — charitable organizations, educational institutions, public research organizations, public safety/health organizations, environmental protection organizations, and government institutions — **regardless of funding source**
-- **Fair use** — your fair use rights under applicable law are not limited
-
-**Any other use requires a separate commercial license from the licensor.** This includes but is not limited to: use within a for-profit company (including internal evaluation or testing), use by freelancers or contractors for paid work, and any distribution in a commercial context.
-
-If you're unsure whether your use qualifies, please [open an issue](https://github.com/AnalyseDeCircuit/oxideterm/issues).
-
-Full text: [polyformproject.org/licenses/noncommercial/1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+Full text: [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 
 ---
 

@@ -45,7 +45,7 @@ function buildNotices() {
   crates.sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
 
   // Filter out oxideterm before any statistics to avoid leaking local path
-  // and polluting license counts with our own non-commercial license.
+  // and polluting license counts with our own GPL-3.0 license.
   const thirdPartyCrates = crates.filter(c => c.name !== 'oxideterm');
 
   const licenseCounts = new Map();

@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="버전">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="버전">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="플랫폼">
-  <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blueviolet" alt="라이선스">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="라이선스">
   <img src="https://img.shields.io/badge/rust-1.75+-orange" alt="Rust">
   <img src="https://img.shields.io/badge/tauri-2.0-purple" alt="Tauri">
 </p>
@@ -357,19 +357,11 @@ cd src-tauri && cargo build --no-default-features --release
 
 ## 라이선스
 
-**PolyForm Noncommercial 1.0.0** — 이 소프트웨어는 **비상업적 사용에 한해** 라이선스됩니다.
+**GPL-3.0** — 이 소프트웨어는 [GNU 일반 공중 사용 허가서 v3.0](https://www.gnu.org/licenses/gpl-3.0.html) 하에 배포되는 자유 소프트웨어입니다.
 
-본 라이선스는 다음을 명시적으로 허용합니다:
+GPL-3.0 조건에 따라 이 소프트웨어를 자유롭게 사용, 수정 및 배포할 수 있습니다. 파생 작품도 동일한 라이선스 하에 배포해야 합니다.
 
-- **개인 사용** — 연구, 실험, 공적 지식을 위한 테스트, 개인 학습, 사적 오락, 취미 프로젝트, 아마추어 활동 — 단, **상업적 활용이 예상되지 않는** 경우에 한함
-- **비상업 조직** — 자선 단체, 교육 기관, 공적 연구 기관, 공공 안전·보건 기관, 환경 보호 단체, 정부 기관 — **자금 출처에 관계없이**
-- **공정 사용** — 관련 법률에 따른 공정 사용 권리는 제한되지 않습니다
-
-**기타 모든 사용에는 라이선서의 별도 상업 라이선스가 필요합니다.** 이에는 다음이 포함되지만 이에 국한되지 않습니다: 영리 기업 내 사용(내부 평가 또는 테스트 포함), 프리랜서 또는 계약자의 유상 업무 사용, 상업적 맥락에서의 배포.
-
-사용 자격 여부가 불확실한 경우 [Issue를 생성](https://github.com/AnalyseDeCircuit/oxideterm/issues)해 주세요.
-
-전문: [polyformproject.org/licenses/noncommercial/1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+전문: [GNU 일반 공중 사용 허가서 v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 
 ---
 

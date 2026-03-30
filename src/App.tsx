@@ -418,7 +418,9 @@ function App() {
           const { tabs, activeTabId, closeTab } = useAppStore.getState();
           if (!activeTabId) return;
           const others = tabs.filter((tab) => tab.id !== activeTabId);
-          for (const tab of others) { closeTab(tab.id); }
+          (async () => {
+            for (const tab of others) { await closeTab(tab.id); }
+          })();
           return;
         }
         // Cmd+N — New SSH connection

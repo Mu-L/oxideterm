@@ -1281,7 +1281,7 @@ export const SettingsView = () => {
                     {/* ── 基础 ── */}
                     <Button
                         variant={activeTab === 'general' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('general')}
                     >
                         <Monitor className="h-4 w-4" /> {t('settings.general.title')}
@@ -1292,21 +1292,21 @@ export const SettingsView = () => {
                     {/* ── 终端（字体/光标/缓冲区 → 主题/背景 → 本地 shell） ── */}
                     <Button
                         variant={activeTab === 'terminal' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('terminal')}
                     >
                         <TerminalIcon className="h-4 w-4" /> {t('settings.terminal.title')}
                     </Button>
                     <Button
                         variant={activeTab === 'appearance' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('appearance')}
                     >
                         <Monitor className="h-4 w-4" /> {t('settings_view.tabs.appearance')}
                     </Button>
                     <Button
                         variant={activeTab === 'local' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('local')}
                     >
                         <Square className="h-4 w-4" /> {t('settings_view.tabs.local')}
@@ -1317,21 +1317,21 @@ export const SettingsView = () => {
                     {/* ── 连接（默认/分组 → 密钥 → 重连策略） ── */}
                     <Button
                         variant={activeTab === 'connections' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('connections')}
                     >
                         <Shield className="h-4 w-4" /> {t('settings_view.tabs.connections')}
                     </Button>
                     <Button
                         variant={activeTab === 'ssh' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('ssh')}
                     >
                         <Key className="h-4 w-4" /> {t('settings_view.tabs.ssh')}
                     </Button>
                     <Button
                         variant={activeTab === 'reconnect' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('reconnect')}
                     >
                         <WifiOff className="h-4 w-4" /> {t('settings_view.tabs.reconnect')}
@@ -1342,28 +1342,28 @@ export const SettingsView = () => {
                     {/* ── 功能（文件传输 → 编辑器 → AI） ── */}
                     <Button
                         variant={activeTab === 'sftp' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('sftp')}
                     >
                         <HardDrive className="h-4 w-4" /> {t('settings_view.tabs.sftp')}
                     </Button>
                     <Button
                         variant={activeTab === 'ide' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('ide')}
                     >
                         <Code2 className="h-4 w-4" /> {t('settings_view.tabs.ide', 'IDE')}
                     </Button>
                     <Button
                         variant={activeTab === 'ai' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('ai')}
                     >
                         <Sparkles className="h-4 w-4" /> {t('settings_view.tabs.ai')}
                     </Button>
                     <Button
                         variant={activeTab === 'knowledge' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('knowledge')}
                     >
                         <BookOpen className="h-4 w-4" /> {t('settings_view.tabs.knowledge')}
@@ -1374,7 +1374,7 @@ export const SettingsView = () => {
                     {/* ── 帮助 ── */}
                     <Button
                         variant={activeTab === 'help' ? 'secondary' : 'ghost'}
-                        className="w-full justify-start gap-3 h-10 font-normal"
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
                         onClick={() => setActiveTab('help')}
                     >
                         <HelpCircle className="h-4 w-4" /> {t('settings_view.tabs.help')}

@@ -1384,9 +1384,15 @@ function applyAppearanceToDOM(appearance: AppearanceSettings): void {
   root.style.setProperty('--radius-md', `${r}px`);
   root.style.setProperty('--radius-lg', `${Math.round(r * 1.33)}px`);
 
-  // UI Font
+  // UI Font — split comma-separated input into proper CSS font-family fallback chain
   if (appearance.uiFontFamily) {
-    root.style.setProperty('--font-sans', `"${appearance.uiFontFamily}", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`);
+    const userFonts = appearance.uiFontFamily
+      .split(',')
+      .map((f) => f.trim())
+      .filter(Boolean)
+      .map((f) => `"${f}"`)
+      .join(', ');
+    root.style.setProperty('--font-sans', `${userFonts}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`);
   } else {
     root.style.removeProperty('--font-sans');
   }

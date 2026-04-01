@@ -13,7 +13,7 @@ const buttonVariants = cva(
         default:
           "bg-theme-text text-theme-bg hover:opacity-90 active:scale-[0.97] shadow-none border border-transparent",
         secondary:
-          "bg-theme-bg-panel text-theme-text border border-theme-border hover:bg-theme-bg-hover hover:border-theme-border-strong active:scale-[0.97]",
+          "bg-theme-bg-panel text-theme-text border border-theme-border shadow-sm hover:bg-theme-bg-hover hover:border-theme-border-strong active:scale-[0.97]",
         outline:
           "border border-theme-border bg-transparent hover:bg-theme-bg-hover hover:border-theme-border-strong active:scale-[0.97] text-theme-text",
         ghost: "hover:bg-theme-bg-hover hover:text-theme-text text-theme-text",
@@ -29,13 +29,14 @@ const buttonVariants = cva(
       },
       radius: {
         none: "rounded-none",
-        sm: "rounded-sm", // 2px
+        sm: "rounded-sm",
+        md: "rounded-md",
       }
     },
     defaultVariants: {
       variant: "secondary",
       size: "default",
-      radius: "sm",
+      radius: "md",
     },
   }
 )

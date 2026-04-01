@@ -53,7 +53,7 @@ const AppIcon: React.FC<{
       title={app.name}
     >
       {/* Icon — larger, matching native Launchpad size */}
-      <div className="w-16 h-16 rounded-[14px] overflow-hidden flex items-center justify-center shadow-md shadow-black/20">
+      <div className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center shadow-md shadow-black/20">
         {iconUrl && !iconError ? (
           <img
             src={iconUrl}

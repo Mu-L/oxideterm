@@ -144,9 +144,11 @@
   /* Overridden by [data-density] selectors for compact / spacious modes */
 
   /* Borders — dynamically driven by --ui-radius CSS property (set via JS) */
+  --radius: calc(var(--ui-radius, 6px) * 0.67);
   --radius-sm: max(1px, calc(var(--ui-radius, 6px) * 0.33));
   --radius-md: var(--ui-radius, 6px);
   --radius-lg: calc(var(--ui-radius, 6px) * 1.33);
+  --radius-xl: calc(var(--ui-radius, 6px) * 2);
 
   /* Animation speed multiplier (1 = normal, 0 = off) */
   --animation-speed: 1;

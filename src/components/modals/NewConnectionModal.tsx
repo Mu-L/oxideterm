@@ -337,13 +337,13 @@ export const NewConnectionModal = () => {
         toggleModal('newConnection', open);
       }}>
         <DialogContent
-          className="max-h-[90vh] overflow-y-auto"
+          className="max-h-[90vh] flex flex-col overflow-hidden"
           aria-describedby="new-connection-description"
           onKeyDown={handleFormKeyDown}
           onCompositionStart={() => { isComposingRef.current = true; }}
           onCompositionEnd={() => { isComposingRef.current = false; }}
         >
-          <DialogHeader>
+          <DialogHeader className="shrink-0">
             <DialogTitle>{t('modals.new_connection.title')}</DialogTitle>
             <DialogDescription id="new-connection-description">
               {t('modals.new_connection.description')}
@@ -352,7 +352,7 @@ export const NewConnectionModal = () => {
           
           {/* KBI Error display */}
           {kbiError && (
-            <div className="mx-4 mt-2 p-3 bg-red-950/30 border border-red-900/50 rounded text-sm text-red-400">
+            <div className="mx-4 mt-2 p-3 bg-red-950/30 border border-red-900/50 rounded text-sm text-red-400 shrink-0">
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4" />
                 <span>{t('modals.new_connection.twofa_error')}: {kbiError}</span>
@@ -360,6 +360,7 @@ export const NewConnectionModal = () => {
             </div>
           )}
           
+          <div className="flex-1 overflow-y-auto min-h-0">
           <div className="space-y-6 p-4">
             <div className="space-y-4">
               <div className="space-y-2">
@@ -686,8 +687,9 @@ export const NewConnectionModal = () => {
             )}
           </div>
         </div>
+        </div>
    
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
            <Button variant="ghost" onClick={() => toggleModal('newConnection', false)}>{t('modals.new_connection.cancel')}</Button>
            <Button onClick={handleConnect} disabled={loading || !canConnect()}>
               {loading ? t('modals.new_connection.connecting') : t('modals.new_connection.connect')}

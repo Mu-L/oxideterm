@@ -51,7 +51,7 @@ const bgColorClasses = {
 
 function StatCard({ label, value, icon, color = 'gray', sublabel }: StatCardProps) {
   return (
-    <div className={`rounded-lg p-3 ${bgColorClasses[color]}`}>
+    <div className={`rounded-lg p-3 shadow-sm ${bgColorClasses[color]}`}>
       <div className="flex items-center gap-2">
         <span className={colorClasses[color]}>{icon}</span>
         <span className="text-xs text-muted-foreground">{label}</span>

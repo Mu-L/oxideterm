@@ -29,6 +29,8 @@ import {
   Type,
   Command,
   Sparkles,
+  SquareTerminal,
+  Bot,
 } from 'lucide-react';
 
 // ============================================================================
@@ -392,7 +394,9 @@ export const OnboardingModal = () => {
       <div className="grid grid-cols-2 gap-2">
         {([
           { icon: Command, key: 'cmd_palette', shortcut: isMac ? '⌘K' : 'Ctrl+K' },
+          { icon: Bot, key: 'ai_chat', shortcut: null },
           { icon: RefreshCw, key: 'reconnect', shortcut: null },
+          { icon: SquareTerminal, key: 'cli_companion', shortcut: null },
           { icon: ArrowUpDown, key: 'multiplexing', shortcut: null },
           { icon: Shield, key: 'security', shortcut: null },
         ] as const).map((item) => (

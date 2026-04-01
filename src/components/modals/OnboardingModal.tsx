@@ -31,6 +31,16 @@ import {
   Sparkles,
   SquareTerminal,
   Bot,
+  Route,
+  Keyboard,
+  Waypoints,
+  FolderOpen,
+  Server,
+  FileCode,
+  Zap,
+  Lock,
+  Cpu,
+  Puzzle,
 } from 'lucide-react';
 
 // ============================================================================
@@ -68,7 +78,7 @@ const FONT_OPTIONS: { value: FontFamily; label: string; bundled: boolean }[] = [
   { value: 'menlo', label: 'Menlo', bundled: false },
 ];
 
-const TOTAL_STEPS = 5; // 0..4
+const TOTAL_STEPS = 7; // 0..6
 
 /** Mini terminal preview for theme cards */
 const ThemeCard = ({
@@ -167,7 +177,7 @@ export const OnboardingModal = () => {
 
   // Scan SSH config hosts when reaching the quick-start step
   useEffect(() => {
-    if (!open || step !== 3) return;
+    if (!open || step !== 4) return;
     api.listSshConfigHosts()
       .then((hosts) => setHostCount(hosts.filter((h) => h.alias !== '*').length))
       .catch(() => setHostCount(0));
@@ -228,7 +238,7 @@ export const OnboardingModal = () => {
 
   /** Step 0 — Welcome + Language */
   const renderWelcome = () => (
-    <div className="px-6 pt-8 pb-6 space-y-6">
+    <div className="px-6 pt-8 pb-6 space-y-5">
       <div className="text-center select-none">
         <div className="flex items-center justify-center gap-1">
           <h2 className="text-3xl font-bold tracking-tight text-theme-text empty-brand">
@@ -239,8 +249,26 @@ export const OnboardingModal = () => {
         <p className="text-sm text-theme-text-muted mt-2">{t('onboarding.subtitle')}</p>
       </div>
 
-      <div className="rounded-md border border-theme-border bg-theme-bg-panel p-4 space-y-3">
+      <div className="rounded-md border border-theme-border bg-theme-bg-panel p-4">
         <p className="text-sm text-theme-text leading-relaxed">{t('onboarding.project_intro')}</p>
+      </div>
+
+      {/* Core highlights */}
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          { icon: Zap, key: 'highlight_performance' },
+          { icon: Lock, key: 'highlight_security_arch' },
+          { icon: Cpu, key: 'highlight_crossplatform' },
+          { icon: Puzzle, key: 'highlight_extensible' },
+        ] as const).map((item) => (
+          <div key={item.key} className="flex gap-2 p-2.5 rounded-md bg-theme-bg-panel/50 border border-theme-border/50">
+            <item.icon className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[var(--theme-accent)]" />
+            <div className="min-w-0">
+              <span className="text-xs font-medium text-theme-text">{t(`onboarding.${item.key}`)}</span>
+              <p className="text-[10px] text-theme-text-muted leading-snug mt-0.5">{t(`onboarding.${item.key}_desc`)}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="space-y-2">
@@ -334,7 +362,55 @@ export const OnboardingModal = () => {
     </div>
   );
 
-  /** Step 3 — Quick Start (SSH import + actions) */
+  /** Step 3 — Core Workflow */
+  const renderWorkflow = () => {
+    const workflows = [
+      { icon: Server, key: 'workflow_connect' },
+      { icon: Terminal, key: 'workflow_terminal' },
+      { icon: FolderOpen, key: 'workflow_sftp' },
+      { icon: Waypoints, key: 'workflow_forwarding' },
+      { icon: FileCode, key: 'workflow_ide' },
+    ] as const;
+
+    return (
+      <div className="px-6 pt-6 pb-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Route className="h-5 w-5 text-[var(--theme-accent)]" />
+          <div>
+            <h3 className="text-lg font-semibold text-theme-text">{t('onboarding.workflow_title')}</h3>
+            <p className="text-xs text-theme-text-muted">{t('onboarding.workflow_desc')}</p>
+          </div>
+        </div>
+
+        <div className="relative space-y-0">
+          {workflows.map((item, i) => (
+            <div key={item.key} className="flex items-start gap-3 relative">
+              {/* Vertical connector line */}
+              {i < workflows.length - 1 && (
+                <div className="absolute left-[13px] top-[28px] w-px h-[calc(100%-16px)] bg-theme-border" />
+              )}
+              {/* Step number circle */}
+              <div className="relative z-10 flex items-center justify-center w-[28px] h-[28px] rounded-full bg-[var(--theme-accent)]/15 border border-[var(--theme-accent)]/30 shrink-0 mt-1.5">
+                <span className="text-[11px] font-bold text-[var(--theme-accent)]">{i + 1}</span>
+              </div>
+              {/* Content */}
+              <div className="flex-1 pb-4">
+                <div className="flex items-center gap-2 rounded-md border border-theme-border bg-theme-bg-panel p-3">
+                  <item.icon className="h-4 w-4 shrink-0 text-[var(--theme-accent)]" />
+                  <div className="min-w-0">
+                    <span className="text-xs font-medium text-theme-text">{t(`onboarding.${item.key}`)}</span>
+                    <p className="text-[11px] text-theme-text-muted leading-snug mt-0.5">{t(`onboarding.${item.key}_desc`)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  /** Step 4 — Quick Start (SSH import + actions) */
   const renderQuickStart = () => (
     <div className="px-6 pt-6 pb-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -385,7 +461,80 @@ export const OnboardingModal = () => {
     </div>
   );
 
-  /** Step 4 — Features + Finish */
+  /** Step 5 — Keyboard Shortcuts */
+  const renderShortcuts = () => {
+    const mod = isMac ? '⌘' : 'Ctrl';
+    const shortcutGroups = [
+      {
+        titleKey: 'shortcuts_navigation',
+        items: [
+          { keys: [`${mod}K`], descKey: 'shortcut_command_palette' },
+          { keys: [`${mod}N`], descKey: 'shortcut_new_connection' },
+          { keys: [`${mod}T`], descKey: 'shortcut_new_tab' },
+        ],
+      },
+      {
+        titleKey: 'shortcuts_terminal',
+        items: [
+          { keys: [`${mod}F`], descKey: 'shortcut_search' },
+          { keys: [isMac ? '⌘⇧A' : 'Ctrl+Shift+A'], descKey: 'shortcut_ai_chat' },
+          { keys: [`${mod}${isMac ? '⇧' : '+Shift+'}C`], descKey: 'shortcut_copy' },
+        ],
+      },
+      {
+        titleKey: 'shortcuts_window',
+        items: [
+          { keys: [`${mod}E`], descKey: 'shortcut_split_right' },
+          { keys: [`${mod}D`], descKey: 'shortcut_split_down' },
+          { keys: [`${mod}W`], descKey: 'shortcut_close_tab' },
+          { keys: [`${mod}${isMac ? '' : '+'}=`, `${mod}${isMac ? '' : '+'}-`], descKey: 'shortcut_zoom' },
+        ],
+      },
+    ];
+
+    return (
+      <div className="px-6 pt-6 pb-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Keyboard className="h-5 w-5 text-[var(--theme-accent)]" />
+          <div>
+            <h3 className="text-lg font-semibold text-theme-text">{t('onboarding.shortcuts_title')}</h3>
+            <p className="text-xs text-theme-text-muted">{t('onboarding.shortcuts_hint')}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          {shortcutGroups.map((group) => (
+            <div key={group.titleKey} className="space-y-2">
+              <span className="text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">
+                {t(`onboarding.${group.titleKey}`)}
+              </span>
+              <div className="space-y-1.5">
+                {group.items.map((item) => (
+                  <div key={item.descKey} className="flex items-start gap-2">
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {item.keys.map((k, i) => (
+                        <span key={i}>
+                          {i > 0 && <span className="text-[9px] text-theme-text-muted mx-0.5">/</span>}
+                          <kbd className="inline-flex items-center px-1.5 py-0.5 rounded bg-theme-bg border border-theme-border text-theme-text-muted font-mono text-[10px] leading-tight shadow-sm">
+                            {k}
+                          </kbd>
+                        </span>
+                      ))}
+                    </div>
+                    <span className="text-[11px] text-theme-text leading-snug mt-0.5">
+                      {t(`onboarding.${item.descKey}`)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  /** Step 6 — Features + Finish */
   const renderFeatures = () => (
     <div className="px-6 pt-6 pb-6 space-y-4">
       <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider">
@@ -395,6 +544,8 @@ export const OnboardingModal = () => {
         {([
           { icon: Command, key: 'cmd_palette', shortcut: isMac ? '⌘K' : 'Ctrl+K' },
           { icon: Bot, key: 'ai_chat', shortcut: null },
+          { icon: FolderOpen, key: 'sftp', shortcut: null },
+          { icon: Waypoints, key: 'port_forwarding', shortcut: null },
           { icon: RefreshCw, key: 'reconnect', shortcut: null },
           { icon: SquareTerminal, key: 'cli_companion', shortcut: null },
           { icon: ArrowUpDown, key: 'multiplexing', shortcut: null },
@@ -419,8 +570,8 @@ export const OnboardingModal = () => {
     </div>
   );
 
-  const STEP_ICONS = [Globe, Palette, Type, Sparkles, Shield];
-  const stepRenderers = [renderWelcome, renderTheme, renderFont, renderQuickStart, renderFeatures];
+  const STEP_ICONS = [Globe, Palette, Type, Route, Sparkles, Keyboard, Shield];
+  const stepRenderers = [renderWelcome, renderTheme, renderFont, renderWorkflow, renderQuickStart, renderShortcuts, renderFeatures];
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>

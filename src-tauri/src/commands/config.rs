@@ -140,7 +140,9 @@ fn auth_to_info(auth: &SavedAuth) -> (String, Option<String>, Option<String>) {
         SavedAuth::Password { .. } => ("password".to_string(), None, None),
         SavedAuth::Key { key_path, .. } => ("key".to_string(), Some(key_path.clone()), None),
         SavedAuth::Certificate {
-            key_path, cert_path, ..
+            key_path,
+            cert_path,
+            ..
         } => (
             "certificate".to_string(),
             Some(key_path.clone()),
@@ -198,9 +200,9 @@ pub struct SaveConnectionRequest {
     pub host: String,
     pub port: u16,
     pub username: String,
-    pub auth_type: String,        // "password", "key", "agent"
-    pub password: Option<String>, // Only for password auth
-    pub key_path: Option<String>, // Only for key auth
+    pub auth_type: String,         // "password", "key", "agent"
+    pub password: Option<String>,  // Only for password auth
+    pub key_path: Option<String>,  // Only for key auth
     pub cert_path: Option<String>, // Only for certificate auth
     pub color: Option<String>,
     #[serde(default)]

@@ -508,10 +508,15 @@ impl PtyHandle {
             tracing::debug!("Killing process tree for PID {} (Windows)", pid);
 
             // Use taskkill /F /T to force-kill the entire process tree
-            match std::process::Command::new("taskkill")
-                .args(["/F", "/T", "/PID", &pid.to_string()])
-                .output()
+            #[allow(unused_mut)]
+            let mut cmd = std::process::Command::new("taskkill");
+            cmd.args(["/F", "/T", "/PID", &pid.to_string()]);
+            #[cfg(windows)]
             {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+            match cmd.output() {
                 Ok(output) if output.status.success() => {
                     tracing::debug!("Successfully killed process tree for PID {}", pid);
                 }

@@ -1,7 +1,7 @@
 # Third-Party Notices (Frontend)
 
 This file lists third-party components used by the frontend (including transitive production dependencies) and their declared licenses.
-Generated: 2026-03-30T13:05:28.211Z
+Generated: 2026-04-03T19:02:33.006Z
 
 ## Summary
 - MIT: 228
@@ -24,7 +24,7 @@ Generated: 2026-03-30T13:05:28.211Z
 | Package | Version(s) | License | Homepage |
 |---|---:|---|---|
 | @antfu/install-pkg | 1.1.0 | MIT | https://github.com/antfu/install-pkg#readme |
-| @babel/runtime | 7.28.6 | MIT | https://babel.dev/docs/en/next/babel-runtime |
+| @babel/runtime | 7.28.6, 7.29.2 | MIT | https://babel.dev/docs/en/next/babel-runtime |
 | @braintree/sanitize-url | 7.1.2 | MIT | https://github.com/braintree/sanitize-url#readme |
 | @chevrotain/cst-dts-gen | 11.0.3 | Apache-2.0 | https://github.com/Chevrotain/chevrotain#readme |
 | @chevrotain/gast | 11.0.3 | Apache-2.0 | https://github.com/Chevrotain/chevrotain#readme |
@@ -244,14 +244,14 @@ Generated: 2026-03-30T13:05:28.211Z
 | delaunator | 5.0.1 | ISC | https://github.com/mapbox/delaunator#readme |
 | detect-node-es | 1.1.0 | MIT | https://github.com/thekashey/detect-node |
 | dingbat-to-unicode | 1.0.1 | BSD-2-Clause | https://github.com/mwilliamson/dingbat-to-unicode#readme |
-| dompurify | 3.3.1 | (MPL-2.0 OR Apache-2.0) | https://github.com/cure53/DOMPurify |
+| dompurify | 3.3.3 | (MPL-2.0 OR Apache-2.0) | https://github.com/cure53/DOMPurify |
 | duck | 0.1.12 | BSD | https://github.com/mwilliamson/duck.js#readme |
 | frac | 1.1.2 | Apache-2.0 | http://sheetjs.com/opensource |
 | get-nonce | 1.0.1 | MIT | https://github.com/theKashey/get-nonce |
 | hachure-fill | 0.5.2 | MIT | https://github.com/pshihn/hachure-fill#readme |
 | html-parse-stringify | 3.0.1 | MIT | https://github.com/henrikjoreteg/html-parse-stringify |
 | i18next | 25.7.4 | MIT | https://www.i18next.com |
-| i18next-browser-languagedetector | 8.2.0 | MIT | https://github.com/i18next/i18next-browser-languageDetector |
+| i18next-browser-languagedetector | 8.2.1 | MIT | https://github.com/i18next/i18next-browser-languageDetector |
 | iconv-lite | 0.6.3 | MIT | https://github.com/ashtuchkin/iconv-lite |
 | immediate | 3.0.6 | MIT | https://github.com/calvinmetcalf/immediate#readme |
 | inherits | 2.0.4 | ISC | https://github.com/isaacs/inherits#readme |
@@ -259,14 +259,14 @@ Generated: 2026-03-30T13:05:28.211Z
 | isarray | 1.0.0 | MIT | https://github.com/juliangruber/isarray |
 | js-base64 | 3.7.8 | BSD-3-Clause | https://github.com/dankogai/js-base64#readme |
 | jszip | 3.10.1 | (MIT OR GPL-3.0-or-later) | https://github.com/Stuk/jszip#readme |
-| katex | 0.16.28 | MIT | https://katex.org |
+| katex | 0.16.44 | MIT | https://katex.org |
 | khroma | 2.1.0 | MIT | https://github.com/fabiospampinato/khroma#readme |
 | langium | 3.3.1 | MIT | https://langium.org |
 | layout-base | 1.0.2, 2.0.1 | MIT | https://github.com/iVis-at-Bilkent/layout-base#readme |
 | lie | 3.3.0 | MIT | https://github.com/calvinmetcalf/lie#readme |
 | lodash-es | 4.17.21, 4.17.23 | MIT | https://lodash.com/custom-builds |
 | lop | 0.4.2 | BSD-2-Clause | https://github.com/mwilliamson/lop#readme |
-| lucide-react | 0.562.0 | ISC | https://lucide.dev |
+| lucide-react | 0.577.0 | ISC | https://lucide.dev |
 | mammoth | 1.11.0 | BSD-2-Clause | https://github.com/mwilliamson/mammoth.js#readme |
 | marked | 16.4.2, 17.0.1 | MIT | https://marked.js.org |
 | mermaid | 11.12.2 | MIT | https://github.com/mermaid-js/mermaid#readme |

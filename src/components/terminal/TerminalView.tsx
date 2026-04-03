@@ -14,7 +14,7 @@ import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { triggerGitRefresh } from '../../store/ideStore';
 import { api } from '../../lib/api';
-import { themes } from '../../lib/themes';
+import { getTerminalTheme } from '../../lib/themes';
 import { getFontFamily } from '../../lib/fontFamily';
 import { useTerminalViewShortcuts } from '../../hooks/useTerminalKeyboard';
 import { SearchBar, DeepSearchState } from './SearchBar';
@@ -580,7 +580,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         // Apply theme update — must use transparent background when bg image is set
         const enabledTabs = terminal.backgroundEnabledTabs ?? ['terminal', 'local_terminal'];
         const hasBg = terminal.backgroundEnabled !== false && !!terminal.backgroundImage && enabledTabs.includes('terminal');
-        const themeConfig = themes[terminal.theme] || themes.default;
+        const themeConfig = getTerminalTheme(terminal.theme);
         term.options.theme = hasBg
           ? { ...themeConfig, background: hexToRgba(themeConfig.background || '#09090b', 0.01), overviewRulerBorder: 'transparent', scrollbarSliderBackground: 'rgba(255,255,255,0.15)', scrollbarSliderHoverBackground: 'rgba(255,255,255,0.3)', scrollbarSliderActiveBackground: 'rgba(255,255,255,0.4)' }
           : { ...themeConfig, overviewRulerBorder: 'transparent', scrollbarSliderBackground: 'rgba(255,255,255,0.15)', scrollbarSliderHoverBackground: 'rgba(255,255,255,0.3)', scrollbarSliderActiveBackground: 'rgba(255,255,255,0.4)' };
@@ -914,7 +914,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const hasBgImage = terminalSettings.backgroundEnabled !== false
       && !!terminalSettings.backgroundImage
       && (terminalSettings.backgroundEnabledTabs ?? ['terminal', 'local_terminal']).includes('terminal');
-    const baseTheme = themes[terminalSettings.theme] || themes.default;
+    const baseTheme = getTerminalTheme(terminalSettings.theme);
     const xtermTheme = hasBgImage
       ? { ...baseTheme, background: hexToRgba(baseTheme.background || '#09090b', 0.01), overviewRulerBorder: 'transparent', scrollbarSliderBackground: 'rgba(255,255,255,0.15)', scrollbarSliderHoverBackground: 'rgba(255,255,255,0.3)', scrollbarSliderActiveBackground: 'rgba(255,255,255,0.4)' }
       : { ...baseTheme, overviewRulerBorder: 'transparent', scrollbarSliderBackground: 'rgba(255,255,255,0.15)', scrollbarSliderHoverBackground: 'rgba(255,255,255,0.3)', scrollbarSliderActiveBackground: 'rgba(255,255,255,0.4)' };
@@ -1711,7 +1711,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   };
 
-  const currentTheme = themes[terminalSettings.theme] || themes.default;
+  const currentTheme = getTerminalTheme(terminalSettings.theme);
 
   // ── Background Image ──────────────────────────────────────────────────
   // Compute the asset:// URL and effective blur (capped on low-end GPU)

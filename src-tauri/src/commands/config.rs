@@ -435,7 +435,9 @@ pub async fn save_connection(
                                 .keychain
                                 .store(&kc_id, password)
                                 .map_err(|e| e.to_string())?;
-                            SavedAuth::Password { keychain_id: Some(kc_id) }
+                            SavedAuth::Password {
+                                keychain_id: Some(kc_id),
+                            }
                         }
                         "key" => {
                             let key_path = hop_req
@@ -531,7 +533,9 @@ pub async fn save_connection(
                                 .keychain
                                 .store(&kc_id, password)
                                 .map_err(|e| e.to_string())?;
-                            SavedAuth::Password { keychain_id: Some(kc_id) }
+                            SavedAuth::Password {
+                                keychain_id: Some(kc_id),
+                            }
                         }
                         "key" => {
                             let key_path = hop_req
@@ -627,7 +631,10 @@ pub async fn delete_connection(
 
         // Delete keychain entry if password auth
         if let Some(conn) = config.get_connection(&id) {
-            if let SavedAuth::Password { keychain_id: Some(keychain_id) } = &conn.auth {
+            if let SavedAuth::Password {
+                keychain_id: Some(keychain_id),
+            } = &conn.auth
+            {
                 let _ = state.keychain.delete(keychain_id);
             }
         }
@@ -666,9 +673,9 @@ pub async fn get_connection_password(
     let conn = config.get_connection(&id).ok_or("Connection not found")?;
 
     match &conn.auth {
-        SavedAuth::Password { keychain_id: Some(keychain_id) } => {
-            state.keychain.get(keychain_id).map_err(|e| e.to_string())
-        }
+        SavedAuth::Password {
+            keychain_id: Some(keychain_id),
+        } => state.keychain.get(keychain_id).map_err(|e| e.to_string()),
         SavedAuth::Password { keychain_id: None } => {
             Err("Password not saved for this connection".to_string())
         }

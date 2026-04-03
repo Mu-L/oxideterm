@@ -314,7 +314,9 @@ pub async fn import_from_oxide(
                         id: keychain_id.clone(),
                         value: password,
                     });
-                    SavedAuth::Password { keychain_id: Some(keychain_id) }
+                    SavedAuth::Password {
+                        keychain_id: Some(keychain_id),
+                    }
                 }
             }
             EncryptedAuth::Key {

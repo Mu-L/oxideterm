@@ -76,10 +76,43 @@ impl SshClient {
 
         // Authenticate
         let authenticated = match &self.config.auth {
-            AuthMethod::Password { password } => handle
-                .authenticate_password(&self.config.username, password)
+            AuthMethod::Password { password } => {
+                let result = tokio::time::timeout(
+                    Duration::from_secs(30),
+                    handle.authenticate_password(&self.config.username, password),
+                )
                 .await
-                .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?,
+                .map_err(|_| SshError::Timeout("Password authentication timed out".to_string()))?
+                .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?;
+
+                // Retry once on Failure (not partial success) to handle intermittent
+                // server-side rejections, PAM delays, and protocol timing issues.
+                // Do NOT retry partial_success=true (multi-factor auth in progress).
+                if matches!(
+                    result,
+                    client::AuthResult::Failure {
+                        partial_success: false,
+                        ..
+                    }
+                ) {
+                    debug!(
+                        "Password auth attempt 1 returned {:?}, retrying after 500ms",
+                        result
+                    );
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    tokio::time::timeout(
+                        Duration::from_secs(30),
+                        handle.authenticate_password(&self.config.username, password),
+                    )
+                    .await
+                    .map_err(|_| {
+                        SshError::Timeout("Password authentication timed out (retry)".to_string())
+                    })?
+                    .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?
+                } else {
+                    result
+                }
+            }
             AuthMethod::Key {
                 key_path,
                 passphrase,
@@ -147,9 +180,10 @@ impl SshClient {
         };
 
         if !authenticated.success() {
-            return Err(SshError::AuthenticationFailed(
-                "Authentication rejected by server".to_string(),
-            ));
+            return Err(SshError::AuthenticationFailed(format!(
+                "Authentication rejected by server ({:?})",
+                authenticated
+            )));
         }
 
         info!("SSH authentication successful");

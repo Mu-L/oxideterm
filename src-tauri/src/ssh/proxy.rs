@@ -227,10 +227,38 @@ async fn direct_connect(
     let authenticated = match &hop.auth {
         AuthMethod::Password { password } => {
             info!("Authenticating to jump host with password");
-            handle
-                .authenticate_password(&hop.username, password)
+            let result = tokio::time::timeout(
+                Duration::from_secs(30),
+                handle.authenticate_password(&hop.username, password),
+            )
+            .await
+            .map_err(|_| SshError::Timeout(format!("Password auth to {} timed out", hop.host)))?
+            .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?;
+
+            if matches!(
+                result,
+                client::AuthResult::Failure {
+                    partial_success: false,
+                    ..
+                }
+            ) {
+                debug!(
+                    "Jump host password auth attempt 1 returned {:?}, retrying",
+                    result
+                );
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                tokio::time::timeout(
+                    Duration::from_secs(30),
+                    handle.authenticate_password(&hop.username, password),
+                )
                 .await
+                .map_err(|_| {
+                    SshError::Timeout(format!("Password auth to {} timed out (retry)", hop.host))
+                })?
                 .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?
+            } else {
+                result
+            }
         }
         AuthMethod::Key {
             key_path,
@@ -363,10 +391,38 @@ async fn connect_via_stream(
     let authenticated = match &hop.auth {
         AuthMethod::Password { password } => {
             info!("Authenticating via stream with password");
-            handle
-                .authenticate_password(&hop.username, password)
+            let result = tokio::time::timeout(
+                Duration::from_secs(30),
+                handle.authenticate_password(&hop.username, password),
+            )
+            .await
+            .map_err(|_| SshError::Timeout(format!("Password auth to {} timed out", hop.host)))?
+            .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?;
+
+            if matches!(
+                result,
+                client::AuthResult::Failure {
+                    partial_success: false,
+                    ..
+                }
+            ) {
+                debug!(
+                    "Stream password auth attempt 1 returned {:?}, retrying",
+                    result
+                );
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                tokio::time::timeout(
+                    Duration::from_secs(30),
+                    handle.authenticate_password(&hop.username, password),
+                )
                 .await
+                .map_err(|_| {
+                    SshError::Timeout(format!("Password auth to {} timed out (retry)", hop.host))
+                })?
                 .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?
+            } else {
+                result
+            }
         }
         AuthMethod::Key {
             key_path,

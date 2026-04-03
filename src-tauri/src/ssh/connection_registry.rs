@@ -1093,15 +1093,56 @@ impl SshConnectionRegistry {
 
         // 5. 认证
         let authenticated = match &target_config.auth {
-            AuthMethod::Password { password } => handle
-                .authenticate_password(&target_config.username, password)
+            AuthMethod::Password { password } => {
+                let result = tokio::time::timeout(
+                    Duration::from_secs(30),
+                    handle.authenticate_password(&target_config.username, password),
+                )
                 .await
+                .map_err(|_| {
+                    ConnectionRegistryError::ConnectionFailed(
+                        "Password authentication timed out".to_string(),
+                    )
+                })?
                 .map_err(|e| {
                     ConnectionRegistryError::ConnectionFailed(format!(
                         "Authentication failed: {}",
                         e
                     ))
-                })?,
+                })?;
+
+                if matches!(
+                    result,
+                    russh::client::AuthResult::Failure {
+                        partial_success: false,
+                        ..
+                    }
+                ) {
+                    debug!(
+                        "Tunnel password auth attempt 1 returned {:?}, retrying",
+                        result
+                    );
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    tokio::time::timeout(
+                        Duration::from_secs(30),
+                        handle.authenticate_password(&target_config.username, password),
+                    )
+                    .await
+                    .map_err(|_| {
+                        ConnectionRegistryError::ConnectionFailed(
+                            "Password authentication timed out (retry)".to_string(),
+                        )
+                    })?
+                    .map_err(|e| {
+                        ConnectionRegistryError::ConnectionFailed(format!(
+                            "Authentication failed: {}",
+                            e
+                        ))
+                    })?
+                } else {
+                    result
+                }
+            }
             AuthMethod::Key {
                 key_path,
                 passphrase,

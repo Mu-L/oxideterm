@@ -199,7 +199,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
     return (
       <button
         onClick={onOpenSettings}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-400/10"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-400/10"
       >
         <Circle className="w-1.5 h-1.5 fill-current" />
         <span>{t('ai.model_selector.no_provider')}</span>
@@ -212,7 +212,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
       <button
         onClick={() => setOpen(!open)}
         className={cn(
-          "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium min-w-0",
+          "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium min-w-0",
           "text-theme-text-muted hover:text-theme-text hover:bg-theme-accent/10",
           open && "bg-theme-accent/10 text-theme-text"
         )}
@@ -227,7 +227,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
       </button>
 
       {open && (
-        <div className="absolute left-0 bottom-full mb-0.5 w-64 bg-theme-bg-elevated border border-theme-border shadow-lg z-50 overflow-hidden">
+        <div className="absolute left-0 bottom-full mb-0.5 w-64 bg-theme-bg-elevated border border-theme-border rounded-md shadow-lg z-50 overflow-hidden">
           <div className="max-h-80 overflow-y-auto py-1">
             {aiSettings.providers
               .filter((p) => p.enabled)

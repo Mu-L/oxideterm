@@ -261,7 +261,7 @@ export function ChatInput({ onSend, onStop, isLoading, disabled, externalValue, 
               type="button"
               onClick={() => setIncludeContext(!includeContext)}
               disabled={fetchingContext}
-              className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-tight uppercase border shrink-0 ${includeContext
+              className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-tight uppercase border rounded-md shrink-0 ${includeContext
                 ? 'bg-theme-accent/10 border-theme-accent/30 text-theme-accent'
                 : 'bg-transparent text-theme-text-muted border-theme-border/30 hover:border-theme-border/50'
                 } ${fetchingContext ? 'opacity-50 cursor-wait' : ''}`}
@@ -276,7 +276,7 @@ export function ChatInput({ onSend, onStop, isLoading, disabled, externalValue, 
               type="button"
               onClick={() => setIncludeAllPanes(!includeAllPanes)}
               disabled={fetchingContext}
-              className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-tight uppercase border shrink-0 ${includeAllPanes
+              className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-tight uppercase border rounded-md shrink-0 ${includeAllPanes
                 ? 'bg-blue-500/10 border-blue-500/30 text-blue-500'
                 : 'bg-transparent text-theme-text-muted border-theme-border/30 hover:border-theme-border/50'
                 } ${fetchingContext ? 'opacity-50 cursor-wait' : ''}`}
@@ -289,7 +289,7 @@ export function ChatInput({ onSend, onStop, isLoading, disabled, externalValue, 
           {/* IDE context indicator — auto-injected when IDE mode is active */}
           {hasIdeContext && (
             <span
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-tight uppercase border shrink-0 bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-tight uppercase border rounded-md shrink-0 bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
               title={ideActiveTabPath ?? ideProject?.name ?? t('ai.input.ide_context')}
             >
               <Code2 className="w-3 h-3" />
@@ -300,7 +300,7 @@ export function ChatInput({ onSend, onStop, isLoading, disabled, externalValue, 
           {/* SFTP context indicator — auto-injected when browsing files */}
           {hasSftpContext && (
             <span
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-tight uppercase border shrink-0 bg-orange-500/10 border-orange-500/30 text-orange-500"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-tight uppercase border rounded-md shrink-0 bg-orange-500/10 border-orange-500/30 text-orange-500"
               title={getSftpContext(activeTab?.nodeId ?? '')?.remotePath ?? t('ai.input.sftp_context')}
             >
               <FolderOpen className="w-3 h-3" />
@@ -311,12 +311,12 @@ export function ChatInput({ onSend, onStop, isLoading, disabled, externalValue, 
       )}
 
       {/* Input area — Flat, no rounded corners, integrated */}
-      <div className="relative flex flex-col bg-theme-bg-panel/15 border border-theme-border/40 focus-within:border-theme-accent/40">
+      <div className="relative flex flex-col bg-theme-bg-panel/15 border border-theme-border/40 rounded-md focus-within:border-theme-accent/40 shadow-sm focus-within:shadow-md transition-shadow">
         {/* Autocomplete Popup */}
         {acVisible && acItems.length > 0 && (
           <div
             ref={acRef}
-            className="absolute bottom-full left-0 right-0 mb-1 max-h-[200px] overflow-y-auto bg-theme-bg border border-theme-border/60 shadow-lg z-50"
+            className="absolute bottom-full left-0 right-0 mb-1 max-h-[200px] overflow-y-auto bg-theme-bg border border-theme-border/60 rounded-md shadow-lg z-50"
           >
             {acItems.map((item, i) => {
               const isActive = i === acIndex;
@@ -392,7 +392,7 @@ export function ChatInput({ onSend, onStop, isLoading, disabled, externalValue, 
               <button
                 type="button"
                 onClick={onStop}
-                className="flex items-center gap-1 px-2 py-0.5 bg-red-500/10 hover:bg-red-500/15 text-red-500 text-[10px] font-bold"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-500/10 hover:bg-red-500/15 text-red-500 text-[10px] font-bold"
                 title={t('ai.input.stop_generation')}
               >
                 <StopCircle className="w-3 h-3" />
@@ -403,7 +403,7 @@ export function ChatInput({ onSend, onStop, isLoading, disabled, externalValue, 
                 type="button"
                 onClick={handleSubmit}
                 disabled={!input.trim() || disabled}
-                className="px-2.5 py-0.5 bg-theme-accent text-theme-bg hover:opacity-90 disabled:opacity-20 disabled:grayscale font-bold text-[10px]"
+                className="px-2.5 py-0.5 rounded-md bg-theme-accent text-theme-bg hover:opacity-90 disabled:opacity-20 disabled:grayscale font-bold text-[10px]"
                 title={t('ai.input.send')}
               >
                 {t('ai.input.send_btn')}

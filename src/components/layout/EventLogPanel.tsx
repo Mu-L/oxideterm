@@ -53,7 +53,7 @@ const CategoryBadge = ({ category }: { category: EventCategory }) => {
     : 'bg-blue-500/15 text-blue-400';
 
   return (
-    <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0', colorClass)}>
+    <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-md shrink-0', colorClass)}>
       {label}
     </span>
   );

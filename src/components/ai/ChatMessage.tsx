@@ -218,7 +218,7 @@ export const ChatMessage = memo(function ChatMessage({
                 {originalMessages.map((orig) => (
                   <div
                     key={orig.id}
-                    className="text-[11px] text-theme-text-muted/50 bg-theme-bg/30 rounded px-2 py-1"
+                    className="text-[11px] text-theme-text-muted/50 bg-theme-bg/30 rounded-md px-2 py-1"
                   >
                     <span className="font-semibold text-theme-text-muted/40 mr-1.5">
                       {orig.role === 'user' ? t('ai.message.you') : 'OxideSens'}:
@@ -254,7 +254,7 @@ export const ChatMessage = memo(function ChatMessage({
       </div>
 
       {/* Content — user messages get prominent bubble with accent color */}
-      <div className={`mt-1 ${isUser ? 'bg-theme-accent/10 border border-theme-accent/30 px-3 py-2 rounded-md' : ''}`}>
+      <div className={`mt-1 ${isUser ? 'bg-theme-accent/10 border border-theme-accent/20 px-3 py-2 rounded-md shadow-sm ring-1 ring-theme-accent/5' : ''}`}>
         {/* Thinking Block */}
         {!isUser && message.thinkingContent && (
           <ThinkingBlock
@@ -278,7 +278,7 @@ export const ChatMessage = memo(function ChatMessage({
               ref={editTextareaRef}
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full bg-theme-bg/50 border border-theme-accent/40 text-[13px] text-theme-text px-2 py-1.5 resize-none focus:outline-none focus:border-theme-accent/60 min-h-[60px]"
+              className="w-full bg-theme-bg/50 border border-theme-accent/40 rounded-md text-[13px] text-theme-text px-2 py-1.5 resize-none focus:outline-none focus:border-theme-accent/60 min-h-[60px]"
               rows={3}
               onKeyDown={(e) => {
                 if (e.nativeEvent.isComposing || e.keyCode === 229) return;
@@ -297,7 +297,7 @@ export const ChatMessage = memo(function ChatMessage({
             <div className="flex items-center gap-1 justify-end">
               <button
                 onClick={() => setIsEditing(false)}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-theme-text-muted hover:text-theme-text hover:bg-theme-border/10"
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] text-theme-text-muted hover:text-theme-text hover:bg-theme-border/10"
               >
                 <X className="w-3 h-3" />
                 {t('ai.message.cancel')}
@@ -311,7 +311,7 @@ export const ChatMessage = memo(function ChatMessage({
                   }
                 }}
                 disabled={!editContent.trim()}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-theme-accent hover:bg-theme-accent/10 disabled:opacity-30"
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] text-theme-accent hover:bg-theme-accent/10 disabled:opacity-30"
               >
                 <Check className="w-3 h-3" />
                 {t('ai.message.save_and_resend')}
@@ -369,7 +369,7 @@ export const ChatMessage = memo(function ChatMessage({
                   setTimeout(() => editTextareaRef.current?.focus(), 50);
                 }}
                 className="flex items-center gap-1 text-[11px] text-theme-text-muted/40 
-                  hover:text-theme-text-muted py-0.5 px-1.5
+                  hover:text-theme-text-muted py-0.5 px-1.5 rounded-md
                   hover:bg-theme-border/10 opacity-0 group-hover/msg:opacity-100 transition-opacity"
                 title={t('ai.message.edit')}
               >
@@ -388,7 +388,7 @@ export const ChatMessage = memo(function ChatMessage({
                   });
                 }}
                 className="flex items-center gap-1 text-[11px] text-theme-text-muted/40 
-                  hover:text-theme-text-muted py-0.5 px-1.5
+                  hover:text-theme-text-muted py-0.5 px-1.5 rounded-md
                   hover:bg-theme-border/10 transition-colors"
                 title={t('ai.message.copy')}
               >
@@ -403,7 +403,7 @@ export const ChatMessage = memo(function ChatMessage({
                 onClick={onRegenerate}
                 disabled={isRegenerating}
                 className="flex items-center gap-1 text-[11px] text-theme-text-muted/40 
-                  hover:text-theme-text-muted py-0.5 px-1.5
+                  hover:text-theme-text-muted py-0.5 px-1.5 rounded-md
                   hover:bg-theme-border/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 title={t('ai.message.regenerate')}
               >
@@ -417,7 +417,7 @@ export const ChatMessage = memo(function ChatMessage({
               <button
                 onClick={() => onDelete(message.id)}
                 className="flex items-center gap-1 text-[11px] text-theme-text-muted/40 
-                  hover:text-red-500 py-0.5 px-1.5
+                  hover:text-red-500 py-0.5 px-1.5 rounded-md
                   hover:bg-red-500/5 opacity-0 group-hover/msg:opacity-100 transition-opacity"
                 title={t('ai.message.delete')}
               >
@@ -435,7 +435,7 @@ export const ChatMessage = memo(function ChatMessage({
                 key={i}
                 type="button"
                 onClick={() => onSuggestionClick(s.text)}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] text-theme-text-muted/70 border border-theme-border/30 hover:border-theme-accent/40 hover:text-theme-accent hover:bg-theme-accent/5 transition-colors"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-theme-text-muted/70 border border-theme-border/30 hover:border-theme-accent/40 hover:text-theme-accent hover:bg-theme-accent/5 hover:shadow-sm transition-[color,background-color,border-color,box-shadow]"
               >
                 <MessageSquare className="w-3 h-3 shrink-0" />
                 <span>{s.text}</span>

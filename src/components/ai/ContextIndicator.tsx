@@ -210,7 +210,7 @@ export function ContextIndicator({ pendingInput = '' }: ContextIndicatorProps) {
       {showPopover && createPortal(
         <div
           ref={popoverRef}
-          className="fixed w-60 bg-theme-bg-panel border border-theme-border/30 rounded-lg shadow-xl z-[9999] overflow-hidden"
+          className="fixed w-60 bg-theme-bg-panel border border-theme-border/30 rounded-md shadow-xl z-[9999] overflow-hidden"
           style={{
             top: popoverPos.top,
             left: popoverPos.left,

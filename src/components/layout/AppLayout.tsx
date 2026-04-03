@@ -143,7 +143,7 @@ const EmptyState = () => {
         <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 pt-1">
           {shortcuts.map(s => (
             <span key={s.key} className="inline-flex items-center gap-1.5 text-xs text-theme-text-muted">
-              <kbd className="px-1.5 py-0.5 rounded bg-theme-bg-panel border border-theme-border text-theme-text font-mono text-[11px] leading-tight shadow-sm">{s.key}</kbd>
+              <kbd className="px-1.5 py-0.5 rounded-md bg-theme-bg-panel border border-theme-border text-theme-text font-mono text-[11px] leading-tight shadow-sm">{s.key}</kbd>
               <span>{s.label}</span>
             </span>
           ))}

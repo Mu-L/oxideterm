@@ -27,6 +27,7 @@
     "revealInFileManager": "在檔案管理員中顯示",
     "newFile": "新增檔案",
     "newFilePrompt": "請輸入新檔案名稱",
+    "fileName": "檔案名稱",
     "fileCreated": "檔案已建立",
     "duplicate": "建立副本",
     "duplicated": "已建立副本",

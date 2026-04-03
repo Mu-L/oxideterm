@@ -36,7 +36,15 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   onDiscard,
 }) => {
   const { t } = useTranslation();
-  const meta = useRecordingStore(s => s.getRecordingMeta(sessionId));
+  // Select only primitive values to avoid new object references from
+  // getRecordingMeta's spread, which causes infinite re-renders in Zustand v5.
+  const hasRecording = useRecordingStore(s => s.recordings.has(sessionId));
+  const recordingElapsed = useRecordingStore(s => {
+    const tick = s.recordingTicks.get(sessionId);
+    if (tick) return tick.elapsed;
+    const entry = s.recordings.get(sessionId);
+    return entry ? entry.meta.elapsed : 0;
+  });
   const recordingState = useRecordingStore(s => s.getRecordingState(sessionId));
   const pauseRecording = useRecordingStore(s => s.pauseRecording);
   const resumeRecording = useRecordingStore(s => s.resumeRecording);
@@ -63,7 +71,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
     onDiscard();
   }, [sessionId, discardRecording, onDiscard]);
 
-  if (!meta || recordingState === 'idle') return null;
+  if (!hasRecording || recordingState === 'idle') return null;
 
   const isPaused = recordingState === 'paused';
 
@@ -103,7 +111,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
 
       {/* Elapsed time */}
       <span className="text-[11px] font-mono text-theme-text-muted ml-1">
-        {formatElapsed(meta.elapsed)}
+        {formatElapsed(recordingElapsed)}
       </span>
 
       {/* Separator */}

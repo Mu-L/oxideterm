@@ -41,7 +41,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({
       <button
         onClick={() => onNavigate(null)}
         className={cn(
-          "flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors flex-shrink-0",
+          "flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-colors flex-shrink-0",
           "hover:bg-theme-bg-hover hover:text-oxide-accent",
           path.length === 0 
             ? "text-oxide-accent" 
@@ -69,7 +69,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({
             <button
               onClick={() => onNavigate(node.id)}
               className={cn(
-                "px-1.5 py-0.5 rounded transition-colors truncate max-w-[120px]",
+                "px-1.5 py-0.5 rounded-md transition-colors truncate max-w-[120px]",
                 "hover:bg-theme-bg-hover",
                 isLast 
                   ? "text-oxide-accent font-medium" 

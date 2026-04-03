@@ -116,7 +116,7 @@ const BroadcastDropdown: React.FC<BroadcastDropdownProps> = ({
       <DropdownMenuTrigger asChild>
         <button
           className={cn(
-            'relative p-1.5 mx-1 rounded-sm transition-colors',
+            'relative p-1.5 mx-1 rounded-md transition-colors',
             enabled
               ? 'text-orange-400 bg-orange-500/15 hover:bg-orange-500/25'
               : 'text-theme-text-muted hover:text-theme-accent hover:bg-theme-bg-hover',
@@ -146,7 +146,7 @@ const BroadcastDropdown: React.FC<BroadcastDropdownProps> = ({
             <div className="flex items-center gap-2 px-2 py-1.5 text-xs opacity-60">
               <span className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse flex-shrink-0" />
               <span className="flex-1 truncate">{entryLabel(currentEntry)}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-500/15 text-orange-400">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-orange-500/15 text-orange-400">
                 {t('terminal.broadcast.current')}
               </span>
             </div>
@@ -172,7 +172,7 @@ const BroadcastDropdown: React.FC<BroadcastDropdownProps> = ({
                 <span className="flex-1 truncate">{entryLabel(entry)}</span>
                 <span
                   className={cn(
-                    'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                    'text-[10px] px-1.5 py-0.5 rounded-md font-medium',
                     entry.terminalType === 'local_terminal'
                       ? 'bg-emerald-500/15 text-emerald-400'
                       : 'bg-blue-500/15 text-blue-400',
@@ -230,9 +230,16 @@ export const TabBarTerminalActions: React.FC<TabBarTerminalActionsProps> = ({
   const isRecording = useRecordingStore(s =>
     sessionId ? s.isRecording(sessionId) : false,
   );
-  const meta = useRecordingStore(s =>
-    sessionId ? s.getRecordingMeta(sessionId) : null,
-  );
+  // Select only the primitive elapsed value to avoid creating a new object
+  // reference on every getSnapshot() call (which causes infinite re-renders
+  // with Zustand v5's raw useSyncExternalStore).
+  const recordingElapsed = useRecordingStore(s => {
+    if (!sessionId) return null;
+    const tick = s.recordingTicks.get(sessionId);
+    if (tick) return tick.elapsed;
+    const entry = s.recordings.get(sessionId);
+    return entry ? entry.meta.elapsed : null;
+  });
   const stopRecording = useRecordingStore(s => s.stopRecording);
   const discardRecording = useRecordingStore(s => s.discardRecording);
 
@@ -342,7 +349,7 @@ export const TabBarTerminalActions: React.FC<TabBarTerminalActionsProps> = ({
             onClick={() => handleSplit('horizontal')}
             disabled={!canSplit}
             className={cn(
-              'p-1.5 rounded-sm transition-colors',
+              'p-1.5 rounded-md transition-colors',
               canSplit
                 ? 'text-theme-text-muted hover:text-theme-accent hover:bg-theme-bg-hover'
                 : 'text-theme-text-muted/40 cursor-not-allowed',
@@ -360,7 +367,7 @@ export const TabBarTerminalActions: React.FC<TabBarTerminalActionsProps> = ({
             onClick={() => handleSplit('vertical')}
             disabled={!canSplit}
             className={cn(
-              'p-1.5 rounded-sm transition-colors',
+              'p-1.5 rounded-md transition-colors',
               canSplit
                 ? 'text-theme-text-muted hover:text-theme-accent hover:bg-theme-bg-hover'
                 : 'text-theme-text-muted/40 cursor-not-allowed',
@@ -405,20 +412,20 @@ export const TabBarTerminalActions: React.FC<TabBarTerminalActionsProps> = ({
       <div className="w-px h-4 bg-theme-border/50" />
 
       {/* ── Recording actions ───────────────────────────────────────── */}
-      {isRecording && meta ? (
+      {isRecording && recordingElapsed !== null ? (
         <div className="flex items-center gap-1.5 px-2">
           {/* REC badge */}
           <div className="flex items-center gap-1.5">
             <Circle className="h-2.5 w-2.5 fill-red-500 text-red-500 animate-pulse" />
             <span className="text-xs font-mono text-red-400 font-medium">
-              {fmtElapsed(meta.elapsed)}
+              {fmtElapsed(recordingElapsed)}
             </span>
           </div>
 
           {/* Stop */}
           <button
             onClick={handleStop}
-            className="p-1 rounded-sm text-theme-text-muted hover:text-red-400 hover:bg-theme-bg-hover transition-colors"
+            className="p-1 rounded-md text-theme-text-muted hover:text-red-400 hover:bg-theme-bg-hover transition-colors"
             title={t('terminal.recording.stop')}
           >
             <Square className="h-3 w-3 fill-current" />
@@ -427,7 +434,7 @@ export const TabBarTerminalActions: React.FC<TabBarTerminalActionsProps> = ({
           {/* Discard */}
           <button
             onClick={handleDiscard}
-            className="p-1 rounded-sm text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-hover transition-colors"
+            className="p-1 rounded-md text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-hover transition-colors"
             title={t('terminal.recording.discard')}
           >
             <Trash2 className="h-3 w-3" />
@@ -439,7 +446,7 @@ export const TabBarTerminalActions: React.FC<TabBarTerminalActionsProps> = ({
           <button
             onClick={handleStartRecording}
             className={cn(
-              'p-1.5 rounded-sm transition-colors',
+              'p-1.5 rounded-md transition-colors',
               'text-theme-text-muted hover:text-red-400 hover:bg-theme-bg-hover',
             )}
             title={`${t('terminal.recording.start')}  ⌘⇧R`}
@@ -451,7 +458,7 @@ export const TabBarTerminalActions: React.FC<TabBarTerminalActionsProps> = ({
           <button
             onClick={handleOpenCast}
             className={cn(
-              'p-1.5 rounded-sm transition-colors',
+              'p-1.5 rounded-md transition-colors',
               'text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-hover',
             )}
             title={t('terminal.recording.open_cast')}

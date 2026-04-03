@@ -105,34 +105,46 @@ export function useLocalFiles(options: UseLocalFilesOptions = {}): UseLocalFiles
     
     try {
       const entries = await readDir(path);
-      const fileList: FileInfo[] = await Promise.all(
-        entries.map(async (entry) => {
-          // Normalize path to avoid double slashes
-          const basePath = path.endsWith('/') ? path.slice(0, -1) : path;
-          const fullPath = `${basePath}/${entry.name}`;
-          const isDir = entry.isDirectory === true;
-          try {
-            const info = await stat(fullPath);
-            return {
-              name: entry.name,
-              path: fullPath,
-              file_type: isDir ? 'Directory' : 'File',
-              size: info.size || 0,
-              modified: info.mtime ? Math.floor(info.mtime.getTime() / 1000) : 0,
-              permissions: ''
-            } satisfies FileInfo;
-          } catch {
-            return {
-              name: entry.name,
-              path: fullPath,
-              file_type: isDir ? 'Directory' : 'File',
-              size: 0,
-              modified: 0,
-              permissions: ''
-            } satisfies FileInfo;
-          }
-        })
-      );
+
+      // Map entries to stat tasks, batched to limit concurrency
+      const BATCH_SIZE = 50;
+      const fileList: FileInfo[] = [];
+
+      for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+        const batch = entries.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map(async (entry) => {
+            const basePath = path.endsWith('/') ? path.slice(0, -1) : path;
+            const fullPath = `${basePath}/${entry.name}`;
+            const isDir = entry.isDirectory === true;
+            const isSymlink = entry.isSymlink === true;
+            // Symlinks to directories keep 'Directory' so navigation/sorting works;
+            // only non-directory symlinks get the 'Symlink' type.
+            const fileType: FileInfo['file_type'] = isDir ? 'Directory' : isSymlink ? 'Symlink' : 'File';
+            try {
+              const info = await stat(fullPath);
+              return {
+                name: entry.name,
+                path: fullPath,
+                file_type: fileType,
+                size: info.size || 0,
+                modified: info.mtime ? Math.floor(info.mtime.getTime() / 1000) : 0,
+                permissions: ''
+              } satisfies FileInfo;
+            } catch {
+              return {
+                name: entry.name,
+                path: fullPath,
+                file_type: fileType,
+                size: 0,
+                modified: 0,
+                permissions: ''
+              } satisfies FileInfo;
+            }
+          })
+        );
+        fileList.push(...results);
+      }
       
       // Initial sort: directories first, then alphabetically
       fileList.sort((a, b) => {

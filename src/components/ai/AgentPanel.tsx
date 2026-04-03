@@ -261,7 +261,7 @@ const AgentRolesPanel = memo(() => {
                   updateRole({ reviewer: { ...agentRoles.reviewer, interval: val } });
                 }}
                 disabled={isRunning}
-                className="w-10 h-6 text-[11px] text-center rounded border border-theme-border bg-theme-bg text-theme-text"
+                className="w-10 h-6 text-[11px] text-center rounded-md border border-theme-border bg-theme-bg text-theme-text"
               />
             </div>
           </RoleModelSelect>
@@ -465,7 +465,7 @@ const StepEntry = memo(({ step }: { step: AgentStep }) => {
           {t(`agent.step.${step.type}`)}
         </span>
         {step.toolCall && (
-          <code className="text-xs px-1.5 py-0.5 rounded bg-theme-bg-hover text-theme-accent font-mono">
+          <code className="text-xs px-1.5 py-0.5 rounded-md bg-theme-bg-hover text-theme-accent font-mono">
             {step.toolCall.name}
           </code>
         )}
@@ -590,7 +590,7 @@ const ApprovalItem = memo(({ approval, onResolve, onSkip }: {
           {t('agent.approval.viewArgs')}
         </button>
         {argsExpanded && (
-          <pre className="text-[10px] font-mono text-theme-text-muted mt-1 p-1.5 rounded bg-theme-bg whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
+          <pre className="text-[10px] font-mono text-theme-text-muted mt-1 p-1.5 rounded-md bg-theme-bg whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
             {approval.arguments}
           </pre>
         )}
@@ -716,7 +716,7 @@ const ControlBar = memo(() => {
             const idx = levels.indexOf(autonomyLevel);
             setAutonomyLevel(levels[(idx + 1) % levels.length]);
           }}
-          className={cn('h-7 w-7 p-0 flex items-center justify-center rounded', AUTONOMY_CONFIG[autonomyLevel].colorClass)}
+          className={cn('h-7 w-7 p-0 flex items-center justify-center rounded-md', AUTONOMY_CONFIG[autonomyLevel].colorClass)}
           title={t('agent.control.switchAutonomy', { level: t(`agent.autonomy.${autonomyLevel}`) })}
         >
           <AutonomyIcon className="w-3.5 h-3.5" />

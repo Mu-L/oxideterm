@@ -277,7 +277,7 @@ const TabItem = React.memo<TabItemProps>(({
                   onClick={(e) => tab.sessionId && onReconnect(e, tab.sessionId)}
                   disabled={isManualReconnecting}
                   className={cn(
-                    "opacity-0 group-hover:opacity-100 hover:bg-theme-bg-hover rounded p-0.5 transition-opacity",
+                    "opacity-0 group-hover:opacity-100 hover:bg-theme-bg-hover rounded-md p-0.5 transition-opacity",
                     isActive && "opacity-100",
                     isManualReconnecting && "opacity-100"
                   )}
@@ -294,7 +294,7 @@ const TabItem = React.memo<TabItemProps>(({
                 onClick={(e) => onCloseTab(e, tab.id, tab.sessionId, tab.type)}
                 disabled={tab.sessionId ? closing === tab.sessionId : false}
                 className={cn(
-                  "opacity-0 group-hover:opacity-100 hover:bg-theme-bg-hover rounded p-0.5 transition-opacity",
+                  "opacity-0 group-hover:opacity-100 hover:bg-theme-bg-hover rounded-md p-0.5 transition-opacity",
                   isActive && "opacity-100",
                   (tab.sessionId && closing === tab.sessionId) && "opacity-100"
                 )}
@@ -391,7 +391,7 @@ const ReconnectIndicator = ({
         <TooltipTrigger asChild>
           <button
             onClick={(e) => onCancel(e, nodeId)}
-            className="hover:bg-theme-bg-hover rounded p-0.5"
+            className="hover:bg-theme-bg-hover rounded-md p-0.5"
           >
             <XCircle className="h-3 w-3" />
           </button>
@@ -402,7 +402,7 @@ const ReconnectIndicator = ({
       {/* Hover popover with timeline */}
       {showTimeline && (
         <div
-          className="absolute top-full right-0 mt-1 z-50 bg-theme-bg-elevated border border-theme-border rounded-lg shadow-xl"
+          className="absolute top-full right-0 mt-1 z-50 bg-theme-bg-elevated border border-theme-border rounded-md shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
           <ReconnectTimeline job={job} />

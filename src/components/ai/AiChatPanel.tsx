@@ -240,7 +240,7 @@ export function AiChatPanel() {
         </p>
         <button
           onClick={() => createTab('settings')}
-          className="flex items-center gap-2 px-4 py-1.5 bg-theme-accent hover:opacity-90 text-theme-bg text-[12px] font-bold"
+          className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-theme-accent hover:opacity-90 text-theme-bg text-[12px] font-bold"
         >
           <Settings className="w-3.5 h-3.5" />
           {t('ai.chat.open_settings')}
@@ -272,7 +272,7 @@ export function AiChatPanel() {
         <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={handleNewChat}
-            className="p-1 hover:bg-theme-border/10 text-theme-text-muted hover:text-theme-text"
+            className="p-1 rounded-md hover:bg-theme-border/10 text-theme-text-muted hover:text-theme-text"
             title={t('ai.chat.new_chat_tooltip')}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -280,7 +280,7 @@ export function AiChatPanel() {
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="p-1 hover:bg-theme-border/10 text-theme-text-muted hover:text-theme-text"
+              className="p-1 rounded-md hover:bg-theme-border/10 text-theme-text-muted hover:text-theme-text"
               title={t('ai.chat.more_options')}
             >
               <MoreVertical className="w-3.5 h-3.5" />
@@ -288,17 +288,17 @@ export function AiChatPanel() {
             {showMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-0.5 w-40 py-0.5 bg-theme-bg-elevated border border-theme-border shadow-lg z-20">
+                <div className="absolute right-0 top-full mt-0.5 w-40 py-0.5 bg-theme-bg-elevated border border-theme-border rounded-md shadow-lg z-20">
                   <button
                     onClick={handleOpenSettings}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-theme-text-muted hover:text-theme-text hover:bg-theme-border/10"
+                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-theme-text-muted hover:text-theme-text hover:bg-theme-border/10"
                   >
                     <Settings className="w-3.5 h-3.5" />
                     {t('ai.chat.settings')}
                   </button>
                   <button
                     onClick={handleClearAll}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-red-500 hover:bg-red-500/10"
+                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-red-500 hover:bg-red-500/10"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     {t('ai.chat.clear_all')}
@@ -314,7 +314,7 @@ export function AiChatPanel() {
       {showConversations && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setShowConversations(false)} />
-          <div className="absolute left-2 right-2 top-[36px] max-h-64 overflow-y-auto bg-theme-bg-elevated border border-theme-border shadow-lg z-20">
+          <div className="absolute left-2 right-2 top-[36px] max-h-64 overflow-y-auto bg-theme-bg-elevated border border-theme-border rounded-md shadow-lg z-20">
             {conversations.length === 0 ? (
               <div className="p-4 text-center text-sm text-theme-text-muted">
                 {t('ai.chat.no_conversations')}
@@ -418,21 +418,21 @@ export function AiChatPanel() {
             <button
               onClick={() => { handleCompact(); setModelSwitchWarning(null); }}
               disabled={isLoading}
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded disabled:opacity-50"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-md disabled:opacity-50"
             >
               <Shrink className="w-3 h-3" />
               {t('ai.context.compact_button')}
             </button>
             <button
               onClick={() => { handleNewChat(); setModelSwitchWarning(null); }}
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-md"
             >
               <Plus className="w-3 h-3" />
               {t('ai.chat.new_chat_tooltip')}
             </button>
             <button
               onClick={() => setModelSwitchWarning(null)}
-              className="px-1.5 py-0.5 text-[10px] text-amber-400/60 hover:text-amber-300 rounded"
+              className="px-1.5 py-0.5 text-[10px] text-amber-400/60 hover:text-amber-300 rounded-md"
             >
               ✕
             </button>
@@ -451,7 +451,7 @@ export function AiChatPanel() {
             <button
               onClick={handleCompact}
               disabled={isLoading}
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded disabled:opacity-50"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-md disabled:opacity-50"
             >
               <Shrink className="w-3 h-3" />
               {t('ai.context.compact_button')}
@@ -459,14 +459,14 @@ export function AiChatPanel() {
             <button
               onClick={handleSummarize}
               disabled={isLoading}
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded disabled:opacity-50"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-md disabled:opacity-50"
             >
               <Shrink className="w-3 h-3" />
               {t('ai.context.summarize')}
             </button>
             <button
               onClick={handleNewChat}
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-md"
             >
               <Plus className="w-3 h-3" />
               {t('ai.chat.new_chat_tooltip')}
@@ -559,7 +559,7 @@ function ConversationItem({
         ) : (
           <div className="flex items-center gap-1.5 min-w-0">
             {conversation.origin === 'cli' && (
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-sm border border-theme-border/40 text-theme-text-muted/70 shrink-0">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-md border border-theme-border/40 text-theme-text-muted/70 shrink-0">
                 <Terminal className="w-2.5 h-2.5" />
               </span>
             )}
@@ -607,7 +607,7 @@ function QuickPromptButton({
   return (
     <button
       onClick={handleClick}
-      className="w-full flex items-center gap-3 px-3 py-1.5 border border-transparent hover:border-theme-border/20 hover:bg-theme-bg-panel/20 text-left group/btn"
+      className="w-full flex items-center gap-3 px-3 py-1.5 rounded-md border border-transparent hover:border-theme-border/20 hover:bg-theme-bg-panel/20 hover:shadow-sm text-left group/btn transition-[color,background-color,border-color,box-shadow]"
     >
       <div className="flex-shrink-0 text-theme-text-muted group-hover/btn:text-theme-accent">
         {icon}

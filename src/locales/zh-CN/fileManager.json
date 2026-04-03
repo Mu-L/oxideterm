@@ -27,6 +27,7 @@
     "revealInFileManager": "在文件管理器中显示",
     "newFile": "新建文件",
     "newFilePrompt": "请输入新文件名",
+    "fileName": "文件名",
     "fileCreated": "文件已创建",
     "duplicate": "创建副本",
     "duplicated": "已创建副本",

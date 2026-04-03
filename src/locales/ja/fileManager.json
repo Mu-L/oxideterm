@@ -27,6 +27,7 @@
     "revealInFileManager": "ファイルマネージャーで表示",
     "newFile": "新規ファイル",
     "newFilePrompt": "新しいファイル名を入力してください",
+    "fileName": "ファイル名",
     "fileCreated": "ファイルを作成しました",
     "duplicate": "複製",
     "duplicated": "複製しました",

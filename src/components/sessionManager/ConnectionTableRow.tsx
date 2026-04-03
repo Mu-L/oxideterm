@@ -30,25 +30,25 @@ const AuthBadge = ({ authType }: { authType: string }) => {
   switch (authType) {
     case 'key':
       return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-300">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-emerald-500/20 text-emerald-300">
           <KeyRound className="h-3 w-3" /> Key
         </span>
       );
     case 'password':
       return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-500/20 text-amber-300">
           <Lock className="h-3 w-3" /> Pwd
         </span>
       );
     case 'agent':
       return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/20 text-blue-300">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/20 text-blue-300">
           <Bot className="h-3 w-3" /> Agent
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-theme-text-muted/20 text-theme-text">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-theme-text-muted/20 text-theme-text">
           <ShieldQuestion className="h-3 w-3" /> {authType}
         </span>
       );

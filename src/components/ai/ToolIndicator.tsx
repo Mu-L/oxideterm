@@ -148,7 +148,7 @@ export const ToolIndicator = ({ activeTabType, hasAnySSHSession }: ToolIndicator
       <button
         onClick={() => setOpen(!open)}
         className={cn(
-          "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium",
+          "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
           "text-theme-text-muted hover:text-theme-text hover:bg-theme-accent/10",
           open && "bg-theme-accent/10 text-theme-text",
           isUsingSessionOverride && "ring-1 ring-amber-400/40",
@@ -162,7 +162,7 @@ export const ToolIndicator = ({ activeTabType, hasAnySSHSession }: ToolIndicator
 
       {/* Popover */}
       {open && (
-        <div className="absolute left-0 bottom-full mb-0.5 w-72 bg-theme-bg-elevated border border-theme-border shadow-lg z-50 overflow-hidden">
+        <div className="absolute left-0 bottom-full mb-0.5 w-72 bg-theme-bg-elevated border border-theme-border rounded-md shadow-lg z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-theme-border/30">
             <span className="text-[10px] font-bold tracking-wider uppercase text-theme-text-muted">
@@ -173,7 +173,7 @@ export const ToolIndicator = ({ activeTabType, hasAnySSHSession }: ToolIndicator
               <button
                 onClick={toggleSessionOverride}
                 className={cn(
-                  "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]",
+                  "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px]",
                   isUsingSessionOverride
                     ? "text-amber-400 bg-amber-400/10 hover:bg-amber-400/20"
                     : "text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-hover/50",
@@ -268,7 +268,7 @@ export const ToolIndicator = ({ activeTabType, hasAnySSHSession }: ToolIndicator
                             key={toolName}
                             onClick={() => toggleTool(toolName)}
                             className={cn(
-                              "flex items-center gap-2 w-full text-left px-2 py-1 rounded text-[10px] transition-colors",
+                              "flex items-center gap-2 w-full text-left px-2 py-1 rounded-md text-[10px] transition-colors",
                               isEnabled
                                 ? "text-theme-text hover:bg-theme-accent/10"
                                 : "text-theme-text-muted/50 hover:bg-theme-bg-hover/30 line-through",

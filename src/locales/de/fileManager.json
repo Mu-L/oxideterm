@@ -27,6 +27,7 @@
     "revealInFileManager": "Im Dateimanager anzeigen",
     "newFile": "Neue Datei",
     "newFilePrompt": "Geben Sie einen Namen für die neue Datei ein",
+    "fileName": "Dateiname",
     "fileCreated": "Datei erstellt",
     "duplicate": "Duplizieren",
     "duplicated": "Dupliziert",

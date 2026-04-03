@@ -122,7 +122,7 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
 
   return (
     <div className={cn(
-      "border rounded overflow-hidden",
+      "border rounded-md overflow-hidden",
       isPendingApproval
         ? isDenyListCommand
           ? "border-red-500/40 bg-red-500/5"
@@ -174,14 +174,14 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
           )}
           <button
             onClick={() => resolveToolApproval(call.id, true)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
           >
             <Check className="w-3 h-3" />
             {t('ai.tool_use.approve')}
           </button>
           <button
             onClick={() => resolveToolApproval(call.id, false)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
           >
             <X className="w-3 h-3" />
             {t('ai.tool_use.reject')}
@@ -197,7 +197,7 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
             <div className="text-[9px] text-theme-text-muted/40 font-medium uppercase tracking-wider mb-0.5">
               {t('ai.tool_use.arguments')}
             </div>
-            <pre className="text-[10px] text-theme-text-muted/60 font-[family-name:var(--terminal-font-family)] bg-theme-bg/50 rounded px-1.5 py-1 overflow-x-auto max-h-[120px] overflow-y-auto whitespace-pre-wrap break-all">
+            <pre className="text-[10px] text-theme-text-muted/60 font-[family-name:var(--terminal-font-family)] bg-theme-bg/50 rounded-md px-1.5 py-1 overflow-x-auto max-h-[120px] overflow-y-auto whitespace-pre-wrap break-all">
               {(() => {
                 try { return JSON.stringify(JSON.parse(call.arguments), null, 2); }
                 catch { return call.arguments; }
@@ -212,12 +212,12 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
                 {t('ai.tool_use.output')}
               </div>
               {call.result!.error && (
-                <div className="text-[10px] text-red-400/80 font-[family-name:var(--terminal-font-family)] bg-red-500/5 rounded px-1.5 py-1 mb-1">
+                <div className="text-[10px] text-red-400/80 font-[family-name:var(--terminal-font-family)] bg-red-500/5 rounded-md px-1.5 py-1 mb-1">
                   {call.result!.error}
                 </div>
               )}
               {call.result!.output && (
-                <pre className="text-[10px] text-theme-text-muted/60 font-[family-name:var(--terminal-font-family)] bg-theme-bg/50 rounded px-1.5 py-1 overflow-x-auto max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all">
+                <pre className="text-[10px] text-theme-text-muted/60 font-[family-name:var(--terminal-font-family)] bg-theme-bg/50 rounded-md px-1.5 py-1 overflow-x-auto max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all">
                   {call.result!.output}
                 </pre>
               )}
@@ -279,7 +279,7 @@ export const ToolCallBlock = memo(function ToolCallBlock({ toolCalls }: ToolCall
           <button
             onClick={() => setShowEarly(true)}
             className={cn(
-              'flex items-center gap-1.5 px-2 py-1 rounded w-full text-left',
+              'flex items-center gap-1.5 px-2 py-1 rounded-md w-full text-left',
               'bg-theme-bg-hover/20 hover:bg-theme-bg-hover/40 transition-colors',
               'text-[10px] text-theme-text-muted/40',
             )}

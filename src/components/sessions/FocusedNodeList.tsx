@@ -212,7 +212,7 @@ const NodeItem: React.FC<NodeItemProps> = ({
       <ContextMenuTrigger>
         <div
           className={cn(
-            "group flex flex-col gap-1 p-3 mx-2 mb-2 rounded-lg border transition-all cursor-pointer",
+            "group flex flex-col gap-1 p-3 mx-2 mb-2 rounded-md border transition-all cursor-pointer",
             "border-theme-border/50",
             styles.bg,
             isSelected && "ring-1 ring-oxide-accent border-oxide-accent/50 bg-oxide-accent/5"
@@ -249,7 +249,7 @@ const NodeItem: React.FC<NodeItemProps> = ({
             <div className="flex items-center gap-2 flex-shrink-0">
               {/* Terminal count badge */}
               {terminals.length > 0 && (
-              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400">
                 <Terminal className="w-3 h-3" />
                 <span className="text-xs">{terminals.length}</span>
               </div>
@@ -268,7 +268,7 @@ const NodeItem: React.FC<NodeItemProps> = ({
               {/* Quick action button */}
               {!isConnected && !isConnecting && (
               <button
-                className="px-2 py-1 text-xs rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                className="px-2 py-1 text-xs rounded-md bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
                 onClick={(e) => {
                 e.stopPropagation();
                 onConnect();
@@ -287,7 +287,7 @@ const NodeItem: React.FC<NodeItemProps> = ({
                 <div
                   key={termId}
                   className={cn(
-                    "flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors group/term",
+                    "flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer transition-colors group/term",
                     activeTerminalId === termId 
                       ? "bg-blue-500/20 text-blue-300" 
                       : "text-theme-text-muted hover:bg-white/5 hover:text-theme-text"
@@ -300,7 +300,7 @@ const NodeItem: React.FC<NodeItemProps> = ({
                   <Terminal className="w-3 h-3" />
                   <span className="text-xs flex-1">{t('sessions.focused_list.terminal')} #{idx + 1}</span>
                   <button
-                    className="opacity-0 group-hover/term:opacity-100 p-0.5 rounded hover:bg-red-500/20 hover:text-red-400 transition-all"
+                    className="opacity-0 group-hover/term:opacity-100 p-0.5 rounded-md hover:bg-red-500/20 hover:text-red-400 transition-all"
                     onClick={(e) => {
                       e.stopPropagation();
                       onCloseTerminal(termId);

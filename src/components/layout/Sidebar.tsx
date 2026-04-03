@@ -940,7 +940,7 @@ export const Sidebar = () => {
                     value={savedSearchQuery}
                     onChange={(e) => setSavedSearchQuery(e.target.value)}
                     placeholder={t('sessionManager.toolbar.search_placeholder')}
-                    className="w-full h-7 pl-7 pr-2 text-xs rounded bg-theme-bg border border-theme-border text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-theme-accent"
+                    className="w-full h-7 pl-7 pr-2 text-xs rounded-md bg-theme-bg border border-theme-border text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-theme-accent"
                   />
                 </div>
               </div>
@@ -970,7 +970,7 @@ export const Sidebar = () => {
                     <div
                       key={conn.id}
                       onClick={() => handleConnectSaved(conn.id)}
-                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer group text-theme-text hover:bg-theme-bg-hover transition-colors"
+                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer group text-theme-text hover:bg-theme-bg-hover transition-colors"
                     >
                       {conn.color && (
                         <div

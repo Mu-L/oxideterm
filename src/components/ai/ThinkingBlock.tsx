@@ -49,7 +49,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         onClick={toggleExpanded}
         className={cn(
           "flex items-center gap-1.5 text-[11px] text-theme-text-muted/60 hover:text-theme-text-muted",
-          "py-1 px-2 hover:bg-theme-bg-subtle"
+          "py-1 px-2 rounded-md hover:bg-theme-bg-subtle"
         )}
       >
         <Brain className="w-3 h-3" />
@@ -60,7 +60,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   }
 
   return (
-    <div className="mb-3 border border-theme-border/20 bg-theme-bg-subtle/50 overflow-hidden">
+    <div className="mb-3 border border-theme-border/20 rounded-md bg-theme-bg-subtle/50 overflow-hidden">
       {/* Header - always visible */}
       <button
         onClick={toggleExpanded}

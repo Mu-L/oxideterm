@@ -27,6 +27,7 @@
     "revealInFileManager": "Mostra nel Gestore File",
     "newFile": "Nuovo File",
     "newFilePrompt": "Inserisci un nome per il nuovo file",
+    "fileName": "Nome del file",
     "fileCreated": "File Creato",
     "duplicate": "Duplica",
     "duplicated": "Duplicato",

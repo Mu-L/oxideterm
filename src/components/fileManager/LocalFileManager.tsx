@@ -8,7 +8,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderPlus, Trash2, Terminal, Star, PanelLeftClose, PanelLeft, Copy, Scissors, ClipboardPaste, Archive, FolderArchive, HardDrive, Usb, Globe } from 'lucide-react';
+import { FolderPlus, Terminal, Star, PanelLeftClose, PanelLeft, Copy, Scissors, ClipboardPaste, Archive, FolderArchive, HardDrive, Usb, Globe } from 'lucide-react';
 import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { FileList, formatFileSize } from './FileList';
 import { QuickLook } from './QuickLook';
@@ -18,6 +18,7 @@ import { useIsTabActive } from '../../hooks/useTabActive';
 import { FilePropertiesDialog } from './FilePropertiesDialog';
 import { useLocalFiles, useFileSelection, useBookmarks, useFileClipboard, useFileArchive } from './hooks';
 import { useToast } from '../../hooks/useToast';
+import { useConfirm } from '../../hooks/useConfirm';
 import { useLocalTerminalStore } from '../../store/localTerminalStore';
 import { useAppStore } from '../../store/appStore';
 import { Button } from '../ui/button';
@@ -175,10 +176,12 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
   // Dialog states
   const [newFolderDialog, setNewFolderDialog] = useState(false);
   const [renameDialog, setRenameDialog] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
   const [drivesDialog, setDrivesDialog] = useState(false);
   const [availableDrives, setAvailableDrives] = useState<DriveInfo[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [newFileDialog, setNewFileDialog] = useState(false);
+  const [newFileInputValue, setNewFileInputValue] = useState('');
   
   // Preview state (for Quick Look)
   const [previewFile, setPreviewFile] = useState<FilePreview | null>(null);
@@ -194,6 +197,14 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
   const [checksumLoading, setChecksumLoading] = useState(false);
   const propertiesPathRef = useRef<string | null>(null);
   
+  // Compute the set of file names that are in the "cut" clipboard (for visual dimming)
+  const cutFileNames = React.useMemo(() => {
+    if (fileClipboard.clipboardMode !== 'cut' || !fileClipboard.clipboard) return undefined;
+    // Only dim files when the current directory matches the clipboard source
+    if (fileClipboard.clipboard.sourcePath !== localFiles.path) return undefined;
+    return new Set(fileClipboard.clipboard.files.map(f => f.name));
+  }, [fileClipboard.clipboard, fileClipboard.clipboardMode, localFiles.path]);
+
   // Compute previewable files (non-directories) from displayFiles
   const previewableFiles = React.useMemo(() => 
     localFiles.displayFiles.filter(f => f.file_type !== 'Directory'),
@@ -407,7 +418,7 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
       if (!document.hasFocus()) return;
 
       // Space key for Quick Look (when file selected and no dialog open)
-      if (e.key === ' ' && !previewFile && !newFolderDialog && !renameDialog && !deleteConfirm) {
+      if (e.key === ' ' && !previewFile && !newFolderDialog && !renameDialog) {
         const selectedFiles = Array.from(selection.selected);
         if (selectedFiles.length === 1) {
           const file = localFiles.displayFiles.find(f => f.name === selectedFiles[0]);
@@ -421,7 +432,7 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isTabActive, selection.selected, localFiles.displayFiles, previewFile, newFolderDialog, renameDialog, deleteConfirm, handlePreview]);
+  }, [isTabActive, selection.selected, localFiles.displayFiles, previewFile, newFolderDialog, renameDialog, handlePreview]);
   
   // Handle show drives
   const handleShowDrives = useCallback(async () => {
@@ -478,20 +489,27 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
   }, [localFiles, renameDialog, inputValue, toastSuccess, toastError, t, selection]);
   
   // Handle delete
-  const handleDelete = useCallback(async () => {
-    if (!deleteConfirm || deleteConfirm.length === 0) return;
+  const handleDelete = useCallback(async (files: string[]) => {
+    if (files.length === 0) return;
+    const fileList = files.join('\n');
+    const confirmed = await confirm({
+      title: t('fileManager.confirmDelete'),
+      description: t('fileManager.confirmDeleteDesc', { count: files.length }) + (files.length <= 5 ? '\n' + fileList : ''),
+      confirmLabel: t('common.delete'),
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
-      await localFiles.deleteFiles(deleteConfirm);
+      await localFiles.deleteFiles(files);
       toastSuccess(
-        t('fileManager.deleted'), 
-        t('fileManager.deletedCount', { count: deleteConfirm.length })
+        t('fileManager.deleted'),
+        t('fileManager.deletedCount', { count: files.length })
       );
-      setDeleteConfirm(null);
       selection.clearSelection();
     } catch (err) {
       toastError(t('fileManager.error'), String(err));
     }
-  }, [localFiles, deleteConfirm, toastSuccess, toastError, t, selection]);
+  }, [localFiles, confirm, toastSuccess, toastError, t, selection]);
   
   // Handle open in external application
   const handleOpenExternal = useCallback(async (path: string) => {
@@ -513,17 +531,28 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
 
   // Handle create new empty file
   const handleNewFile = useCallback(async () => {
-    const name = prompt(t('fileManager.newFilePrompt'));
-    if (!name || !name.trim()) return;
+    setNewFileInputValue('');
+    setNewFileDialog(true);
+  }, []);
+
+  const handleNewFileConfirm = useCallback(async () => {
+    const name = newFileInputValue.trim();
+    if (!name) return;
+    // Block path traversal characters in file names
+    if (name.includes('/') || name.includes('\\') || name.includes('..')) {
+      toastError(t('fileManager.error'), 'Invalid file name');
+      return;
+    }
     try {
-      const filePath = `${localFiles.path}/${name.trim()}`;
+      const filePath = `${localFiles.path}/${name}`;
       await writeTextFile(filePath, '');
       localFiles.refresh();
-      toastSuccess(t('fileManager.fileCreated'), name.trim());
+      toastSuccess(t('fileManager.fileCreated'), name);
+      setNewFileDialog(false);
     } catch (err) {
       toastError(t('fileManager.error'), String(err));
     }
-  }, [localFiles, toastSuccess, toastError, t]);
+  }, [localFiles, newFileInputValue, toastSuccess, toastError, t]);
 
   // Handle duplicate selected files
   const handleDuplicate = useCallback(async (fileNames: string[]) => {
@@ -932,7 +961,7 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
             sortDirection={localFiles.sortDirection}
             onSortChange={localFiles.toggleSort}
             onPreview={handlePreview}
-            onDelete={(files) => setDeleteConfirm(files)}
+            onDelete={handleDelete}
             onRename={(name) => {
               setInputValue(name);
               setRenameDialog(name);
@@ -955,6 +984,7 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
             onExtract={handleExtract}
             hasClipboard={fileClipboard.hasClipboard}
             canExtract={getSelectedFiles().some(f => fileArchive.canExtract(f.name))}
+            cutFileNames={cutFileNames}
             t={t}
           />
         </div>
@@ -1089,6 +1119,31 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
         </DialogContent>
       </Dialog>
       
+      {/* New File Dialog */}
+      <Dialog open={newFileDialog} onOpenChange={setNewFileDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('fileManager.newFile')}</DialogTitle>
+            <DialogDescription>{t('fileManager.newFilePrompt')}</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newFileInputValue}
+            onChange={(e) => setNewFileInputValue(e.target.value)}
+            placeholder={t('fileManager.fileName')}
+            onKeyDown={(e) => e.key === 'Enter' && handleNewFileConfirm()}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNewFileDialog(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleNewFileConfirm} disabled={!newFileInputValue.trim()}>
+              {t('common.create')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       {/* Rename Dialog */}
       <Dialog open={!!renameDialog} onOpenChange={() => setRenameDialog(null)}>
         <DialogContent className="max-w-sm">
@@ -1114,31 +1169,7 @@ export const LocalFileManager: React.FC<LocalFileManagerProps> = ({ className })
         </DialogContent>
       </Dialog>
       
-      {/* Delete Confirm Dialog */}
-      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('fileManager.confirmDelete')}</DialogTitle>
-            <DialogDescription>
-              {t('fileManager.confirmDeleteDesc', { count: deleteConfirm?.length || 0 })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-40 overflow-y-auto text-sm text-theme-text-muted">
-            {deleteConfirm?.map(name => (
-              <div key={name} className="py-1">{name}</div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>
-              {t('common.cancel')}
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              <Trash2 className="h-4 w-4 mr-1" />
-              {t('common.delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };

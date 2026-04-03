@@ -27,6 +27,7 @@
     "revealInFileManager": "Mostrar en el Explorador",
     "newFile": "Nuevo Archivo",
     "newFilePrompt": "Ingrese un nombre para el nuevo archivo",
+    "fileName": "Nombre del archivo",
     "fileCreated": "Archivo Creado",
     "duplicate": "Duplicar",
     "duplicated": "Duplicado",

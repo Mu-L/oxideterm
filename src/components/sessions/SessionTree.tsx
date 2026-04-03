@@ -252,7 +252,7 @@ const ActionItem: React.FC<ActionItemProps> = ({
     <TreeItem depth={depth} isLast={isLast} lineColor={lineColor}>
       <div
         className={cn(
-          "flex items-center gap-2 h-7 px-2 cursor-pointer transition-colors rounded-sm text-sm",
+          "flex items-center gap-2 h-7 px-2 cursor-pointer transition-colors rounded-md text-sm",
           variantStyles[variant]
         )}
         onClick={onClick}
@@ -294,7 +294,7 @@ const TerminalItem: React.FC<TerminalItemProps> = ({
     <TreeItem depth={depth} isLast={isLast} lineColor={lineColor}>
       <div
         className={cn(
-          "flex items-center gap-2 h-7 px-2 cursor-pointer group transition-colors rounded-sm ml-1",
+          "flex items-center gap-2 h-7 px-2 cursor-pointer group transition-colors rounded-md ml-1",
           isActive
             ? "bg-theme-accent/10 text-theme-accent font-medium border-l-2 border-theme-accent pl-1.5"
             : "text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-hover"
@@ -304,7 +304,7 @@ const TerminalItem: React.FC<TerminalItemProps> = ({
         <Terminal className="w-3.5 h-3.5" />
         <span className="text-sm flex-1">{t('sessions.focused_list.terminal')} #{index + 1}</span>
         <button
-          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-theme-bg-hover rounded transition-opacity"
+          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-theme-bg-hover rounded-md transition-opacity"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -398,7 +398,7 @@ const SessionNode = React.memo<SessionNodeProps>(({
     <TreeItem depth={node.depth} isLast={!node.isExpanded && node.isLastChild} lineColor={styles.line}>
       <div
         className={cn(
-          "flex items-center h-8 px-2 cursor-pointer group transition-[color,background-color,border-color,box-shadow] duration-150 rounded-sm",
+          "flex items-center h-8 px-2 cursor-pointer group transition-[color,background-color,border-color,box-shadow] duration-150 rounded-md",
           "hover:bg-theme-bg-hover",
           isSelected && "bg-theme-accent/10 ring-1 ring-theme-accent/30",
           isConnecting && "animate-pulse",

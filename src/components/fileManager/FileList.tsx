@@ -109,6 +109,8 @@ export interface FileListProps {
   onExtract?: () => void;
   hasClipboard?: boolean;
   canExtract?: boolean;
+  /** Set of file names currently in the "cut" clipboard (for visual dimming) */
+  cutFileNames?: Set<string>;
   
   // Drag & Drop
   isDragOver?: boolean;
@@ -125,6 +127,7 @@ const FILE_ROW_HEIGHT = 28; // py-1 + text-xs + border ≈ 28px
 type FileRowProps = {
   file: FileInfo;
   isSelected: boolean;
+  isCut: boolean;
   isRemote: boolean;
   path: string;
   selected: Set<string>;
@@ -135,17 +138,27 @@ type FileRowProps = {
 };
 
 const FileRow = React.memo<FileRowProps>(({
-  file, isSelected, isRemote, path, selected,
+  file, isSelected, isCut, isRemote, path, selected,
   onSelect, onNavigate, onPreview, onContextMenu,
 }) => (
   <div
     draggable
     onDragStart={(e) => {
+      const draggedFiles = selected.size > 0 ? Array.from(selected) : [file.name];
       e.dataTransfer.setData('application/json', JSON.stringify({
-        files: Array.from(selected.size > 0 ? selected : [file.name]),
+        files: draggedFiles,
         source: isRemote ? 'remote' : 'local',
         basePath: path
       }));
+      // Custom drag preview showing file count badge
+      const preview = document.createElement('div');
+      preview.style.cssText = 'position:absolute;top:-9999px;left:-9999px;display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--color-theme-bg-elevated,#1e1e2e);border:1px solid var(--color-theme-border,#444);border-radius:4px;color:var(--color-theme-text,#cdd6f4);font-size:12px;white-space:nowrap;';
+      preview.textContent = draggedFiles.length > 1
+        ? `${draggedFiles[0]} +${draggedFiles.length - 1}`
+        : draggedFiles[0];
+      document.body.appendChild(preview);
+      e.dataTransfer.setDragImage(preview, 0, 0);
+      requestAnimationFrame(() => document.body.removeChild(preview));
     }}
     onClick={(e) => {
       e.stopPropagation();
@@ -163,7 +176,8 @@ const FileRow = React.memo<FileRowProps>(({
     onContextMenu={(e) => onContextMenu(e, file)}
     className={cn(
       "flex items-center px-2 text-xs cursor-default select-none border-b border-transparent hover:bg-theme-bg-hover",
-      isSelected && "bg-theme-accent/20 text-theme-accent"
+      isSelected && "bg-theme-accent/20 text-theme-accent",
+      isCut && "opacity-50"
     )}
     style={{ height: FILE_ROW_HEIGHT }}
   >
@@ -183,6 +197,7 @@ const FileRow = React.memo<FileRowProps>(({
 ), (prev, next) =>
   prev.file === next.file &&
   prev.isSelected === next.isSelected &&
+  prev.isCut === next.isCut &&
   prev.path === next.path
 );
 FileRow.displayName = 'FileRow';
@@ -229,6 +244,7 @@ export const FileList: React.FC<FileListProps> = ({
   onExtract,
   hasClipboard,
   canExtract,
+  cutFileNames,
   isDragOver = false,
   onDragOver,
   onDragLeave,
@@ -528,6 +544,7 @@ export const FileList: React.FC<FileListProps> = ({
                   <FileRow
                     file={file}
                     isSelected={selected.has(file.name)}
+                    isCut={cutFileNames?.has(file.name) ?? false}
                     isRemote={isRemote}
                     path={path}
                     selected={selected}
@@ -555,7 +572,7 @@ export const FileList: React.FC<FileListProps> = ({
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 bg-theme-bg-elevated border border-theme-border rounded-sm shadow-lg py-1 min-w-[180px] max-h-[80vh] overflow-y-auto"
+          className="fixed z-50 bg-theme-bg-elevated border border-theme-border rounded-md shadow-lg py-1 min-w-[180px] max-h-[80vh] overflow-y-auto"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           {/* Open (directories only — navigate into folder) */}

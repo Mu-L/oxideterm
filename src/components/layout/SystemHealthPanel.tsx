@@ -131,7 +131,7 @@ function MetricCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="border border-theme-border/50 rounded-lg p-3 space-y-2 bg-theme-bg-panel">
+    <div className="border border-theme-border/50 rounded-md p-3 space-y-2 bg-theme-bg-panel">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-theme-text-muted text-xs">
           <Icon className="w-3.5 h-3.5" />
@@ -333,7 +333,7 @@ export const SystemHealthPanel: React.FC = () => {
 
       {/* Network I/O Card */}
       {!isRttOnly && (metrics.netRxBytesPerSec !== null || metrics.netTxBytesPerSec !== null) && (
-        <div className="border border-theme-border/50 rounded-lg p-3 bg-theme-bg-panel">
+        <div className="border border-theme-border/50 rounded-md p-3 bg-theme-bg-panel">
           <div className="flex items-center gap-1.5 text-theme-text-muted text-xs mb-2">
             <Wifi className="w-3.5 h-3.5" />
             {t('profiler.panel.network')}
@@ -358,7 +358,7 @@ export const SystemHealthPanel: React.FC = () => {
       {/* Load Averages + RTT — compact row */}
       <div className="grid grid-cols-2 gap-2">
         {!isRttOnly && metrics.loadAvg1 !== null && (
-          <div className="border border-theme-border/50 rounded-lg p-3 bg-theme-bg-panel">
+          <div className="border border-theme-border/50 rounded-md p-3 bg-theme-bg-panel">
             <div className="flex items-center gap-1.5 text-theme-text-muted text-xs mb-1">
               <Gauge className="w-3.5 h-3.5" />
               {t('profiler.panel.load_avg')}
@@ -368,7 +368,7 @@ export const SystemHealthPanel: React.FC = () => {
             </div>
           </div>
         )}
-        <div className="border border-theme-border/50 rounded-lg p-3 bg-theme-bg-panel">
+        <div className="border border-theme-border/50 rounded-md p-3 bg-theme-bg-panel">
           <div className="flex items-center gap-1.5 text-theme-text-muted text-xs mb-1">
             <Activity className="w-3.5 h-3.5" />
             {t('profiler.panel.rtt')}
@@ -404,7 +404,7 @@ function PanelHeader({
   if (!connection) return null;
 
   return (
-    <div className="flex items-center gap-2 border border-theme-border/50 rounded-lg p-3 bg-theme-bg-panel">
+    <div className="flex items-center gap-2 border border-theme-border/50 rounded-md p-3 bg-theme-bg-panel">
       <Server className={cn(
         'w-4 h-4 shrink-0',
         isRunning ? 'text-emerald-400' : 'text-theme-text-muted'
@@ -421,7 +421,7 @@ function PanelHeader({
         <button
           onClick={onToggle}
           className={cn(
-            'p-1 rounded transition-colors shrink-0',
+            'p-1 rounded-md transition-colors shrink-0',
             isEnabled
               ? 'text-emerald-400 hover:text-red-400 hover:bg-red-500/10'
               : 'text-theme-text-muted hover:text-emerald-400 hover:bg-emerald-500/10'

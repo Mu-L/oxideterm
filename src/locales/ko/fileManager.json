@@ -27,6 +27,7 @@
     "revealInFileManager": "파일 관리자에서 보기",
     "newFile": "새 파일",
     "newFilePrompt": "새 파일 이름을 입력하세요",
+    "fileName": "파일 이름",
     "fileCreated": "파일 생성됨",
     "duplicate": "복제",
     "duplicated": "복제됨",

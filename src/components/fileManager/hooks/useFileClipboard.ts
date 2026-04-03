@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { copyFile, rename, mkdir, readDir, stat } from '@tauri-apps/plugin-fs';
+import { copyFile, rename, mkdir, readDir } from '@tauri-apps/plugin-fs';
 import type { FileInfo, ClipboardData, ClipboardMode } from '../types';
 
 export interface PasteProgress {
@@ -65,11 +65,15 @@ export function useFileClipboard(options: UseFileClipboardOptions = {}): UseFile
   }, []);
 
   // Count total files recursively (for progress tracking)
+  // MAX_COUNT_DEPTH prevents unbounded recursion; visited detects symlink cycles.
+  const MAX_COUNT_DEPTH = 20;
+
   const countFiles = async (files: FileInfo[]): Promise<number> => {
+    const visited = new Set<string>();
     let count = 0;
     for (const file of files) {
       if (file.file_type === 'Directory') {
-        count += await countDirFiles(file.path);
+        count += await countDirFiles(file.path, 0, visited);
       } else {
         count++;
       }
@@ -77,13 +81,18 @@ export function useFileClipboard(options: UseFileClipboardOptions = {}): UseFile
     return count;
   };
 
-  const countDirFiles = async (dirPath: string): Promise<number> => {
+  const countDirFiles = async (dirPath: string, depth: number, visited: Set<string>): Promise<number> => {
+    if (depth >= MAX_COUNT_DEPTH || visited.has(dirPath)) {
+      // Estimate 1 for directories too deep or already visited (symlink cycle)
+      return 1;
+    }
+    visited.add(dirPath);
     let count = 0;
     try {
       const entries = await readDir(dirPath);
       for (const entry of entries) {
         if (entry.isDirectory) {
-          count += await countDirFiles(`${dirPath}/${entry.name}`);
+          count += await countDirFiles(`${dirPath}/${entry.name}`, depth + 1, visited);
         } else {
           count++;
         }
@@ -143,33 +152,68 @@ export function useFileClipboard(options: UseFileClipboardOptions = {}): UseFile
     }
   };
 
-  // Generate unique name if file exists
-  const getUniqueName = async (destPath: string, name: string, isDirectory: boolean): Promise<string> => {
-    const fullPath = `${destPath}/${name}`;
-    
-    try {
-      await stat(fullPath);
-      // File exists, generate unique name
-      const ext = isDirectory ? '' : (name.includes('.') ? `.${name.split('.').pop()}` : '');
-      const baseName = isDirectory ? name : (ext ? name.slice(0, -ext.length) : name);
-      
-      let counter = 1;
-      let newName = `${baseName} (${counter})${ext}`;
-      
-      while (true) {
-        try {
-          await stat(`${destPath}/${newName}`);
-          counter++;
-          newName = `${baseName} (${counter})${ext}`;
-        } catch {
-          // Name is available
-          return newName;
+  // Try to copy/move a single file, auto-appending (N) suffix on name collision.
+  // This avoids the TOCTOU race of checking existence before operating.
+  const MAX_COLLISION_RETRIES = 100;
+
+  const copyOrMoveWithRetry = async (
+    srcPath: string,
+    destDir: string,
+    name: string,
+    isDirectory: boolean,
+    mode: ClipboardMode,
+    tracker: { done: number; total: number; fileName: string; lastEmit: number },
+  ): Promise<void> => {
+    // Guard against path traversal in file names
+    if (name.includes('/') || name.includes('\\') || name.includes('..')) {
+      throw new Error(`Invalid file name: ${name}`);
+    }
+
+    const ext = isDirectory ? '' : (name.includes('.') ? `.${name.split('.').pop()}` : '');
+    const baseName = isDirectory ? name : (ext ? name.slice(0, -ext.length) : name);
+
+    let attempt = 0;
+    let destName = name;
+
+    while (attempt < MAX_COLLISION_RETRIES) {
+      const destFilePath = `${destDir}/${destName}`;
+      try {
+        if (isDirectory) {
+          if (mode === 'copy') {
+            await copyDirectory(srcPath, destFilePath, tracker);
+          } else {
+            await rename(srcPath, destFilePath);
+            tracker.done++;
+            tracker.fileName = destName;
+            emitProgress(tracker);
+          }
+        } else {
+          if (mode === 'copy') {
+            await copyFile(srcPath, destFilePath);
+            tracker.done++;
+            tracker.fileName = destName;
+            emitProgress(tracker);
+          } else {
+            await rename(srcPath, destFilePath);
+            tracker.done++;
+            tracker.fileName = destName;
+            emitProgress(tracker);
+          }
+        }
+        return; // success
+      } catch (err) {
+        const errStr = String(err).toLowerCase();
+        // Retry with incremented suffix on "already exists" errors
+        if (errStr.includes('exist') || errStr.includes('eexist') || errStr.includes('already')) {
+          attempt++;
+          destName = `${baseName} (${attempt})${ext}`;
+        } else {
+          throw err; // non-collision error — propagate
         }
       }
-    } catch {
-      // File doesn't exist, use original name
-      return name;
     }
+    // Exhausted retries — fall through with last attempted name
+    throw new Error(`Too many name collisions for ${name}`);
   };
 
   // Paste files from clipboard
@@ -195,41 +239,24 @@ export function useFileClipboard(options: UseFileClipboardOptions = {}): UseFile
         // Check if pasting to same directory
         const isSameDir = sourcePath === destPath;
         
-        // Get destination name (handle duplicates)
-        const destName = isSameDir && mode === 'copy'
-          ? await getUniqueName(destPath, file.name, file.file_type === 'Directory')
-          : file.name;
-        
-        const destFilePath = `${destPath}/${destName}`;
-        
-        if (file.file_type === 'Directory') {
-          if (mode === 'copy') {
-            await copyDirectory(file.path, destFilePath, tracker);
-          } else {
-            // Cut = move
-            if (!isSameDir) {
-              await rename(file.path, destFilePath);
-              tracker.done++;
-              tracker.fileName = file.name;
-              emitProgress(tracker);
-            }
-          }
-        } else {
-          if (mode === 'copy') {
-            await copyFile(file.path, destFilePath);
-            tracker.done++;
-            tracker.fileName = file.name;
-            emitProgress(tracker);
-          } else {
-            // Cut = move
-            if (!isSameDir) {
-              await rename(file.path, destFilePath);
-              tracker.done++;
-              tracker.fileName = file.name;
-              emitProgress(tracker);
-            }
-          }
+        if (isSameDir && mode === 'cut') {
+          // Cut + paste in same dir is a no-op
+          tracker.done++;
+          tracker.fileName = file.name;
+          emitProgress(tracker);
+          successCount++;
+          continue;
         }
+
+        // Use collision-safe copy/move (handles duplicates atomically)
+        await copyOrMoveWithRetry(
+          file.path,
+          destPath,
+          file.name,
+          file.file_type === 'Directory',
+          isSameDir ? 'copy' : mode, // same-dir cut treated above
+          tracker,
+        );
         
         successCount++;
       } catch (err) {

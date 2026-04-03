@@ -39,7 +39,7 @@ const TreeNode = ({
     <div>
       <div
         className={cn(
-          'flex items-center gap-1 px-2 py-1 cursor-pointer rounded text-sm hover:bg-theme-bg-hover transition-colors min-w-0',
+          'flex items-center gap-1 px-2 py-1 cursor-pointer rounded-md text-sm hover:bg-theme-bg-hover transition-colors min-w-0',
           isSelected && 'bg-theme-bg-active text-theme-text font-medium'
         )}
         style={{ paddingLeft: `${Math.min(depth, 5) * 16 + 8}px` }}
@@ -47,7 +47,7 @@ const TreeNode = ({
       >
         {hasChildren ? (
           <button
-            className="p-0.5 hover:bg-theme-bg-hover rounded"
+            className="p-0.5 hover:bg-theme-bg-hover rounded-md"
             onClick={(e) => {
               e.stopPropagation();
               onToggleExpand(node.fullPath);
@@ -104,7 +104,7 @@ export const FolderTree = ({
       <div className="shrink-0 pt-2 px-1">
         <div
           className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 cursor-pointer rounded text-sm hover:bg-theme-bg-hover transition-colors min-w-0',
+            'flex items-center gap-1.5 px-3 py-1.5 cursor-pointer rounded-md text-sm hover:bg-theme-bg-hover transition-colors min-w-0',
             selectedGroup === null && 'bg-theme-bg-active font-medium'
           )}
           onClick={() => onSelectGroup(null)}
@@ -133,7 +133,7 @@ export const FolderTree = ({
         {ungroupedCount > 0 && (
           <div
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 cursor-pointer rounded text-sm hover:bg-theme-bg-hover transition-colors mt-0.5 min-w-0',
+              'flex items-center gap-1.5 px-3 py-1.5 cursor-pointer rounded-md text-sm hover:bg-theme-bg-hover transition-colors mt-0.5 min-w-0',
               selectedGroup === '__ungrouped__' && 'bg-theme-bg-active font-medium'
             )}
             onClick={() => onSelectGroup('__ungrouped__')}
@@ -149,7 +149,7 @@ export const FolderTree = ({
       <div className="shrink-0 border-t border-theme-border px-1 py-1.5">
         <div
           className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 cursor-pointer rounded text-sm hover:bg-theme-bg-hover transition-colors min-w-0',
+            'flex items-center gap-1.5 px-3 py-1.5 cursor-pointer rounded-md text-sm hover:bg-theme-bg-hover transition-colors min-w-0',
             selectedGroup === '__recent__' && 'bg-theme-bg-active font-medium'
           )}
           onClick={() => onSelectGroup('__recent__')}

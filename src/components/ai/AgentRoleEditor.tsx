@@ -104,7 +104,7 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder={t('agent.customRoles.nameHint')}
-            className="w-full h-7 text-xs px-2 rounded border border-theme-border bg-theme-bg text-theme-text"
+            className="w-full h-7 text-xs px-2 rounded-md border border-theme-border bg-theme-bg text-theme-text"
           />
         </div>
         <div>
@@ -129,7 +129,7 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder={t('agent.customRoles.descriptionHint')}
-          className="w-full h-7 text-xs px-2 rounded border border-theme-border bg-theme-bg text-theme-text"
+          className="w-full h-7 text-xs px-2 rounded-md border border-theme-border bg-theme-bg text-theme-text"
         />
       </div>
 
@@ -142,7 +142,7 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
               <button
                 key={v}
                 onClick={() => setPromptTemplate(p => p + v)}
-                className="text-[9px] px-1 py-0.5 rounded bg-theme-bg border border-theme-border text-theme-text-muted hover:text-theme-accent"
+                className="text-[9px] px-1 py-0.5 rounded-md bg-theme-bg border border-theme-border text-theme-text-muted hover:text-theme-accent"
               >
                 {v}
               </button>
@@ -154,7 +154,7 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
           onChange={e => setPromptTemplate(e.target.value)}
           rows={6}
           className={cn(
-            'w-full resize-none rounded border border-theme-border bg-theme-bg px-2 py-1.5',
+            'w-full resize-none rounded-md border border-theme-border bg-theme-bg px-2 py-1.5',
             'text-xs font-mono text-theme-text placeholder:text-theme-text-muted',
             'focus:outline-none focus:ring-1 focus:ring-theme-accent',
           )}
@@ -199,7 +199,7 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
             value={maxRounds}
             onChange={e => setMaxRounds(e.target.value)}
             placeholder="—"
-            className="w-full h-7 text-xs px-2 text-center rounded border border-theme-border bg-theme-bg text-theme-text"
+            className="w-full h-7 text-xs px-2 text-center rounded-md border border-theme-border bg-theme-bg text-theme-text"
           />
         </div>
       </div>
@@ -212,7 +212,7 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
             value={typeof toolAllowlist === 'string' ? toolAllowlist : ''}
             onChange={e => setToolAllowlist(e.target.value)}
             placeholder={t('agent.customRoles.toolListHint')}
-            className="w-full h-7 text-xs px-2 rounded border border-theme-border bg-theme-bg text-theme-text"
+            className="w-full h-7 text-xs px-2 rounded-md border border-theme-border bg-theme-bg text-theme-text"
           />
         </div>
       )}

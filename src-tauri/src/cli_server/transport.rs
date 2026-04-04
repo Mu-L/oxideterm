@@ -6,6 +6,7 @@
 //! - macOS/Linux: Unix Domain Socket at `~/.oxideterm/oxt.sock`
 //! - Windows: Named Pipe at `\\.\pipe\OxideTerm-CLI-{username}`
 
+#[cfg(unix)]
 use std::path::PathBuf;
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -187,9 +188,9 @@ mod platform {
     unsafe fn create_pipe_with_acl(
         pipe_name: &str,
     ) -> Result<tokio::net::windows::named_pipe::NamedPipeServer, std::io::Error> {
+        use windows_sys::Win32::Foundation::LocalFree;
         use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
         use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
-        use windows_sys::Win32::System::Memory::LocalFree;
 
         // SDDL: Owner gets full control, no other access
         // D: = DACL
@@ -235,7 +236,7 @@ mod platform {
             use windows_sys::Win32::Security::Authorization::SE_KERNEL_OBJECT;
             use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
 
-            let handle = pipe_server.as_raw_handle() as isize;
+            let handle = pipe_server.as_raw_handle() as *mut core::ffi::c_void;
 
             // Extract DACL from our security descriptor
             let mut dacl_present: i32 = 0;
@@ -254,10 +255,10 @@ mod platform {
                     handle,
                     SE_KERNEL_OBJECT,
                     DACL_SECURITY_INFORMATION,
-                    std::ptr::null(),
-                    std::ptr::null(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
                     dacl_ptr,
-                    std::ptr::null(),
+                    std::ptr::null_mut(),
                 );
                 if result != 0 {
                     tracing::warn!(
@@ -269,7 +270,7 @@ mod platform {
         }
 
         // Free the security descriptor
-        LocalFree(sd_ptr as isize);
+        LocalFree(sd_ptr);
 
         server
     }

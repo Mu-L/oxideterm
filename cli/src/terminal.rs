@@ -76,8 +76,7 @@ pub fn get_terminal_size() -> (u16, u16) {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Console::{
-            GetConsoleScreenBufferInfo, GetStdHandle, CONSOLE_SCREEN_BUFFER_INFO,
-            STD_OUTPUT_HANDLE,
+            GetConsoleScreenBufferInfo, GetStdHandle, CONSOLE_SCREEN_BUFFER_INFO, STD_OUTPUT_HANDLE,
         };
         let handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
         if handle != 0 && handle != -1isize as _ {

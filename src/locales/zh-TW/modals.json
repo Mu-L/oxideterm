@@ -323,6 +323,8 @@
       "ungrouped": "未分組",
       "create_groups_hint": "在設定中建立群組",
       "save_connection": "儲存連線以供日後使用",
+      "agent_forwarding": "啟用 SSH Agent 轉發",
+      "agent_forwarding_hint": "僅在受信任的伺服器上啟用。惡意伺服器可能利用你本地的 SSH Agent 認證到其他主機。",
       "proxy_chain": {
         "title": "代理鏈",
         "add_jump": "新增跳板伺服器",

@@ -289,6 +289,7 @@ async fn run_kbi_flow(
         color: None,
         cols,
         rows,
+        agent_forwarding: false,
     };
 
     // Create session in registry
@@ -303,7 +304,7 @@ async fn run_kbi_flow(
     }
 
     // Create SSH session from authenticated handle
-    let ssh_session = SshSession::new(handle, cols, rows);
+    let ssh_session = SshSession::new(handle, cols, rows, false);
 
     // Request shell with PTY
     let (session_handle, handle_controller) =

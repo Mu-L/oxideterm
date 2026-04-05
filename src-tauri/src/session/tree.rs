@@ -88,6 +88,9 @@ pub struct NodeConnection {
     pub auth: AuthMethod,
     /// 可选的显示名称
     pub display_name: Option<String>,
+    /// Enable SSH agent forwarding
+    #[serde(default)]
+    pub agent_forwarding: bool,
 }
 
 impl NodeConnection {
@@ -99,6 +102,7 @@ impl NodeConnection {
             username: username.into(),
             auth: AuthMethod::Agent,
             display_name: None,
+            agent_forwarding: false,
         }
     }
 

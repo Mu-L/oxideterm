@@ -323,6 +323,8 @@
       "ungrouped": "Không có nhóm",
       "create_groups_hint": "Tạo nhóm trong Cài đặt",
       "save_connection": "Lưu kết nối để sử dụng sau",
+      "agent_forwarding": "Bật chuyển tiếp SSH Agent",
+      "agent_forwarding_hint": "Chỉ bật cho các máy chủ đáng tin cậy. Máy chủ độc hại có thể sử dụng SSH Agent cục bộ của bạn để xác thực với các máy chủ khác.",
       "proxy_chain": {
         "title": "Proxy Chain",
         "add_jump": "Thêm Jump Server",

@@ -321,6 +321,8 @@
       "ungrouped": "Sem grupo",
       "create_groups_hint": "Crie grupos nas configurações",
       "save_connection": "Salvar conexão para uso futuro",
+      "agent_forwarding": "Ativar encaminhamento de agente SSH",
+      "agent_forwarding_hint": "Ative apenas para servidores confiáveis. Um servidor malicioso pode usar seu agente SSH local para autenticar em outros hosts.",
       "proxy_chain": {
         "title": "Cadeia de proxy",
         "add_jump": "Adicionar servidor de salto",

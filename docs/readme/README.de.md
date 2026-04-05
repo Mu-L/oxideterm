@@ -92,7 +92,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | Kategorie | Funktionen |
 |---|---|
 | **Terminal** | Lokales PTY (zsh/bash/fish/pwsh/WSL2), SSH Remote, geteilte Fenster, Broadcast-Eingabe, Sitzungsaufzeichnung/-wiedergabe (asciicast v2), WebGL-Rendering, 30+ Designs + benutzerdefinierter Editor, Befehlspalette (`⌘K`), Zen-Modus |
-| **SSH & Authentifizierung** | Verbindungspool & Multiplexing, ProxyJump (unbegrenzte Hops) mit Topologiegraph, Auto-Reconnect mit Grace Period. Auth: Passwort, SSH-Schlüssel (RSA/Ed25519/ECDSA), SSH Agent, Zertifikate, Keyboard-Interactive 2FA, Known Hosts TOFU |
+| **SSH & Authentifizierung** | Verbindungspool & Multiplexing, ProxyJump (unbegrenzte Hops) mit Topologiegraph, Auto-Reconnect mit Grace Period, Agent-Weiterleitung. Auth: Passwort, SSH-Schlüssel (RSA/Ed25519/ECDSA), SSH Agent, Zertifikate, Keyboard-Interactive 2FA, Known Hosts TOFU |
 | **SFTP** | Dual-Pane-Browser, Drag-and-Drop, intelligente Vorschau (Bilder/Video/Audio/Code/PDF/Hex/Schriftarten), Transfer-Warteschlange mit Fortschritt & ETA, Lesezeichen, Archivextraktion |
 | **IDE-Modus** | CodeMirror 6 mit 30+ Sprachen, Dateibaum + Git-Status, Multi-Tab, Konfliktlösung, integriertes Terminal. Optionaler Remote-Agent für Linux (9 zusätzliche Architekturen) |
 | **Portweiterleitung** | Lokal (-L), Remote (-R), dynamisches SOCKS5 (-D), lock-freie Message-Passing-I/O, automatische Wiederherstellung bei Reconnect, Ausfallberichterstattung, Leerlauf-Timeout |

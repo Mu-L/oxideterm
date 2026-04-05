@@ -92,7 +92,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | 分類 | 功能 |
 |---|---|
 | **終端** | 本機 PTY（zsh/bash/fish/pwsh/WSL2）、SSH 遠端、分割窗格、廣播輸入、工作階段錄製/回放（asciicast v2）、WebGL 算繪、30+ 主題 + 自訂編輯器、命令面板（`⌘K`）、禪模式 |
-| **SSH 與驗證** | 連線池與多工複用、ProxyJump（無限跳數）拓撲圖、寬限期自動重連。驗證方式：密碼、SSH 金鑰（RSA/Ed25519/ECDSA）、SSH Agent、憑證、keyboard-interactive 2FA、Known Hosts TOFU |
+| **SSH 與驗證** | 連線池與多工複用、ProxyJump（無限跳數）拓撲圖、寬限期自動重連、Agent 轉發。驗證方式：密碼、SSH 金鑰（RSA/Ed25519/ECDSA）、SSH Agent、憑證、keyboard-interactive 2FA、Known Hosts TOFU |
 | **SFTP** | 雙窗格瀏覽器、拖放操作、智慧預覽（圖片/影片/音訊/程式碼/PDF/十六進位/字型）、帶進度和預估時間的傳輸佇列、書籤、壓縮檔解壓 |
 | **IDE 模式** | CodeMirror 6 支援 30+ 語言、檔案樹 + Git 狀態、多分頁、衝突解決、整合終端。可選 Linux 遠端 Agent（9 種額外架構） |
 | **連接埠轉發** | 本機（-L）、遠端（-R）、動態 SOCKS5（-D）、無鎖訊息傳遞 I/O、重連自動恢復、終止報告、閒置逾時 |

@@ -15,6 +15,7 @@
 //! - Keyboard-Interactive authentication (2FA) support
 
 mod agent;
+mod agent_forward;
 mod auth;
 mod client;
 mod config;

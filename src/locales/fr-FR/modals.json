@@ -321,6 +321,8 @@
       "ungrouped": "Non groupé",
       "create_groups_hint": "Créer des groupes dans les Paramètres",
       "save_connection": "Enregistrer la connexion pour une utilisation future",
+      "agent_forwarding": "Activer le transfert d'agent SSH",
+      "agent_forwarding_hint": "Activez uniquement pour les serveurs de confiance. Un serveur malveillant pourrait utiliser votre agent SSH local pour s'authentifier sur d'autres hôtes.",
       "proxy_chain": {
         "title": "Chaîne proxy",
         "add_jump": "Ajouter un serveur de saut",

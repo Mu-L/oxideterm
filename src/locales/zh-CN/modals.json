@@ -321,6 +321,8 @@
       "ungrouped": "未分组",
       "create_groups_hint": "在设置中创建分组",
       "save_connection": "保存连接以便将来使用",
+      "agent_forwarding": "启用 SSH Agent 转发",
+      "agent_forwarding_hint": "仅在受信任的服务器上启用。恶意服务器可能利用你本地的 SSH Agent 认证到其他主机。",
       "proxy_chain": {
         "title": "代理链",
         "add_jump": "添加跳板机",

@@ -183,7 +183,9 @@ fn build_updater_for_channel(
     let mut builder = app.updater_builder();
     if channel == Some("beta") {
         builder = builder
-            .endpoints(vec![BETA_ENDPOINT.parse().expect("BETA_ENDPOINT is a valid URL")])
+            .endpoints(vec![
+                BETA_ENDPOINT.parse().expect("BETA_ENDPOINT is a valid URL"),
+            ])
             .map_err(|e| UpdateError::General(format!("set beta endpoint failed: {e}")))?;
     }
     builder

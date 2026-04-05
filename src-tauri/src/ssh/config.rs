@@ -49,6 +49,9 @@ pub struct SshConfig {
     /// - Some(false): trust for this session only (don't save)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trust_host_key: Option<bool>,
+    /// Enable SSH agent forwarding
+    #[serde(default)]
+    pub agent_forwarding: bool,
 }
 
 /// Configuration for a single proxy hop
@@ -159,6 +162,7 @@ impl Default for SshConfig {
             proxy_chain: None,
             strict_host_key_checking: false,
             trust_host_key: None,
+            agent_forwarding: false,
         }
     }
 }

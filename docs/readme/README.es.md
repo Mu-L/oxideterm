@@ -92,7 +92,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | Categoría | Funcionalidades |
 |---|---|
 | **Terminal** | PTY local (zsh/bash/fish/pwsh/WSL2), SSH remoto, paneles divididos, difusión de entrada, grabación/reproducción de sesiones (asciicast v2), renderizado WebGL, 30+ temas + editor personalizado, paleta de comandos (`⌘K`), modo zen |
-| **SSH y autenticación** | Pool de conexiones y multiplexación, ProxyJump (saltos ilimitados) con grafo topológico, reconexión automática con período de gracia. Auth: contraseña, clave SSH (RSA/Ed25519/ECDSA), SSH Agent, certificados, 2FA interactivo por teclado, Known Hosts TOFU |
+| **SSH y autenticación** | Pool de conexiones y multiplexación, ProxyJump (saltos ilimitados) con grafo topológico, reconexión automática con período de gracia, Reenvío de agente. Auth: contraseña, clave SSH (RSA/Ed25519/ECDSA), SSH Agent, certificados, 2FA interactivo por teclado, Known Hosts TOFU |
 | **SFTP** | Navegador de doble panel, arrastrar y soltar, vista previa inteligente (imágenes/vídeo/audio/código/PDF/hex/fuentes), cola de transferencias con progreso y ETA, marcadores, extracción de archivos |
 | **Modo IDE** | CodeMirror 6 con 30+ lenguajes, árbol de archivos + estado Git, multi-pestaña, resolución de conflictos, terminal integrado. Agente remoto opcional para Linux (9 arquitecturas adicionales) |
 | **Reenvío de puertos** | Local (-L), remoto (-R), SOCKS5 dinámico (-D), I/O por paso de mensajes sin bloqueo, restauración automática en reconexión, informe de fallos, tiempo de inactividad |

@@ -321,6 +321,8 @@
       "ungrouped": "Sin grupo",
       "create_groups_hint": "Crea grupos en configuración",
       "save_connection": "Guardar conexión para uso futuro",
+      "agent_forwarding": "Habilitar reenvío de agente SSH",
+      "agent_forwarding_hint": "Habilitar solo en servidores de confianza. Un servidor malicioso podría usar tu agente SSH local para autenticarse en otros hosts.",
       "proxy_chain": {
         "title": "Cadena de proxy",
         "add_jump": "Añadir servidor de salto",

@@ -998,6 +998,7 @@ export interface ConnectServerRequest {
   certPath?: string;
   passphrase?: string;
   displayName?: string;
+  agentForwarding?: boolean;
 }
 
 /**
@@ -1014,6 +1015,7 @@ export interface DrillDownRequest {
   certPath?: string;
   passphrase?: string;
   displayName?: string;
+  agentForwarding?: boolean;
 }
 
 /**

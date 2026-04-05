@@ -393,6 +393,7 @@ mod tests {
             color: None,
             cols: 80,
             rows: 24,
+            agent_forwarding: false,
         };
 
         let reconnector = SessionReconnector::new(
@@ -422,6 +423,7 @@ mod tests {
             color: None,
             cols: 80,
             rows: 24,
+            agent_forwarding: false,
         };
 
         let reconnector = SessionReconnector::new(

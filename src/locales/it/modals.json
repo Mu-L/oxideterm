@@ -323,6 +323,8 @@
       "ungrouped": "Non raggruppato",
       "create_groups_hint": "Crea gruppi nelle Impostazioni",
       "save_connection": "Salva connessione per uso futuro",
+      "agent_forwarding": "Abilita inoltro agente SSH",
+      "agent_forwarding_hint": "Abilitare solo per server affidabili. Un server malevolo potrebbe utilizzare il tuo agente SSH locale per autenticarsi su altri host.",
       "proxy_chain": {
         "title": "Catena Proxy",
         "add_jump": "Aggiungi Jump Server",

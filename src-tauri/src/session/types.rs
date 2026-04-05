@@ -38,6 +38,9 @@ pub struct SessionConfig {
     /// Initial terminal rows
     #[serde(default = "default_rows")]
     pub rows: u32,
+    /// Enable SSH agent forwarding
+    #[serde(default)]
+    pub agent_forwarding: bool,
 }
 
 fn default_cols() -> u32 {
@@ -65,6 +68,7 @@ impl SessionConfig {
             color: None,
             cols: 80,
             rows: 24,
+            agent_forwarding: false,
         }
     }
 
@@ -85,6 +89,7 @@ impl SessionConfig {
             color: None,
             cols: 80,
             rows: 24,
+            agent_forwarding: false,
         }
     }
 

@@ -92,7 +92,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | カテゴリ | 機能 |
 |---|---|
 | **ターミナル** | ローカル PTY（zsh/bash/fish/pwsh/WSL2）、SSH リモート、分割ペイン、ブロードキャスト入力、セッション録画・再生（asciicast v2）、WebGL レンダリング、30 以上のテーマ + カスタムエディター、コマンドパレット（`⌘K`）、Zen モード |
-| **SSH と認証** | 接続プーリングと多重化、ProxyJump（無制限ホップ）＋トポロジーグラフ、Grace Period 付き自動再接続。認証：パスワード、SSH キー（RSA/Ed25519/ECDSA）、SSH Agent、証明書、keyboard-interactive 2FA、Known Hosts TOFU |
+| **SSH と認証** | 接続プーリングと多重化、ProxyJump（無制限ホップ）＋トポロジーグラフ、Grace Period 付き自動再接続、Agent 転送。認証：パスワード、SSH キー（RSA/Ed25519/ECDSA）、SSH Agent、証明書、keyboard-interactive 2FA、Known Hosts TOFU |
 | **SFTP** | デュアルペインブラウザー、ドラッグ＆ドロップ、スマートプレビュー（画像/動画/音声/コード/PDF/Hex/フォント）、進捗・ETA 付き転送キュー、ブックマーク、アーカイブ展開 |
 | **IDE モード** | CodeMirror 6、30 以上の言語、ファイルツリー + Git ステータス、マルチタブ、競合解決、統合ターミナル。Linux 向けオプションのリモートエージェント（9 種の追加アーキテクチャ） |
 | **ポートフォワーディング** | Local (-L)、Remote (-R)、Dynamic SOCKS5 (-D)、ロックフリーなメッセージパッシング I/O、再接続時の自動復元、停止報告、アイドルタイムアウト |

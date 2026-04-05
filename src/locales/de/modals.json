@@ -323,6 +323,8 @@
       "ungrouped": "Nicht gruppiert",
       "create_groups_hint": "Gruppen in Einstellungen erstellen",
       "save_connection": "Verbindung für zukünftige Verwendung speichern",
+      "agent_forwarding": "SSH-Agent-Weiterleitung aktivieren",
+      "agent_forwarding_hint": "Nur bei vertrauenswürdigen Servern aktivieren. Ein bösartiger Server könnte Ihren lokalen SSH-Agent verwenden, um sich bei anderen Hosts zu authentifizieren.",
       "proxy_chain": {
         "title": "Proxy-Kette",
         "add_jump": "Jump-Server hinzufügen",

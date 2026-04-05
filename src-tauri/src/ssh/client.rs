@@ -55,6 +55,7 @@ impl SshClient {
             self.config.port,
             self.config.strict_host_key_checking,
             self.config.trust_host_key,
+            self.config.agent_forwarding,
         );
 
         // Connect with timeout
@@ -133,7 +134,12 @@ impl SshClient {
         info!("SSH authentication successful");
 
         // Create session
-        Ok(SshSession::new(handle, self.config.cols, self.config.rows))
+        Ok(SshSession::new(
+            handle,
+            self.config.cols,
+            self.config.rows,
+            self.config.agent_forwarding,
+        ))
     }
 }
 
@@ -142,6 +148,7 @@ impl SshClient {
 /// This handler processes server-initiated events, including:
 /// - Host key verification against ~/.ssh/known_hosts
 /// - Remote port forwarding (forwarded-tcpip channels)
+/// - SSH agent forwarding relay
 pub struct ClientHandler {
     /// Target host for key verification
     host: String,
@@ -156,6 +163,11 @@ pub struct ClientHandler {
     /// - Some(true): trust and save unknown keys
     /// - Some(false): trust for session only (don't save)
     trust_host_key: Option<bool>,
+    /// Whether agent forwarding was requested by the client.
+    /// Defense-in-depth: reject server-initiated agent channels if we never asked.
+    agent_forwarding_requested: bool,
+    /// Semaphore to limit concurrent agent forwarding channels (max 16)
+    agent_forward_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
 }
 
 impl ClientHandler {
@@ -165,16 +177,32 @@ impl ClientHandler {
             port,
             strict,
             trust_host_key: None,
+            agent_forwarding_requested: false,
+            agent_forward_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(16)),
         }
     }
 
-    pub fn with_trust(host: String, port: u16, strict: bool, trust_host_key: Option<bool>) -> Self {
+    pub fn with_trust(
+        host: String,
+        port: u16,
+        strict: bool,
+        trust_host_key: Option<bool>,
+        agent_forwarding: bool,
+    ) -> Self {
         Self {
             host,
             port,
             strict,
             trust_host_key,
+            agent_forwarding_requested: agent_forwarding,
+            agent_forward_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(16)),
         }
+    }
+
+    /// Mark that agent forwarding was requested on this connection.
+    /// Must be called after sending `auth-agent-req@openssh.com`.
+    pub fn set_agent_forwarding_requested(&mut self, requested: bool) {
+        self.agent_forwarding_requested = requested;
     }
 }
 
@@ -300,6 +328,52 @@ impl client::Handler for ClientHandler {
                     connected_address, connected_port, e
                 );
             }
+        });
+
+        Ok(())
+    }
+
+    /// Called when the server opens an agent forwarding channel.
+    /// This happens when the remote side needs to use the local SSH agent
+    /// (e.g., for `ssh` commands on the remote host).
+    ///
+    /// Defense-in-depth: rejects the channel if agent forwarding was not requested,
+    /// and limits concurrent agent channels via semaphore.
+    async fn server_channel_open_agent_forward(
+        &mut self,
+        channel: Channel<client::Msg>,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        // Defense-in-depth: reject unsolicited agent channels
+        if !self.agent_forwarding_requested {
+            warn!(
+                "Server {}:{} tried to open agent channel but forwarding was not requested — rejecting",
+                self.host, self.port
+            );
+            let _ = channel.eof().await;
+            return Ok(());
+        }
+
+        info!("Server opened agent forwarding channel");
+
+        use super::agent_forward::handle_agent_forward_channel;
+
+        // Acquire semaphore permit to limit concurrent agent channels
+        let semaphore = self.agent_forward_semaphore.clone();
+        let permit = match semaphore.try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                warn!("Too many concurrent agent forwarding channels — rejecting");
+                let _ = channel.eof().await;
+                return Ok(());
+            }
+        };
+
+        // Spawn a task to handle this agent forwarding channel
+        // We can't block here as this is called from the SSH event loop
+        tokio::spawn(async move {
+            handle_agent_forward_channel(channel).await;
+            drop(permit); // Release semaphore when done
         });
 
         Ok(())

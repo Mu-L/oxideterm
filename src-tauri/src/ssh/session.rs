@@ -6,7 +6,7 @@
 use russh::client::Handle;
 use russh::{ChannelMsg, Pty};
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use super::client::ClientHandler;
 use super::error::SshError;
@@ -151,11 +151,22 @@ pub struct SshSession {
     handle: Handle<ClientHandler>,
     cols: u32,
     rows: u32,
+    agent_forwarding: bool,
 }
 
 impl SshSession {
-    pub fn new(handle: Handle<ClientHandler>, cols: u32, rows: u32) -> Self {
-        Self { handle, cols, rows }
+    pub fn new(
+        handle: Handle<ClientHandler>,
+        cols: u32,
+        rows: u32,
+        agent_forwarding: bool,
+    ) -> Self {
+        Self {
+            handle,
+            cols,
+            rows,
+            agent_forwarding,
+        }
     }
 
     /// Start the Handle Owner Task and return a controller
@@ -213,6 +224,14 @@ impl SshSession {
             .map_err(|e| SshError::ChannelError(format!("PTY request failed: {}", e)))?;
 
         debug!("PTY allocated, requesting shell");
+
+        // Request agent forwarding if enabled (must be before shell)
+        if self.agent_forwarding {
+            debug!("Requesting SSH agent forwarding");
+            if let Err(e) = channel.agent_forward(false).await {
+                warn!("Agent forwarding request failed (non-fatal): {}", e);
+            }
+        }
 
         // Request shell
         channel

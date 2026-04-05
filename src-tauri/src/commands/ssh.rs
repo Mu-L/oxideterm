@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, State};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use super::{ForwardingRegistry, HealthRegistry, ProfilerRegistry};
 use crate::agent::AgentRegistry;
@@ -241,6 +241,7 @@ pub async fn create_terminal(
         color: None,
         cols: request.cols,
         rows: request.rows,
+        agent_forwarding: false, // Terminal-level config, actual flag read from connection entry
     };
 
     // 在 SessionRegistry 创建 session
@@ -336,6 +337,12 @@ pub async fn create_terminal(
     // themes like spaceship-zsh that cache cursor positions during init).
     let deferred_pty = request.cols == 0 || request.rows == 0;
 
+    // Check if agent forwarding is enabled for this connection
+    let agent_forwarding = connection_registry
+        .get_connection(&request.connection_id)
+        .map(|entry| entry.config.agent_forwarding)
+        .unwrap_or(false);
+
     if !deferred_pty {
         // Standard flow: request PTY immediately with provided dimensions
         // Clamp to sane limits to prevent resource abuse
@@ -361,6 +368,14 @@ pub async fn create_terminal(
                 });
                 format!("Failed to request PTY: {}", e)
             })?;
+
+        // Request agent forwarding if enabled (must be after PTY, before shell)
+        if agent_forwarding {
+            debug!("Requesting SSH agent forwarding on terminal channel");
+            if let Err(e) = channel.agent_forward(false).await {
+                warn!("Agent forwarding request failed (non-fatal): {}", e);
+            }
+        }
 
         channel.request_shell(false).await.map_err(|e| {
             session_registry.remove(&session_id);
@@ -452,6 +467,13 @@ pub async fn create_terminal(
                 tracing::error!("Failed to request deferred PTY for session {}: {}", sid, e);
                 let _ = channel.eof().await;
                 return;
+            }
+            // Request agent forwarding if enabled (must be after PTY, before shell)
+            if agent_forwarding {
+                debug!("Requesting SSH agent forwarding on deferred PTY channel");
+                if let Err(e) = channel.agent_forward(false).await {
+                    warn!("Agent forwarding request failed (non-fatal): {}", e);
+                }
             }
             if let Err(e) = channel.request_shell(false).await {
                 tracing::error!("Failed to request shell for session {}: {}", sid, e);

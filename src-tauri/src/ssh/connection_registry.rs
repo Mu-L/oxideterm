@@ -922,6 +922,7 @@ impl SshConnectionRegistry {
             proxy_chain: None,
             strict_host_key_checking: false,
             trust_host_key: None, // Connection pool uses known_hosts, no TOFU here
+            agent_forwarding: config.agent_forwarding,
         };
 
         // 建立 SSH 连接
@@ -1177,8 +1178,12 @@ impl SshConnectionRegistry {
         );
 
         // 6. 创建 SshSession 并启动 Handle Owner Task
-        let session =
-            super::session::SshSession::new(handle, target_config.cols, target_config.rows);
+        let session = super::session::SshSession::new(
+            handle,
+            target_config.cols,
+            target_config.rows,
+            target_config.agent_forwarding,
+        );
         let handle_controller = session.start(connection_id.clone());
 
         // 7. 创建连接条目（带父连接 ID）
@@ -2758,6 +2763,7 @@ mod tests {
                 color: None,
                 cols: 80,
                 rows: 24,
+                agent_forwarding: false,
             },
             handle_controller: {
                 // 创建一个 mock controller
@@ -2808,6 +2814,7 @@ mod tests {
                 color: None,
                 cols: 80,
                 rows: 24,
+                agent_forwarding: false,
             },
             handle_controller: HandleController::new(tx),
             state: RwLock::new(ConnectionState::Active),

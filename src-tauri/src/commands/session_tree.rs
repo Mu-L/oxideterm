@@ -53,6 +53,8 @@ pub struct ConnectServerRequest {
     pub cert_path: Option<String>,
     pub passphrase: Option<String>,
     pub display_name: Option<String>,
+    #[serde(default)]
+    pub agent_forwarding: bool,
 }
 
 fn default_auth_type() -> String {
@@ -74,6 +76,8 @@ pub struct DrillDownRequest {
     pub cert_path: Option<String>,
     pub passphrase: Option<String>,
     pub display_name: Option<String>,
+    #[serde(default)]
+    pub agent_forwarding: bool,
 }
 
 /// 预设链连接请求
@@ -153,10 +157,12 @@ fn build_connection(
     username: String,
     auth: AuthMethod,
     display_name: Option<String>,
+    agent_forwarding: bool,
 ) -> NodeConnection {
     let mut conn = NodeConnection::new(host, port, username);
     conn.auth = auth;
     conn.display_name = display_name;
+    conn.agent_forwarding = agent_forwarding;
     conn
 }
 
@@ -219,6 +225,7 @@ pub async fn add_root_node(
         request.username,
         auth,
         request.display_name,
+        request.agent_forwarding,
     );
 
     let mut tree = state.tree.write().await;
@@ -251,6 +258,7 @@ pub async fn tree_drill_down(
         request.username,
         auth,
         request.display_name,
+        request.agent_forwarding,
     );
 
     let mut tree = state.tree.write().await;
@@ -307,6 +315,7 @@ pub async fn expand_manual_preset(
             hop.username.clone(),
             auth,
             None,
+            false,
         ));
     }
 
@@ -323,6 +332,7 @@ pub async fn expand_manual_preset(
         request.target.username.clone(),
         target_auth,
         None,
+        false,
     );
 
     // 展开为树节点
@@ -787,6 +797,7 @@ pub async fn connect_tree_node(
             color: None,
             cols: request.cols,
             rows: request.rows,
+            agent_forwarding: node.connection.agent_forwarding,
         };
 
         (config, node.parent_id.clone())
@@ -987,6 +998,7 @@ pub async fn connect_manual_preset(
             hop.username.clone(),
             auth,
             None,
+            false,
         ));
     }
 
@@ -1003,6 +1015,7 @@ pub async fn connect_manual_preset(
         request.target.username.clone(),
         target_auth,
         None,
+        false,
     );
 
     // 2. 展开为树节点
@@ -1058,6 +1071,7 @@ pub async fn connect_manual_preset(
                 color: None,
                 cols,
                 rows,
+                agent_forwarding: node.connection.agent_forwarding,
             };
 
             // 获取父节点的 SSH 连接 ID（如果有）

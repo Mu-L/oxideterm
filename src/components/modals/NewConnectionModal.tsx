@@ -35,9 +35,15 @@ import { ProxyHopConfig } from '../../types';
 import { api } from '../../lib/api';
 import { AddJumpServerDialog } from './AddJumpServerDialog';
 import { KbiDialog } from './KbiDialog';
-import { Plus, Trash2, Key, Lock, ChevronDown, ChevronRight, Shield } from 'lucide-react';
+import { Plus, Trash2, Key, Lock, ChevronDown, ChevronRight, Shield, Info } from 'lucide-react';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
 import { useToast } from '../../hooks/useToast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../ui/tooltip';
 
 export const NewConnectionModal = () => {
   const { t } = useTranslation();
@@ -73,6 +79,7 @@ export const NewConnectionModal = () => {
   const [showAddJumpDialog, setShowAddJumpDialog] = useState(false);
   const [proxyChainExpanded, setProxyChainExpanded] = useState(false);
   const [agentAvailable, setAgentAvailable] = useState<boolean | null>(null);
+  const [agentForwarding, setAgentForwarding] = useState(false);
   const isComposingRef = useRef(false);
 
   // Enter key submit (with IME guard)
@@ -275,6 +282,7 @@ export const NewConnectionModal = () => {
         certPath: authType === 'certificate' ? certPath : undefined,
         passphrase: authType === 'certificate' ? passphrase : undefined,
         proxy_chain: proxyServers.length > 0 ? proxyServers : undefined,
+        agentForwarding,
       };
 
       // 添加根节点到 SessionTree
@@ -343,6 +351,7 @@ export const NewConnectionModal = () => {
         if (!open) {
           setPassword('');
           setKbiError(null);
+          setAgentForwarding(false);
           // 清除代理链中的密码
           setProxyServers(prev => prev.map(p => ({ ...p, password: undefined, passphrase: undefined })));
         }
@@ -583,6 +592,25 @@ export const NewConnectionModal = () => {
               </Select>
             </div>
    
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="agent-fwd" 
+                checked={agentForwarding}
+                onCheckedChange={(c) => setAgentForwarding(!!c)}
+              />
+              <Label htmlFor="agent-fwd" className="font-normal">{t('modals.new_connection.agent_forwarding')}</Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-yellow-500 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[280px]">
+                    <p className="text-xs">{t('modals.new_connection.agent_forwarding_hint')}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
             <div className="flex items-center space-x-2">
               <Checkbox 
                 id="save-conn" 

@@ -344,6 +344,7 @@ pub async fn establish_connection(
         color: None,
         cols: request.cols,
         rows: request.rows,
+        agent_forwarding: false,
     };
 
     // 检查是否有可复用的连接

@@ -92,7 +92,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | 카테고리 | 기능 |
 |---|---|
 | **터미널** | 로컬 PTY(zsh/bash/fish/pwsh/WSL2), SSH 원격, 분할 창, 브로드캐스트 입력, 세션 녹화/재생(asciicast v2), WebGL 렌더링, 30개 이상 테마 + 커스텀 에디터, 커맨드 팔레트(`⌘K`), Zen 모드 |
-| **SSH 및 인증** | 연결 풀링 및 다중화, ProxyJump(무제한 홉) + 토폴로지 그래프, Grace Period 자동 재연결. 인증: 비밀번호, SSH 키(RSA/Ed25519/ECDSA), SSH Agent, 인증서, keyboard-interactive 2FA, Known Hosts TOFU |
+| **SSH 및 인증** | 연결 풀링 및 다중화, ProxyJump(무제한 홉) + 토폴로지 그래프, Grace Period 자동 재연결, Agent 포워딩. 인증: 비밀번호, SSH 키(RSA/Ed25519/ECDSA), SSH Agent, 인증서, keyboard-interactive 2FA, Known Hosts TOFU |
 | **SFTP** | 이중 패널 브라우저, 드래그 앤 드롭, 스마트 미리보기(이미지/동영상/오디오/코드/PDF/Hex/폰트), 진행률 및 ETA가 포함된 전송 큐, 북마크, 아카이브 추출 |
 | **IDE 모드** | CodeMirror 6, 30개 이상 언어, 파일 트리 + Git 상태, 멀티 탭, 충돌 해결, 통합 터미널. Linux용 선택적 원격 에이전트(9종 추가 아키텍처) |
 | **포트 포워딩** | Local (-L), Remote (-R), Dynamic SOCKS5 (-D), 무잠금 메시지 패싱 I/O, 재연결 시 자동 복원, 종료 보고, 유휴 타임아웃 |

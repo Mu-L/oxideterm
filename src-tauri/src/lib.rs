@@ -39,7 +39,7 @@ mod windows_timer {
     static TIMER_ENABLED: AtomicBool = AtomicBool::new(false);
 
     #[link(name = "winmm")]
-    extern "C" {
+    unsafe extern "C" {
         // Windows Multimedia API
         fn timeBeginPeriod(uPeriod: u32) -> u32;
         fn timeEndPeriod(uPeriod: u32) -> u32;
@@ -135,7 +135,7 @@ fn show_startup_error(title: &str, message: &str) {
 
     unsafe {
         #[link(name = "user32")]
-        extern "system" {
+        unsafe extern "system" {
             fn MessageBoxW(
                 hwnd: *mut std::ffi::c_void,
                 text: *const u16,

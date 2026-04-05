@@ -198,19 +198,21 @@ mod platform {
         let sddl: Vec<u16> = "D:(A;;GA;;;OW)\0".encode_utf16().collect();
         let mut sd_ptr: *mut core::ffi::c_void = std::ptr::null_mut();
 
-        let ok = ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            sddl.as_ptr(),
-            1, // SDDL_REVISION_1
-            &mut sd_ptr as *mut _ as *mut _,
-            std::ptr::null_mut(),
-        );
+        let ok = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                1, // SDDL_REVISION_1
+                &mut sd_ptr as *mut _ as *mut _,
+                std::ptr::null_mut(),
+            )
+        };
 
         if ok == 0 {
             return Err(std::io::Error::last_os_error());
         }
 
         // Build SECURITY_ATTRIBUTES that references our restrictive SD
-        let sa = SECURITY_ATTRIBUTES {
+        let _sa = SECURITY_ATTRIBUTES {
             nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
             lpSecurityDescriptor: sd_ptr,
             bInheritHandle: 0, // false
@@ -243,23 +245,27 @@ mod platform {
             let mut dacl_ptr: *mut windows_sys::Win32::Security::ACL = std::ptr::null_mut();
             let mut defaulted: i32 = 0;
 
-            let got_dacl = windows_sys::Win32::Security::GetSecurityDescriptorDacl(
-                sd_ptr,
-                &mut dacl_present,
-                &mut dacl_ptr as *mut _ as *mut _,
-                &mut defaulted,
-            );
+            let got_dacl = unsafe {
+                windows_sys::Win32::Security::GetSecurityDescriptorDacl(
+                    sd_ptr,
+                    &mut dacl_present,
+                    &mut dacl_ptr as *mut _ as *mut _,
+                    &mut defaulted,
+                )
+            };
 
             if got_dacl != 0 && dacl_present != 0 && !dacl_ptr.is_null() {
-                let result = SetSecurityInfo(
-                    handle,
-                    SE_KERNEL_OBJECT,
-                    DACL_SECURITY_INFORMATION,
-                    std::ptr::null_mut(),
-                    std::ptr::null_mut(),
-                    dacl_ptr,
-                    std::ptr::null_mut(),
-                );
+                let result = unsafe {
+                    SetSecurityInfo(
+                        handle,
+                        SE_KERNEL_OBJECT,
+                        DACL_SECURITY_INFORMATION,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        dacl_ptr,
+                        std::ptr::null_mut(),
+                    )
+                };
                 if result != 0 {
                     tracing::warn!(
                         "Failed to set pipe security descriptor (error {}), proceeding with defaults",
@@ -270,7 +276,7 @@ mod platform {
         }
 
         // Free the security descriptor
-        LocalFree(sd_ptr);
+        unsafe { LocalFree(sd_ptr) };
 
         server
     }

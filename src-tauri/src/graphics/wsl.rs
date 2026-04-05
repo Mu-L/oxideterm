@@ -22,12 +22,9 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Create a `wsl.exe` Command with `CREATE_NO_WINDOW` to suppress console flicker.
 fn wsl_command() -> Command {
+    use std::os::windows::process::CommandExt;
     let mut cmd = Command::new("wsl.exe");
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    cmd.creation_flags(CREATE_NO_WINDOW);
     cmd
 }
 

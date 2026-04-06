@@ -31,6 +31,9 @@
   <a href="https://github.com/AnalyseDeCircuit/oxideterm/releases/latest">
     <img src="https://img.shields.io/github/v/release/AnalyseDeCircuit/oxideterm?label=Télécharger%20la%20dernière%20version&style=for-the-badge&color=brightgreen" alt="Télécharger la dernière version">
   </a>
+  <a href="https://github.com/AnalyseDeCircuit/oxideterm/releases">
+    <img src="https://img.shields.io/github/v/release/AnalyseDeCircuit/oxideterm?include_prereleases&label=Télécharger%20la%20dernière%20bêta&style=for-the-badge&color=orange" alt="Télécharger la dernière bêta">
+  </a>
 </p>
 
 <p align="center">

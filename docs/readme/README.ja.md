@@ -31,6 +31,9 @@
   <a href="https://github.com/AnalyseDeCircuit/oxideterm/releases/latest">
     <img src="https://img.shields.io/github/v/release/AnalyseDeCircuit/oxideterm?label=%E6%9C%80%E6%96%B0%E7%89%88%E3%82%92%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89&style=for-the-badge&color=brightgreen" alt="最新版をダウンロード">
   </a>
+  <a href="https://github.com/AnalyseDeCircuit/oxideterm/releases">
+    <img src="https://img.shields.io/github/v/release/AnalyseDeCircuit/oxideterm?include_prereleases&label=%E6%9C%80%E6%96%B0Beta%E7%89%88%E3%82%92%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89&style=for-the-badge&color=orange" alt="最新Beta版をダウンロード">
+  </a>
 </p>
 
 <p align="center">

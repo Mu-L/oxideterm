@@ -31,6 +31,9 @@
   <a href="https://github.com/AnalyseDeCircuit/oxideterm/releases/latest">
     <img src="https://img.shields.io/github/v/release/AnalyseDeCircuit/oxideterm?label=Tải%20phiên%20bản%20mới%20nhất&style=for-the-badge&color=brightgreen" alt="Tải phiên bản mới nhất">
   </a>
+  <a href="https://github.com/AnalyseDeCircuit/oxideterm/releases">
+    <img src="https://img.shields.io/github/v/release/AnalyseDeCircuit/oxideterm?include_prereleases&label=Tải%20bản%20beta%20mới%20nhất&style=for-the-badge&color=orange" alt="Tải bản beta mới nhất">
+  </a>
 </p>
 
 <p align="center">

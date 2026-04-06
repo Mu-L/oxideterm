@@ -31,6 +31,9 @@
   <a href="https://github.com/AnalyseDeCircuit/oxideterm/releases/latest">
     <img src="https://img.shields.io/github/v/release/AnalyseDeCircuit/oxideterm?label=%E4%B8%8B%E8%BC%89%E6%9C%80%E6%96%B0%E7%89%88&style=for-the-badge&color=brightgreen" alt="下載最新版">
   </a>
+  <a href="https://github.com/AnalyseDeCircuit/oxideterm/releases">
+    <img src="https://img.shields.io/github/v/release/AnalyseDeCircuit/oxideterm?include_prereleases&label=%E4%B8%8B%E8%BC%89%E6%9C%80%E6%96%B0Beta%E7%89%88&style=for-the-badge&color=orange" alt="下載最新Beta版">
+  </a>
 </p>
 
 <p align="center">

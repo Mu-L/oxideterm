@@ -4,11 +4,13 @@
 /**
  * Shared keyboard shortcuts data for Help views and ShortcutsModal.
  *
- * Single source of truth — used by both SettingsView HelpAboutSection
- * and KeyboardShortcutsModal.
+ * Reads effective bindings from keybindingRegistry (respects user overrides).
+ * Context-specific shortcuts (file manager, SFTP, editor) remain hardcoded
+ * since they are not part of the global keybinding registry.
  */
 
 import type { TFunction } from 'i18next';
+import { type ActionId, getDisplayBinding } from '@/lib/keybindingRegistry';
 
 export type ShortcutEntry = {
   label: string;
@@ -22,6 +24,16 @@ export type ShortcutCategory = {
   shortcuts: ShortcutEntry[];
 };
 
+/** Build a ShortcutEntry from the keybinding registry. */
+function fromRegistry(actionId: ActionId, label: string): ShortcutEntry {
+  const binding = getDisplayBinding(actionId);
+  return {
+    label,
+    mac: binding?.mac ?? '',
+    other: binding?.other ?? '',
+  };
+}
+
 /**
  * Build the full shortcut categories list using the current t() function.
  * Both SettingsView and KeyboardShortcutsModal call this.
@@ -32,37 +44,53 @@ export function getShortcutCategories(t: TFunction): ShortcutCategory[] {
       id: 'app',
       title: t('settings_view.help.category_app'),
       shortcuts: [
-        { label: t('settings_view.help.shortcut_new_tab'), mac: '⌘T', other: 'Ctrl+T' },
-        { label: t('settings_view.help.shortcut_shell_launcher'), mac: '⌘⇧T', other: 'Ctrl+Shift+T' },
-        { label: t('settings_view.help.shortcut_close_tab'), mac: '⌘W', other: 'Ctrl+W' },
-        { label: t('settings_view.help.shortcut_next_tab'), mac: '⌘}', other: 'Ctrl+Tab' },
-        { label: t('settings_view.help.shortcut_prev_tab'), mac: '⌘{', other: 'Ctrl+Shift+Tab' },
-        { label: t('settings_view.help.shortcut_go_to_tab'), mac: '⌘1-9', other: 'Ctrl+1-9' },
-        { label: t('settings_view.help.shortcut_new_connection'), mac: '⌘N', other: 'Ctrl+N' },
-        { label: t('settings_view.help.shortcut_command_palette'), mac: '⌘K', other: 'Ctrl+K' },
-        { label: t('settings_view.help.shortcut_toggle_sidebar'), mac: '⌘\\', other: 'Ctrl+\\' },
-        { label: t('settings_view.help.shortcut_settings'), mac: '⌘,', other: 'Ctrl+,' },
-        { label: t('settings_view.help.shortcut_zen_mode'), mac: '⌘⇧Z', other: 'Ctrl+Shift+Z' },
-        { label: t('settings_view.help.shortcut_keyboard_shortcuts'), mac: '⌘/', other: 'Ctrl+/' },
+        fromRegistry('app.newTerminal', t('settings_view.help.shortcut_new_tab')),
+        fromRegistry('app.shellLauncher', t('settings_view.help.shortcut_shell_launcher')),
+        fromRegistry('app.closeTab', t('settings_view.help.shortcut_close_tab')),
+        fromRegistry('app.nextTab', t('settings_view.help.shortcut_next_tab')),
+        fromRegistry('app.prevTab', t('settings_view.help.shortcut_prev_tab')),
+        // goToTab is a range (1-9); show the base binding with "1-9" suffix
+        (() => {
+          const tab1 = getDisplayBinding('app.goToTab1');
+          return {
+            label: t('settings_view.help.shortcut_go_to_tab'),
+            mac: tab1 ? tab1.mac.replace(/1$/, '') + '1-9' : '',
+            other: tab1 ? tab1.other.replace(/1$/, '') + '1-9' : '',
+          };
+        })(),
+        fromRegistry('app.newConnection', t('settings_view.help.shortcut_new_connection')),
+        fromRegistry('app.commandPalette', t('settings_view.help.shortcut_command_palette')),
+        fromRegistry('app.toggleSidebar', t('settings_view.help.shortcut_toggle_sidebar')),
+        fromRegistry('app.settings', t('settings_view.help.shortcut_settings')),
+        fromRegistry('app.zenMode', t('settings_view.help.shortcut_zen_mode')),
+        fromRegistry('app.showShortcuts', t('settings_view.help.shortcut_keyboard_shortcuts')),
       ],
     },
     {
       id: 'terminal',
       title: t('settings_view.help.category_terminal'),
       shortcuts: [
-        { label: t('settings_view.help.shortcut_find'), mac: '⌘F', other: 'Ctrl+Shift+F' },
-        { label: t('settings_view.help.shortcut_ai_panel'), mac: '⌘I', other: 'Ctrl+Shift+I' },
-        { label: t('settings_view.help.shortcut_close_panel'), mac: 'Esc', other: 'Esc' },
+        fromRegistry('terminal.search', t('settings_view.help.shortcut_find')),
+        fromRegistry('terminal.aiPanel', t('settings_view.help.shortcut_ai_panel')),
+        fromRegistry('terminal.closePanel', t('settings_view.help.shortcut_close_panel')),
       ],
     },
     {
       id: 'split',
       title: t('settings_view.help.category_split'),
       shortcuts: [
-        { label: t('settings_view.help.shortcut_split_h'), mac: '⌘⇧E', other: 'Ctrl+Shift+E' },
-        { label: t('settings_view.help.shortcut_split_v'), mac: '⌘⇧D', other: 'Ctrl+Shift+D' },
-        { label: t('settings_view.help.shortcut_close_pane'), mac: '⌘⇧W', other: 'Ctrl+Shift+W' },
-        { label: t('settings_view.help.shortcut_nav_pane'), mac: '⌘⌥Arrow', other: 'Ctrl+Alt+Arrow' },
+        fromRegistry('split.horizontal', t('settings_view.help.shortcut_split_h')),
+        fromRegistry('split.vertical', t('settings_view.help.shortcut_split_v')),
+        fromRegistry('split.closePane', t('settings_view.help.shortcut_close_pane')),
+        // navPane is a group (left/right); show modifier prefix + "Arrow"
+        (() => {
+          const navL = getDisplayBinding('split.navLeft');
+          return {
+            label: t('settings_view.help.shortcut_nav_pane'),
+            mac: navL ? navL.mac.replace(/←$/, '') + 'Arrow' : '',
+            other: navL ? navL.other.replace(/←$/, '') + 'Arrow' : '',
+          };
+        })(),
       ],
     },
     {

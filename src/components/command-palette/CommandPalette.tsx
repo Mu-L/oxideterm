@@ -93,6 +93,7 @@ import { useReconnectOrchestratorStore } from '@/store/reconnectOrchestratorStor
 import { useSessionTreeStore } from '@/store/sessionTreeStore';
 import type { ConnectionInfo, PaneNode } from '@/types';
 import { platform } from '@/lib/platform';
+import { type ActionId, getDisplayBinding } from '@/lib/keybindingRegistry';
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -131,33 +132,37 @@ const QUICK_CONNECT_RE = /^([^@\s]+)@([^:\s]+)(?::(\d+))?$/;
 
 const isMac = platform.isMac;
 
-/** Map command IDs to their keyboard shortcuts */
-const SHORTCUT_MAP: Record<string, { mac: string; other: string }> = {
-  'cmd:new_terminal': { mac: '⌘T', other: 'Ctrl+T' },
-  'cmd:new_connection': { mac: '⌘N', other: 'Ctrl+N' },
-  'cmd:settings': { mac: '⌘,', other: 'Ctrl+,' },
-  'cmd:toggle_sidebar': { mac: '⌘\\', other: 'Ctrl+\\' },
-  'cmd:zen_mode': { mac: '⌘⇧Z', other: 'Ctrl+Shift+Z' },
-  'cmd:toggle_panel': { mac: '⌘J', other: 'Ctrl+J' },
-  'cmd:toggle_ai_sidebar': { mac: '⌘⇧A', other: 'Ctrl+Shift+A' },
-  'cmd:close_tab': { mac: '⌘W', other: 'Ctrl+W' },
-  'cmd:split_horizontal': { mac: '⌘⇧E', other: 'Ctrl+Shift+E' },
-  'cmd:split_vertical': { mac: '⌘⇧D', other: 'Ctrl+Shift+D' },
-  'cmd:broadcast_toggle': { mac: '⌘B', other: 'Ctrl+B' },
-  'cmd:show_shortcuts': { mac: '⌘/', other: 'Ctrl+/' },
-  // Tab management
-  'cmd:next_tab': { mac: '⌘}', other: 'Ctrl+Tab' },
-  'cmd:prev_tab': { mac: '⌘{', other: 'Ctrl+Shift+Tab' },
-  'cmd:close_other_tabs': { mac: '⌘⇧W', other: 'Ctrl+Shift+W' },
-  'cmd:go_back': { mac: '⌘[', other: 'Alt+←' },
-  'cmd:go_forward': { mac: '⌘]', other: 'Alt+→' },
-  // Terminal
-  'cmd:shell_launcher': { mac: '⌘⇧T', other: 'Ctrl+Shift+T' },
-  // Font
-  'cmd:font_increase': { mac: '⌘+', other: 'Ctrl++' },
-  'cmd:font_decrease': { mac: '⌘-', other: 'Ctrl+-' },
-  'cmd:font_reset': { mac: '⌘0', other: 'Ctrl+0' },
+/** Map command IDs to their registry ActionIds for shortcut display */
+const CMD_TO_ACTION: Record<string, ActionId> = {
+  'cmd:new_terminal': 'app.newTerminal',
+  'cmd:new_connection': 'app.newConnection',
+  'cmd:settings': 'app.settings',
+  'cmd:toggle_sidebar': 'app.toggleSidebar',
+  'cmd:zen_mode': 'app.zenMode',
+  'cmd:toggle_panel': 'palette.eventLog',
+  'cmd:toggle_ai_sidebar': 'palette.aiSidebar',
+  'cmd:close_tab': 'app.closeTab',
+  'cmd:split_horizontal': 'split.horizontal',
+  'cmd:split_vertical': 'split.vertical',
+  'cmd:broadcast_toggle': 'palette.broadcast',
+  'cmd:show_shortcuts': 'app.showShortcuts',
+  'cmd:next_tab': 'app.nextTab',
+  'cmd:prev_tab': 'app.prevTab',
+  'cmd:close_other_tabs': 'app.closeOtherTabs',
+  'cmd:go_back': 'app.navBack',
+  'cmd:go_forward': 'app.navForward',
+  'cmd:shell_launcher': 'app.shellLauncher',
+  'cmd:font_increase': 'app.fontIncrease',
+  'cmd:font_decrease': 'app.fontDecrease',
+  'cmd:font_reset': 'app.fontReset',
 };
+
+/** Get keyboard shortcut display strings for a command, reading from the keybinding registry. */
+function getCommandShortcut(cmdId: string): { mac: string; other: string } | undefined {
+  const actionId = CMD_TO_ACTION[cmdId];
+  if (!actionId) return undefined;
+  return getDisplayBinding(actionId);
+}
 
 // ─── Highlight helper ─────────────────────────────────────────────────
 
@@ -239,7 +244,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_new_terminal'),
         section: 'commands',
         icon: <Terminal className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:new_terminal'],
+        shortcut: getCommandShortcut('cmd:new_terminal'),
         action: async () => {
           const { createTerminal } = useLocalTerminalStore.getState();
           const { createTab } = useAppStore.getState();
@@ -252,7 +257,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_new_connection'),
         section: 'commands',
         icon: <Plus className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:new_connection'],
+        shortcut: getCommandShortcut('cmd:new_connection'),
         action: () => useAppStore.getState().toggleModal('newConnection', true),
       },
       {
@@ -260,7 +265,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_settings'),
         section: 'commands',
         icon: <Settings className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:settings'],
+        shortcut: getCommandShortcut('cmd:settings'),
         action: () => useAppStore.getState().createTab('settings'),
       },
       {
@@ -268,7 +273,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_toggle_sidebar'),
         section: 'commands',
         icon: <PanelLeft className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:toggle_sidebar'],
+        shortcut: getCommandShortcut('cmd:toggle_sidebar'),
         action: () => useSettingsStore.getState().toggleSidebar(),
       },
       {
@@ -276,7 +281,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_zen_mode'),
         section: 'commands',
         icon: <Maximize2 className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:zen_mode'],
+        shortcut: getCommandShortcut('cmd:zen_mode'),
         action: () => useSettingsStore.getState().toggleZenMode(),
       },
       {
@@ -284,7 +289,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_toggle_panel'),
         section: 'commands',
         icon: <Rows className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:toggle_panel'],
+        shortcut: getCommandShortcut('cmd:toggle_panel'),
         action: () => {
           useEventLogStore.getState().togglePanel();
         },
@@ -294,7 +299,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_toggle_ai_sidebar'),
         section: 'commands',
         icon: <PanelLeft className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:toggle_ai_sidebar'],
+        shortcut: getCommandShortcut('cmd:toggle_ai_sidebar'),
         action: () => useSettingsStore.getState().toggleAiSidebar(),
       },
       {
@@ -302,7 +307,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_close_tab'),
         section: 'commands',
         icon: <X className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:close_tab'],
+        shortcut: getCommandShortcut('cmd:close_tab'),
         action: async () => {
           const { activeTabId: tabId, closeTab } = useAppStore.getState();
           if (tabId) await closeTab(tabId);
@@ -313,7 +318,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_split_horizontal'),
         section: 'commands',
         icon: <Rows className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:split_horizontal'],
+        shortcut: getCommandShortcut('cmd:split_horizontal'),
         action: () => {
           window.dispatchEvent(new CustomEvent('oxideterm:split', { detail: { direction: 'horizontal' } }));
         },
@@ -323,7 +328,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_split_vertical'),
         section: 'commands',
         icon: <Columns2 className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:split_vertical'],
+        shortcut: getCommandShortcut('cmd:split_vertical'),
         action: () => {
           window.dispatchEvent(new CustomEvent('oxideterm:split', { detail: { direction: 'vertical' } }));
         },
@@ -333,7 +338,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_broadcast_toggle'),
         section: 'commands',
         icon: <Radio className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:broadcast_toggle'],
+        shortcut: getCommandShortcut('cmd:broadcast_toggle'),
         action: () => useBroadcastStore.getState().toggle(),
       },
       // ── Help ──
@@ -342,7 +347,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_show_shortcuts'),
         section: 'help',
         icon: <Keyboard className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:show_shortcuts'],
+        shortcut: getCommandShortcut('cmd:show_shortcuts'),
         action: () => onOpenShortcuts?.(),
       },
       {
@@ -361,7 +366,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_next_tab'),
         section: 'commands',
         icon: <ChevronRight className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:next_tab'],
+        shortcut: getCommandShortcut('cmd:next_tab'),
         action: () => useAppStore.getState().nextTab(),
       },
       {
@@ -369,7 +374,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_prev_tab'),
         section: 'commands',
         icon: <ChevronLeft className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:prev_tab'],
+        shortcut: getCommandShortcut('cmd:prev_tab'),
         action: () => useAppStore.getState().prevTab(),
       },
       {
@@ -377,7 +382,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_close_other_tabs'),
         section: 'commands',
         icon: <XCircle className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:close_other_tabs'],
+        shortcut: getCommandShortcut('cmd:close_other_tabs'),
         action: async () => {
           const { tabs, activeTabId, closeTab } = useAppStore.getState();
           if (!activeTabId) return;
@@ -404,7 +409,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_go_back'),
         section: 'commands',
         icon: <ArrowLeft className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:go_back'],
+        shortcut: getCommandShortcut('cmd:go_back'),
         action: () => useAppStore.getState().navigateBack(),
       },
       {
@@ -412,7 +417,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_go_forward'),
         section: 'commands',
         icon: <ArrowRight className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:go_forward'],
+        shortcut: getCommandShortcut('cmd:go_forward'),
         action: () => useAppStore.getState().navigateForward(),
       },
       {
@@ -455,7 +460,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_font_increase'),
         section: 'commands',
         icon: <ZoomIn className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:font_increase'],
+        shortcut: getCommandShortcut('cmd:font_increase'),
         action: () => {
           const s = useSettingsStore.getState();
           const cur = s.settings.terminal.fontSize;
@@ -467,7 +472,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_font_decrease'),
         section: 'commands',
         icon: <ZoomOut className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:font_decrease'],
+        shortcut: getCommandShortcut('cmd:font_decrease'),
         action: () => {
           const s = useSettingsStore.getState();
           const cur = s.settings.terminal.fontSize;
@@ -479,7 +484,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_font_reset'),
         section: 'commands',
         icon: <RotateCcw className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:font_reset'],
+        shortcut: getCommandShortcut('cmd:font_reset'),
         action: () => useSettingsStore.getState().updateTerminal('fontSize', 14),
       },
       {
@@ -640,7 +645,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         label: t('command_palette.cmd_shell_launcher'),
         section: 'commands',
         icon: <Clapperboard className="h-4 w-4" />,
-        shortcut: SHORTCUT_MAP['cmd:shell_launcher'],
+        shortcut: getCommandShortcut('cmd:shell_launcher'),
         action: () => {
           window.dispatchEvent(new CustomEvent('oxideterm:shell-launcher'));
         },

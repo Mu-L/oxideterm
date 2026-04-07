@@ -63,7 +63,7 @@ impl RusshSigner for LocalKeySigner {
         to_sign: Vec<u8>,
     ) -> impl Future<Output = Result<Vec<u8>, Self::Error>> + Send {
         let key = Arc::clone(&self.key);
-        async move { sign_auth_payload_with_hash_alg(key.as_ref(), hash_alg, &to_sign) }
+        async move { sign_auth_payload_with_hash_alg(key.as_ref(), hash_alg, to_sign) }
     }
 }
 
@@ -570,20 +570,26 @@ pub(crate) fn load_certificate_auth_material(
 fn sign_auth_payload_with_hash_alg(
     key: &PrivateKey,
     hash_alg: Option<HashAlg>,
-    data: &[u8],
+    mut data: Vec<u8>,
 ) -> Result<Vec<u8>, LocalSignerError> {
     let signature = match key.key_data() {
-        KeypairData::Rsa(rsa_keypair) => SignatureSigner::try_sign(&(rsa_keypair, hash_alg), data)
+        KeypairData::Rsa(rsa_keypair) => SignatureSigner::try_sign(
+            &(rsa_keypair, hash_alg),
+            data.as_slice(),
+        )
             .map_err(|error| LocalSignerError::Sign(error.to_string()))?,
-        keypair => SignatureSigner::try_sign(keypair, data)
+        keypair => SignatureSigner::try_sign(keypair, data.as_slice())
             .map_err(|error| LocalSignerError::Sign(error.to_string()))?,
     };
 
-    let mut encoded = Vec::new();
+    let mut encoded_signature = Vec::new();
     signature
-        .encode(&mut encoded)
+        .encode(&mut encoded_signature)
         .map_err(|error| LocalSignerError::Sign(error.to_string()))?;
-    Ok(encoded)
+    encoded_signature
+        .encode(&mut data)
+        .map_err(|error| LocalSignerError::Sign(error.to_string()))?;
+    Ok(data)
 }
 
 #[cfg(test)]

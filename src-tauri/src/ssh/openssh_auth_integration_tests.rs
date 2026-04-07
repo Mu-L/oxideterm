@@ -455,7 +455,6 @@ async fn test_agent_auth_against_rsa_sha2_512_only_openssh_server() -> Result<()
 }
 
 #[tokio::test]
-#[ignore = "russh 0.59 still encodes RSA certificates as ssh-rsa-cert-v01@openssh.com"]
 async fn test_certificate_auth_against_rsa_sha2_256_only_openssh_server() -> Result<()> {
     let Some(binaries) = require_openssh() else {
         eprintln!("skipping OpenSSH certificate integration test: required binaries not found");
@@ -502,7 +501,6 @@ async fn test_certificate_auth_against_rsa_sha2_256_only_openssh_server() -> Res
 }
 
 #[tokio::test]
-#[ignore = "russh 0.59 still encodes RSA certificates as ssh-rsa-cert-v01@openssh.com"]
 async fn test_certificate_auth_against_rsa_sha2_512_only_openssh_server() -> Result<()> {
     let Some(binaries) = require_openssh() else {
         eprintln!("skipping OpenSSH certificate integration test: required binaries not found");

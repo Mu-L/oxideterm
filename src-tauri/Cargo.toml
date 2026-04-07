@@ -167,6 +167,9 @@ windows-sys = { version = "0.59", features = [
 anyhow = "1"
 tempfile = "3"
 
+[patch.crates-io]
+russh = { path = "vendor/russh-0.59.0" }
+
 [profile.release]
 # 1. 链接时优化 (LTO)
 # 改用 "thin" 是明智的，它能解决 macOS 签名丢失问题，同时保持 99% 的性能

@@ -243,9 +243,13 @@ async fn run_kbi_flow(
                         name,
                         instructions,
                         prompts: prompts_for_frontend,
+                        chained: false,
                     },
                 )
-                .map_err(|e| format!("Failed to emit prompt event: {}", e))?;
+                .map_err(|e| {
+                    cleanup_pending(&auth_flow_id);
+                    format!("Failed to emit prompt event: {}", e)
+                })?;
 
                 // Wait for frontend response with STRICT 60s timeout
                 let responses = tokio::time::timeout(KBI_USER_INPUT_TIMEOUT, rx)

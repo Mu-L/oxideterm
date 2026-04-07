@@ -28,6 +28,7 @@ import { CommandPalette } from './components/command-palette/CommandPalette';
 import { CastPlayer } from './components/terminal/CastPlayer';
 import { OnboardingModal } from './components/modals/OnboardingModal';
 import { KeyboardShortcutsModal } from './components/modals/KeyboardShortcutsModal';
+import { GlobalKbiDialog } from './components/modals/GlobalKbiDialog';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useFontSizeHUD } from './components/ui/FontSizeHUD';
 import { useRecordingStore } from './store/recordingStore';
@@ -389,6 +390,7 @@ function App() {
         <Toaster />
         <AutoRouteModal />
         <OnboardingModal />
+        <GlobalKbiDialog />
         <PluginConfirmDialog />
         <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} onOpenShortcuts={() => setShortcutsModalOpen(true)} />
         <KeyboardShortcutsModal open={shortcutsModalOpen} onOpenChange={setShortcutsModalOpen} />

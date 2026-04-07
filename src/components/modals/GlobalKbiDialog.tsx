@@ -2,21 +2,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 /**
- * Keyboard-Interactive (2FA) Authentication Dialog
+ * Global Keyboard-Interactive Dialog for Multi-Step Auth Chaining
  *
- * This is a simple MVP modal for handling SSH keyboard-interactive authentication.
- * It displays server prompts and collects user responses with strict timeout awareness.
+ * Always mounted in App.tsx. Handles KBI prompts that arise from
+ * multi-step authentication (e.g. key auth → server requests 2FA via KBI).
+ * Only processes events with `chained: true`.
  *
- * Design principles:
- * - Completely isolated from normal password/key auth flows
- * - Supports both echo=true (visible) and echo=false (password) inputs
- * - 60s timeout enforced by backend - dialog should communicate urgency
- * - No auto-retry on failure - user must manually reconnect
+ * Unlike the standalone KbiDialog (used in NewConnectionModal), this dialog
+ * does NOT manage session creation — the normal connect flow handles that.
+ * It simply collects user responses and forwards them to the backend.
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -32,135 +31,120 @@ import {
 import { Loader2, Shield, Clock } from 'lucide-react';
 import type { KbiPromptEvent, KbiResultEvent, KbiRespondRequest, KbiCancelRequest } from '../../types';
 
-interface KbiDialogProps {
-  /** Called when authentication succeeds */
-  onSuccess: (sessionId: string, wsPort: number, wsToken: string) => void;
-  /** Called when authentication fails or is cancelled */
-  onFailure: (error: string) => void;
-}
-
-export const KbiDialog = ({ onSuccess, onFailure }: KbiDialogProps) => {
+export const GlobalKbiDialog = () => {
   const { t } = useTranslation();
-  // Current prompt state
   const [currentPrompt, setCurrentPrompt] = useState<KbiPromptEvent | null>(null);
   const [responses, setResponses] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(60);
 
-  // Track listeners for cleanup
   const listenersRef = useRef<UnlistenFn[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  // Track current auth flow ID for cleanup cancellation
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentAuthFlowIdRef = useRef<string | null>(null);
 
-  // Set up event listeners
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const activatePrompt = (prompt: KbiPromptEvent) => {
+    currentAuthFlowIdRef.current = prompt.authFlowId;
+    setCurrentPrompt(prompt);
+    setResponses(new Array(prompt.prompts.length).fill(''));
+    setLoading(false);
+    setError(null);
+    setTimeLeft(60);
+
+    clearTimer();
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearTimer();
+          return 0;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   useEffect(() => {
     let mounted = true;
 
-    // Listen for prompt events from backend (only standalone/non-chained flows)
+    // Listen for chained KBI prompt events only
     listen<KbiPromptEvent>('ssh_kbi_prompt', (event) => {
       if (!mounted) return;
-      // Ignore chained auth prompts — handled by GlobalKbiDialog
-      if (event.payload.chained) return;
-      if (
-        currentAuthFlowIdRef.current &&
-        currentAuthFlowIdRef.current !== event.payload.authFlowId
-      ) {
-        invoke('ssh_kbi_cancel', {
-          request: { authFlowId: event.payload.authFlowId } as KbiCancelRequest,
-        }).catch(() => {
-          // Ignore errors - the flow may have already completed or timed out
-        });
+      // Only handle chained auth prompts
+      if (!event.payload.chained) return;
+
+      if (!currentAuthFlowIdRef.current) {
+        activatePrompt(event.payload);
         return;
       }
 
-      // Track the auth flow ID for cleanup
-      currentAuthFlowIdRef.current = event.payload.authFlowId;
-      setCurrentPrompt(event.payload);
-      setResponses(new Array(event.payload.prompts.length).fill(''));
-      setLoading(false);
-      setError(null);
-      setTimeLeft(60);
-
-      // Start countdown timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+      if (currentAuthFlowIdRef.current === event.payload.authFlowId) {
+        activatePrompt(event.payload);
+        return;
       }
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            if (timerRef.current) clearInterval(timerRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+
+      invoke('ssh_kbi_cancel', {
+        request: { authFlowId: event.payload.authFlowId } as KbiCancelRequest,
+      }).catch(() => {
+        // Ignore errors - the flow may have already completed or timed out
+      });
     }).then((fn) => {
       if (mounted) {
         listenersRef.current.push(fn);
       } else {
-        fn(); // Component unmounted, clean up immediately
+        fn();
       }
     });
 
-    // Listen for result events from backend
+    // Listen for result events to close dialog
     listen<KbiResultEvent>('ssh_kbi_result', (event) => {
       if (!mounted) return;
+      // Only handle results for our active flow
       if (currentAuthFlowIdRef.current !== event.payload.authFlowId) return;
 
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      clearTimer();
 
-      const result = event.payload;
-      // Clear the auth flow ID since authentication completed
-      currentAuthFlowIdRef.current = null;
-      if (result.success && result.sessionId && result.wsPort && result.wsToken) {
+      if (event.payload.success) {
+        // Chained auth succeeded — just close the dialog.
+        // Session creation is handled by the normal connect flow.
+        currentAuthFlowIdRef.current = null;
         setCurrentPrompt(null);
-        onSuccess(result.sessionId, result.wsPort, result.wsToken);
       } else {
-        setError(result.error || 'Authentication failed');
+        setError(event.payload.error || 'Authentication failed');
         setLoading(false);
-        // Don't close dialog - let user see the error
-        // They can click Cancel to dismiss
       }
     }).then((fn) => {
       if (mounted) {
         listenersRef.current.push(fn);
       } else {
-        fn(); // Component unmounted, clean up immediately
+        fn();
       }
     });
 
     return () => {
       mounted = false;
-      // Cleanup listeners
       listenersRef.current.forEach((unlisten) => unlisten());
       listenersRef.current = [];
 
-      // Cleanup timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      clearTimer();
 
-      // CRITICAL: Cancel pending auth flow if component unmounts during authentication
-      // This prevents the backend from waiting 60s for a response that will never come
       if (currentAuthFlowIdRef.current) {
         const authFlowId = currentAuthFlowIdRef.current;
         currentAuthFlowIdRef.current = null;
-        invoke('ssh_kbi_cancel', { 
-          request: { authFlowId } as KbiCancelRequest 
-        }).catch(() => {
-          // Ignore errors - the flow may have already completed or timed out
-        });
+        invoke('ssh_kbi_cancel', {
+          request: { authFlowId } as KbiCancelRequest,
+        }).catch(() => {});
       }
     };
-  }, [onSuccess]);
+  }, []);
 
-  // Handle response submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPrompt || loading) return;
@@ -171,40 +155,34 @@ export const KbiDialog = ({ onSuccess, onFailure }: KbiDialogProps) => {
     try {
       const request: KbiRespondRequest = {
         authFlowId: currentPrompt.authFlowId,
-        responses: responses,
+        responses,
       };
       await invoke('ssh_kbi_respond', { request });
-      // Result will come via ssh_kbi_result event
     } catch (err) {
       setError(String(err));
       setLoading(false);
     }
   };
 
-  // Handle cancel
   const handleCancel = async () => {
     if (!currentPrompt) return;
 
+    const authFlowId = currentPrompt.authFlowId;
+
     try {
       const request: KbiCancelRequest = {
-        authFlowId: currentPrompt.authFlowId,
+        authFlowId,
       };
       await invoke('ssh_kbi_cancel', { request });
     } catch {
       // Ignore cancel errors
     }
 
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
+    clearTimer();
     currentAuthFlowIdRef.current = null;
     setCurrentPrompt(null);
-    onFailure('Authentication cancelled by user');
   };
 
-  // Update response at index
   const updateResponse = (index: number, value: string) => {
     setResponses((prev) => {
       const next = [...prev];
@@ -213,7 +191,6 @@ export const KbiDialog = ({ onSuccess, onFailure }: KbiDialogProps) => {
     });
   };
 
-  // Check if all required responses are filled
   const allResponsesFilled = responses.every((r) => r.length > 0);
 
   return (
@@ -257,12 +234,11 @@ export const KbiDialog = ({ onSuccess, onFailure }: KbiDialogProps) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Prompt inputs */}
           {currentPrompt?.prompts.map((prompt, index) => (
             <div key={index} className="space-y-2">
-              <Label htmlFor={`kbi-input-${index}`}>{prompt.prompt}</Label>
+              <Label htmlFor={`global-kbi-input-${index}`}>{prompt.prompt}</Label>
               <Input
-                id={`kbi-input-${index}`}
+                id={`global-kbi-input-${index}`}
                 type={prompt.echo ? 'text' : 'password'}
                 value={responses[index] || ''}
                 onChange={(e) => updateResponse(index, e.target.value)}

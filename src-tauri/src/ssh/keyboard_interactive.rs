@@ -52,6 +52,10 @@ pub struct KbiPromptEvent {
     pub instructions: String,
     /// List of prompts to display
     pub prompts: Vec<KbiPrompt>,
+    /// Whether this prompt is from a chained auth flow (primary auth + KBI)
+    /// When true, the prompt comes from multi-step auth chaining, not standalone KBI.
+    #[serde(default)]
+    pub chained: bool,
 }
 
 /// Event payload: Backend → Frontend

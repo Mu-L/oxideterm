@@ -13,7 +13,7 @@ use tracing::{debug, info, warn};
 
 use super::auth::{
     DEFAULT_AUTH_TIMEOUT_SECS, authenticate_password, build_client_config, ensure_auth_success,
-    load_certificate_auth_material, load_public_key_auth_material,
+    load_certificate_auth_material, load_public_key_auth_material, try_kbi_auth_chain,
 };
 use super::config::{AuthMethod, SshConfig};
 use super::error::SshError;
@@ -31,7 +31,15 @@ impl SshClient {
     }
 
     /// Connect to the SSH server and return a session
-    pub async fn connect(self) -> Result<SshSession, SshError> {
+    ///
+    /// If `app_handle` is provided, multi-step authentication is supported:
+    /// when the primary auth method returns `partial_success` with
+    /// `keyboard-interactive` in `remaining_methods`, a KBI prompt flow
+    /// is automatically triggered via Tauri events.
+    pub async fn connect(
+        self,
+        app_handle: Option<&tauri::AppHandle>,
+    ) -> Result<SshSession, SshError> {
         let addr = format!("{}:{}", self.config.host, self.config.port);
 
         info!("Connecting to SSH server at {}", addr);
@@ -134,6 +142,24 @@ impl SshClient {
                 ));
             }
         };
+
+        // Multi-step auth chaining: if server returned partial_success with
+        // keyboard-interactive in remaining_methods, automatically run KBI flow
+        if !authenticated.success() {
+            if let Some(app) = app_handle {
+                if try_kbi_auth_chain(&authenticated, &mut handle, &self.config.username, app)
+                    .await?
+                {
+                    info!("SSH authentication successful (multi-step: primary + KBI)");
+                    return Ok(SshSession::new(
+                        handle,
+                        self.config.cols,
+                        self.config.rows,
+                        self.config.agent_forwarding,
+                    ));
+                }
+            }
+        }
 
         ensure_auth_success(&authenticated, "Authentication rejected by server")?;
 

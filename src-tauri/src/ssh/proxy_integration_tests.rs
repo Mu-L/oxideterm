@@ -964,7 +964,7 @@ async fn test_agent_forward_channel_relays_to_local_agent_socket() {
         agent_forwarding: true,
     });
 
-    let session = client.connect().await.unwrap();
+    let session = client.connect(None).await.unwrap();
     let (_shell, _controller) = session.request_shell_extended().await.unwrap();
     let FakeAgentServer {
         received_rx: fake_agent_received_rx,

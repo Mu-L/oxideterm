@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMutableSelectorStore } from '@/test/helpers/mockStore';
 
@@ -38,9 +39,6 @@ vi.mock('@/hooks/useToast', () => ({
 vi.mock('@/components/modals/AddJumpServerDialog', () => ({
   AddJumpServerDialog: () => null,
 }));
-vi.mock('@/components/modals/KbiDialog', () => ({
-  KbiDialog: () => null,
-}));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -60,7 +58,9 @@ describe('NewConnectionModal KBI flow', () => {
   });
 
   it('passes agentForwarding to ssh_connect_kbi', async () => {
-    render(<NewConnectionModal />);
+    await act(async () => {
+      render(<NewConnectionModal />);
+    });
 
     fireEvent.change(screen.getByLabelText('modals.new_connection.target_host *'), {
       target: { value: 'server.example.com' },
@@ -85,6 +85,17 @@ describe('NewConnectionModal KBI flow', () => {
         username: 'alice',
         agentForwarding: true,
       }));
+    });
+  });
+
+  it('mounts the real standalone KbiDialog listeners before connect', async () => {
+    await act(async () => {
+      render(<NewConnectionModal />);
+    });
+
+    await waitFor(() => {
+      expect(listen).toHaveBeenCalledWith('ssh_kbi_prompt', expect.any(Function));
+      expect(listen).toHaveBeenCalledWith('ssh_kbi_result', expect.any(Function));
     });
   });
 });

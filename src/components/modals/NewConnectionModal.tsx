@@ -57,7 +57,7 @@ export const NewConnectionModal = () => {
   const [loading, setLoading] = useState(false);
   
   // KBI (2FA) specific state
-  const [kbiFlowActive, setKbiFlowActive] = useState(false);
+  const [, setKbiFlowActive] = useState(false);
   const [kbiError, setKbiError] = useState<string | null>(null);
   
   // Form State
@@ -235,6 +235,7 @@ export const NewConnectionModal = () => {
 
     setLoading(true);
     setKbiError(null);
+    setKbiFlowActive(true);
 
     try {
       // Initiate KBI auth flow - this will trigger ssh_kbi_prompt events
@@ -247,12 +248,9 @@ export const NewConnectionModal = () => {
         displayName: name || undefined,
         agentForwarding,
       });
-      
-      // KBI flow started - show the dialog
-      setKbiFlowActive(true);
-      // Note: setLoading(false) will be called by handleKbiSuccess/handleKbiFailure
     } catch (e) {
       console.error('Failed to start KBI flow:', e);
+      setKbiFlowActive(false);
       setKbiError(String(e));
       setLoading(false);
     }
@@ -342,13 +340,11 @@ export const NewConnectionModal = () => {
 
   return (
     <>
-      {/* KBI Dialog - shown when 2FA flow is active */}
-      {kbiFlowActive && (
-        <KbiDialog
-          onSuccess={handleKbiSuccess}
-          onFailure={handleKbiFailure}
-        />
-      )}
+      {/* Keep mounted so listeners are ready before the backend emits the first prompt. */}
+      <KbiDialog
+        onSuccess={handleKbiSuccess}
+        onFailure={handleKbiFailure}
+      />
 
       <Dialog open={modals.newConnection} onOpenChange={(open) => {
         // 关闭 modal 时清除敏感数据

@@ -240,6 +240,8 @@ export interface KbiPromptEvent {
   instructions: string;
   /** Prompts the user must respond to */
   prompts: KbiPrompt[];
+  /** Whether this prompt is from a chained auth flow (primary auth + KBI) */
+  chained?: boolean;
 }
 
 /**

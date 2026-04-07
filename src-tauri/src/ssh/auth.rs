@@ -8,13 +8,19 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use russh::MethodKind;
 use russh::client;
 use russh::keys::key::PrivateKeyWithHashAlg;
 use russh::keys::{Certificate, PrivateKey};
-use tracing::debug;
+use tauri::AppHandle;
+use tracing::{debug, info};
 
 use super::client::ClientHandler;
 use super::error::SshError;
+use super::keyboard_interactive::{
+    EVENT_KBI_PROMPT, EVENT_KBI_RESULT, KbiPrompt, KbiPromptEvent, KbiResultEvent, cleanup_pending,
+    register_pending,
+};
 use crate::path_utils::expand_tilde;
 
 pub(crate) const DEFAULT_AUTH_TIMEOUT_SECS: u64 = 30;
@@ -122,6 +128,173 @@ pub(crate) fn ensure_auth_success(
             rejection_context.into(),
             authenticated
         )))
+    }
+}
+
+/// Timeout for waiting on user KBI input during auth chaining (60s)
+const KBI_CHAIN_USER_TIMEOUT: Duration = Duration::from_secs(60);
+
+fn emit_kbi_chain_result(
+    app: &AppHandle,
+    auth_flow_id: &str,
+    success: bool,
+    error: Option<String>,
+) {
+    use tauri::Emitter;
+
+    let _ = app.emit(
+        EVENT_KBI_RESULT,
+        KbiResultEvent {
+            auth_flow_id: auth_flow_id.to_string(),
+            success,
+            error,
+            session_id: None,
+            ws_port: None,
+            ws_token: None,
+        },
+    );
+}
+
+/// Check if an auth result indicates partial success with keyboard-interactive
+/// as a remaining method, and if so, run the KBI flow on the same handle.
+///
+/// Returns `Ok(true)` if KBI chaining was performed and succeeded.
+/// Returns `Ok(false)` if no chaining was needed (result is not partial_success w/ KBI).
+/// Returns `Err` if chaining was attempted but failed.
+pub(crate) async fn try_kbi_auth_chain(
+    result: &client::AuthResult,
+    handle: &mut client::Handle<ClientHandler>,
+    username: &str,
+    app: &AppHandle,
+) -> Result<bool, SshError> {
+    use tauri::Emitter;
+
+    let remaining = match result {
+        client::AuthResult::Failure {
+            partial_success: true,
+            remaining_methods,
+        } => remaining_methods,
+        _ => return Ok(false),
+    };
+
+    if !remaining.contains(&MethodKind::KeyboardInteractive) {
+        return Ok(false);
+    }
+
+    info!(
+        "Auth partial success, server requires keyboard-interactive. Starting KBI chain for {}",
+        username
+    );
+
+    // Generate unique flow ID for this chained KBI
+    let auth_flow_id = uuid::Uuid::new_v4().to_string();
+
+    // Start keyboard-interactive on the same handle
+    let mut kbi_result = handle
+        .authenticate_keyboard_interactive_start(username, None::<String>)
+        .await
+        .map_err(|e| {
+            let err = format!("KBI chain start failed: {}", e);
+            emit_kbi_chain_result(app, &auth_flow_id, false, Some(err.clone()));
+            SshError::AuthenticationFailed(err)
+        })?;
+
+    // KBI prompt/response loop (same logic as kbi.rs but reused inline)
+    use russh::client::KeyboardInteractiveAuthResponse;
+
+    loop {
+        match kbi_result {
+            KeyboardInteractiveAuthResponse::Success => {
+                info!("KBI chain: authentication successful");
+                emit_kbi_chain_result(app, &auth_flow_id, true, None);
+                return Ok(true);
+            }
+            KeyboardInteractiveAuthResponse::Failure { .. } => {
+                let err_msg =
+                    "KBI chain: server rejected keyboard-interactive responses".to_string();
+                emit_kbi_chain_result(app, &auth_flow_id, false, Some(err_msg.clone()));
+                return Err(SshError::AuthenticationFailed(err_msg));
+            }
+            KeyboardInteractiveAuthResponse::InfoRequest {
+                name,
+                instructions,
+                prompts,
+            } => {
+                debug!(
+                    "KBI chain {}: InfoRequest with {} prompts",
+                    auth_flow_id,
+                    prompts.len()
+                );
+
+                let prompts_for_frontend: Vec<KbiPrompt> = prompts
+                    .iter()
+                    .map(|p| KbiPrompt {
+                        prompt: p.prompt.clone(),
+                        echo: p.echo,
+                    })
+                    .collect();
+
+                // Register pending request BEFORE emitting event
+                let rx = register_pending(auth_flow_id.clone());
+
+                // Emit prompt event to frontend
+                app.emit(
+                    EVENT_KBI_PROMPT,
+                    KbiPromptEvent {
+                        auth_flow_id: auth_flow_id.clone(),
+                        name,
+                        instructions,
+                        prompts: prompts_for_frontend,
+                        chained: true,
+                    },
+                )
+                .map_err(|e| {
+                    // Clean up the pending request since frontend will never respond
+                    cleanup_pending(&auth_flow_id);
+                    let err = format!("KBI chain: failed to emit prompt event: {}", e);
+                    emit_kbi_chain_result(app, &auth_flow_id, false, Some(err.clone()));
+                    SshError::AuthenticationFailed(err)
+                })?;
+
+                // Wait for frontend response with 60s timeout
+                let responses = tokio::time::timeout(KBI_CHAIN_USER_TIMEOUT, rx)
+                    .await
+                    .map_err(|_| {
+                        cleanup_pending(&auth_flow_id);
+                        let err = "KBI chain: no response within 60 seconds".to_string();
+                        emit_kbi_chain_result(app, &auth_flow_id, false, Some(err.clone()));
+                        SshError::Timeout(err)
+                    })?
+                    .map_err(|_| {
+                        cleanup_pending(&auth_flow_id);
+                        let err = "KBI chain: response channel closed".to_string();
+                        emit_kbi_chain_result(app, &auth_flow_id, false, Some(err.clone()));
+                        SshError::AuthenticationFailed(err)
+                    })?
+                    .map_err(|e| {
+                        cleanup_pending(&auth_flow_id);
+                        let err = format!("KBI chain: {}", e);
+                        emit_kbi_chain_result(app, &auth_flow_id, false, Some(err.clone()));
+                        SshError::AuthenticationFailed(err)
+                    })?;
+
+                debug!(
+                    "KBI chain {}: got {} responses from frontend",
+                    auth_flow_id,
+                    responses.len()
+                );
+
+                let raw_responses: Vec<String> = responses.iter().map(|r| (**r).clone()).collect();
+                kbi_result = handle
+                    .authenticate_keyboard_interactive_respond(raw_responses)
+                    .await
+                    .map_err(|e| {
+                        let err = format!("KBI chain respond failed: {}", e);
+                        emit_kbi_chain_result(app, &auth_flow_id, false, Some(err.clone()));
+                        SshError::AuthenticationFailed(err)
+                    })?;
+            }
+        }
     }
 }
 

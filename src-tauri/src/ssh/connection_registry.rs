@@ -49,7 +49,7 @@ use zeroize::Zeroizing;
 
 use super::auth::{
     DEFAULT_AUTH_TIMEOUT_SECS, authenticate_password, build_client_config, ensure_auth_success,
-    load_certificate_auth_material, load_public_key_auth_material,
+    load_certificate_auth_material, load_public_key_auth_material, try_kbi_auth_chain,
 };
 use super::handle_owner::HandleController;
 use super::{AuthMethod as SshAuthMethod, SshClient, SshConfig};
@@ -928,8 +928,11 @@ impl SshConnectionRegistry {
 
         // 建立 SSH 连接
         let client = SshClient::new(ssh_config);
+        // Clone AppHandle and drop the read lock immediately to avoid holding it
+        // during SSH handshake + potential KBI chain (which waits for user input).
+        let app_clone = self.app_handle.read().await.clone();
         let session = client
-            .connect()
+            .connect(app_clone.as_ref())
             .await
             .map_err(|e| ConnectionRegistryError::ConnectionFailed(e.to_string()))?;
 
@@ -1172,6 +1175,71 @@ impl SshConnectionRegistry {
                 ));
             }
         };
+
+        // Multi-step auth chaining for tunneled connections
+        if !authenticated.success() {
+            // Clone AppHandle and drop immediately to avoid holding read lock
+            // during KBI chain (which waits for user input up to 60s).
+            let app_clone = self.app_handle.read().await.clone();
+            if let Some(app_ref) = app_clone.as_ref() {
+                if try_kbi_auth_chain(
+                    &authenticated,
+                    &mut handle,
+                    &target_config.username,
+                    app_ref,
+                )
+                .await
+                .map_err(|e| ConnectionRegistryError::ConnectionFailed(e.to_string()))?
+                {
+                    info!(
+                        "Tunneled SSH connection {} established via {} (multi-step auth)",
+                        connection_id, parent_connection_id
+                    );
+
+                    // Skip ensure_auth_success — KBI chain already succeeded
+                    let session = super::session::SshSession::new(
+                        handle,
+                        target_config.cols,
+                        target_config.rows,
+                        target_config.agent_forwarding,
+                    );
+                    let handle_controller = session.start(connection_id.clone());
+
+                    let entry = Arc::new(ConnectionEntry {
+                        id: connection_id.clone(),
+                        config: target_config,
+                        handle_controller,
+                        state: RwLock::new(ConnectionState::Active),
+                        ref_count: AtomicU32::new(0),
+                        last_active: AtomicU64::new(Utc::now().timestamp() as u64),
+                        keep_alive: AtomicBool::new(false),
+                        created_at: Utc::now(),
+                        idle_timer: Mutex::new(None),
+                        terminal_ids: RwLock::new(Vec::new()),
+                        sftp_session_id: RwLock::new(None),
+                        sftp: tokio::sync::Mutex::new(None),
+                        forward_ids: RwLock::new(Vec::new()),
+                        heartbeat_task: Mutex::new(None),
+                        heartbeat_failures: AtomicU32::new(0),
+                        reconnect_task: Mutex::new(None),
+                        is_reconnecting: AtomicBool::new(false),
+                        reconnect_attempts: AtomicU32::new(0),
+                        current_attempt_id: AtomicU64::new(0),
+                        last_emitted_status: parking_lot::Mutex::new(None),
+                        parent_connection_id: Some(parent_connection_id.to_string()),
+                        remote_env: std::sync::OnceLock::new(),
+                    });
+
+                    self.connections.insert(connection_id.clone(), entry);
+                    parent_conn.add_ref();
+
+                    self.start_heartbeat(&connection_id);
+                    self.spawn_env_detection(&connection_id);
+
+                    return Ok(connection_id);
+                }
+            }
+        }
 
         ensure_auth_success(
             &authenticated,

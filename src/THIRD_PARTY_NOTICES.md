@@ -1,7 +1,7 @@
 # Third-Party Notices (Frontend)
 
 This file lists third-party components used by the frontend (including transitive production dependencies) and their declared licenses.
-Generated: 2026-04-03T19:02:33.006Z
+Generated: 2026-04-07T16:47:56.532Z
 
 ## Summary
 - MIT: 228
@@ -51,9 +51,9 @@ Generated: 2026-04-03T19:02:33.006Z
 | @codemirror/legacy-modes | 6.5.2 | MIT | https://github.com/codemirror/legacy-modes#readme |
 | @codemirror/lint | 6.9.2 | MIT | https://github.com/codemirror/lint#readme |
 | @codemirror/search | 6.6.0 | MIT | https://github.com/codemirror/search#readme |
-| @codemirror/state | 6.5.4 | MIT | https://github.com/codemirror/state#readme |
+| @codemirror/state | 6.6.0 | MIT | https://github.com/codemirror/state#readme |
 | @codemirror/theme-one-dark | 6.1.3 | MIT | https://github.com/codemirror/theme-one-dark#readme |
-| @codemirror/view | 6.39.11 | MIT | https://github.com/codemirror/view#readme |
+| @codemirror/view | 6.41.0 | MIT | https://github.com/codemirror/view#readme |
 | @dnd-kit/accessibility | 3.1.1 | MIT | https://github.com/clauderic/dnd-kit#readme |
 | @dnd-kit/core | 6.3.1 | MIT | https://github.com/clauderic/dnd-kit#readme |
 | @dnd-kit/sortable | 10.0.0 | MIT | https://github.com/clauderic/dnd-kit#readme |
@@ -129,10 +129,10 @@ Generated: 2026-04-03T19:02:33.006Z
 | @tanstack/virtual-core | 3.13.23 | MIT | https://tanstack.com/virtual |
 | @tauri-apps/api | 2.10.1 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri#readme |
 | @tauri-apps/plugin-dialog | 2.6.0 | MIT OR Apache-2.0 | https://github.com/tauri-apps/plugins-workspace#readme |
-| @tauri-apps/plugin-fs | 2.4.5 | MIT OR Apache-2.0 | https://github.com/tauri-apps/plugins-workspace#readme |
+| @tauri-apps/plugin-fs | 2.5.0 | MIT OR Apache-2.0 | https://github.com/tauri-apps/plugins-workspace#readme |
 | @tauri-apps/plugin-opener | 2.5.3 | MIT OR Apache-2.0 | https://github.com/tauri-apps/plugins-workspace#readme |
 | @tauri-apps/plugin-process | 2.3.1 | MIT OR Apache-2.0 | https://github.com/tauri-apps/plugins-workspace#readme |
-| @tauri-apps/plugin-shell | 2.3.4 | MIT OR Apache-2.0 | https://github.com/tauri-apps/plugins-workspace#readme |
+| @tauri-apps/plugin-shell | 2.3.5 | MIT OR Apache-2.0 | https://github.com/tauri-apps/plugins-workspace#readme |
 | @tauri-apps/plugin-updater | 2.10.0 | MIT OR Apache-2.0 | https://github.com/tauri-apps/plugins-workspace#readme |
 | @types/d3 | 7.4.3 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3 |
 | @types/d3-array | 3.2.2 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-array |
@@ -289,7 +289,7 @@ Generated: 2026-04-03T19:02:33.006Z
 | react-i18next | 16.5.3 | MIT | https://github.com/i18next/react-i18next |
 | react-remove-scroll | 2.7.2 | MIT | https://github.com/theKashey/react-remove-scroll#readme |
 | react-remove-scroll-bar | 2.3.8 | MIT | https://github.com/theKashey/react-remove-scroll-bar#readme |
-| react-resizable-panels | 4.4.1 | MIT | https://react-resizable-panels.vercel.app/ |
+| react-resizable-panels | 4.9.0 | MIT | https://react-resizable-panels.vercel.app/ |
 | react-style-singleton | 2.2.3 | MIT | https://github.com/theKashey/react-style-singleton#readme |
 | readable-stream | 2.3.8 | MIT | https://github.com/nodejs/readable-stream#readme |
 | robust-predicates | 3.0.2 | Unlicense | https://github.com/mourner/robust-predicates#readme |
@@ -308,7 +308,7 @@ Generated: 2026-04-03T19:02:33.006Z
 | tinyexec | 1.0.2 | MIT | https://github.com/tinylibs/tinyexec#readme |
 | ts-dedent | 2.2.0 | MIT | https://github.com/tamino-martinius/node-ts-dedent#readme |
 | tslib | 2.8.1 | 0BSD | https://www.typescriptlang.org/ |
-| typescript | 5.8.3 | Apache-2.0 | https://www.typescriptlang.org/ |
+| typescript | 5.9.3 | Apache-2.0 | https://www.typescriptlang.org/ |
 | ufo | 1.6.3 | MIT | https://github.com/unjs/ufo#readme |
 | underscore | 1.13.7 | MIT | https://underscorejs.org |
 | use-callback-ref | 1.3.3 | MIT | https://github.com/theKashey/use-callback-ref#readme |

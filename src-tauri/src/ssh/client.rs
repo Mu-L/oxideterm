@@ -12,8 +12,9 @@ use russh::*;
 use tracing::{debug, info, warn};
 
 use super::auth::{
-    DEFAULT_AUTH_TIMEOUT_SECS, authenticate_password, build_client_config, ensure_auth_success,
-    load_certificate_auth_material, load_public_key_auth_material, try_kbi_auth_chain,
+    DEFAULT_AUTH_TIMEOUT_SECS, authenticate_password, authenticate_publickey_best_algo,
+    build_client_config, ensure_auth_success, load_certificate_auth_material,
+    load_private_key_material, try_kbi_auth_chain,
 };
 use super::config::{AuthMethod, SshConfig};
 use super::error::SshError;
@@ -94,16 +95,11 @@ impl SshClient {
             AuthMethod::Key {
                 key_path,
                 passphrase,
-            } => handle
-                .authenticate_publickey(
-                    &self.config.username,
-                    load_public_key_auth_material(
-                        key_path,
-                        passphrase.as_ref().map(|p| p.as_str()),
-                    )?,
-                )
-                .await
-                .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?,
+            } => {
+                let key =
+                    load_private_key_material(key_path, passphrase.as_ref().map(|p| p.as_str()))?;
+                authenticate_publickey_best_algo(&mut handle, &self.config.username, key).await?
+            }
             AuthMethod::Agent => {
                 // Connect to SSH Agent and authenticate
                 let mut agent = crate::ssh::agent::SshAgentClient::connect().await?;

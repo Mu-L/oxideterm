@@ -33,8 +33,9 @@ use russh::client::{self, Handle};
 use tracing::{debug, info};
 
 use super::auth::{
-    DEFAULT_AUTH_TIMEOUT_SECS, authenticate_password, build_client_config, ensure_auth_success,
-    load_certificate_auth_material, load_public_key_auth_material,
+    DEFAULT_AUTH_TIMEOUT_SECS, authenticate_password, authenticate_publickey_best_algo,
+    build_client_config, ensure_auth_success, load_certificate_auth_material,
+    load_private_key_material,
 };
 use super::client::ClientHandler;
 use super::config::AuthMethod;
@@ -234,13 +235,10 @@ async fn direct_connect(
         AuthMethod::Key {
             key_path,
             passphrase,
-        } => handle
-            .authenticate_publickey(
-                &hop.username,
-                load_public_key_auth_material(key_path, passphrase.as_ref().map(|p| p.as_str()))?,
-            )
-            .await
-            .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?,
+        } => {
+            let key = load_private_key_material(key_path, passphrase.as_ref().map(|p| p.as_str()))?;
+            authenticate_publickey_best_algo(&mut handle, &hop.username, key).await?
+        }
         AuthMethod::Certificate {
             key_path,
             cert_path,
@@ -358,13 +356,10 @@ async fn connect_via_stream(
         AuthMethod::Key {
             key_path,
             passphrase,
-        } => handle
-            .authenticate_publickey(
-                &hop.username,
-                load_public_key_auth_material(key_path, passphrase.as_ref().map(|p| p.as_str()))?,
-            )
-            .await
-            .map_err(|e| SshError::AuthenticationFailed(e.to_string()))?,
+        } => {
+            let key = load_private_key_material(key_path, passphrase.as_ref().map(|p| p.as_str()))?;
+            authenticate_publickey_best_algo(&mut handle, &hop.username, key).await?
+        }
         AuthMethod::Certificate {
             key_path,
             cert_path,

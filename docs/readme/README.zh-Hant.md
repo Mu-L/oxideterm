@@ -299,6 +299,18 @@ CodeMirror 6 編輯器基於 SFTP 運作——預設無需伺服端安裝：
 
 ---
 
+## 安裝
+
+從 [GitHub Releases](https://github.com/AnalyseDeCircuit/oxideterm/releases/latest) 下載最新版本。
+
+| 平台 | 執行階段相依性 |
+|---|---|
+| **Windows** | [WebView2 執行階段](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — 已預先安裝於 Windows 10（1803+）和 Windows 11。對於**離線 / 內網**環境，請使用 [Evergreen 獨立安裝程式](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download)（離線安裝，約 170 MB），或透過群組原則部署**固定版本**執行階段。 |
+| **macOS** | 無（使用原生 WebKit） |
+| **Linux** | `libwebkit2gtk-4.1`（現代桌面環境通常已預先安裝） |
+
+---
+
 ## 快速開始
 
 ### 先決條件

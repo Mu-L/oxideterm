@@ -299,6 +299,18 @@ CodeMirror 6 编辑器基于 SFTP 运行——默认无需服务端安装：
 
 ---
 
+## 安装
+
+从 [GitHub Releases](https://github.com/AnalyseDeCircuit/oxideterm/releases/latest) 下载最新版本。
+
+| 平台 | 运行时依赖 |
+|---|---|
+| **Windows** | [WebView2 运行时](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — 已预装于 Windows 10（1803+）和 Windows 11。对于**离线 / 内网**环境，请使用 [Evergreen 独立安装程序](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download)（离线安装，约 170 MB），或通过组策略部署**固定版本**运行时。 |
+| **macOS** | 无（使用原生 WebKit） |
+| **Linux** | `libwebkit2gtk-4.1`（现代桌面环境通常已预装） |
+
+---
+
 ## 快速开始
 
 ### 前置要求

@@ -299,6 +299,18 @@ Shell local multiplataforma vía `portable-pty 0.8`, protegido por feature gate 
 
 ---
 
+## Instalación
+
+Descargue la última versión desde [GitHub Releases](https://github.com/AnalyseDeCircuit/oxideterm/releases/latest).
+
+| Plataforma | Dependencia en tiempo de ejecución |
+|---|---|
+| **Windows** | [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — preinstalado en Windows 10 (1803+) y Windows 11. Para entornos **sin conexión / intranet**, utilice el [instalador independiente Evergreen](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download) (sin conexión, ~170 MB) o despliegue el runtime de **versión fija** mediante directivas de grupo. |
+| **macOS** | Ninguna (usa WebKit nativo) |
+| **Linux** | `libwebkit2gtk-4.1` (generalmente preinstalado en escritorios modernos) |
+
+---
+
 ## Inicio rápido
 
 ### Requisitos previos

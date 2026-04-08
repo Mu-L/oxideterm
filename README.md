@@ -299,6 +299,18 @@ Cross-platform local shell via `portable-pty 0.8`, feature-gated behind `local-t
 
 ---
 
+## Installation
+
+Download the latest release from [GitHub Releases](https://github.com/AnalyseDeCircuit/oxideterm/releases/latest).
+
+| Platform | Runtime Dependency |
+|---|---|
+| **Windows** | [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — pre-installed on Windows 10 (1803+) and Windows 11. For **air-gapped / intranet** environments, use the [Evergreen Standalone Installer](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download) (offline, ~170 MB) or deploy the **Fixed Version** runtime via group policy. |
+| **macOS** | None (uses native WebKit) |
+| **Linux** | `libwebkit2gtk-4.1` (usually pre-installed on modern desktops) |
+
+---
+
 ## Quick Start
 
 ### Prerequisites

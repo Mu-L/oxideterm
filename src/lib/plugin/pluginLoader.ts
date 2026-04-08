@@ -17,9 +17,32 @@ import { usePluginStore } from '../../store/pluginStore';
 import { buildPluginContext, cleanupPluginAssets } from './pluginContextFactory';
 import { loadPluginI18n, removePluginI18n } from './pluginI18nManager';
 import type { PluginManifest, PluginModule, PluginGlobalConfig } from '../../types/plugin';
+import packageJson from '../../../package.json';
 
 /** Current OxideTerm version for engine compatibility checks */
-const OXIDETERM_VERSION = '1.6.2';
+const OXIDETERM_VERSION = packageJson.version ?? '0.0.0';
+
+function parseSemverParts(version: string): [number, number, number] | null {
+  const match = version.trim().match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!match) {
+    return null;
+  }
+
+  const parts = match.slice(1).map(Number);
+  if (parts.some((part) => Number.isNaN(part))) {
+    return null;
+  }
+
+  return [parts[0], parts[1], parts[2]];
+}
+
+function compareSemver(a: readonly number[], b: readonly number[]): number {
+  for (let index = 0; index < 3; index++) {
+    if (a[index] > b[index]) return 1;
+    if (a[index] < b[index]) return -1;
+  }
+  return 0;
+}
 
 /** Timeout for activate/deactivate calls (ms) */
 const LIFECYCLE_TIMEOUT = 5000;
@@ -90,19 +113,36 @@ function validateManifest(manifest: PluginManifest): string | null {
   if (!manifest.version || typeof manifest.version !== 'string') return 'Missing or invalid "version"';
   if (!manifest.main || typeof manifest.main !== 'string') return 'Missing or invalid "main"';
 
-  // Check engine compatibility (simple semver >=)
-  const required = manifest.engines?.oxideterm;
+  // Check engine compatibility.
+  // Supported syntax today: >x.y.z and >=x.y.z.
+  // Pre-release suffixes are ignored for ordering (e.g. 1.2.3-beta.1 -> 1.2.3).
+  const required = manifest.engines?.oxideterm?.trim();
   if (required) {
-    const match = required.match(/^>=?\s*(\d+\.\d+\.\d+)/);
-    if (match) {
-      const requiredParts = match[1].split('.').map(Number);
-      const currentParts = OXIDETERM_VERSION.split('.').map(Number);
-      for (let i = 0; i < 3; i++) {
-        if (currentParts[i] > requiredParts[i]) break;
-        if (currentParts[i] < requiredParts[i]) {
-          return `Requires OxideTerm >=${match[1]}, current is ${OXIDETERM_VERSION}`;
-        }
-      }
+    const match = required.match(/^(>=|>)\s*(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/);
+    if (!match) {
+      console.warn(
+        `[PluginLoader] Plugin "${manifest.id}" uses unsupported engines.oxideterm format "${required}". ` +
+        'Only >x.y.z and >=x.y.z are currently supported.',
+      );
+      return null;
+    }
+
+    const operator = match[1];
+    const requiredVersion = match[2];
+    const currentParts = parseSemverParts(OXIDETERM_VERSION);
+    const requiredParts = parseSemverParts(requiredVersion);
+
+    if (!currentParts || !requiredParts) {
+      console.warn(
+        `[PluginLoader] Skipping engines.oxideterm check for plugin "${manifest.id}" because the host or required version is invalid ` +
+        `(host="${OXIDETERM_VERSION}", required="${requiredVersion}").`,
+      );
+      return null;
+    }
+
+    const comparison = compareSemver(currentParts, requiredParts);
+    if (comparison < 0 || (comparison === 0 && operator === '>')) {
+      return `Requires OxideTerm ${operator}${requiredVersion}, current is ${OXIDETERM_VERSION}`;
     }
   }
 

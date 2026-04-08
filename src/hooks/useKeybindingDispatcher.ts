@@ -22,6 +22,8 @@ import {
   getBinding,
   type ActionId,
 } from '@/lib/keybindingRegistry';
+import { usePluginStore } from '@/store/pluginStore';
+import { matchPluginKeybinding } from '@/lib/plugin/pluginHostUi';
 import { matchPluginShortcut } from '@/lib/plugin/pluginTerminalHooks';
 import { platform } from '@/lib/platform';
 
@@ -103,6 +105,14 @@ export function useKeybindingDispatcher(
         e.preventDefault();
         e.stopPropagation();
         handler();
+        return;
+      }
+
+      const pluginKeybindingHandler = matchPluginKeybinding(e, usePluginStore.getState().keybindings);
+      if (pluginKeybindingHandler) {
+        e.preventDefault();
+        e.stopPropagation();
+        pluginKeybindingHandler();
         return;
       }
 

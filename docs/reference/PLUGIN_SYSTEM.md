@@ -3,7 +3,7 @@
 > **状态**: 已实施
 > **版本**: v2.0
 > **日期**: 2026-02-08
-> **前置依赖**: OxideTerm v1.6.2+
+> **前置依赖**: 当前 OxideTerm 版本（宿主版本由应用自身 version 字段提供）
 
 ---
 
@@ -213,11 +213,13 @@ export async function activate(ctx) {
 
 ---
 
-## 3. PluginContext API（12 个命名空间）
+## 3. PluginContext API（18 个命名空间）
 
 插件通过 `activate(ctx)` 接收的唯一 API 入口。整个对象通过 `Object.freeze()` 递归冻结。
 
-包含：`pluginId` + 11 个子 API（`connections`、`events`、`ui`、`terminal`、`settings`、`i18n`、`storage`、`api`、`assets`、`sftp`、`forward`）
+包含：`pluginId` + 17 个子 API（`connections`、`events`、`ui`、`terminal`、`settings`、`i18n`、`storage`、`api`、`assets`、`sftp`、`forward`、`sessions`、`transfers`、`profiler`、`eventLog`、`ide`、`ai`、`app`）
+
+> `ctx.ui.registerContextMenu()`、`ctx.ui.registerStatusBarItem()`、`ctx.ui.registerKeybinding()` 和 `ctx.ui.showProgress()` 现在都已经完成宿主接线：上下文菜单会挂到 terminal / sftp / tab / sidebar 目标，状态栏项会渲染到主布局底部，全局 keybinding 会进入统一快捷键分发链路，进度则显示为右上角 HUD。
 
 ### 3.1 `ctx.connections`（只读连接状态）
 
@@ -972,7 +974,7 @@ ws.onmessage = (e) => handleWsMessage(e, ws);
 
 **问题**：折叠态（L612-L760）和展开态（L786-L920）各有一套硬编码按钮列表，~200 行几乎完全重复。
 
-**实际实现（v1.6.2）**：
+**实际实现（当前仓库版本）**：
 
 Sidebar 按钮已重构为三区结构（`topButtons` + 分隔线 + `bottomButtons`）：
 

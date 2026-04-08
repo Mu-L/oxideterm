@@ -21,6 +21,7 @@ import type {
   RegistryEntry,
   InstallState,
   PluginCommandEntry,
+  ContextMenuItem,
 } from '../types/plugin';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -98,11 +99,11 @@ interface PluginStore {
   /** Plugin commands for command palette: key = "pluginId:commandId" */
   commands: Map<string, PluginCommandEntry>;
   /** Context menu items: key = "pluginId:target:uuid" */
-  contextMenuItems: Map<string, { pluginId: string; target: string; items: { label: string; handler: () => void; icon?: string }[] }>;
+  contextMenuItems: Map<string, { pluginId: string; target: string; items: ContextMenuItem[] }>;
   /** Status bar items: key = "pluginId:itemId" */
   statusBarItems: Map<string, { pluginId: string; text: string; tooltip?: string; icon?: string; onClick?: () => void; priority?: number; alignment?: 'left' | 'right' }>;
   /** Global keybindings: key = "pluginId:keybinding" */
-  keybindings: Map<string, { pluginId: string; keybinding: string; handler: () => void }>;
+  keybindings: Map<string, { pluginId: string; keybinding: string; normalizedKey: string; handler: () => void }>;
   /** Disposables per plugin: key = pluginId */
   disposables: Map<string, Disposable[]>;
 

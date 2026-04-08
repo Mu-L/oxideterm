@@ -1,7 +1,7 @@
 # OxideTerm Plugin Development Guide
 
-> **版本**: 适用于 OxideTerm v1.6.2+（Plugin API v3 — 2026-03-15 更新）
-> **最后更新**: 2026-03-15
+> **版本**: 适用于当前 OxideTerm 版本（Plugin API v3）
+> **最后更新**: 2026-04-09
 
 ---
 
@@ -502,7 +502,7 @@ export function deactivate() {
 | `author` | `string` | ⬜ | 作者 |
 | `main` | `string` | ✅ | ESM 入口文件的相对路径 (如 `"./main.js"` 或 `"./src/main.js"`) |
 | `engines` | `object` | ⬜ | 版本兼容性要求 |
-| `engines.oxideterm` | `string` | ⬜ | 所需最低 OxideTerm 版本 (如 `">=1.6.0"`)。支持 `>=x.y.z` 格式。 |
+| `engines.oxideterm` | `string` | ⬜ | 所需最低 OxideTerm 版本 (如 `">=1.6.0"`)。当前仅支持 `>=x.y.z` 和 `>x.y.z`，预发布后缀会按基础版本比较。 |
 | `contributes` | `object` | ⬜ | 插件贡献的能力声明 |
 | `locales` | `string` | ⬜ | i18n 翻译文件目录的相对路径 (如 `"./locales"`) |
 
@@ -770,7 +770,7 @@ list_plugins()
 前端 `loadPlugin()` 收到 manifest 后进行二次验证：
 
 1. **必需字段检查**：`id`、`name`、`version`、`main` 必须为非空 string
-2. **版本兼容检查**：如果声明了 `engines.oxideterm`，与当前 OxideTerm 版本做简单 semver `>=` 比较
+2. **版本兼容检查**：如果声明了 `engines.oxideterm`，与当前 OxideTerm 版本做简单 semver 比较；当前仅支持 `>=` 和 `>` 两种写法，预发布后缀会被折叠到基础版本号
 3. 验证失败 → 设置 `state: 'error'` 并记录错误信息
 
 ### 5.3 加载 (Loading)
@@ -1185,6 +1185,12 @@ ui.registerContextMenu(target: ContextMenuTarget, items: ContextMenuItem[]): Dis
 
 为指定目标区域注册右键菜单项。`target` 可以是 `'terminal'`、`'sftp'`、`'tab'` 或 `'sidebar'`。
 
+当前宿主接线如下：
+- `terminal`：终端内容区域
+- `sftp`：SFTP 文件面板右键菜单
+- `tab`：标签页右键菜单
+- `sidebar`：侧边栏宿主区域右键菜单
+
 ```javascript
 ctx.ui.registerContextMenu('terminal', [
   {
@@ -1248,6 +1254,8 @@ ui.registerKeybinding(keybinding: string, handler: () => void): Disposable
 
 注册全局键盘快捷键（与 Terminal Hooks 的 `registerShortcut` 不同，这里不需要在 manifest 中声明）。
 
+宿主会在全局快捷键分发链路中处理这些按键。内建快捷键仍然优先于插件 keybinding，插件 keybinding 又优先于 terminal hooks 的 `registerShortcut()`。
+
 ```javascript
 ctx.ui.registerKeybinding('ctrl+shift+p', () => {
   console.log('Plugin action triggered!');
@@ -1280,7 +1288,9 @@ ctx.ui.showNotification({
 ui.showProgress(title: string): ProgressReporter
 ```
 
-显示进度指示器，返回可更新和关闭的 `ProgressReporter`。
+显示进度指示器，返回可更新的 `ProgressReporter`。
+
+宿主会在右上角显示轻量进度 HUD。当 `report(value, total)` 到达 100% 时，进度项会自动收起。
 
 ```typescript
 type ProgressReporter = {
@@ -2578,10 +2588,12 @@ function ItemList() {
 ### 7.4 使用 Lucide React Icons
 
 ```javascript
-const { lucideIcons } = window.__OXIDE__;
+const { lucideIcons, lucideReact } = window.__OXIDE__;
 // lucideIcons 是一个 { 名称: 组件 } 映射对象
 const Activity = lucideIcons['Activity'];
 const Terminal = lucideIcons['Terminal'];
+// lucideReact 是带降级的完整模块代理，不存在的 PascalCase 图标会回退到 Puzzle
+const Wifi = lucideReact.Wifi;
 
 function MyIcon() {
   return h(Activity, { className: 'h-4 w-4 text-primary' });
@@ -2590,7 +2602,7 @@ function MyIcon() {
 
 完整图标列表见: https://lucide.dev/icons/
 
-> **Manifest 图标解析**：`plugin.json` 中 `contributes.tabs[].icon` 和 `contributes.sidebarPanels[].icon` 字段使用图标名称字符串（如 `"LayoutDashboard"`），系统会通过 `resolvePluginIcon()` 自动将其解析为对应的 Lucide React 组件，用于标签栏和侧边栏活动栏的图标渲染。插件组件内部通过 `lucideIcons['IconName']` 获取图标组件。
+> **Manifest 图标解析**：`plugin.json` 中 `contributes.tabs[].icon` 和 `contributes.sidebarPanels[].icon` 字段使用图标名称字符串（如 `"LayoutDashboard"`），系统会通过 `resolvePluginIcon()` 自动将其解析为对应的 Lucide React 组件，用于标签栏和侧边栏活动栏的图标渲染。插件组件内部如果要按字符串索引图标，可使用 `lucideIcons['IconName']`；如果直接按属性名取图标并希望在缺失时自动回退，可优先使用 `lucideReact.IconName`。
 
 ### 7.5 使用 UI Kit（推荐）
 
@@ -4869,4 +4881,4 @@ declare global {
 
 ---
 
-*本文档基于 OxideTerm v1.6.2（Plugin API v3）插件系统源码更新。最后更新：2026-03-15。如有疑问，请参考上述源码文件或提交 Issue。*
+*本文档基于当前仓库中的 OxideTerm Plugin API v3 源码更新。最后更新：2026-04-09。如有疑问，请参考上述源码文件或提交 Issue。*

@@ -19,6 +19,8 @@ import { ConnectionPoolMonitor } from '../connections/ConnectionPoolMonitor';
 import { TabActiveProvider } from '../../hooks/useTabActive';
 import { ConnectionsPanel } from '../connections/ConnectionsPanel';
 import { SystemHealthPanel } from './SystemHealthPanel';
+import { PluginStatusBar } from '../plugin/PluginStatusBar';
+import { PluginTargetContextMenu } from '../plugin/PluginTargetContextMenu';
 import { Plus, Terminal as TerminalIcon } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -254,27 +256,29 @@ export const AppLayout = () => {
                 <TabActiveProvider value={isActive}>
                   {/* Terminal tabs: Support split panes via rootPane, fallback to single terminal */}
                   {(tab.type === 'terminal' || tab.type === 'local_terminal') && (
-                    <div className="relative h-full w-full group/terminal">
-                      {tab.rootPane ? (
-                        // Split pane mode - use recursive container
-                        <SplitTerminalContainer
-                          key={`split-${tab.id}`}
-                          tabId={tab.id}
-                          rootPane={tab.rootPane}
-                          activePaneId={tab.activePaneId}
-                          onPaneFocus={(paneId) => handlePaneFocus(tab.id, paneId)}
-                          onPaneClose={(paneId) => handlePaneClose(tab.id, paneId)}
-                        />
-                      ) : (
-                        // Legacy single pane mode (backward compatible)
-                        // Key includes ws_url to force remount when backend assigns new port
-                        tab.sessionId && (
-                          tab.type === 'terminal'
-                            ? <TerminalView key={`${tab.sessionId}-${getSession(tab.sessionId)?.ws_url ?? ''}`} sessionId={tab.sessionId} tabId={tab.id} isActive={tab.id === activeTabId} />
-                            : <LocalTerminalView key={tab.sessionId} sessionId={tab.sessionId} tabId={tab.id} isActive={tab.id === activeTabId} />
-                        )
-                      )}
-                    </div>
+                    <PluginTargetContextMenu target="terminal">
+                      <div className="relative h-full w-full group/terminal">
+                        {tab.rootPane ? (
+                          // Split pane mode - use recursive container
+                          <SplitTerminalContainer
+                            key={`split-${tab.id}`}
+                            tabId={tab.id}
+                            rootPane={tab.rootPane}
+                            activePaneId={tab.activePaneId}
+                            onPaneFocus={(paneId) => handlePaneFocus(tab.id, paneId)}
+                            onPaneClose={(paneId) => handlePaneClose(tab.id, paneId)}
+                          />
+                        ) : (
+                          // Legacy single pane mode (backward compatible)
+                          // Key includes ws_url to force remount when backend assigns new port
+                          tab.sessionId && (
+                            tab.type === 'terminal'
+                              ? <TerminalView key={`${tab.sessionId}-${getSession(tab.sessionId)?.ws_url ?? ''}`} sessionId={tab.sessionId} tabId={tab.id} isActive={tab.id === activeTabId} />
+                              : <LocalTerminalView key={tab.sessionId} sessionId={tab.sessionId} tabId={tab.id} isActive={tab.id === activeTabId} />
+                          )
+                        )}
+                      </div>
+                    </PluginTargetContextMenu>
                   )}
                   {tab.type === 'sftp' && (
                     <TabBgWrapper tabType="sftp">
@@ -419,6 +423,7 @@ export const AppLayout = () => {
             </>
           )}
         </PanelGroup>
+        <PluginStatusBar />
       </div>
 
       {/* AI Sidebar - Right side (hidden in zen mode) */}

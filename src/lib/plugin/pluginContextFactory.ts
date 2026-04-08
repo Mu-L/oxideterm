@@ -63,12 +63,14 @@ import { createPluginI18nManager } from './pluginI18nManager';
 import { toSnapshot } from './pluginUtils';
 import { freezeSnapshot } from './pluginSnapshots';
 import { createThrottledEmitter } from './pluginThrottledEvents';
+import { normalizePluginComboDescriptor, normalizePluginKeyCombo } from './pluginHostUi';
 import {
   findPaneBySessionId,
   getTerminalBuffer,
   getTerminalSelection,
   writeToTerminal as registryWriteToTerminal,
 } from '../terminalRegistry';
+import { getDefaults, getBinding } from '../keybindingRegistry';
 import { invoke } from '@tauri-apps/api/core';
 
 // Lazy store imports — loaded on first use to avoid circular deps
@@ -421,12 +423,20 @@ export function buildPluginContext(manifest: PluginManifest): PluginContext {
     },
     registerStatusBarItem(options: StatusBarItemOptions): StatusBarHandle {
       const id = `${pluginId}:${(options as StatusBarItemOptions & { id?: string }).id ?? crypto.randomUUID()}`;
+      let currentOptions: StatusBarItemOptions = {
+        ...options,
+        alignment: options.alignment ?? 'left',
+      };
       const updateBar = (opts: StatusBarItemOptions) => {
+        currentOptions = {
+          ...opts,
+          alignment: opts.alignment ?? 'left',
+        };
         usePluginStore.setState((state) => ({
-          statusBarItems: new Map(state.statusBarItems ?? new Map()).set(id, { pluginId, ...opts }),
+          statusBarItems: new Map(state.statusBarItems ?? new Map()).set(id, { pluginId, ...currentOptions }),
         }));
       };
-      updateBar(options);
+      updateBar(currentOptions);
       const disposable = createDisposable(pluginId, () => {
         usePluginStore.setState((state) => {
           const m = new Map(state.statusBarItems ?? new Map());
@@ -435,14 +445,35 @@ export function buildPluginContext(manifest: PluginManifest): PluginContext {
         });
       });
       return Object.freeze({
-        update(newOpts: Partial<StatusBarItemOptions>) { updateBar({ ...options, ...newOpts }); },
+        update(newOpts: Partial<StatusBarItemOptions>) { updateBar({ ...currentOptions, ...newOpts }); },
         dispose: disposable.dispose,
       });
     },
     registerKeybinding(keybinding: string, handler: () => void) {
       const key = `${pluginId}:${keybinding}`;
+      const normalizedKey = normalizePluginKeyCombo(keybinding);
+      const conflictingBuiltIn = getDefaults().find((definition) => {
+        const combo = getBinding(definition.id);
+        if (!combo) return false;
+        return normalizePluginComboDescriptor(combo) === normalizedKey;
+      });
+      if (conflictingBuiltIn) {
+        console.warn(
+          `[PluginContextFactory] Plugin "${pluginId}" registered keybinding "${keybinding}" ` +
+          `which conflicts with built-in action "${conflictingBuiltIn.id}". Built-in shortcuts keep priority.`,
+        );
+      }
+
+      const conflictingPlugin = Array.from(usePluginStore.getState().keybindings.values()).find((entry) => entry.normalizedKey === normalizedKey);
+      if (conflictingPlugin) {
+        console.warn(
+          `[PluginContextFactory] Plugin "${pluginId}" registered keybinding "${keybinding}" ` +
+          `which conflicts with plugin "${conflictingPlugin.pluginId}". Earlier registrations keep priority.`,
+        );
+      }
+
       usePluginStore.setState((state) => ({
-        keybindings: new Map(state.keybindings ?? new Map()).set(key, { pluginId, keybinding, handler }),
+        keybindings: new Map(state.keybindings ?? new Map()).set(key, { pluginId, keybinding, normalizedKey, handler }),
       }));
       return createDisposable(pluginId, () => {
         usePluginStore.setState((state) => {

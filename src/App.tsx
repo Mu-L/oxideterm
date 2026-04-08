@@ -24,6 +24,7 @@ import { setupConnectionBridge, setupNodeStateBridge, setupTransferBridge, plugi
 import { useToastStore } from './hooks/useToast';
 import { useUpdateStore } from './store/updateStore';
 import { PluginConfirmDialog } from './components/plugin/PluginConfirmDialog';
+import { PluginProgressHost } from './components/plugin/PluginProgressHost';
 import { CommandPalette } from './components/command-palette/CommandPalette';
 import { CastPlayer } from './components/terminal/CastPlayer';
 import { OnboardingModal } from './components/modals/OnboardingModal';
@@ -388,6 +389,7 @@ function App() {
       <TooltipProvider delayDuration={300} skipDelayDuration={100}>
         <AppLayout />
         <Toaster />
+        <PluginProgressHost />
         <AutoRouteModal />
         <OnboardingModal />
         <GlobalKbiDialog />

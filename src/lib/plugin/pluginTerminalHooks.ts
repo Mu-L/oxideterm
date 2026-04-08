@@ -18,6 +18,7 @@
 
 import { usePluginStore } from '../../store/pluginStore';
 import { trackPluginError } from './pluginLoader';
+import { normalizePluginKeyboardEvent } from './pluginHostUi';
 
 /** Maximum time (ms) a single hook handler should take before warning */
 const HOOK_BUDGET_MS = 5;
@@ -130,14 +131,7 @@ export function matchPluginShortcut(event: KeyboardEvent): (() => void) | undefi
   const shortcuts = usePluginStore.getState().shortcuts;
   if (shortcuts.size === 0) return undefined;
 
-  // Build normalized key from event.
-  // Platform normalization: Ctrl and Cmd(⌘) are unified as "ctrl".
-  const parts: string[] = [];
-  if (event.ctrlKey || event.metaKey) parts.push('ctrl');
-  if (event.shiftKey) parts.push('shift');
-  if (event.altKey) parts.push('alt');
-  parts.push(event.key.toLowerCase());
-  const normalizedKey = parts.sort().join('+');
+  const normalizedKey = normalizePluginKeyboardEvent(event);
 
   return shortcuts.get(normalizedKey)?.handler;
 }

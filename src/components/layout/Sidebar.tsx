@@ -50,6 +50,7 @@ import { api } from '../../lib/api';
 import { connectToSaved } from '../../lib/connectToSaved';
 
 import { PluginSidebarRenderer } from '../plugin/PluginSidebarRenderer';
+import { PluginTargetContextMenu } from '../plugin/PluginTargetContextMenu';
 import { BackgroundSessionsPopover } from '../terminal/BackgroundSessionsPopover';
 
 export const Sidebar = () => {
@@ -775,6 +776,7 @@ export const Sidebar = () => {
   void sessionList; // For future use
 
   return (
+    <PluginTargetContextMenu target="sidebar">
     <div
       ref={sidebarRef}
       className="flex h-full border-r border-theme-border bg-theme-bg-panel flex-row relative overflow-hidden"
@@ -1082,5 +1084,6 @@ export const Sidebar = () => {
       )}
       {ConfirmDialog}
     </div>
+    </PluginTargetContextMenu>
   );
 };

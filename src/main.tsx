@@ -9,6 +9,7 @@ import { clsx } from 'clsx'
 import { useTranslation } from 'react-i18next'
 import { pluginUIKit } from './lib/plugin/pluginUIKit'
 import { cn } from './lib/utils'
+import packageJson from '../package.json'
 import App from './App'
 import './styles.css'
 import { i18nReady } from './i18n'
@@ -48,7 +49,7 @@ window.__OXIDE__ = {
   clsx,
   cn,
   useTranslation,
-  version: '1.6.2',
+  version: packageJson.version,
   pluginApiVersion: 3,
 }
 

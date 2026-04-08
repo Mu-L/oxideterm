@@ -12,11 +12,13 @@ import { cn } from '../../lib/utils';
 import { Tab, PaneNode } from '../../types';
 import { topologyResolver } from '../../lib/topologyResolver';
 import { resolvePluginIcon } from '../../lib/plugin/pluginIconResolver';
+import { selectVisiblePluginContextMenuItems } from '../../lib/plugin/pluginHostUi';
 import { ReconnectTimeline } from '../connections/ReconnectTimeline';
 import { TabBarTerminalActions } from './TabBarTerminalActions';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { useConfirm } from '../../hooks/useConfirm';
+import { usePluginStore } from '../../store/pluginStore';
 
 /** Count leaf panes in a pane tree */
 function countPanes(node: PaneNode): number {
@@ -202,6 +204,11 @@ const TabItem = React.memo<TabItemProps>(({
   onCloseTabsToRight, onCloseAllTabs, onDetachTab, onSetActiveTab,
 }) => {
   const { t } = useTranslation();
+  const pluginContextMenuRegistry = usePluginStore((state) => state.contextMenuItems);
+  const pluginContextMenuItems = React.useMemo(
+    () => selectVisiblePluginContextMenuItems(pluginContextMenuRegistry, 'tab'),
+    [pluginContextMenuRegistry],
+  );
 
   // Read session/connection state on demand (not subscribed — avoids re-renders on connection:update)
   const sessions = useAppStore.getState().sessions;
@@ -325,6 +332,20 @@ const TabItem = React.memo<TabItemProps>(({
             <CirclePause className="h-3.5 w-3.5 mr-2" />
             {t('tabbar.send_to_background')}
           </ContextMenuItem>
+        </>
+      )}
+      {pluginContextMenuItems.length > 0 && (
+        <>
+          <ContextMenuSeparator />
+          {pluginContextMenuItems.map((item) => {
+            const Icon = item.icon ? resolvePluginIcon(item.icon) : null;
+            return (
+              <ContextMenuItem key={item.key} onSelect={item.handler}>
+                {Icon && <Icon className="h-3.5 w-3.5 mr-2" />}
+                {item.label}
+              </ContextMenuItem>
+            );
+          })}
         </>
       )}
       <ContextMenuSeparator />

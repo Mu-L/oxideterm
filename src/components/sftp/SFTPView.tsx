@@ -30,12 +30,15 @@ import {
   Globe
 } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
+import { usePluginStore } from '../../store/pluginStore';
 import { useTransferStore } from '../../store/transferStore';
 import { useToast } from '../../hooks/useToast';
 import { useTabBgActive } from '../../hooks/useTabBackground';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { cn } from '../../lib/utils';
+import { resolvePluginIcon } from '../../lib/plugin/pluginIconResolver';
+import { selectVisiblePluginContextMenuItems } from '../../lib/plugin/pluginHostUi';
 import { TransferQueue } from './TransferQueue';
 import { TransferConflictDialog, ConflictInfo, ConflictResolution } from './TransferConflictDialog';
 import { PathBreadcrumb } from './PathBreadcrumb';
@@ -215,6 +218,11 @@ const FileList = ({
 }) => {
   const listRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{x: number, y: number, file?: FileInfo} | null>(null);
+  const pluginContextMenuRegistry = usePluginStore((state) => state.contextMenuItems);
+  const pluginContextMenuItems = useMemo(
+    () => selectVisiblePluginContextMenuItems(pluginContextMenuRegistry, 'sftp'),
+    [pluginContextMenuRegistry],
+  );
 
   const handleSelect = (name: string, multi: boolean, range: boolean) => {
     onActivate();
@@ -644,6 +652,24 @@ const FileList = ({
               <Trash2 className="h-3 w-3" /> {t('sftp.context.delete')}
             </button>
           )}
+
+          {pluginContextMenuItems.length > 0 && <div className="border-t border-theme-border my-1" />}
+          {pluginContextMenuItems.map((item) => {
+            const Icon = item.icon ? resolvePluginIcon(item.icon) : null;
+            return (
+              <button
+                key={item.key}
+                className="w-full px-3 py-1.5 text-left text-xs hover:bg-theme-bg-hover flex items-center gap-2"
+                onClick={() => {
+                  item.handler();
+                  setContextMenu(null);
+                }}
+              >
+                {Icon && <Icon className="h-3 w-3" />}
+                {item.label}
+              </button>
+            );
+          })}
           
           <div className="border-t border-theme-border my-1" />
           

@@ -92,6 +92,7 @@ function makeIncompleteTransfer(
   return {
     transfer_id: 'transfer-1',
     transfer_type: 'Download',
+    is_directory: false,
     source_path: '/remote/file.txt',
     destination_path: '/local/file.txt',
     transferred_bytes: 5,

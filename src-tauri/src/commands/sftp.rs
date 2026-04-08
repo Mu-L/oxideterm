@@ -91,6 +91,7 @@ pub async fn sftp_update_settings(
 pub struct IncompleteTransferInfo {
     pub transfer_id: String,
     pub transfer_type: &'static str,
+    pub is_directory: bool,
     pub source_path: String,
     pub destination_path: String,
     pub transferred_bytes: u64,

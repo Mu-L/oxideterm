@@ -573,11 +573,10 @@ fn sign_auth_payload_with_hash_alg(
     mut data: Vec<u8>,
 ) -> Result<Vec<u8>, LocalSignerError> {
     let signature = match key.key_data() {
-        KeypairData::Rsa(rsa_keypair) => SignatureSigner::try_sign(
-            &(rsa_keypair, hash_alg),
-            data.as_slice(),
-        )
-            .map_err(|error| LocalSignerError::Sign(error.to_string()))?,
+        KeypairData::Rsa(rsa_keypair) => {
+            SignatureSigner::try_sign(&(rsa_keypair, hash_alg), data.as_slice())
+                .map_err(|error| LocalSignerError::Sign(error.to_string()))?
+        }
         keypair => SignatureSigner::try_sign(keypair, data.as_slice())
             .map_err(|error| LocalSignerError::Sign(error.to_string()))?,
     };

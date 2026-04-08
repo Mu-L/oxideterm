@@ -115,10 +115,16 @@ fn find_binary(name: &str, fallbacks: &[&str]) -> Option<PathBuf> {
 
 fn detect_openssh_binaries() -> Option<OpenSshBinaries> {
     Some(OpenSshBinaries {
-        sshd: find_binary("sshd", &["/usr/sbin/sshd", "/usr/local/sbin/sshd"] )?,
-        ssh_agent: find_binary("ssh-agent", &["/usr/bin/ssh-agent", "/usr/local/bin/ssh-agent"] )?,
-        ssh_add: find_binary("ssh-add", &["/usr/bin/ssh-add", "/usr/local/bin/ssh-add"] )?,
-        ssh_keygen: find_binary("ssh-keygen", &["/usr/bin/ssh-keygen", "/usr/local/bin/ssh-keygen"] )?,
+        sshd: find_binary("sshd", &["/usr/sbin/sshd", "/usr/local/sbin/sshd"])?,
+        ssh_agent: find_binary(
+            "ssh-agent",
+            &["/usr/bin/ssh-agent", "/usr/local/bin/ssh-agent"],
+        )?,
+        ssh_add: find_binary("ssh-add", &["/usr/bin/ssh-add", "/usr/local/bin/ssh-add"])?,
+        ssh_keygen: find_binary(
+            "ssh-keygen",
+            &["/usr/bin/ssh-keygen", "/usr/local/bin/ssh-keygen"],
+        )?,
     })
 }
 
@@ -136,15 +142,22 @@ fn run_command(command: &mut Command, label: &str) -> Result<()> {
 }
 
 fn reserve_local_port() -> Result<u16> {
-    let listener = StdTcpListener::bind(("127.0.0.1", 0)).context("failed to reserve local port")?;
-    let port = listener.local_addr().context("failed to inspect reserved port")?.port();
+    let listener =
+        StdTcpListener::bind(("127.0.0.1", 0)).context("failed to reserve local port")?;
+    let port = listener
+        .local_addr()
+        .context("failed to inspect reserved port")?
+        .port();
     drop(listener);
     Ok(port)
 }
 
 async fn wait_for_tcp_listener(port: u16, label: &str, log_path: &Path) -> Result<()> {
     for _ in 0..50 {
-        if tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+        if tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
             return Ok(());
         }
         sleep(Duration::from_millis(100)).await;
@@ -240,9 +253,11 @@ async fn start_sshd(
     principals_file: Option<&Path>,
 ) -> Result<OpenSshServer> {
     let dir = tempfile::tempdir().context("failed to create sshd tempdir")?;
-    let host_key = generate_ed25519_keypair(&binaries.ssh_keygen, dir.path(), "ssh_host_ed25519_key")?;
+    let host_key =
+        generate_ed25519_keypair(&binaries.ssh_keygen, dir.path(), "ssh_host_ed25519_key")?;
     let authorized_keys = dir.path().join("authorized_keys");
-    fs::write(&authorized_keys, authorized_keys_contents).context("failed to write authorized_keys")?;
+    fs::write(&authorized_keys, authorized_keys_contents)
+        .context("failed to write authorized_keys")?;
     let port = reserve_local_port()?;
     let config_path = write_sshd_config(
         dir.path(),
@@ -361,9 +376,7 @@ fn openssh_client_config(port: u16, username: &str, auth: AuthMethod) -> SshConf
 }
 
 fn cert_accepted_algorithms(hash_name: &str) -> String {
-    format!(
-        "{hash_name},{hash_name}-cert-v01@openssh.com"
-    )
+    format!("{hash_name},{hash_name}-cert-v01@openssh.com")
 }
 
 fn test_username() -> String {
@@ -398,15 +411,19 @@ async fn test_agent_auth_against_rsa_sha2_256_only_openssh_server() -> Result<()
     .await?;
     let agent = start_ssh_agent(&binaries, &key_path).await?;
 
-    let session = SshClient::new(openssh_client_config(server.port, &username, AuthMethod::Agent))
-        .connect(None)
-        .await
-        .with_context(|| {
-            format!(
-                "agent auth against rsa-sha2-256-only server failed; sshd log: {}",
-                fs::read_to_string(&server.log_path).unwrap_or_default()
-            )
-        })?;
+    let session = SshClient::new(openssh_client_config(
+        server.port,
+        &username,
+        AuthMethod::Agent,
+    ))
+    .connect(None)
+    .await
+    .with_context(|| {
+        format!(
+            "agent auth against rsa-sha2-256-only server failed; sshd log: {}",
+            fs::read_to_string(&server.log_path).unwrap_or_default()
+        )
+    })?;
 
     drop(session);
     drop(agent);
@@ -438,15 +455,19 @@ async fn test_agent_auth_against_rsa_sha2_512_only_openssh_server() -> Result<()
     .await?;
     let agent = start_ssh_agent(&binaries, &key_path).await?;
 
-    let session = SshClient::new(openssh_client_config(server.port, &username, AuthMethod::Agent))
-        .connect(None)
-        .await
-        .with_context(|| {
-            format!(
-                "agent auth against rsa-sha2-512-only server failed; sshd log: {}",
-                fs::read_to_string(&server.log_path).unwrap_or_default()
-            )
-        })?;
+    let session = SshClient::new(openssh_client_config(
+        server.port,
+        &username,
+        AuthMethod::Agent,
+    ))
+    .connect(None)
+    .await
+    .with_context(|| {
+        format!(
+            "agent auth against rsa-sha2-512-only server failed; sshd log: {}",
+            fs::read_to_string(&server.log_path).unwrap_or_default()
+        )
+    })?;
 
     drop(session);
     drop(agent);
@@ -465,7 +486,8 @@ async fn test_certificate_auth_against_rsa_sha2_256_only_openssh_server() -> Res
     let (cert_material, ca_public_key) = generate_certificate_material(&binaries, &username)?;
     let principals_dir = tempfile::tempdir().context("failed to create principals tempdir")?;
     let principals_file = principals_dir.path().join("authorized_principals");
-    fs::write(&principals_file, format!("{username}\n")).context("failed to write principals file")?;
+    fs::write(&principals_file, format!("{username}\n"))
+        .context("failed to write principals file")?;
 
     let server = start_sshd(
         &binaries,
@@ -511,7 +533,8 @@ async fn test_certificate_auth_against_rsa_sha2_512_only_openssh_server() -> Res
     let (cert_material, ca_public_key) = generate_certificate_material(&binaries, &username)?;
     let principals_dir = tempfile::tempdir().context("failed to create principals tempdir")?;
     let principals_file = principals_dir.path().join("authorized_principals");
-    fs::write(&principals_file, format!("{username}\n")).context("failed to write principals file")?;
+    fs::write(&principals_file, format!("{username}\n"))
+        .context("failed to write principals file")?;
 
     let server = start_sshd(
         &binaries,

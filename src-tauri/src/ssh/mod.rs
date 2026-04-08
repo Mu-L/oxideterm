@@ -24,10 +24,10 @@ mod error;
 mod handle_owner;
 pub mod keyboard_interactive;
 pub mod known_hosts;
-pub mod preflight;
-mod proxy;
 #[cfg(all(test, unix))]
 mod openssh_auth_integration_tests;
+pub mod preflight;
+mod proxy;
 #[cfg(test)]
 mod proxy_integration_tests;
 mod session;

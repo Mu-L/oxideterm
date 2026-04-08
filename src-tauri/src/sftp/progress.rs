@@ -23,6 +23,10 @@ pub struct StoredTransferProgress {
     /// Transfer type
     pub transfer_type: TransferType,
 
+    /// Transfer strategy (file vs directory mode)
+    #[serde(default)]
+    pub strategy: TransferStrategy,
+
     /// Source path (local for upload, remote for download)
     pub source_path: PathBuf,
 
@@ -53,6 +57,16 @@ pub struct StoredTransferProgress {
 pub enum TransferType {
     Upload,
     Download,
+}
+
+/// Transfer strategy for persistence and resume routing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TransferStrategy {
+    #[default]
+    File,
+    DirectoryRecursive,
+    DirectoryTar,
 }
 
 /// Transfer status
@@ -89,6 +103,10 @@ impl StoredTransferProgress {
         self.status == TransferStatus::Active
     }
 
+    pub fn is_directory(&self) -> bool {
+        self.strategy != TransferStrategy::File
+    }
+
     /// Create a new transfer progress record
     pub fn new(
         transfer_id: String,
@@ -101,6 +119,7 @@ impl StoredTransferProgress {
         Self {
             transfer_id,
             transfer_type,
+            strategy: TransferStrategy::File,
             source_path,
             destination_path,
             transferred_bytes: 0,
@@ -572,6 +591,7 @@ mod tests {
         let progress = StoredTransferProgress {
             transfer_id: "test".to_string(),
             transfer_type: TransferType::Download,
+            strategy: TransferStrategy::File,
             source_path: "/remote/file.txt".into(),
             destination_path: "/local/file.txt".into(),
             transferred_bytes: 1024,
@@ -610,5 +630,23 @@ mod tests {
         progress.mark_completed();
         assert!(!progress.is_active());
         assert!(!progress.is_incomplete());
+    }
+
+    #[test]
+    fn test_directory_strategy_defaults_and_detection() {
+        let mut progress = StoredTransferProgress::new(
+            "test-dir".to_string(),
+            TransferType::Upload,
+            "/local/dir".into(),
+            "/remote/dir".into(),
+            0,
+            "session-1".to_string(),
+        );
+
+        assert_eq!(progress.strategy, TransferStrategy::File);
+        assert!(!progress.is_directory());
+
+        progress.strategy = TransferStrategy::DirectoryTar;
+        assert!(progress.is_directory());
     }
 }

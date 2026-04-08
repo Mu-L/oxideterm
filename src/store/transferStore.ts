@@ -73,6 +73,10 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     set((state) => {
       const transfer = state.transfers.get(id);
       if (!transfer) return state;
+
+      if (transfer.state === 'completed' || transfer.state === 'cancelled' || transfer.state === 'error') {
+        return state;
+      }
       
       const newTransfers = new Map(state.transfers);
       

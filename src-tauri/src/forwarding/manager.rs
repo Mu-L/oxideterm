@@ -993,8 +993,8 @@ mod tests {
     #[tokio::test]
     async fn test_restart_forward_keeps_rule_when_restart_fails() {
         let manager = create_test_manager();
-        let rule = ForwardRule::local("256.256.256.256", 8080, "localhost", 3000)
-            .with_id("rule-restart");
+        let rule =
+            ForwardRule::local("256.256.256.256", 8080, "localhost", 3000).with_id("rule-restart");
         manager
             .stopped_forwards
             .write()

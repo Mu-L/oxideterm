@@ -194,9 +194,18 @@ mod tests {
 
     #[test]
     fn parse_forward_type_accepts_supported_variants() {
-        assert!(matches!(parse_forward_type("local"), Ok(ForwardType::Local)));
-        assert!(matches!(parse_forward_type("remote"), Ok(ForwardType::Remote)));
-        assert!(matches!(parse_forward_type("dynamic"), Ok(ForwardType::Dynamic)));
+        assert!(matches!(
+            parse_forward_type("local"),
+            Ok(ForwardType::Local)
+        ));
+        assert!(matches!(
+            parse_forward_type("remote"),
+            Ok(ForwardType::Remote)
+        ));
+        assert!(matches!(
+            parse_forward_type("dynamic"),
+            Ok(ForwardType::Dynamic)
+        ));
     }
 
     #[test]

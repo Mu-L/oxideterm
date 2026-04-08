@@ -57,6 +57,11 @@ import { homeDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { registerSftpContext, unregisterSftpContext } from '../../lib/sftpContextRegistry';
 import { normalizeTransferFailure, resolveTransferCompletionUpdate } from './transferCompletion';
+import {
+  cleanupPreviewResource,
+  findTransferForProgressEvent,
+  getTransferCompletionRefreshPlan,
+} from './sftpViewHelpers';
 
 // 🔴 Key-Driven: 全局路径记忆 Map — keyed by nodeId (stable across reconnects)
 const sftpPathMemory = new Map<string, string>();
@@ -100,6 +105,25 @@ interface TransferCompleteEvent {
     success: boolean;
     error?: string;
 }
+
+type PreviewFileState = {
+  name: string;
+  path: string;
+  type: 'text' | 'image' | 'video' | 'audio' | 'pdf' | 'office' | 'hex' | 'too-large' | 'unsupported';
+  data: string;
+  mimeType?: string;
+  language?: string | null;
+  encoding?: string;
+  assetSrc?: string;
+  tempPath?: string;
+  hexOffset?: number;
+  hexTotalSize?: number;
+  hexHasMore?: boolean;
+  recommendDownload?: boolean;
+  maxSize?: number;
+  fileSize?: number;
+  reason?: string;
+};
 
 // Format file size to human readable format
 const formatFileSize = (bytes: number): string => {
@@ -740,32 +764,11 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
   const [remoteLastSelected, setRemoteLastSelected] = useState<string | null>(null);
 
   // Preview State
-  const [previewFile, setPreviewFile] = useState<{
-    name: string;
-    path: string;
-    type: 'text' | 'image' | 'video' | 'audio' | 'pdf' | 'office' | 'hex' | 'too-large' | 'unsupported';
-    data: string;
-    mimeType?: string;
-    language?: string | null;
-    encoding?: string; // Detected file encoding
-    /** asset:// URL for streaming media from a temp file (set when backend returns AssetFile) */
-    assetSrc?: string;
-    /** Raw local path of the temp file, for cleanup */
-    tempPath?: string;
-    // Hex specific
-    hexOffset?: number;
-    hexTotalSize?: number;
-    hexHasMore?: boolean;
-    // Too large specific
-    recommendDownload?: boolean;
-    maxSize?: number;
-    fileSize?: number;
-    // Unsupported specific
-    reason?: string;
-  } | null>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewFileState | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [hexLoadingMore, setHexLoadingMore] = useState(false);
   const [sftpPdfZoom, setSftpPdfZoom] = useState(1);
+  const previewFileRef = useRef<PreviewFileState | null>(null);
 
   // Dialog States
   const [renameDialog, setRenameDialog] = useState<{oldName: string, isRemote: boolean} | null>(null);
@@ -1284,6 +1287,32 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
   // Get transfer store actions
   const { addTransfer, updateProgress, setTransferState, getAllTransfers } = useTransferStore();
 
+  useEffect(() => {
+    previewFileRef.current = previewFile;
+  }, [previewFile]);
+
+  const applyPreviewFile = useCallback(async (nextPreview: PreviewFileState | null) => {
+    if (previewFileRef.current?.tempPath && previewFileRef.current.tempPath !== nextPreview?.tempPath) {
+      await cleanupPreviewResource(previewFileRef.current, cleanupSftpPreviewTemp);
+    }
+
+    previewFileRef.current = nextPreview;
+    setPreviewFile(nextPreview);
+  }, []);
+
+  const closePreview = useCallback(async () => {
+    await cleanupPreviewResource(previewFileRef.current, cleanupSftpPreviewTemp);
+    previewFileRef.current = null;
+    setPreviewFile(null);
+    setSftpPdfZoom(1);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      void cleanupPreviewResource(previewFileRef.current, cleanupSftpPreviewTemp);
+    };
+  }, []);
+
   // Event Listeners for Transfer Progress
   useEffect(() => {
       // 使用 mounted 标志防止组件卸载后仍处理事件
@@ -1296,22 +1325,12 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
         if (!mounted) return; // 组件已卸载，忽略事件
         
         const { id, remote_path, local_path, transferred_bytes, total_bytes, speed } = event.payload;
-        // Prefer matching by transfer_id for accuracy; fall back to path matching
         const transfers = getAllTransfers();
-        const normalizePath = (p: string) => p.replace(/\/+/g, '/').replace(/\/$/, '');
-        
-        let match = transfers.find(t => t.id === id);
-        
-        if (!match) {
-          // Fallback: match by exact normalized paths
-          const normalizedRemote = normalizePath(remote_path);
-          const normalizedLocal = normalizePath(local_path);
-          match = transfers.find(t => {
-            const tRemote = normalizePath(t.remotePath);
-            const tLocal = normalizePath(t.localPath);
-            return tRemote === normalizedRemote || tLocal === normalizedLocal;
-          });
-        }
+        const match = findTransferForProgressEvent(transfers, {
+          id,
+          remote_path,
+          local_path,
+        });
         
         if (match) {
           updateProgress(match.id, transferred_bytes, total_bytes, speed);
@@ -1336,9 +1355,13 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
 
         if (nextUpdate?.state === 'completed') {
           setTransferState(transfer_id, 'completed');
-          // Refresh file lists
-          refreshLocalFiles();
-          nodeSftpListDir(nodeId, remotePath).then(setRemoteFiles);
+          const refreshPlan = getTransferCompletionRefreshPlan(transfer?.direction);
+          if (refreshPlan.refreshLocal) {
+            refreshLocalFiles();
+          }
+          if (refreshPlan.refreshRemote) {
+            nodeSftpListDir(nodeId, remotePath).then(setRemoteFiles);
+          }
         } else if (nextUpdate?.state === 'error') {
           setTransferState(transfer_id, 'error', nextUpdate.error);
         }
@@ -1784,7 +1807,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
           
           // Handle all response types from backend
           if ('TooLarge' in content) {
-              setPreviewFile({
+              await applyPreviewFile({
                   name: file.name,
                   path: fullPath,
                   type: 'too-large',
@@ -1797,7 +1820,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
           }
           
           if ('Unsupported' in content) {
-              setPreviewFile({
+              await applyPreviewFile({
                   name: file.name,
                   path: fullPath,
                   type: 'unsupported',
@@ -1809,7 +1832,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
           }
           
           if ('Text' in content) {
-              setPreviewFile({
+              await applyPreviewFile({
                   name: file.name,
                   path: fullPath,
                   type: 'text',
@@ -1822,7 +1845,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
           }
           
           if ('Image' in content) {
-              setPreviewFile({
+              await applyPreviewFile({
                   name: file.name,
                   path: fullPath,
                   type: 'image',
@@ -1840,7 +1863,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
               const typeMap: Record<string, 'image' | 'video' | 'audio' | 'pdf' | 'office'> = {
                   image: 'image', video: 'video', audio: 'audio', pdf: 'pdf', office: 'office',
               };
-              setPreviewFile({
+                await applyPreviewFile({
                   name: file.name,
                   path: fullPath,
                   type: typeMap[kind] || 'unsupported',
@@ -1853,7 +1876,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
           }
 
           if ('Hex' in content) {
-              setPreviewFile({
+              await applyPreviewFile({
                   name: file.name,
                   path: fullPath,
                   type: 'hex',
@@ -2083,12 +2106,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
       {/* Preview Dialog */}
       <Dialog open={!!previewFile} onOpenChange={(open) => {
         if (!open) {
-          // Clean up temp file if the preview used an asset:// stream
-          if (previewFile?.tempPath) {
-            cleanupSftpPreviewTemp(previewFile.tempPath).catch(() => {});
-          }
-          setPreviewFile(null);
-          setSftpPdfZoom(1);
+          void closePreview();
         }
       }}>
         <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 gap-0" aria-describedby="preview-desc">
@@ -2263,7 +2281,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
                               language: previewFile.language || null,
                               encoding: previewFile.encoding || 'UTF-8',
                             });
-                            setPreviewFile(null);
+                            void closePreview();
                           }
                         }}
                         title={t('editor.edit_mode')}
@@ -2288,14 +2306,14 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
                             const localDest = `${localPath}/${previewFile.name}`;
                             await nodeSftpDownload(nodeId, previewFile.path, localDest);
                             refreshLocalFiles();
-                            setPreviewFile(null);
+                          await closePreview();
                         } catch (e) {
                             console.error("Download failed:", e);
                         }
                     }}>
                         <Download className="h-3 w-3 mr-2" /> {t('sftp.preview.download')}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setPreviewFile(null)}>{t('sftp.preview.close')}</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void closePreview()}>{t('sftp.preview.close')}</Button>
                 </div>
             </DialogFooter>
         </DialogContent>

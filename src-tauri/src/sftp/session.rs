@@ -960,7 +960,7 @@ impl SftpSession {
                 "download_dir_inner: max recursion depth {} reached at {}, likely symlink cycle",
                 MAX_DEPTH, remote_path
             );
-            return Ok(0);
+            return Err(recursion_depth_error("download", remote_path, MAX_DEPTH));
         }
 
         let entries = self
@@ -1255,7 +1255,7 @@ impl SftpSession {
                 "upload_dir_inner: max recursion depth {} reached at {:?}, likely symlink cycle",
                 MAX_DEPTH, local_path
             );
-            return Ok(0);
+            return Err(recursion_depth_error("upload", local_path, MAX_DEPTH));
         }
 
         let mut entries = tokio::fs::read_dir(local_path)
@@ -2490,6 +2490,13 @@ impl SftpSession {
     }
 }
 
+fn recursion_depth_error(direction: &str, path: &str, max_depth: u32) -> SftpError {
+    SftpError::TransferError(format!(
+        "{} directory transfer exceeded max recursion depth {} at {}",
+        direction, max_depth, path
+    ))
+}
+
 /// Registry of active SFTP sessions
 pub struct SftpRegistry {
     sessions: RwLock<HashMap<String, Arc<tokio::sync::Mutex<SftpSession>>>>,
@@ -2547,5 +2554,24 @@ impl SftpRegistry {
 impl Default for SftpRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::recursion_depth_error;
+    use crate::sftp::error::SftpError;
+
+    #[test]
+    fn recursion_depth_error_is_not_silent_success() {
+        let error = recursion_depth_error("download", "/remote/loop", 64);
+
+        match error {
+            SftpError::TransferError(message) => {
+                assert!(message.contains("max recursion depth 64"));
+                assert!(message.contains("/remote/loop"));
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
     }
 }

@@ -881,6 +881,7 @@ export interface StoredTransferProgress {
 export interface IncompleteTransferInfo {
   transfer_id: string;
   transfer_type: TransferType;
+  is_directory: boolean;
   source_path: string;
   destination_path: string;
   transferred_bytes: number;

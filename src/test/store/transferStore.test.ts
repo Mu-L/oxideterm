@@ -76,6 +76,18 @@ describe('useTransferStore', () => {
     expect(transfer?.transferred).toBe(2048);
   });
 
+  it('ignores late progress for transfers that already reached a terminal state', () => {
+    useTransferStore.setState({
+      transfers: new Map([['tx-1', makeTransfer({ id: 'tx-1', state: 'completed', transferred: 500, size: 500 })]]),
+    });
+
+    useTransferStore.getState().updateProgress('tx-1', 250, 500, 42);
+
+    const transfer = useTransferStore.getState().transfers.get('tx-1');
+    expect(transfer?.state).toBe('completed');
+    expect(transfer?.transferred).toBe(500);
+  });
+
   it('interrupts only active or pending transfers for the selected node', () => {
     useTransferStore.setState({
       transfers: new Map([

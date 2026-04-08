@@ -61,6 +61,7 @@
       "skip_check": "跳过端口可用性检查（高级）",
       "checking_port": "正在检查端口可用性...",
       "port_required": "端口必填",
+      "port_invalid": "端口必须在 1 到 65535 之间",
       "desc": "示例: 本地=127.0.0.1:8080, 远程=localhost:3000 → 通过 localhost:8080 访问远程:3000"
     },
     "toast": {

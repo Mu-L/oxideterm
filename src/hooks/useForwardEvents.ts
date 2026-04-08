@@ -36,6 +36,11 @@ export interface ForwardEvent {
 
 export interface UseForwardEventsOptions {
   /**
+   * Whether the listener should be active.
+   * Use this to avoid subscribing before a node has a resolved terminal session.
+   */
+  enabled?: boolean;
+  /**
    * Session ID to filter events for (only events for this session will be handled).
    * If not provided, all events will be handled (useful for node-first components).
    */
@@ -75,6 +80,7 @@ export interface UseForwardEventsOptions {
  * ```
  */
 export function useForwardEvents({
+  enabled = true,
   sessionId,
   onStatusChanged,
   onStatsUpdated,
@@ -111,6 +117,10 @@ export function useForwardEvents({
   );
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     let mounted = true;
     let unlisten: (() => void) | null = null;
     let resolved = false;
@@ -143,5 +153,5 @@ export function useForwardEvents({
         setupPromise.then(() => unlisten?.());
       }
     };
-  }, [handleEvent]);
+  }, [enabled, handleEvent]);
 }

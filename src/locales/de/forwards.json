@@ -61,6 +61,7 @@
       "skip_check": "Port-Verfügbarkeitsprüfung überspringen (erweitert)",
       "checking_port": "Port-Verfügbarkeit wird geprüft...",
       "port_required": "Port ist erforderlich",
+      "port_invalid": "Port muss zwischen 1 und 65535 liegen",
       "desc": "Beispiel: Lokal=127.0.0.1:8080, Remote=localhost:3000 → Zugriff auf remote:3000 über localhost:8080"
     },
     "toast": {

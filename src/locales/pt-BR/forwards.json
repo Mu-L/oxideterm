@@ -61,6 +61,7 @@
       "skip_check": "Pular verificação de disponibilidade da porta (avançado)",
       "checking_port": "Verificando disponibilidade da porta...",
       "port_required": "A porta é obrigatória",
+      "port_invalid": "A porta deve estar entre 1 e 65535",
       "desc": "Exemplo: Local=127.0.0.1:8080, Remoto=localhost:3000 → Acessar remote:3000 via localhost:8080"
     },
     "toast": {

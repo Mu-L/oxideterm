@@ -61,6 +61,7 @@
       "skip_check": "포트 가용성 검사 건너뛰기 (고급)",
       "checking_port": "포트 가용성 확인 중...",
       "port_required": "포트는 필수입니다",
+      "port_invalid": "포트는 1에서 65535 사이여야 합니다",
       "desc": "예: Local=127.0.0.1:8080, Remote=localhost:3000 → localhost:8080을 통해 remote:3000 접근"
     },
     "toast": {

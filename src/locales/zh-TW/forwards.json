@@ -61,6 +61,7 @@
       "skip_check": "略過連接埠可用性檢查（進階）",
       "checking_port": "檢查連接埠可用性...",
       "port_required": "必須指定連接埠",
+      "port_invalid": "連接埠必須介於 1 到 65535 之間",
       "desc": "範例：本機=127.0.0.1:8080、遠端=localhost:3000 → 透過 localhost:8080 存取 remote:3000"
     },
     "toast": {

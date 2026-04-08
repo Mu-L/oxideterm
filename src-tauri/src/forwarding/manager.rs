@@ -545,18 +545,22 @@ impl ForwardingManager {
 
     /// Restart a stopped forward
     pub async fn restart_forward(&self, forward_id: &str) -> Result<ForwardRule, SshError> {
-        // Get the rule from stopped_forwards
+        // Clone the rule first so a failed restart does not permanently discard it.
         let rule = self
             .stopped_forwards
-            .write()
+            .read()
             .await
-            .remove(forward_id)
+            .get(forward_id)
+            .cloned()
             .ok_or_else(|| {
                 SshError::ConnectionFailed(format!("Stopped forward not found: {}", forward_id))
             })?;
 
         // Create a new forward with the same rule (keep the same ID)
-        self.create_forward(rule).await
+        let restarted = self.create_forward(rule).await?;
+
+        self.stopped_forwards.write().await.remove(forward_id);
+        Ok(restarted)
     }
 
     /// Update a stopped forward's configuration
@@ -984,5 +988,29 @@ mod tests {
         let err = manager.restart_forward("missing-rule").await.unwrap_err();
 
         assert!(err.to_string().contains("Stopped forward not found"));
+    }
+
+    #[tokio::test]
+    async fn test_restart_forward_keeps_rule_when_restart_fails() {
+        let manager = create_test_manager();
+        let rule = ForwardRule::local("256.256.256.256", 8080, "localhost", 3000)
+            .with_id("rule-restart");
+        manager
+            .stopped_forwards
+            .write()
+            .await
+            .insert(rule.id.clone(), rule.clone());
+
+        let err = manager.restart_forward("rule-restart").await.unwrap_err();
+
+        assert!(!err.to_string().is_empty());
+        let preserved = manager
+            .stopped_forwards
+            .read()
+            .await
+            .get("rule-restart")
+            .cloned();
+        assert!(preserved.is_some());
+        assert_eq!(preserved.unwrap().bind_port, 8080);
     }
 }

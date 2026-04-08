@@ -171,16 +171,33 @@ function flushMicrotasks() {
   return Promise.resolve().then(() => Promise.resolve());
 }
 
+function makeForwardRule(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'forward-1',
+    forward_type: 'local',
+    bind_address: '127.0.0.1',
+    bind_port: 8080,
+    target_host: 'localhost',
+    target_port: 3000,
+    status: 'active',
+    description: 'forward',
+    ...overrides,
+  };
+}
+
 async function loadStore() {
   const mod = await import('@/store/reconnectOrchestratorStore');
   return mod.useReconnectOrchestratorStore;
 }
 
 describe('reconnectOrchestratorStore', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.resetModules();
     vi.clearAllMocks();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     reconnectConfig.enabled = true;
     reconnectConfig.maxAttempts = 2;
@@ -212,6 +229,7 @@ describe('reconnectOrchestratorStore', () => {
   });
 
   afterEach(() => {
+    warnSpy.mockRestore();
     vi.useRealTimers();
   });
 
@@ -351,5 +369,75 @@ describe('reconnectOrchestratorStore', () => {
     store.getState().clearCompleted();
 
     expect(Array.from(store.getState().jobs.keys())).toEqual(['running']);
+  });
+
+  it('restores only non-stopped forward rules from the snapshot', async () => {
+    treeStoreMock.nodes.clear();
+    treeStoreMock.nodes.set(
+      'root',
+      makeUnifiedNode({
+        id: 'root',
+        runtime: { connectionId: 'conn-root', status: 'link-down', terminalIds: [], sftpSessionId: null },
+      }),
+    );
+    apiMocks.nodeListForwards
+      .mockResolvedValueOnce([
+        makeForwardRule({ id: 'active-1', status: 'active', bind_port: 8080 }),
+        makeForwardRule({ id: 'stopped-1', status: 'stopped', bind_port: 9090 }),
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const store = await loadStore();
+    store.getState().scheduleReconnect('root');
+
+    await vi.advanceTimersByTimeAsync(500);
+    await flushMicrotasks();
+
+    expect(apiMocks.nodeCreateForward).toHaveBeenCalledTimes(1);
+    expect(apiMocks.nodeCreateForward).toHaveBeenCalledWith(
+      expect.objectContaining({
+        node_id: 'root',
+        bind_port: 8080,
+      }),
+    );
+  });
+
+  it('continues restoring later forwards after one restore fails', async () => {
+    treeStoreMock.nodes.clear();
+    treeStoreMock.nodes.set(
+      'root',
+      makeUnifiedNode({
+        id: 'root',
+        runtime: { connectionId: 'conn-root', status: 'link-down', terminalIds: [], sftpSessionId: null },
+      }),
+    );
+    apiMocks.nodeListForwards
+      .mockResolvedValueOnce([
+        makeForwardRule({ id: 'forward-1', bind_port: 8080, description: 'first' }),
+        makeForwardRule({ id: 'forward-2', bind_port: 9090, description: 'second' }),
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    apiMocks.nodeCreateForward
+      .mockRejectedValueOnce(new Error('bind failed'))
+      .mockResolvedValueOnce(undefined);
+
+    const store = await loadStore();
+    store.getState().scheduleReconnect('root');
+
+    await vi.advanceTimersByTimeAsync(500);
+    await flushMicrotasks();
+
+    expect(apiMocks.nodeCreateForward).toHaveBeenCalledTimes(2);
+    expect(apiMocks.nodeCreateForward).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        node_id: 'root',
+        bind_port: 9090,
+      }),
+    );
+    expect(store.getState().getJob('root')?.status).toBe('done');
   });
 });

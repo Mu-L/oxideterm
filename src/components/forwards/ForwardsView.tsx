@@ -22,6 +22,8 @@ import { useTabBgActive } from '../../hooks/useTabBackground';
 import { usePortDetection } from '../../hooks/usePortDetection';
 import { PortDetectionBanner } from './PortDetectionBanner';
 import { topologyResolver } from '../../lib/topologyResolver';
+import { useSessionTreeStore } from '../../store/sessionTreeStore';
+import { validateForwardForm } from './forwardFormValidation';
 
 // Type guard for ForwardType using const type parameter (TS 5.0+)
 const FORWARD_TYPES = ['local', 'remote', 'dynamic'] as const;
@@ -50,6 +52,10 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
   const { state: nodeState } = useNodeState(nodeId);
   // State Gating: only allow IO when node is ready
   const nodeReady = nodeState.readiness === 'ready';
+  const forwardSessionId = useSessionTreeStore((state) => {
+    const node = state.getNode(nodeId);
+    return node?.terminalSessionId ?? state.getTerminalsForNode(nodeId)[0];
+  });
 
   // Smart port detection: resolve nodeId → connectionId for profiler events
   const connectionId = topologyResolver.getConnectionId(nodeId);
@@ -120,7 +126,8 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
 
   // Listen for forward events from backend (death reports, status changes)
   useForwardEvents({
-    // No sessionId filter — events are accepted for all sessions and matched by forward ID
+    enabled: Boolean(forwardSessionId),
+    sessionId: forwardSessionId,
     onStatusChanged: useCallback((forwardId: string, status: EventForwardStatus, error?: string) => {
       console.log(`[ForwardsView] Forward ${forwardId} status changed to ${status}`, error);
       
@@ -205,8 +212,13 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
 
   const handleCreateForward = async () => {
       setCreateError(null);
-      if (!bindPort || (forwardType !== 'dynamic' && !targetPort)) {
-          setCreateError(t('forwards.form.port_required'));
+      const validation = validateForwardForm({
+        forwardType,
+        bindPort,
+        targetPort,
+      });
+      if (validation.errorKey) {
+        setCreateError(t(validation.errorKey));
           return;
       }
 
@@ -216,9 +228,9 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
               node_id: nodeId,
               forward_type: forwardType,
               bind_address: bindAddress,
-              bind_port: parseInt(bindPort),
+          bind_port: validation.bindPort!,
               target_host: forwardType === 'dynamic' ? '0.0.0.0' : targetHost,
-              target_port: forwardType === 'dynamic' ? 0 : parseInt(targetPort),
+          target_port: forwardType === 'dynamic' ? 0 : validation.targetPort!,
               check_health: !skipHealthCheck
           });
           
@@ -397,6 +409,7 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
                                 size="icon" 
                                 variant="ghost" 
                                 className="h-7 w-7 text-theme-text-muted hover:text-yellow-400"
+                                aria-label={t('forwards.actions.stop')}
                                 onClick={() => api.nodeStopForward(nodeId, fw.id).then(fetchForwards)}
                               >
                                 <Square className="h-3 w-3 fill-current" />
@@ -418,6 +431,7 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
                                   size="icon" 
                                   variant="ghost" 
                                   className="h-7 w-7 text-theme-text-muted hover:text-green-400"
+                                  aria-label={t('forwards.actions.restart')}
                                   onClick={() => api.nodeRestartForward(nodeId, fw.id).then(fetchForwards)}
                                 >
                                   <Play className="h-3 w-3 fill-current" />
@@ -431,6 +445,7 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
                                   size="icon" 
                                   variant="ghost" 
                                   className="h-7 w-7 text-theme-text-muted hover:text-blue-400"
+                                  aria-label={t('forwards.actions.edit')}
                                   onClick={() => {
                                     setEditingForward(fw);
                                     // 使用独立的编辑状态，不影响创建表单
@@ -455,6 +470,7 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
                               size="icon" 
                               variant="ghost" 
                               className="h-7 w-7 text-theme-text-muted hover:text-red-400"
+                              aria-label={t('forwards.actions.delete')}
                               onClick={async () => {
                                 const confirmed = await confirm({
                                   title: t('forwards.actions.confirm_delete_title'),
@@ -670,14 +686,23 @@ export const ForwardsView = ({ nodeId }: { nodeId: string }) => {
                         <Button variant="ghost" onClick={() => setEditingForward(null)}>{t('forwards.form.cancel')}</Button>
                         <Button onClick={async () => {
                             setEditError(null);
+                          const validation = validateForwardForm({
+                            forwardType: editingForward.forward_type,
+                            bindPort: editBindPort,
+                            targetPort: editTargetPort,
+                          });
+                          if (validation.errorKey) {
+                            setEditError(t(validation.errorKey));
+                            return;
+                          }
                             try {
                                 await api.nodeUpdateForward({
                                     node_id: nodeId,
                                     forward_id: editingForward.id,
                                     bind_address: editBindAddress,
-                                    bind_port: parseInt(editBindPort),
-                                    target_host: editTargetHost,
-                                    target_port: parseInt(editTargetPort),
+                              bind_port: validation.bindPort,
+                              target_host: editingForward.forward_type === 'dynamic' ? undefined : editTargetHost,
+                              target_port: editingForward.forward_type === 'dynamic' ? undefined : validation.targetPort,
                                 });
                                 setEditingForward(null);
                                 fetchForwards();

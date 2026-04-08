@@ -61,6 +61,7 @@
       "skip_check": "Ignorer la vérification de disponibilité du port (avancé)",
       "checking_port": "Vérification de la disponibilité du port...",
       "port_required": "Le port est requis",
+      "port_invalid": "Le port doit être compris entre 1 et 65535",
       "desc": "Exemple : Local=127.0.0.1:8080, Distant=localhost:3000 → accéder à distant:3000 via localhost:8080"
     },
     "toast": {

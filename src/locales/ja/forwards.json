@@ -61,6 +61,7 @@
       "skip_check": "ポート利用可能チェックをスキップ（上級者向け）",
       "checking_port": "ポートの利用可能性を確認中...",
       "port_required": "ポートは必須です",
+      "port_invalid": "ポートは1から65535の範囲で指定してください",
       "desc": "例: ローカル=127.0.0.1:8080, リモート=localhost:3000 → localhost:8080経由でremote:3000にアクセス"
     },
     "toast": {

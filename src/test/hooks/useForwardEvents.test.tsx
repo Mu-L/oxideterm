@@ -150,4 +150,26 @@ describe('useForwardEvents', () => {
 
     expect(tauriForwardMocks.count('forward-event')).toBe(0);
   });
+
+  it('does not register a listener while disabled', () => {
+    renderHook(() => useForwardEvents({ enabled: false }));
+
+    expect(tauriForwardMocks.listen).not.toHaveBeenCalled();
+    expect(tauriForwardMocks.count('forward-event')).toBe(0);
+  });
+
+  it('registers and tears down the listener when enabled toggles', async () => {
+    const { rerender } = renderHook(
+      ({ enabled }) => useForwardEvents({ enabled }),
+      { initialProps: { enabled: false } },
+    );
+
+    expect(tauriForwardMocks.count('forward-event')).toBe(0);
+
+    rerender({ enabled: true });
+    await waitFor(() => expect(tauriForwardMocks.count('forward-event')).toBe(1));
+
+    rerender({ enabled: false });
+    await waitFor(() => expect(tauriForwardMocks.count('forward-event')).toBe(0));
+  });
 });

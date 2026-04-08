@@ -61,6 +61,7 @@
       "skip_check": "Bỏ qua kiểm tra khả dụng cổng (nâng cao)",
       "checking_port": "Đang kiểm tra khả dụng cổng...",
       "port_required": "Cổng là bắt buộc",
+      "port_invalid": "Cổng phải nằm trong khoảng từ 1 đến 65535",
       "desc": "Ví dụ: Local=127.0.0.1:8080, Remote=localhost:3000 → truy cập remote:3000 qua localhost:8080"
     },
     "toast": {

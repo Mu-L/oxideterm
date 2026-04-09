@@ -186,7 +186,12 @@ type TabItemProps = {
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
   onPointerCancel: () => void;
-  onCloseTab: (e: React.MouseEvent | null, tabId: string, sessionId: string | undefined, tabType: string) => void;
+  onCloseTab: (
+    e: React.MouseEvent | null,
+    tabId: string,
+    sessionId: string | undefined,
+    tabType: string,
+  ) => Promise<void>;
   onReconnect: (e: React.MouseEvent, sessionId: string) => void;
   onCancelReconnect: (e: React.MouseEvent, nodeId: string) => void;
   onCloseOtherTabs: (keepTabId: string) => void;
@@ -240,7 +245,7 @@ const TabItem = React.memo<TabItemProps>(({
       onMouseDown={(e) => {
         if (e.button === 1) {
           e.preventDefault();
-          onCloseTab(e, tab.id, tab.sessionId, tab.type);
+          void onCloseTab(e, tab.id, tab.sessionId, tab.type);
         }
       }}
       onClick={() => {
@@ -298,7 +303,7 @@ const TabItem = React.memo<TabItemProps>(({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                onClick={(e) => onCloseTab(e, tab.id, tab.sessionId, tab.type)}
+                  onClick={(e) => void onCloseTab(e, tab.id, tab.sessionId, tab.type)}
                 disabled={tab.sessionId ? closing === tab.sessionId : false}
                 className={cn(
                   "opacity-0 group-hover:opacity-100 hover:bg-theme-bg-hover rounded-md p-0.5 transition-opacity",
@@ -349,7 +354,7 @@ const TabItem = React.memo<TabItemProps>(({
         </>
       )}
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => onCloseTab(null, tab.id, tab.sessionId, tab.type)}>
+      <ContextMenuItem onSelect={() => void onCloseTab(null, tab.id, tab.sessionId, tab.type)}>
         {t('tabbar.close_tab')}
       </ContextMenuItem>
       <ContextMenuItem
@@ -603,9 +608,36 @@ export const TabBar = () => {
     orchestratorCancel(nodeId);
   };
 
+  const isRemoteTerminalTab = useCallback((tabType: string, sessionId?: string) => {
+    if (tabType !== 'terminal' || !sessionId) {
+      return false;
+    }
+
+    const session = useAppStore.getState().sessions.get(sessionId);
+    return !!session?.connectionId;
+  }, []);
+
   // 关闭 Tab 时释放后端资源
-  const handleCloseTab = async (e: React.MouseEvent | null, tabId: string, sessionId: string | undefined, tabType: string) => {
+  const handleCloseTab = async (
+    e: React.MouseEvent | null,
+    tabId: string,
+    sessionId: string | undefined,
+    tabType: string,
+    options?: { skipConfirm?: boolean },
+  ) => {
     e?.stopPropagation();
+    let shouldCloseTab = true;
+
+    if (!options?.skipConfirm && isRemoteTerminalTab(tabType, sessionId)) {
+      const confirmed = await confirm({
+        title: t('tabbar.confirm_close_terminal_title'),
+        description: t('tabbar.confirm_close_terminal_desc'),
+        variant: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
 
     // Handle local terminal tabs
     if (tabType === 'local_terminal' && sessionId) {
@@ -631,10 +663,13 @@ export const TabBar = () => {
         await closeTerminal(sessionId);
       } catch (error) {
         console.error('Failed to close local terminal session:', error);
+        shouldCloseTab = false;
       } finally {
         setClosing(null);
       }
-      closeTab(tabId);
+      if (shouldCloseTab) {
+        closeTab(tabId);
+      }
       return;
     }
 
@@ -657,32 +692,79 @@ export const TabBar = () => {
         }
       } catch (error) {
         console.error('Failed to close terminal session:', error);
+        shouldCloseTab = false;
       } finally {
         setClosing(null);
       }
+
+      if (shouldCloseTab) {
+        closeTab(tabId);
+      }
+      return;
     }
 
-    // 总是移除 Tab（即使后端调用失败）
     closeTab(tabId);
   };
 
   const handleCloseOtherTabs = async (keepTabId: string) => {
     const tabsToClose = tabs.filter(tab => tab.id !== keepTabId);
+    const remoteTerminalCount = tabsToClose.filter((tab) => isRemoteTerminalTab(tab.type, tab.sessionId)).length;
+    if (remoteTerminalCount > 0) {
+      const confirmed = await confirm({
+        title: t('tabbar.confirm_close_other_title'),
+        description: t('tabbar.confirm_close_other_desc', { count: tabsToClose.length }),
+        variant: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
     for (const tab of tabsToClose) {
-      await handleCloseTab(null, tab.id, tab.sessionId, tab.type);
+      await handleCloseTab(null, tab.id, tab.sessionId, tab.type, {
+        skipConfirm: remoteTerminalCount > 0 && isRemoteTerminalTab(tab.type, tab.sessionId),
+      });
     }
   };
 
   const handleCloseTabsToRight = async (fromIndex: number) => {
     const tabsToClose = tabs.slice(fromIndex + 1);
+    const remoteTerminalCount = tabsToClose.filter((tab) => isRemoteTerminalTab(tab.type, tab.sessionId)).length;
+    if (remoteTerminalCount > 0) {
+      const confirmed = await confirm({
+        title: t('tabbar.confirm_close_tabs_to_right_title'),
+        description: t('tabbar.confirm_close_tabs_to_right_desc', { count: tabsToClose.length }),
+        variant: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
     for (const tab of tabsToClose) {
-      await handleCloseTab(null, tab.id, tab.sessionId, tab.type);
+      await handleCloseTab(null, tab.id, tab.sessionId, tab.type, {
+        skipConfirm: remoteTerminalCount > 0 && isRemoteTerminalTab(tab.type, tab.sessionId),
+      });
     }
   };
 
   const handleCloseAllTabs = async () => {
+    const remoteTerminalCount = tabs.filter((tab) => isRemoteTerminalTab(tab.type, tab.sessionId)).length;
+    if (remoteTerminalCount > 0) {
+      const confirmed = await confirm({
+        title: t('tabbar.confirm_close_all_title'),
+        description: t('tabbar.confirm_close_all_desc', { count: tabs.length }),
+        variant: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
     for (const tab of [...tabs]) {
-      await handleCloseTab(null, tab.id, tab.sessionId, tab.type);
+      await handleCloseTab(null, tab.id, tab.sessionId, tab.type, {
+        skipConfirm: remoteTerminalCount > 0 && isRemoteTerminalTab(tab.type, tab.sessionId),
+      });
     }
   };
 

@@ -15,7 +15,7 @@
 
 import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { useAppStore } from '../store/appStore';
+import { removeConnectionsById, tabReferencesAnySession, useAppStore } from '../store/appStore';
 import { useTransferStore } from '../store/transferStore';
 import { useSessionTreeStore } from '../store/sessionTreeStore';
 import { useReconnectOrchestratorStore } from '../store/reconnectOrchestratorStore';
@@ -79,7 +79,8 @@ export function useConnectionEvents(): void {
         const unlistenStatus = await listen<ConnectionStatusEvent>('connection_status_changed', (event) => {
           if (!mounted) return;
           const { connection_id, status, affected_children } = event.payload;
-          console.log(`[ConnectionEvents] ${connection_id} -> ${status}`, { affected_children });
+          const affectedChildren = Array.isArray(affected_children) ? affected_children : [];
+          console.log(`[ConnectionEvents] ${connection_id} -> ${status}`, { affected_children: affectedChildren });
 
           // Structured log for diagnostics
           slog({
@@ -119,7 +120,7 @@ export function useConnectionEvents(): void {
             console.log(`[ConnectionEvents] 🔴 LINK_DOWN received for connection ${connection_id}`);
             
             // 1. 标记受影响的节点
-            const affectedNodeIds = topologyResolver.handleLinkDown(connection_id, affected_children);
+            const affectedNodeIds = topologyResolver.handleLinkDown(connection_id, affectedChildren);
 
             slog({
               component: 'ConnectionEvents',
@@ -127,7 +128,7 @@ export function useConnectionEvents(): void {
               connectionId: connection_id,
               nodeId: topologyResolver.getNodeId(connection_id) ?? undefined,
               outcome: 'ok',
-              detail: `affected=${affectedNodeIds.length} children=${affected_children.length}`,
+              detail: `affected=${affectedNodeIds.length} children=${affectedChildren.length}`,
             });
 
             if (affectedNodeIds.length > 0) {
@@ -161,48 +162,46 @@ export function useConnectionEvents(): void {
           if (status === 'disconnected') {
             const sessions = sessionsRef.current;
             const appStore = useAppStore.getState();
+            const disconnectedConnectionIds = new Set([connection_id, ...affectedChildren]);
             const sessionIdsToClose: string[] = [];
+            const disconnectedNodeIds = new Set<string>();
+
+            for (const disconnectedConnectionId of disconnectedConnectionIds) {
+              const nodeId = topologyResolver.getNodeId(disconnectedConnectionId);
+              if (nodeId) {
+                disconnectedNodeIds.add(nodeId);
+              }
+            }
             
             sessions.forEach((session, sessionId) => {
-              if (session.connectionId === connection_id) {
+              if (session.connectionId && disconnectedConnectionIds.has(session.connectionId)) {
                 sessionIdsToClose.push(sessionId);
               }
             });
 
-            // 收集关联的 nodeId，用于关闭 SFTP/IDE/Forwards 等非终端标签页
-            const disconnNodeId = topologyResolver.getNodeId(connection_id);
-            
-            if (sessionIdsToClose.length > 0) {
-              const sessionIdSet = new Set(sessionIdsToClose);
-              const tabsToClose = appStore.tabs.filter(tab =>
-                (tab.sessionId && sessionIdSet.has(tab.sessionId)) ||
-                (tab.nodeId && disconnNodeId && tab.nodeId === disconnNodeId)
-              );
-              for (const tab of tabsToClose) {
-                appStore.closeTab(tab.id);
-              }
-            } else if (disconnNodeId) {
-              // 即使没有终端 session，也要关闭该节点的非终端标签页（SFTP/IDE/Forwards）
-              const nodeTabsToClose = appStore.tabs.filter(tab =>
-                tab.nodeId && tab.nodeId === disconnNodeId
-              );
-              for (const tab of nodeTabsToClose) {
-                appStore.closeTab(tab.id);
-              }
+            const sessionIdSet = new Set(sessionIdsToClose);
+            const tabsToClose = appStore.tabs.filter((tab) =>
+              tabReferencesAnySession(tab, sessionIdSet) ||
+              (!!tab.nodeId && disconnectedNodeIds.has(tab.nodeId))
+            );
+            for (const tab of tabsToClose) {
+              appStore.closeTab(tab.id);
             }
             
             // 中断 SFTP 传输
-            if (disconnNodeId) {
-              interruptTransfersByNode(disconnNodeId, i18n.t('connections.events.connection_closed'));
+            for (const disconnectedNodeId of disconnectedNodeIds) {
+              interruptTransfersByNode(disconnectedNodeId, i18n.t('connections.events.connection_closed'));
+              topologyResolver.unregister(disconnectedNodeId);
             }
             
-            // Strong Consistency Sync: 确保 appStore.connections 反映断开状态
-            useAppStore.getState().refreshConnections().catch((e) => {
-              console.warn('[ConnectionEvents] refreshConnections after disconnect failed:', e);
-            });
+            useAppStore.setState((state) => ({
+              connections: removeConnectionsById(state.connections, disconnectedConnectionIds),
+            }));
             
             // 清理 profiler 事件监听器（避免断开后残留 Tauri 事件订阅）
-            useProfilerStore.getState().removeConnection(connection_id);
+            for (const disconnectedConnectionId of disconnectedConnectionIds) {
+              useProfilerStore.getState().removeConnection(disconnectedConnectionId);
+            }
           }
         });
         

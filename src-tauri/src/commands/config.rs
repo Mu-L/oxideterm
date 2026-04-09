@@ -16,7 +16,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use zeroize::Zeroizing;
 
 use super::forwarding::ForwardingRegistry;
@@ -595,6 +595,7 @@ fn build_saved_auth_for_update(
 /// Save (create or update) a connection
 #[tauri::command]
 pub async fn save_connection(
+    app_handle: tauri::AppHandle,
     state: State<'_, Arc<ConfigState>>,
     request: SaveConnectionRequest,
 ) -> Result<ConnectionInfo, String> {
@@ -621,6 +622,9 @@ pub async fn save_connection(
                     conn.options.jump_host = None;
                 }
 
+                app_handle
+                    .emit("connection:update", "saved")
+                    .map_err(|e| format!("Failed to emit connection:update: {}", e))?;
                 let mut proxy_chain = conn.proxy_chain.clone();
 
                 if let Some(jump_conn) = jump_conn {
@@ -1001,6 +1005,7 @@ mod tests {
 /// Delete a connection
 #[tauri::command]
 pub async fn delete_connection(
+    app_handle: tauri::AppHandle,
     state: State<'_, Arc<ConfigState>>,
     forwarding_registry: State<'_, Arc<ForwardingRegistry>>,
     id: String,
@@ -1019,6 +1024,10 @@ pub async fn delete_connection(
     forwarding_registry.delete_owned_forwards(&id).await?;
 
     state.save().await?;
+
+    app_handle
+        .emit("connection:update", "deleted")
+        .map_err(|e| format!("Failed to emit connection:update: {}", e))?;
 
     Ok(())
 }

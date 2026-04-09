@@ -168,6 +168,157 @@ function loadPersistedUIState(): { tabs: Tab[]; activeTabId: string | null } {
 
 const persistedState = loadPersistedUIState();
 
+type SyntheticConnectionSeed = {
+  id: string;
+  host: string;
+  port: number;
+  username: string;
+  parentConnectionId?: string | null;
+  terminalIds?: string[];
+  sftpSessionId?: string | null;
+  forwardIds?: string[];
+  keepAlive?: boolean;
+  state?: SshConnectionState;
+  remoteEnv?: RemoteEnvInfo;
+  refCount?: number;
+  createdAt?: string;
+  lastActive?: string;
+};
+
+function uniqueStringValues(values: Array<string | null | undefined>): string[] {
+  return Array.from(
+    new Set(values.filter((value): value is string => !!value)),
+  );
+}
+
+function computeSyntheticRefCount(
+  terminalIds: string[],
+  sftpSessionId?: string,
+  forwardIds: string[] = [],
+): number {
+  return terminalIds.length + (sftpSessionId ? 1 : 0) + forwardIds.length;
+}
+
+function nextConnectionStateAfterTerminalRemoval(
+  connection: SshConnectionInfo,
+  nextRefCount: number,
+): SshConnectionState {
+  if (
+    nextRefCount === 0 &&
+    !connection.sftpSessionId &&
+    connection.forwardIds.length === 0 &&
+    (connection.state === 'active' || connection.state === 'idle')
+  ) {
+    return 'idle';
+  }
+
+  return connection.state;
+}
+
+export function upsertSyntheticConnection(
+  connections: ReadonlyMap<string, SshConnectionInfo>,
+  seed: SyntheticConnectionSeed,
+): Map<string, SshConnectionInfo> {
+  const next = new Map(connections);
+  const existing = next.get(seed.id);
+  const terminalIds = uniqueStringValues([
+    ...(existing?.terminalIds ?? []),
+    ...(seed.terminalIds ?? []),
+  ]);
+  const forwardIds = uniqueStringValues([
+    ...(existing?.forwardIds ?? []),
+    ...(seed.forwardIds ?? []),
+  ]);
+  const sftpSessionId = seed.sftpSessionId === undefined
+    ? existing?.sftpSessionId
+    : seed.sftpSessionId || undefined;
+  const computedRefCount = computeSyntheticRefCount(
+    terminalIds,
+    sftpSessionId,
+    forwardIds,
+  );
+  const now = seed.lastActive ?? new Date().toISOString();
+
+  next.set(seed.id, {
+    id: seed.id,
+    host: seed.host,
+    port: seed.port,
+    username: seed.username,
+    state: seed.state ?? existing?.state ?? 'active',
+    refCount: seed.refCount ?? computedRefCount,
+    keepAlive: seed.keepAlive ?? existing?.keepAlive ?? false,
+    createdAt: seed.createdAt ?? existing?.createdAt ?? now,
+    lastActive: now,
+    terminalIds,
+    sftpSessionId,
+    forwardIds,
+    parentConnectionId: seed.parentConnectionId ?? existing?.parentConnectionId,
+    remoteEnv: seed.remoteEnv ?? existing?.remoteEnv,
+  });
+
+  return next;
+}
+
+export function removeConnectionsById(
+  connections: ReadonlyMap<string, SshConnectionInfo>,
+  connectionIds: Iterable<string>,
+): Map<string, SshConnectionInfo> {
+  const next = new Map(connections);
+  for (const connectionId of connectionIds) {
+    next.delete(connectionId);
+  }
+  return next;
+}
+
+export function removeTerminalSessionsFromConnections(
+  connections: ReadonlyMap<string, SshConnectionInfo>,
+  sessions: ReadonlyMap<string, SessionInfo>,
+  sessionIds: Iterable<string>,
+): Map<string, SshConnectionInfo> {
+  const next = new Map(connections);
+  const sessionIdsByConnection = new Map<string, Set<string>>();
+
+  for (const sessionId of sessionIds) {
+    const session = sessions.get(sessionId);
+    if (!session?.connectionId) {
+      continue;
+    }
+
+    const ids = sessionIdsByConnection.get(session.connectionId) ?? new Set<string>();
+    ids.add(sessionId);
+    sessionIdsByConnection.set(session.connectionId, ids);
+  }
+
+  for (const [connectionId, removedSessionIds] of sessionIdsByConnection) {
+    const connection = next.get(connectionId);
+    if (!connection) {
+      continue;
+    }
+
+    const nextTerminalIds = connection.terminalIds.filter(
+      (terminalId) => !removedSessionIds.has(terminalId),
+    );
+    if (nextTerminalIds.length === connection.terminalIds.length) {
+      continue;
+    }
+
+    const nextRefCount = computeSyntheticRefCount(
+      nextTerminalIds,
+      connection.sftpSessionId,
+      connection.forwardIds,
+    );
+    next.set(connectionId, {
+      ...connection,
+      terminalIds: nextTerminalIds,
+      refCount: nextRefCount,
+      state: nextConnectionStateAfterTerminalRemoval(connection, nextRefCount),
+      lastActive: new Date().toISOString(),
+    });
+  }
+
+  return next;
+}
+
 export const useAppStore = create<AppStore>((set, get) => ({
   sessions: new Map(),
   connections: new Map(), // 新增：连接池状态
@@ -206,18 +357,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
   disconnectSsh: async (connectionId: string) => {
     try {
       await api.sshDisconnect(connectionId);
+      const nodeId = topologyResolver.getNodeId(connectionId);
+      const terminalIdsToPurge = Array.from(get().sessions.entries())
+        .filter(([, session]) => session.connectionId === connectionId)
+        .map(([sessionId]) => sessionId);
       
       set((state) => {
         const newConnections = new Map(state.connections);
         newConnections.delete(connectionId);
-        
-        // 关闭所有关联的终端 Tab
-        const connection = state.connections.get(connectionId);
-        const terminalIds = connection?.terminalIds || [];
+
         const newSessions = new Map(state.sessions);
-        const newTabs = state.tabs.filter(t => {
-          if (t.sessionId && terminalIds.includes(t.sessionId)) {
-            newSessions.delete(t.sessionId);
+        const sessionIdSet = new Set<string>();
+        for (const [sessionId, session] of state.sessions) {
+          if (session.connectionId === connectionId) {
+            sessionIdSet.add(sessionId);
+            newSessions.delete(sessionId);
+          }
+        }
+
+        const newTabs = state.tabs.filter((tab) => {
+          if (tabReferencesAnySession(tab, sessionIdSet)) {
+            return false;
+          }
+          if (nodeId && tab.nodeId === nodeId) {
             return false;
           }
           return true;
@@ -235,6 +397,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
           activeTabId: newActiveId
         };
       });
+
+      for (const terminalId of terminalIdsToPurge) {
+        useSessionTreeStore.getState().purgeTerminalMapping(terminalId);
+      }
+
+      if (nodeId) {
+        topologyResolver.unregister(nodeId);
+      }
     } catch (error) {
       console.error('SSH disconnect failed:', error);
       throw error;
@@ -713,7 +883,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       for (const sid of allSessionIds) {
         newSessions.delete(sid);
       }
-      return { sessions: newSessions };
+      return {
+        sessions: newSessions,
+        connections: removeTerminalSessionsFromConnections(
+          state.connections,
+          state.sessions,
+          sshTerminalIds,
+        ),
+      };
     });
     
     // ========== Phase 4: 通知 sessionTreeStore 清理映射 ==========
@@ -767,7 +944,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         console.warn(`[closeTab] Failed to close terminal ${sid}:`, e);
       }
     }
-    
+
     // SSH 连接生命周期由后端 idle timer 管理，不在 closeTab 中断连
     // 用户可通过右键"断开"或后端空闲超时来断开 SSH
   },
@@ -1090,7 +1267,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 const session = newSessions.get(closedSessionId);
                 connectionId = session?.connectionId;
                 newSessions.delete(closedSessionId);
-                return { sessions: newSessions };
+                return {
+                  sessions: newSessions,
+                  connections: removeTerminalSessionsFromConnections(
+                    s.connections,
+                    s.sessions,
+                    [closedSessionId],
+                  ),
+                };
               });
 
               // Close backend terminal (PTY + WsBridge + refs)
@@ -1109,9 +1293,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
                   try {
                     await api.sshDisconnect(connectionId);
                     useAppStore.setState((s) => {
-                      const newConnections = new Map(s.connections);
-                      newConnections.delete(connectionId!);
-                      return { connections: newConnections };
+                      return {
+                        connections: removeConnectionsById(s.connections, [connectionId!]),
+                      };
                     });
                     console.log(`[closePane] SSH connection ${connectionId} disconnected (no remaining terminals)`);
                   } catch (e) {
@@ -1436,6 +1620,36 @@ export const useAppStore = create<AppStore>((set, get) => ({
     });
   }
 }));
+
+export function paneTreeHasAnySession(
+  node: PaneNode,
+  sessionIds: ReadonlySet<string>
+): boolean {
+  if (sessionIds.size === 0) {
+    return false;
+  }
+
+  if (node.type === 'leaf') {
+    return sessionIds.has(node.sessionId);
+  }
+
+  return node.children.some((child) => paneTreeHasAnySession(child, sessionIds));
+}
+
+export function tabReferencesAnySession(
+  tab: Tab,
+  sessionIds: ReadonlySet<string>
+): boolean {
+  if (sessionIds.size === 0) {
+    return false;
+  }
+
+  if (tab.sessionId && sessionIds.has(tab.sessionId)) {
+    return true;
+  }
+
+  return !!tab.rootPane && paneTreeHasAnySession(tab.rootPane, sessionIds);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Split Pane Tree Helper Functions

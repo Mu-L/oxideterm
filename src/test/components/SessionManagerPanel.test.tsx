@@ -97,8 +97,11 @@ vi.mock('@/components/sessionManager/ManagerToolbar', () => ({
 }));
 
 vi.mock('@/components/sessionManager/ConnectionTable', () => ({
-  ConnectionTable: ({ onConnect }: { onConnect: (id: string) => void }) => (
-    <button onClick={() => onConnect('conn-1')}>connect-row</button>
+  ConnectionTable: ({ onConnect, onDelete, connections }: { onConnect: (id: string) => void; onDelete: (conn: { id: string; name: string }) => void; connections: Array<{ id: string; name: string }> }) => (
+    <>
+      <button onClick={() => onConnect('conn-1')}>connect-row</button>
+      <button onClick={() => onDelete(connections[0])}>delete-row</button>
+    </>
   ),
 }));
 
@@ -136,6 +139,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 import { SessionManagerPanel } from '@/components/sessionManager/SessionManagerPanel';
+import { api } from '@/lib/api';
 
 describe('SessionManagerPanel', () => {
   beforeEach(() => {
@@ -154,5 +158,18 @@ describe('SessionManagerPanel', () => {
       expect(screen.getByTestId('connect-modal')).toHaveTextContent('conn-1');
     });
     expect(screen.queryByTestId('properties-modal')).toBeNull();
+  });
+
+  it('broadcasts saved connection changes after deleting a connection', async () => {
+    const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('delete-row'));
+
+    await waitFor(() => {
+      expect(api.deleteConnection).toHaveBeenCalledWith('conn-1');
+      expect(sessionManagerState.refresh).toHaveBeenCalled();
+      expect(dispatchEventSpy).toHaveBeenCalled();
+    });
   });
 });

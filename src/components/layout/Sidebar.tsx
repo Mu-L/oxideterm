@@ -46,7 +46,6 @@ import { FocusedNodeList } from '../sessions/FocusedNodeList';
 import { DrillDownDialog } from '../modals/DrillDownDialog';
 import { SavePathAsPresetDialog } from '../modals/SavePathAsPresetDialog';
 import { AddRootNodeDialog } from '../modals/AddRootNodeDialog';
-import { api } from '../../lib/api';
 import { connectToSaved } from '../../lib/connectToSaved';
 
 import { PluginSidebarRenderer } from '../plugin/PluginSidebarRenderer';
@@ -81,7 +80,6 @@ export const Sidebar = () => {
   const loadGroups = useAppStore((s) => s.loadGroups);
   const modals = useAppStore((s) => s.modals);
   const editingConnection = useAppStore((s) => s.editingConnection);
-  const refreshConnections = useAppStore((s) => s.refreshConnections);
   const openConnectionEditor = useAppStore((s) => s.openConnectionEditor);
 
   // SessionTree store
@@ -196,12 +194,23 @@ export const Sidebar = () => {
     loadGroups();
   }, []);
 
-  // Refresh saved connections when new ones are saved (e.g. from NewConnectionModal)
+  // Refresh saved connection-derived state after any saved connection mutation.
   useEffect(() => {
-    const handler = () => { loadSavedConnections(); loadGroups(); };
-    window.addEventListener('saved-connections-changed', handler);
-    return () => window.removeEventListener('saved-connections-changed', handler);
-  }, [loadSavedConnections, loadGroups]);
+    const refreshSavedConnectionState = () => {
+      void Promise.all([
+        loadSavedConnections(),
+        loadGroups(),
+        fetchTree(),
+      ]).catch((err) => {
+        console.error('Failed to refresh saved connection state:', err);
+      });
+    };
+
+    window.addEventListener('saved-connections-changed', refreshSavedConnectionState);
+    return () => {
+      window.removeEventListener('saved-connections-changed', refreshSavedConnectionState);
+    };
+  }, [fetchTree, loadGroups, loadSavedConnections]);
 
   // Load session tree on mount
   useEffect(() => {
@@ -268,44 +277,9 @@ export const Sidebar = () => {
         throw new Error('Connection ID not found after connect');
       }
       
-      // 3. 创建终端会话
-      const terminalResponse = await api.createTerminal({
-        connectionId: node.runtime.connectionId,
-        cols: 0,
-        rows: 0,
-      });
-
-      // 4. 把 session 添加到 appStore.sessions
-      useAppStore.setState((state) => {
-        const newSessions = new Map(state.sessions);
-        newSessions.set(terminalResponse.sessionId, terminalResponse.session);
-
-        // 更新连接的 terminalIds 和 refCount
-        const newConnections = new Map(state.connections);
-        const connection = newConnections.get(node.runtime.connectionId!);
-        if (connection) {
-          newConnections.set(node.runtime.connectionId!, {
-            ...connection,
-            terminalIds: [terminalResponse.sessionId],
-            refCount: 1,
-            state: 'active',
-          });
-        }
-
-        return { sessions: newSessions, connections: newConnections };
-      });
-
-      // 5. 关联终端会话到节点
-      await api.setTreeNodeTerminal(nodeId, terminalResponse.sessionId);
-
-      // 6. 刷新树和连接池
-      await Promise.all([
-        fetchTree(),
-        refreshConnections(),
-      ]);
-
-      // 7. 打开终端 tab
-      createTab('terminal', terminalResponse.sessionId);
+      const terminalId = await createTerminalForNode(nodeId, 0, 0);
+      await fetchTree();
+      createTab('terminal', terminalId);
       
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -356,7 +330,7 @@ export const Sidebar = () => {
       // 刷新树以显示错误状态
       await fetchTree();
     }
-  }, [fetchTree, refreshConnections, createTab, getNode, toast, t]);
+  }, [createTab, createTerminalForNode, fetchTree, getNode, toast, t]);
 
   const handleTreeDisconnect = useCallback(async (nodeId: string) => {
     const node = getNode(nodeId);
@@ -377,12 +351,10 @@ export const Sidebar = () => {
       // 3. Refresh the tree state
       await disconnectNode(nodeId);
 
-      // Refresh connection pool state
-      await refreshConnections();
     } catch (err) {
       console.error('Failed to disconnect tree node:', err);
     }
-  }, [getNode, disconnectNode, refreshConnections, confirm]);
+  }, [confirm, disconnectNode, getNode]);
 
   const handleTreeOpenSftp = useCallback(async (nodeId: string) => {
     const node = getNode(nodeId);

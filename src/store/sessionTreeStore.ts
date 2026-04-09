@@ -20,7 +20,12 @@ import { useReconnectOrchestratorStore } from './reconnectOrchestratorStore';
 import { topologyResolver } from '../lib/topologyResolver';
 import { useEventLogStore } from './eventLogStore';
 import { useSettingsStore } from './settingsStore';
-import { useAppStore } from './appStore';
+import {
+  removeConnectionsById,
+  removeTerminalSessionsFromConnections,
+  upsertSyntheticConnection,
+  useAppStore,
+} from './appStore';
 import type { 
   FlatNode, 
   SessionTreeSummary,
@@ -101,38 +106,12 @@ function isAlreadyConnectedError(error: unknown): boolean {
   return message.includes('already connected');
 }
 
-async function waitForConnectionInStore(
-  connectionId: string,
-  timeoutMs = 15000
-): Promise<void> {
-  if (useAppStore.getState().connections.has(connectionId)) {
-    return;
+function getNodeTerminalIds(node: FlatNode, nodeTerminalMap: Map<string, string[]>, nodeId: string): string[] {
+  const terminalIdSet = new Set(nodeTerminalMap.get(nodeId) || []);
+  if (node.terminalSessionId) {
+    terminalIdSet.add(node.terminalSessionId);
   }
-
-  await new Promise<void>((resolve, reject) => {
-    let finished = false;
-    const finish = (error?: Error) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timer);
-      unsubscribe();
-      if (error) {
-        reject(error);
-      } else {
-        resolve();
-      }
-    };
-
-    const timer = setTimeout(() => {
-      finish(new Error(`CONNECTION_SYNC_TIMEOUT:${connectionId}`));
-    }, timeoutMs);
-
-    const unsubscribe = useAppStore.subscribe((state) => {
-      if (state.connections.has(connectionId)) {
-        finish();
-      }
-    });
-  });
+  return Array.from(terminalIdSet);
 }
 
 // ============================================================================
@@ -545,16 +524,17 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
         }
         
         // 关闭关联的 Tab（异步导入 appStore 避免循环依赖）
-        const { useAppStore } = await import('./appStore');
+        const { tabReferencesAnySession, useAppStore } = await import('./appStore');
         const appState = useAppStore.getState();
         
         // 关闭终端 Tab（通过 sessionId 匹配）
         if (terminalIdsToClose.length > 0) {
-          for (const termId of terminalIdsToClose) {
-            const tab = appState.tabs.find(t => t.sessionId === termId);
-            if (tab) {
-              appState.closeTab(tab.id);
-            }
+          const terminalIdSet = new Set(terminalIdsToClose);
+          const tabsToClose = appState.tabs.filter((tab) =>
+            tabReferencesAnySession(tab, terminalIdSet)
+          );
+          for (const tab of tabsToClose) {
+            appState.closeTab(tab.id);
           }
         }
         
@@ -802,13 +782,16 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
       
       // 4. 关闭 appStore 中的相关 Tab
       if (sessionIdsToClose.length > 0) {
-        const { useAppStore } = await import('./appStore');
+        const { tabReferencesAnySession, useAppStore } = await import('./appStore');
         const appStore = useAppStore.getState();
         const sessionIdSet = new Set(sessionIdsToClose);
-        for (const tab of appStore.tabs) {
-          if (tab.sessionId && sessionIdSet.has(tab.sessionId)) {
-            appStore.closeTab(tab.id);
-          }
+        const affectedNodeIdSet = new Set(allAffectedNodes.map((n) => n.id));
+        const tabsToClose = appStore.tabs.filter((tab) =>
+          tabReferencesAnySession(tab, sessionIdSet) ||
+          (!!tab.nodeId && affectedNodeIdSet.has(tab.nodeId))
+        );
+        for (const tab of tabsToClose) {
+          appStore.closeTab(tab.id);
         }
       }
       
@@ -845,14 +828,16 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
         console.error('Failed to disconnect tree node:', e);
       }
       
-      // 8. 刷新树状态 + 连接状态 (Strong Consistency Sync)
+      const disconnectedConnectionIds = allAffectedNodes
+        .map((affectedNode) => affectedNode.sshConnectionId)
+        .filter((connectionId): connectionId is string => !!connectionId);
+
+      useAppStore.setState((state) => ({
+        connections: removeConnectionsById(state.connections, disconnectedConnectionIds),
+      }));
+
+      // 8. 刷新树状态
       await get().fetchTree();
-      try {
-        const { useAppStore } = await import('./appStore');
-        await useAppStore.getState().refreshConnections();
-      } catch (e) {
-        console.warn('[disconnectNode] refreshConnections failed:', e);
-      }
     },
     
     /**
@@ -1167,23 +1152,26 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
         )
       }));
       get().rebuildUnifiedNodes();
-      
-      // 🔴 Phase 5.0: 同步 appStore.connections，唤醒 SFTPView/TransferQueue
-      // 它们依赖 appStore.connections.get(connectionId)?.state 判断连接状态
-      try {
-        await useAppStore.getState().refreshConnections();
-        console.debug(`[connectNodeInternal] AppStore connections refreshed for ${response.sshConnectionId}`);
-      } catch (e) {
-        console.warn(`[connectNodeInternal] Failed to refresh AppStore connections:`, e);
-      }
-      
+
+      const parentConnectionId = node.parentId
+        ? get().getRawNode(node.parentId)?.sshConnectionId ?? undefined
+        : undefined;
+      const terminalIds = getNodeTerminalIds(node, get().nodeTerminalMap, nodeId);
+      useAppStore.setState((state) => ({
+        connections: upsertSyntheticConnection(state.connections, {
+          id: response.sshConnectionId,
+          host: node.host,
+          port: node.port,
+          username: node.username,
+          parentConnectionId,
+          terminalIds,
+          sftpSessionId: node.sftpSessionId,
+          state: terminalIds.length > 0 ? 'active' : 'idle',
+        }),
+      }));
+
       // 同步 appStore.sessions 中关联终端的 connectionId
       // 重连后 connectionId 变化，必须更新 sessions 以保持一致性
-      const terminalIdSet = new Set(get().nodeTerminalMap.get(nodeId) || []);
-      if (node.terminalSessionId) {
-        terminalIdSet.add(node.terminalSessionId);
-      }
-      const terminalIds = Array.from(terminalIdSet);
       if (terminalIds.length > 0) {
         useAppStore.setState((state) => {
           const newSessions = new Map(state.sessions);
@@ -1208,13 +1196,13 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
      * 重置节点状态（焦土式清理）
      * 
      * 执行顺序：
-     * 1. 关闭该节点的所有终端（调用后端）
-     * 2. 清理本地映射
-     * 3. 重置节点状态为 pending
+      * 1. 清理 appStore sessions
+      * 2. 清理本地映射
+      * 3. 重置节点状态为 pending
      * 
      * 异常处理：
-     * - 后端调用失败时记录警告但不中断流程
-     * - 确保本地状态一定被清理（即使后端失败）
+      * - 仅做本地清理，避免与后端断开流程重复销毁终端
+      * - 确保本地状态一定被清理
      */
     resetNodeState: async (nodeId: string): Promise<void> => {
       const node = get().getRawNode(nodeId);
@@ -1224,32 +1212,16 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
       }
       
       console.debug(`[resetNodeState] Resetting node ${nodeId}`);
-      
-      // ========== Phase 1: 后端物理销毁 ==========
-      
-      // 1a. 关闭该节点的所有终端
+
+      // ========== Phase 1: 收集现有终端 ==========
+
       const terminalIds = [...(get().nodeTerminalMap.get(nodeId) || [])];
-      
+
       // 也检查后端记录的 terminalSessionId
       if (node.terminalSessionId && !terminalIds.includes(node.terminalSessionId)) {
         terminalIds.push(node.terminalSessionId);
       }
-      
-      for (const terminalId of terminalIds) {
-        try {
-          await api.closeTerminal(terminalId);
-          console.debug(`[resetNodeState] Closed terminal ${terminalId}`);
-        } catch (e) {
-          // 终端可能已不存在，忽略错误
-          console.warn(`[resetNodeState] Failed to close terminal ${terminalId}:`, e);
-        }
-      }
-      
-      // 1b. SFTP 会话由 ConnectionEntry 管理，节点断开时自动清理
-      
-      // 1c. 短暂等待确保后端资源释放
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
+
       // ========== Phase 2: 清理 appStore sessions ==========
       
       try {
@@ -1259,7 +1231,23 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
           for (const terminalId of terminalIds) {
             newSessions.delete(terminalId);
           }
-          return { sessions: newSessions };
+          return {
+            sessions: newSessions,
+            connections: node.sshConnectionId
+              ? removeConnectionsById(
+                  removeTerminalSessionsFromConnections(
+                    state.connections,
+                    state.sessions,
+                    terminalIds,
+                  ),
+                  [node.sshConnectionId],
+                )
+              : removeTerminalSessionsFromConnections(
+                  state.connections,
+                  state.sessions,
+                  terminalIds,
+                ),
+          };
         });
       } catch (e) {
         console.warn(`[resetNodeState] Failed to clear appStore sessions:`, e);
@@ -1358,7 +1346,21 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
           ...response.session,
           connectionId,
         });
-        return { sessions: newSessions };
+        return {
+          sessions: newSessions,
+          connections: upsertSyntheticConnection(state.connections, {
+            id: connectionId,
+            host: node.host,
+            port: node.port,
+            username: node.username,
+            parentConnectionId: node.parentId
+              ? get().getRawNode(node.parentId)?.sshConnectionId ?? undefined
+              : undefined,
+            terminalIds: [terminalId],
+            sftpSessionId: node.sftpSessionId,
+            state: 'active',
+          }),
+        };
       });
       
       // 获取当前映射状态（用于可能的回滚）
@@ -1368,15 +1370,6 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
       // 通知后端更新节点终端 (使用第一个终端作为主终端)
       // 先调用后端 API，成功后再更新本地映射
       try {
-        const appStore = useAppStore.getState();
-        if (!appStore.connections.has(connectionId)) {
-          const waitPromise = waitForConnectionInStore(connectionId, 15000);
-          appStore.refreshConnections().catch((error) => {
-            console.warn(`[createTerminalForNode] refreshConnections failed for ${connectionId}:`, error);
-          });
-          await waitPromise;
-        }
-
         if (existing.length === 0) {
           await api.setTreeNodeTerminal(nodeId, terminalId);
         }
@@ -1388,7 +1381,14 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
           useAppStore.setState((state) => {
             const newSessions = new Map(state.sessions);
             newSessions.delete(terminalId);
-            return { sessions: newSessions };
+            return {
+              sessions: newSessions,
+              connections: removeTerminalSessionsFromConnections(
+                state.connections,
+                state.sessions,
+                [terminalId],
+              ),
+            };
           });
         } catch (rollbackError) {
           console.error('Rollback failed:', rollbackError);
@@ -1906,16 +1906,41 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
           });
           
           get().rebuildUnifiedNodes();
-          
-          // 🔴 Phase 5.0: 自愈后"大声说话" - 刷新 appStore.connections 唤醒 UI 组件
-          // SFTPView/TransferQueue 依赖 appStore.connections 的 connectionState
-          // 必须同步刷新，否则它们会继续 "Waiting for connection"
-          try {
-            await useAppStore.getState().refreshConnections();
-            console.info('[StateDrift] AppStore connections refreshed after auto-fix');
-          } catch (e) {
-            console.warn('[StateDrift] Failed to refresh AppStore connections:', e);
-          }
+
+          const removedConnectionIds = rawNodes
+            .map((node) => node.sshConnectionId)
+            .filter(
+              (connectionId): connectionId is string =>
+                !!connectionId && !backendNodes.some((node) => node.sshConnectionId === connectionId),
+            );
+
+          useAppStore.setState((state) => {
+            let newConnections = removeConnectionsById(state.connections, removedConnectionIds);
+
+            for (const backendNode of backendNodes) {
+              if (!backendNode.sshConnectionId) {
+                continue;
+              }
+
+              const terminalIds = getNodeTerminalIds(backendNode, newTerminalMap, backendNode.id);
+              const parentConnectionId = backendNode.parentId
+                ? backendMap.get(backendNode.parentId)?.sshConnectionId ?? undefined
+                : undefined;
+
+              newConnections = upsertSyntheticConnection(newConnections, {
+                id: backendNode.sshConnectionId,
+                host: backendNode.host,
+                port: backendNode.port,
+                username: backendNode.username,
+                parentConnectionId,
+                terminalIds,
+                sftpSessionId: backendNode.sftpSessionId,
+                state: terminalIds.length > 0 ? 'active' : 'idle',
+              });
+            }
+
+            return { connections: newConnections };
+          });
           
           // 🔴 Phase 5.1: 同步 appStore.sessions 中终端的 connectionId
           // StateDrift 可能包含 sshConnectionId 变化，必须同步到 sessions 否则 SFTP 会失败
@@ -2230,7 +2255,7 @@ export function setupTreeStoreSubscriptions() {
   });
   
   // 监听 connection_status_changed 事件，实时同步后端状态变更
-  // 与 useConnectionEvents 中的 appStore.refreshConnections() 并行，不冲突
+  // appStore.connections 由 useConnectionEvents 和本地增量写入维护，这里只负责树状态自愈
   let unlistenStatus: (() => void) | null = null;
   listen<unknown>('connection_status_changed', () => {
     // 后端连接状态发生变化时，立即同步 sessionTree

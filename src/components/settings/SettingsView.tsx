@@ -1141,7 +1141,7 @@ export const SettingsView = () => {
     const [activeTab, setActiveTab] = useState('general');
 
     // Use unified settings store
-    const { settings, updateTerminal, updateAppearance, updateConnectionDefaults, updateAi, updateSftp, updateIde, updateReconnect, setLanguage, addProvider, removeProvider, updateProvider, setActiveProvider, refreshProviderModels } = useSettingsStore();
+    const { settings, updateTerminal, updateAppearance, updateConnectionDefaults, updateAi, updateSftp, updateIde, updateReconnect, updateConnectionPool, setLanguage, addProvider, removeProvider, updateProvider, setActiveProvider, refreshProviderModels } = useSettingsStore();
     const { general, terminal, appearance, connectionDefaults, ai, sftp, ide, reconnect } = settings;
 
     // AI enable confirmation dialog
@@ -1188,9 +1188,6 @@ export const SettingsView = () => {
     const [selectedSshHosts, setSelectedSshHosts] = useState<Set<string>>(new Set());
     const [batchImporting, setBatchImporting] = useState(false);
 
-    // Connection pool config state
-    const [poolConfig, setPoolConfig] = useState<{ idleTimeoutSecs: number } | null>(null);
-
     // Data directory state
     const [dataDirInfo, setDataDirInfo] = useState<DataDirInfo | null>(null);
     const [dataDirLoading, setDataDirLoading] = useState(false);
@@ -1230,11 +1227,6 @@ export const SettingsView = () => {
                 .catch((e) => {
                     console.error('Failed to load SSH hosts:', e);
                     setSshHosts([]);
-                });
-            api.sshGetPoolConfig()
-                .then(config => setPoolConfig({ idleTimeoutSecs: config.idleTimeoutSecs }))
-                .catch((e) => {
-                    console.error('Failed to load pool config:', e);
                 });
         }
     }, [activeTab]);
@@ -2328,13 +2320,11 @@ export const SettingsView = () => {
                                 <div className="grid gap-2 max-w-xs">
                                     <Label>{t('settings_view.connections.idle_timeout.label')}</Label>
                                     <Select
-                                        value={poolConfig ? String(poolConfig.idleTimeoutSecs) : '1800'}
+                                        value={String(settings.connectionPool?.idleTimeoutSecs ?? 1800)}
                                         onValueChange={async (val) => {
                                             const secs = parseInt(val);
-                                            setPoolConfig({ idleTimeoutSecs: secs });
                                             try {
-                                                const current = await api.sshGetPoolConfig();
-                                                await api.sshSetPoolConfig({ ...current, idleTimeoutSecs: secs });
+                                                updateConnectionPool('idleTimeoutSecs', secs);
                                             } catch (e) {
                                                 console.error('Failed to update pool config:', e);
                                                 toastError(t('settings_view.connections.idle_timeout.save_failed'));

@@ -54,6 +54,7 @@ const profilerStoreMock = vi.hoisted(() => ({
 const topologyResolverMock = vi.hoisted(() => ({
   getNodeId: vi.fn(),
   handleLinkDown: vi.fn(),
+  unregister: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -161,7 +162,6 @@ describe('useConnectionEvents', () => {
     useAppStore.setState({
       connections: new Map([['conn-1', makeConnection()]]),
       closeTab: vi.fn().mockResolvedValue(undefined),
-      refreshConnections: vi.fn().mockResolvedValue(undefined),
     });
   });
 
@@ -257,9 +257,8 @@ describe('useConnectionEvents', () => {
     expect(treeStoreMock.markLinkDownBatch).not.toHaveBeenCalled();
   });
 
-  it('handles disconnected by closing related tabs, interrupting transfers, refreshing connections, and cleaning profiler listeners', async () => {
+  it('handles disconnected by closing related tabs, pruning connection cache, and cleaning profiler listeners', async () => {
     const closeTab = vi.fn().mockResolvedValue(undefined);
-    const refreshConnections = vi.fn().mockResolvedValue(undefined);
 
     useAppStore.setState({
       sessions: new Map([['session-1', makeSession()]]),
@@ -268,7 +267,6 @@ describe('useConnectionEvents', () => {
         { id: 'tab-sftp', type: 'sftp', title: 'SFTP', nodeId: 'node-1', sessionId: 'session-1' },
       ],
       closeTab,
-      refreshConnections,
     });
 
     renderHook(() => useConnectionEvents());
@@ -291,8 +289,77 @@ describe('useConnectionEvents', () => {
       'node-1',
       'connections.events.connection_closed',
     );
-    expect(refreshConnections).toHaveBeenCalledTimes(1);
     expect(profilerStoreMock.removeConnection).toHaveBeenCalledWith('conn-1');
-    expect(useAppStore.getState().connections.get('conn-1')?.state).toBe('disconnected');
+    expect(useAppStore.getState().connections.has('conn-1')).toBe(false);
+  });
+
+  it('handles disconnected affected_children by closing split tabs and descendant node tabs', async () => {
+    const closeTab = vi.fn().mockResolvedValue(undefined);
+
+    topologyResolverMock.getNodeId.mockImplementation((connectionId: string) => {
+      if (connectionId === 'conn-1') return 'node-1';
+      if (connectionId === 'child-conn-1') return 'node-child';
+      return undefined;
+    });
+
+    useAppStore.setState({
+      connections: new Map([
+        ['conn-1', makeConnection()],
+        ['child-conn-1', makeConnection({ id: 'child-conn-1' })],
+      ]),
+      sessions: new Map([
+        ['session-1', makeSession()],
+        ['session-child', makeSession({ id: 'session-child', connectionId: 'child-conn-1' })],
+      ]),
+      tabs: [
+        {
+          id: 'tab-split',
+          type: 'terminal',
+          title: 'Split',
+          rootPane: {
+            type: 'group',
+            id: 'group-1',
+            direction: 'horizontal',
+            children: [
+              { type: 'leaf', id: 'pane-1', sessionId: 'session-1', terminalType: 'terminal' },
+              { type: 'leaf', id: 'pane-2', sessionId: 'session-child', terminalType: 'terminal' },
+            ],
+            sizes: [50, 50],
+          },
+          activePaneId: 'pane-1',
+        },
+        { id: 'tab-child-sftp', type: 'sftp', title: 'SFTP', nodeId: 'node-child' },
+      ],
+      closeTab,
+    });
+
+    renderHook(() => useConnectionEvents());
+
+    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(2));
+
+    tauriEventMocks.emit('connection_status_changed', {
+      connection_id: 'conn-1',
+      status: 'disconnected',
+      affected_children: ['child-conn-1'],
+      timestamp: Date.now(),
+    });
+
+    await waitFor(() => {
+      expect(closeTab).toHaveBeenCalledWith('tab-split');
+      expect(closeTab).toHaveBeenCalledWith('tab-child-sftp');
+    });
+
+    expect(transferStoreMock.interruptTransfersByNode).toHaveBeenCalledWith(
+      'node-1',
+      'connections.events.connection_closed',
+    );
+    expect(transferStoreMock.interruptTransfersByNode).toHaveBeenCalledWith(
+      'node-child',
+      'connections.events.connection_closed',
+    );
+    expect(profilerStoreMock.removeConnection).toHaveBeenCalledWith('conn-1');
+    expect(profilerStoreMock.removeConnection).toHaveBeenCalledWith('child-conn-1');
+    expect(useAppStore.getState().connections.has('conn-1')).toBe(false);
+    expect(useAppStore.getState().connections.has('child-conn-1')).toBe(false);
   });
 });

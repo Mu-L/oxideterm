@@ -22,6 +22,16 @@ class TopologyResolver {
    * 注册连接与节点的映射
    */
   register(connectionId: string, nodeId: string): void {
+    const previousConnectionId = this.nodeToConnection.get(nodeId);
+    if (previousConnectionId && previousConnectionId !== connectionId) {
+      this.connectionToNode.delete(previousConnectionId);
+    }
+
+    const previousNodeId = this.connectionToNode.get(connectionId);
+    if (previousNodeId && previousNodeId !== nodeId) {
+      this.nodeToConnection.delete(previousNodeId);
+    }
+
     this.connectionToNode.set(connectionId, nodeId);
     this.nodeToConnection.set(nodeId, connectionId);
   }

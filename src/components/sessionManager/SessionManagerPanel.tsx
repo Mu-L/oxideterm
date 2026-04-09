@@ -54,6 +54,12 @@ export const SessionManagerPanel = () => {
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
   const [connectPromptConnectionId, setConnectPromptConnectionId] = useState<string | null>(null);
 
+  const notifySavedConnectionsChanged = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('saved-connections-changed', {
+      detail: { source: 'session-manager' },
+    }));
+  }, []);
+
   // Connect action
   const handleConnect = useCallback(async (connectionId: string) => {
     await connectToSaved(connectionId, {
@@ -95,10 +101,11 @@ export const SessionManagerPanel = () => {
         variant: 'success',
       });
       await refresh();
+      notifySavedConnectionsChanged();
     } catch (err) {
       console.error('Failed to duplicate connection:', err);
     }
-  }, [refresh, toast, t]);
+  }, [notifySavedConnectionsChanged, refresh, toast, t]);
 
   // Delete action
   const handleDelete = useCallback(async (conn: ConnectionInfo) => {
@@ -116,10 +123,11 @@ export const SessionManagerPanel = () => {
         variant: 'success',
       });
       await refresh();
+      notifySavedConnectionsChanged();
     } catch (err) {
       console.error('Failed to delete connection:', err);
     }
-  }, [refresh, toast, t]);
+  }, [notifySavedConnectionsChanged, refresh, toast, t]);
 
   // Handle import/export close with refresh
   const handleImportClose = useCallback(async () => {

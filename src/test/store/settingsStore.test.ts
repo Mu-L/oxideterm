@@ -30,6 +30,8 @@ const providerRegistryMock = vi.hoisted(() => ({
 const apiMocks = vi.hoisted(() => ({
   sftpUpdateSettings: vi.fn().mockResolvedValue(undefined),
   getAiProviderApiKey: vi.fn().mockResolvedValue('secret-key'),
+  sshGetPoolConfig: vi.fn().mockResolvedValue({ idleTimeoutSecs: 1800, maxConnections: 0, protectOnExit: true }),
+  sshSetPoolConfig: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/themes', () => themeMocks);
@@ -204,6 +206,38 @@ describe('settingsStore', () => {
     await waitFor(() => {
       expect(apiMocks.sftpUpdateSettings.mock.calls).toContainEqual([5, 256]);
     });
+  });
+
+  it('persists connection pool idle timeout and syncs it on startup and updates', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      connectionPool: { idleTimeoutSecs: 3600 },
+    })));
+
+    const mod = await import('@/store/settingsStore');
+    const useSettingsStore = mod.useSettingsStore;
+
+    mod.initializeSettings();
+
+    await waitFor(() => {
+      expect(apiMocks.sshSetPoolConfig).toHaveBeenCalledWith({
+        idleTimeoutSecs: 3600,
+        maxConnections: 0,
+        protectOnExit: true,
+      });
+    });
+
+    useSettingsStore.getState().updateConnectionPool('idleTimeoutSecs', 900);
+
+    await waitFor(() => {
+      expect(apiMocks.sshSetPoolConfig).toHaveBeenCalledWith({
+        idleTimeoutSecs: 900,
+        maxConnections: 0,
+        protectOnExit: true,
+      });
+    });
+
+    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    expect(persisted.connectionPool.idleTimeoutSecs).toBe(900);
   });
 
   it('refreshes provider models and merges context windows under the provider id', async () => {

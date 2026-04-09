@@ -16,9 +16,9 @@ import {
 import { useAppStore } from '../../store/appStore';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
-import { api } from '../../lib/api';
 import { SshConnectionInfo, SshConnectionState } from '../../types';
 import { useTabBgActive } from '../../hooks/useTabBackground';
+import { useSettingsStore } from '../../store/settingsStore';
 
 // Format connection state
 const useFormatState = () => {
@@ -167,32 +167,19 @@ export const ConnectionsPanel: React.FC = () => {
     refreshConnections, 
     setConnectionKeepAlive
   } = useAppStore();
+  const idleTimeoutSecs = useSettingsStore((state) => state.settings.connectionPool?.idleTimeoutSecs ?? 1800);
   
   const [loading, setLoading] = React.useState(false);
-  const [idleTimeoutSecs, setIdleTimeoutSecs] = React.useState(1800);
   
   // Load connection list
   useEffect(() => {
     refreshConnections();
   }, [refreshConnections]);
 
-  const loadPoolConfig = React.useCallback(() => {
-    api.sshGetPoolConfig().then(config => {
-      setIdleTimeoutSecs(config.idleTimeoutSecs);
-    }).catch(err => {
-      console.error('Failed to load pool config:', err);
-    });
-  }, []);
-
-  useEffect(() => {
-    loadPoolConfig();
-  }, [loadPoolConfig]);
-
   const handleRefresh = async () => {
     setLoading(true);
     try {
       await refreshConnections();
-      loadPoolConfig();
     } finally {
       setLoading(false);
     }

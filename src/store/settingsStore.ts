@@ -275,6 +275,10 @@ export interface ReconnectSettings {
   maxDelayMs: number;            // Max retry delay cap in ms (5000-60000)
 }
 
+export interface ConnectionPoolSettings {
+  idleTimeoutSecs: number;
+}
+
 /** Complete settings structure */
 export interface PersistedSettingsV2 {
   version: 2;
@@ -290,6 +294,7 @@ export interface PersistedSettingsV2 {
   sftp?: SftpSettings;
   ide?: IdeSettings;
   reconnect?: ReconnectSettings;
+  connectionPool?: ConnectionPoolSettings;
   experimental?: ExperimentalSettings;
   /** Whether the first-run onboarding wizard has been completed or dismissed */
   onboardingCompleted?: boolean;
@@ -502,6 +507,23 @@ const defaultReconnectSettings: ReconnectSettings = {
   maxDelayMs: 15000,
 };
 
+const defaultConnectionPoolSettings: ConnectionPoolSettings = {
+  idleTimeoutSecs: 1800,
+};
+
+function syncConnectionPoolToBackend(connectionPool: ConnectionPoolSettings): void {
+  import('../lib/api').then(({ api }) => {
+    api.sshGetPoolConfig()
+      .then((current) => api.sshSetPoolConfig({
+        ...current,
+        idleTimeoutSecs: connectionPool.idleTimeoutSecs,
+      }))
+      .catch((err) => {
+        console.error('Failed to sync connection pool settings to backend:', err);
+      });
+  });
+}
+
 function createDefaultSettings(): PersistedSettingsV2 {
   return {
     version: 2,
@@ -517,6 +539,7 @@ function createDefaultSettings(): PersistedSettingsV2 {
     sftp: { ...defaultSftpSettings },
     ide: { ...defaultIdeSettings },
     reconnect: { ...defaultReconnectSettings },
+    connectionPool: { ...defaultConnectionPoolSettings },
     experimental: { virtualSessionProxy: false },
     onboardingCompleted: false,
   };
@@ -566,6 +589,9 @@ function mergeWithDefaults(saved: Partial<PersistedSettingsV2>): PersistedSettin
     reconnect: saved.reconnect
       ? { ...defaults.reconnect!, ...saved.reconnect }
       : defaults.reconnect,
+    connectionPool: saved.connectionPool
+      ? { ...defaults.connectionPool!, ...saved.connectionPool }
+      : defaults.connectionPool,
     experimental: saved.experimental
       ? { ...defaults.experimental, ...saved.experimental }
       : defaults.experimental,
@@ -760,6 +786,7 @@ interface SettingsStore {
   updateSftp: <K extends keyof SftpSettings>(key: K, value: SftpSettings[K]) => void;
   updateIde: <K extends keyof IdeSettings>(key: K, value: IdeSettings[K]) => void;
   updateReconnect: <K extends keyof ReconnectSettings>(key: K, value: ReconnectSettings[K]) => void;
+  updateConnectionPool: <K extends keyof ConnectionPoolSettings>(key: K, value: ConnectionPoolSettings[K]) => void;
 
   // Actions - Dedicated language setter with i18n sync
   setLanguage: (language: Language) => void;
@@ -800,6 +827,7 @@ interface SettingsStore {
   getSftp: () => SftpSettings;
   getIde: () => IdeSettings;
   getReconnect: () => ReconnectSettings;
+  getConnectionPool: () => ConnectionPoolSettings;
 }
 
 // ============================================================================
@@ -950,6 +978,22 @@ export const useSettingsStore = create<SettingsStore>()(
           reconnect: { ...currentReconnect, [key]: value },
         };
         persistSettings(newSettings);
+        return { settings: newSettings };
+      });
+    },
+
+    updateConnectionPool: (key, value) => {
+      set((state) => {
+        const currentConnectionPool =
+          state.settings.connectionPool || defaultConnectionPoolSettings;
+        const newSettings: PersistedSettingsV2 = {
+          ...state.settings,
+          connectionPool: { ...currentConnectionPool, [key]: value },
+        };
+        persistSettings(newSettings);
+        syncConnectionPoolToBackend(
+          newSettings.connectionPool || defaultConnectionPoolSettings,
+        );
         return { settings: newSettings };
       });
     },
@@ -1296,6 +1340,9 @@ export const useSettingsStore = create<SettingsStore>()(
     resetToDefaults: () => {
       const newSettings = createDefaultSettings();
       persistSettings(newSettings);
+      syncConnectionPoolToBackend(
+        newSettings.connectionPool || defaultConnectionPoolSettings,
+      );
       set({ settings: newSettings });
     },
 
@@ -1308,6 +1355,8 @@ export const useSettingsStore = create<SettingsStore>()(
     getSftp: () => get().settings.sftp || defaultSftpSettings,
     getIde: () => get().settings.ide || defaultIdeSettings,
     getReconnect: () => get().settings.reconnect || defaultReconnectSettings,
+    getConnectionPool: () =>
+      get().settings.connectionPool || defaultConnectionPoolSettings,
   }))
 );
 
@@ -1471,6 +1520,11 @@ export function initializeSettings(): void {
 
   // Apply appearance settings (density, radius, font, animation, frosted glass)
   applyAppearanceToDOM(settings.appearance);
+
+  // Re-apply persisted connection pool settings after backend registry boots.
+  syncConnectionPoolToBackend(
+    settings.connectionPool || defaultConnectionPoolSettings,
+  );
 
   // Initialize previousRenderer for Toast tracking
   previousRenderer = settings.terminal.renderer;

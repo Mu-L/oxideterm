@@ -4,11 +4,17 @@ const apiMocks = vi.hoisted(() => ({
   getSessionTree: vi.fn(),
   getTreeNodePath: vi.fn(),
   updateTreeNodeState: vi.fn(),
+  closeTerminal: vi.fn(),
+  createTerminal: vi.fn(),
+  setTreeNodeTerminal: vi.fn(),
 }));
 
 const settingsStoreMock = vi.hoisted(() => {
   const state = {
     settings: {
+      buffer: {
+        maxLines: 5000,
+      },
       treeUI: {
         expandedIds: [] as string[],
         focusedNodeId: null as string | null,
@@ -42,6 +48,7 @@ const settingsStoreMock = vi.hoisted(() => {
 const appStoreMock = vi.hoisted(() => {
   const state = {
     sessions: new Map<string, { id: string; connectionId: string }>(),
+    connections: new Map<string, Record<string, unknown>>(),
     refreshConnections: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -68,6 +75,76 @@ vi.mock('@/store/settingsStore', () => ({
 
 vi.mock('@/store/appStore', () => ({
   useAppStore: appStoreMock.store,
+  removeConnectionsById: (connections: ReadonlyMap<string, Record<string, unknown>>, connectionIds: Iterable<string>) => {
+    const next = new Map(connections);
+    for (const connectionId of connectionIds) {
+      next.delete(connectionId);
+    }
+    return next;
+  },
+  removeTerminalSessionsFromConnections: (
+    connections: ReadonlyMap<string, Record<string, unknown>>,
+    sessions: ReadonlyMap<string, { id: string; connectionId: string }>,
+    sessionIds: Iterable<string>,
+  ) => {
+    const next = new Map(connections);
+    const byConnection = new Map<string, Set<string>>();
+
+    for (const sessionId of sessionIds) {
+      const session = sessions.get(sessionId);
+      if (!session?.connectionId) {
+        continue;
+      }
+
+      const ids = byConnection.get(session.connectionId) ?? new Set<string>();
+      ids.add(sessionId);
+      byConnection.set(session.connectionId, ids);
+    }
+
+    for (const [connectionId, removedIds] of byConnection) {
+      const connection = next.get(connectionId);
+      if (!connection) {
+        continue;
+      }
+
+      const terminalIds = Array.isArray(connection.terminalIds)
+        ? connection.terminalIds.filter(
+            (terminalId): terminalId is string => typeof terminalId === 'string' && !removedIds.has(terminalId),
+          )
+        : [];
+
+      next.set(connectionId, {
+        ...connection,
+        terminalIds,
+        refCount: terminalIds.length,
+        state: terminalIds.length > 0 ? 'active' : 'idle',
+      });
+    }
+
+    return next;
+  },
+  upsertSyntheticConnection: (
+    connections: ReadonlyMap<string, Record<string, unknown>>,
+    seed: Record<string, unknown> & { id: string; terminalIds?: string[] },
+  ) => {
+    const next = new Map(connections);
+    const existing = next.get(seed.id) ?? {};
+    const terminalIds = Array.from(
+      new Set([
+        ...(Array.isArray(existing.terminalIds) ? existing.terminalIds : []),
+        ...(seed.terminalIds ?? []),
+      ]),
+    );
+
+    next.set(seed.id, {
+      ...existing,
+      ...seed,
+      terminalIds,
+      refCount: seed.refCount ?? terminalIds.length,
+    });
+
+    return next;
+  },
 }));
 
 vi.mock('@/store/reconnectOrchestratorStore', () => ({
@@ -145,6 +222,7 @@ describe('sessionTreeStore', () => {
     settingsStoreMock.state.settings.treeUI.expandedIds = [];
     settingsStoreMock.state.settings.treeUI.focusedNodeId = null;
     appStoreMock.state.sessions = new Map();
+    appStoreMock.state.connections = new Map();
     appStoreMock.state.refreshConnections = vi.fn().mockResolvedValue(undefined);
   });
 
@@ -236,8 +314,88 @@ describe('sessionTreeStore', () => {
     expect(useSessionTreeStore.getState().nodeTerminalMap).toEqual(new Map([['node-1', ['term-1']]]));
     expect(useSessionTreeStore.getState().terminalNodeMap).toEqual(new Map([['term-1', 'node-1']]));
     expect(useSessionTreeStore.getState().linkDownNodeIds).toEqual(new Set(['node-1']));
-    expect(appStoreMock.state.refreshConnections).toHaveBeenCalledTimes(1);
+    expect(appStoreMock.state.connections.get('conn-new')).toEqual(
+      expect.objectContaining({
+        id: 'conn-new',
+        host: 'example.com',
+        port: 22,
+        username: 'tester',
+        terminalIds: ['term-1'],
+        state: 'active',
+      }),
+    );
     expect(appStoreMock.state.sessions.get('term-1')?.connectionId).toBe('conn-new');
+  });
+
+  it('resetNodeState only performs local cleanup and does not close terminals via backend', async () => {
+    const node = makeNode({
+      id: 'node-1',
+      state: { status: 'connected' },
+      sshConnectionId: 'conn-1',
+      terminalSessionId: 'term-main',
+      sftpSessionId: 'sftp-1',
+    });
+
+    useSessionTreeStore.setState({
+      rawNodes: [node],
+      nodeTerminalMap: new Map([['node-1', ['term-main', 'term-side']]]),
+      terminalNodeMap: new Map([
+        ['term-main', 'node-1'],
+        ['term-side', 'node-1'],
+      ]),
+      linkDownNodeIds: new Set(['node-1']),
+      reconnectProgress: new Map([['node-1', { phase: 'ssh-connect', percentage: 50 }]]),
+    });
+    useSessionTreeStore.getState().rebuildUnifiedNodes();
+
+    appStoreMock.state.sessions = new Map([
+      ['term-main', { id: 'term-main', connectionId: 'conn-1' }],
+      ['term-side', { id: 'term-side', connectionId: 'conn-1' }],
+    ]);
+
+    await useSessionTreeStore.getState().resetNodeState('node-1');
+
+    expect(apiMocks.closeTerminal).not.toHaveBeenCalled();
+    expect(appStoreMock.state.sessions.size).toBe(0);
+    expect(useSessionTreeStore.getState().nodeTerminalMap.size).toBe(0);
+    expect(useSessionTreeStore.getState().terminalNodeMap.size).toBe(0);
+    expect(useSessionTreeStore.getState().linkDownNodeIds.size).toBe(0);
+    expect(useSessionTreeStore.getState().reconnectProgress.size).toBe(0);
+    expect(useSessionTreeStore.getState().getRawNode('node-1')?.state.status).toBe('pending');
+    expect(useSessionTreeStore.getState().getRawNode('node-1')?.sshConnectionId).toBeNull();
+  });
+
+  it('createTerminalForNode upserts the connection locally before binding the terminal to the node', async () => {
+    const node = makeNode({
+      id: 'node-1',
+      state: { status: 'connected' },
+      sshConnectionId: 'conn-1',
+    });
+
+    useSessionTreeStore.setState({ rawNodes: [node] });
+    useSessionTreeStore.getState().rebuildUnifiedNodes();
+
+    apiMocks.createTerminal.mockResolvedValue({
+      sessionId: 'term-1',
+      session: { id: 'term-1', name: 'term-1', connectionId: 'conn-1' },
+    });
+    apiMocks.setTreeNodeTerminal.mockResolvedValue(undefined);
+
+    appStoreMock.state.connections = new Map();
+
+    await expect(useSessionTreeStore.getState().createTerminalForNode('node-1')).resolves.toBe('term-1');
+
+    expect(appStoreMock.state.connections.get('conn-1')).toEqual(
+      expect.objectContaining({
+        id: 'conn-1',
+        host: 'example.com',
+        port: 22,
+        username: 'tester',
+        terminalIds: ['term-1'],
+        state: 'active',
+      }),
+    );
+    expect(apiMocks.setTreeNodeTerminal).toHaveBeenCalledWith('node-1', 'term-1');
   });
 
   it('releases all locks when connectNodeWithAncestors fails mid-chain', async () => {

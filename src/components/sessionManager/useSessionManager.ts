@@ -79,7 +79,13 @@ export function useSessionManager() {
 
   // Listen for external save events (e.g. NewConnectionModal)
   useEffect(() => {
-    const handler = () => { refresh(); };
+    const handler = (event: Event) => {
+      const source = (event as CustomEvent<{ source?: string }>).detail?.source;
+      if (source === 'session-manager') {
+        return;
+      }
+      void refresh();
+    };
     window.addEventListener('saved-connections-changed', handler);
     return () => window.removeEventListener('saved-connections-changed', handler);
   }, [refresh]);

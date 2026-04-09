@@ -38,6 +38,12 @@ export const BatchActionsMenu = ({
   const { confirm, ConfirmDialog } = useConfirm();
   const [moveMenuOpen, setMoveMenuOpen] = useState(false);
 
+  const notifySavedConnectionsChanged = () => {
+    window.dispatchEvent(new CustomEvent('saved-connections-changed', {
+      detail: { source: 'session-manager' },
+    }));
+  };
+
   const handleBatchDelete = async () => {
     if (!await confirm({
       title: t('sessionManager.actions.confirm_batch_delete', { count: selectedIds.size }),
@@ -54,6 +60,7 @@ export const BatchActionsMenu = ({
       });
       onClearSelection();
       await onRefresh();
+      notifySavedConnectionsChanged();
     } catch (err) {
       console.error('Batch delete failed:', err);
     }
@@ -87,6 +94,7 @@ export const BatchActionsMenu = ({
       onClearSelection();
       setMoveMenuOpen(false);
       await onRefresh();
+      notifySavedConnectionsChanged();
     } catch (err) {
       console.error('Move to group failed:', err);
     }

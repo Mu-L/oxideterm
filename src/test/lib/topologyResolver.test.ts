@@ -29,6 +29,16 @@ describe('TopologyResolver', () => {
       expect(topologyResolver.getNodeId('conn-1')).toBe('node-2');
     });
 
+    it('removes stale connection mapping when the same node reconnects', () => {
+      topologyResolver.register('conn-1', 'node-1');
+      topologyResolver.register('conn-2', 'node-1');
+
+      expect(topologyResolver.getNodeId('conn-1')).toBeUndefined();
+      expect(topologyResolver.getNodeId('conn-2')).toBe('node-1');
+      expect(topologyResolver.getConnectionId('node-1')).toBe('conn-2');
+      expect(topologyResolver.size()).toBe(1);
+    });
+
     it('returns undefined for unknown connectionId', () => {
       expect(topologyResolver.getNodeId('unknown')).toBeUndefined();
     });

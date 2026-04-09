@@ -4,6 +4,7 @@ const apiMocks = vi.hoisted(() => ({
   sshDisconnect: vi.fn(),
   sshListConnections: vi.fn(),
   sshSetKeepAlive: vi.fn(),
+  closeTerminal: vi.fn(),
   networkStatusChanged: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -99,7 +100,10 @@ vi.mock('@/store/localTerminalStore', () => ({
 }));
 
 vi.mock('@/lib/topologyResolver', () => ({
-  topologyResolver: {},
+  topologyResolver: {
+    getNodeId: vi.fn(),
+    unregister: vi.fn(),
+  },
 }));
 
 vi.mock('@/i18n', () => ({
@@ -109,6 +113,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 import { useAppStore } from '@/store/appStore';
+import { topologyResolver } from '@/lib/topologyResolver';
 import type { RemoteEnvInfo, SessionInfo, SshConnectionInfo } from '@/types';
 
 function makeConnection(overrides: Partial<SshConnectionInfo> = {}): SshConnectionInfo {
@@ -175,6 +180,7 @@ describe('appStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetAppStore();
+    vi.mocked(topologyResolver.getNodeId).mockReturnValue(undefined);
   });
 
   it('refreshConnections replaces the current connection map from backend data', async () => {
@@ -265,6 +271,7 @@ describe('appStore', () => {
 
   it('disconnectSsh removes the connection and all related terminal tabs and sessions', async () => {
     apiMocks.sshDisconnect.mockResolvedValue(undefined);
+    vi.mocked(topologyResolver.getNodeId).mockReturnValue('node-1');
     useAppStore.setState({
       connections: new Map([
         [
@@ -279,6 +286,7 @@ describe('appStore', () => {
       sessions: new Map([['session-1', makeSession()]]),
       tabs: [
         { id: 'tab-1', type: 'terminal', title: 'Terminal 1', sessionId: 'session-1' },
+        { id: 'tab-sftp', type: 'sftp', title: 'SFTP', nodeId: 'node-1' },
         { id: 'tab-2', type: 'settings', title: 'Settings' },
       ],
       activeTabId: 'tab-1',
@@ -291,5 +299,38 @@ describe('appStore', () => {
     expect(useAppStore.getState().sessions.has('session-1')).toBe(false);
     expect(useAppStore.getState().tabs.map((tab) => tab.id)).toEqual(['tab-2']);
     expect(useAppStore.getState().activeTabId).toBe('tab-2');
+    expect(topologyResolver.unregister).toHaveBeenCalledWith('node-1');
+    expect(sessionTreeStoreMock.state.purgeTerminalMapping).toHaveBeenCalledWith('session-1');
+  });
+
+  it('closeTab removes the terminal from the local connection cache after closing ssh terminals', async () => {
+    apiMocks.closeTerminal.mockResolvedValue(undefined);
+
+    useAppStore.setState({
+      connections: new Map([[
+        'conn-1',
+        makeConnection({
+          state: 'active',
+          terminalIds: ['session-1'],
+          refCount: 1,
+        }),
+      ]]),
+      sessions: new Map([['session-1', makeSession()]]),
+      tabs: [
+        { id: 'tab-1', type: 'terminal', title: 'Terminal 1', sessionId: 'session-1' },
+      ],
+      activeTabId: 'tab-1',
+    });
+
+    await useAppStore.getState().closeTab('tab-1');
+
+    expect(apiMocks.closeTerminal).toHaveBeenCalledWith('session-1');
+    expect(useAppStore.getState().connections.get('conn-1')).toEqual(
+      expect.objectContaining({
+        terminalIds: [],
+        refCount: 0,
+        state: 'idle',
+      }),
+    );
   });
 });

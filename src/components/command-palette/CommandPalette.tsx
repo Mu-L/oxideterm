@@ -79,7 +79,7 @@ import {
   CommandShortcut,
 } from '../ui/command';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/store/appStore';
+import { removeConnectionsById, useAppStore } from '@/store/appStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useBroadcastStore } from '@/store/broadcastStore';
 import { useLocalTerminalStore } from '@/store/localTerminalStore';
@@ -588,10 +588,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onOpenChan
         icon: <Unplug className="h-4 w-4" />,
         action: async () => {
           const conns = useAppStore.getState().connections;
+          const disconnectedIds: string[] = [];
           for (const [, conn] of conns) {
-            try { await api.sshDisconnect(conn.id); } catch { /* skip */ }
+            try {
+              await api.sshDisconnect(conn.id);
+              disconnectedIds.push(conn.id);
+            } catch {
+              /* skip */
+            }
           }
-          await useAppStore.getState().refreshConnections();
+          useAppStore.setState((state) => ({
+            connections: removeConnectionsById(state.connections, disconnectedIds),
+          }));
         },
       },
       {

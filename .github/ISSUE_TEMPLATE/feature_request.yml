@@ -5,9 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Pull requests:** We are [not accepting PRs](https://github.com/AnalyseDeCircuit/OxideTerm/blob/main/CONTRIBUTING.md) at this time (long-term maintenance cost). Ideas are still welcome here; for extensions, consider a [plugin](https://github.com/AnalyseDeCircuit/OxideTerm/blob/main/docs/reference/PLUGIN_DEVELOPMENT.md).
+        **Pull requests:** PRs are welcome, but please [open an Issue first](https://github.com/AnalyseDeCircuit/OxideTerm/blob/main/CONTRIBUTING.md) to discuss the approach. For extensions, consider a [plugin](https://github.com/AnalyseDeCircuit/OxideTerm/blob/main/docs/reference/PLUGIN_DEVELOPMENT.md).
 
-        **PR：** 目前[不接 PR](https://github.com/AnalyseDeCircuit/OxideTerm/blob/main/CONTRIBUTING.md)。欢迎在此讨论想法；扩展能力可优先考虑[插件](https://github.com/AnalyseDeCircuit/OxideTerm/blob/main/docs/reference/PLUGIN_DEVELOPMENT.md)。
+        **PR：** 欢迎提交 PR，但请先[开 Issue 讨论方案](https://github.com/AnalyseDeCircuit/OxideTerm/blob/main/CONTRIBUTING.md)。扩展能力可优先考虑[插件](https://github.com/AnalyseDeCircuit/OxideTerm/blob/main/docs/reference/PLUGIN_DEVELOPMENT.md)。
 
         ---
 

@@ -349,6 +349,12 @@
         "configured": "Đã cấu hình jump server"
       },
       "cancel": "Hủy",
+      "test": "Thử",
+      "testing": "Đang thử...",
+      "test_success": "Kết nối thành công",
+      "test_failed": "Thử kết nối thất bại",
+      "test_elapsed": "Đã kết nối trong {{ms}}ms",
+      "test_not_supported_kbi": "Thử kết nối không được hỗ trợ cho xác thực 2FA",
       "connect": "Kết nối",
       "connecting": "Đang kết nối...",
       "connect_failed": "Kết nối thất bại",

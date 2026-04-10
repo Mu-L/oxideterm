@@ -45,6 +45,7 @@
       "edit": "Editar",
       "duplicate": "Duplicar",
       "delete": "Eliminar",
+      "test_connection": "Probar conexión",
       "manage_tags": "Gestionar etiquetas",
       "move_to_group": "Mover a grupo",
       "confirm_delete": "¿Eliminar conexión \"{{name}}\"?",
@@ -65,7 +66,11 @@
       "connections_deleted": "{{count}} conexiones eliminadas",
       "connection_duplicated": "Conexión duplicada",
       "connections_moved": "{{count}} conexiones movidas a \"{{group}}\"",
-      "tags_updated": "Etiquetas actualizadas"
+      "tags_updated": "Etiquetas actualizadas",
+      "test_in_progress": "Probando conexión...",
+      "test_success": "Conexión exitosa",
+      "test_failed": "Prueba de conexión fallida",
+      "test_elapsed": "Conectado en {{ms}}ms"
     },
     "edit_properties": {
       "title": "Editar conexión",

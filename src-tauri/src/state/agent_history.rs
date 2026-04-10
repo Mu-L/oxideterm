@@ -558,16 +558,20 @@ impl AgentHistoryStore {
 
         for handoff_id in lineage {
             match handoff_table.get(handoff_id.as_str())? {
-                Some(entry) => {
-                    match zstd::decode_all(entry.value()) {
-                        Ok(decompressed) => match String::from_utf8(decompressed) {
-                            Ok(json) => results.push(json),
-                            Err(e) => warn!("Skipping handoff {} (UTF-8 error): {}", handoff_id, e),
-                        },
-                        Err(e) => warn!("Skipping handoff {} (decompression error): {}", handoff_id, e),
-                    }
-                }
-                None => warn!("Handoff {} in lineage {} but not in handoff table", handoff_id, lineage_id),
+                Some(entry) => match zstd::decode_all(entry.value()) {
+                    Ok(decompressed) => match String::from_utf8(decompressed) {
+                        Ok(json) => results.push(json),
+                        Err(e) => warn!("Skipping handoff {} (UTF-8 error): {}", handoff_id, e),
+                    },
+                    Err(e) => warn!(
+                        "Skipping handoff {} (decompression error): {}",
+                        handoff_id, e
+                    ),
+                },
+                None => warn!(
+                    "Handoff {} in lineage {} but not in handoff table",
+                    handoff_id, lineage_id
+                ),
             }
         }
 

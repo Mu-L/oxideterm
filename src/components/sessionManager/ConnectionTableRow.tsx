@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { useTranslation } from 'react-i18next';
-import { Play, Pencil, MoreHorizontal, Copy, Trash2, KeyRound, Lock, Bot, ShieldQuestion } from 'lucide-react';
+import { Play, Pencil, MoreHorizontal, Copy, Trash2, KeyRound, Lock, Bot, ShieldQuestion, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Checkbox } from '../ui/checkbox';
 import { Button } from '../ui/button';
@@ -31,6 +31,7 @@ type ConnectionTableRowProps = {
   onEdit: (id: string) => void;
   onDuplicate: (conn: ConnectionInfo) => void;
   onDelete: (conn: ConnectionInfo) => void;
+  onTestConnection?: (conn: ConnectionInfo) => void;
 };
 
 const AuthBadge = ({ authType }: { authType: string }) => {
@@ -86,6 +87,7 @@ export const ConnectionTableRow = ({
   onEdit,
   onDuplicate,
   onDelete,
+  onTestConnection,
 }: ConnectionTableRowProps) => {
   const { t } = useTranslation();
 
@@ -185,6 +187,10 @@ export const ConnectionTableRow = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onTestConnection?.(conn)}>
+              <Zap className="h-4 w-4 mr-2" />
+              {t('sessionManager.actions.test_connection')}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onDuplicate(conn)}>
               <Copy className="h-4 w-4 mr-2" />
               {t('sessionManager.actions.duplicate')}
@@ -206,6 +212,10 @@ export const ConnectionTableRow = ({
         <ContextMenuItem onClick={() => onConnect(conn.id)}>
           <Play className="h-4 w-4 mr-2 text-green-400" />
           {t('sessionManager.actions.connect')}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onTestConnection?.(conn)}>
+          <Zap className="h-4 w-4 mr-2" />
+          {t('sessionManager.actions.test_connection')}
         </ContextMenuItem>
         <ContextMenuItem onClick={() => onEdit(conn.id)}>
           <Pencil className="h-4 w-4 mr-2" />

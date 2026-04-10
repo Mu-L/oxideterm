@@ -347,6 +347,12 @@
         "configured": "ジャンプサーバーが設定されています"
       },
       "cancel": "キャンセル",
+      "test": "テスト",
+      "testing": "テスト中...",
+      "test_success": "接続成功",
+      "test_failed": "接続テスト失敗",
+      "test_elapsed": "{{ms}}ms で接続しました",
+      "test_not_supported_kbi": "二要素認証ではテスト接続はサポートされていません",
       "connect": "接続",
       "connecting": "接続中...",
       "connect_failed": "接続に失敗しました",

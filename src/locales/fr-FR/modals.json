@@ -347,6 +347,12 @@
         "configured": "Serveurs de saut configurés"
       },
       "cancel": "Annuler",
+      "test": "Tester",
+      "testing": "Test en cours...",
+      "test_success": "Connexion réussie",
+      "test_failed": "Échec du test de connexion",
+      "test_elapsed": "Connecté en {{ms}}ms",
+      "test_not_supported_kbi": "Le test de connexion n'est pas pris en charge pour l'authentification 2FA",
       "connect": "Connecter",
       "connecting": "Connexion en cours...",
       "connect_failed": "Échec de la connexion",

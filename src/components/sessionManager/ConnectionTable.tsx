@@ -23,6 +23,7 @@ type ConnectionTableProps = {
   onEdit: (id: string) => void;
   onDuplicate: (conn: ConnectionInfo) => void;
   onDelete: (conn: ConnectionInfo) => void;
+  onTestConnection?: (conn: ConnectionInfo) => void;
 };
 
 const SortIcon = ({ field, currentField, direction }: { field: SortField; currentField: SortField | null; direction: SortDirection }) => {
@@ -44,6 +45,7 @@ export const ConnectionTable = ({
   onEdit,
   onDuplicate,
   onDelete,
+  onTestConnection,
 }: ConnectionTableProps) => {
   const { t } = useTranslation();
   const toggleModal = useAppStore(s => s.toggleModal);
@@ -127,6 +129,7 @@ export const ConnectionTable = ({
             onEdit={onEdit}
             onDuplicate={onDuplicate}
             onDelete={onDelete}
+            onTestConnection={onTestConnection}
           />
         ))}
       </div>

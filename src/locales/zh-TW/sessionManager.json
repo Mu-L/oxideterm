@@ -45,6 +45,7 @@
       "edit": "編輯",
       "duplicate": "複製",
       "delete": "刪除",
+      "test_connection": "測試連線",
       "manage_tags": "管理標籤",
       "move_to_group": "移動到群組",
       "confirm_delete": "刪除連線 \"{{name}}\"？",
@@ -65,7 +66,11 @@
       "connections_deleted": "已刪除 {{count}} 個連線",
       "connection_duplicated": "連線已複製",
       "connections_moved": "{{count}} 個連線已移至 \"{{group}}\"",
-      "tags_updated": "標籤已更新"
+      "tags_updated": "標籤已更新",
+      "test_in_progress": "正在測試連線...",
+      "test_success": "連線成功",
+      "test_failed": "連線測試失敗",
+      "test_elapsed": "已在 {{ms}}ms 內連線"
     },
     "edit_properties": {
       "title": "編輯連線",

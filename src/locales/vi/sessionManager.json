@@ -43,6 +43,7 @@
       "edit": "Sửa",
       "duplicate": "Nhân bản",
       "delete": "Xóa",
+      "test_connection": "Thử kết nối",
       "manage_tags": "Quản lý thẻ",
       "move_to_group": "Chuyển vào nhóm",
       "confirm_delete": "Xóa kết nối \"{{name}}\"?",
@@ -63,7 +64,11 @@
       "connections_deleted": "Đã xóa {{count}} kết nối",
       "connection_duplicated": "Đã nhân bản kết nối",
       "connections_moved": "Đã chuyển {{count}} kết nối sang \"{{group}}\"",
-      "tags_updated": "Đã cập nhật thẻ"
+      "tags_updated": "Đã cập nhật thẻ",
+      "test_in_progress": "Đang thử kết nối...",
+      "test_success": "Kết nối thành công",
+      "test_failed": "Thử kết nối thất bại",
+      "test_elapsed": "Đã kết nối trong {{ms}}ms"
     },
     "edit_properties": {
       "title": "Sửa kết nối",

@@ -53,8 +53,9 @@ export const NewConnectionModal = () => {
     quickConnectData
   } = useAppStore();
   const { addRootNode, connectNode, addKbiSession } = useSessionTreeStore();
-  const { error: toastError } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
   
   // KBI (2FA) specific state
   const [, setKbiFlowActive] = useState(false);
@@ -335,6 +336,41 @@ export const NewConnectionModal = () => {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!host || !username) return;
+    if (authType === 'keyboard_interactive') {
+      toastError(t('modals.new_connection.test_not_supported_kbi'));
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const request = {
+        host,
+        port: parseInt(port) || 22,
+        username,
+        auth_type: authType === 'default_key' ? 'default_key' : authType,
+        password: authType === 'password' ? password : undefined,
+        key_path: (authType === 'key' || authType === 'default_key' || authType === 'certificate') ? keyPath : undefined,
+        cert_path: authType === 'certificate' ? certPath : undefined,
+        passphrase: (authType === 'key' || authType === 'default_key' || authType === 'certificate') && passphrase ? passphrase : undefined,
+      };
+
+      const result = await api.testConnection(request);
+      toastSuccess(
+        t('modals.new_connection.test_success'),
+        t('modals.new_connection.test_elapsed', { ms: result.elapsedMs }),
+      );
+    } catch (e) {
+      toastError(
+        t('modals.new_connection.test_failed'),
+        String(e),
+      );
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -759,7 +795,14 @@ export const NewConnectionModal = () => {
    
         <DialogFooter className="shrink-0">
            <Button variant="ghost" onClick={() => toggleModal('newConnection', false)}>{t('modals.new_connection.cancel')}</Button>
-           <Button onClick={handleConnect} disabled={loading || !canConnect()}>
+           <Button
+              variant="outline"
+              onClick={handleTestConnection}
+              disabled={loading || testing || !canConnect()}
+           >
+              {testing ? t('modals.new_connection.testing') : t('modals.new_connection.test')}
+           </Button>
+           <Button onClick={handleConnect} disabled={loading || testing || !canConnect()}>
               {loading ? t('modals.new_connection.connecting') : t('modals.new_connection.connect')}
            </Button>
         </DialogFooter>

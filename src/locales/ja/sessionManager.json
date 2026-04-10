@@ -45,6 +45,7 @@
       "edit": "編集",
       "duplicate": "複製",
       "delete": "削除",
+      "test_connection": "接続テスト",
       "manage_tags": "タグを管理",
       "move_to_group": "グループに移動",
       "confirm_delete": "接続 \"{{name}}\" を削除しますか？",
@@ -65,7 +66,11 @@
       "connections_deleted": "{{count}} 件の接続を削除しました",
       "connection_duplicated": "接続を複製しました",
       "connections_moved": "{{count}} 件の接続を \"{{group}}\" に移動しました",
-      "tags_updated": "タグを更新しました"
+      "tags_updated": "タグを更新しました",
+      "test_in_progress": "接続をテスト中...",
+      "test_success": "接続成功",
+      "test_failed": "接続テスト失敗",
+      "test_elapsed": "{{ms}}ms で接続しました"
     },
     "edit_properties": {
       "title": "接続を編集",

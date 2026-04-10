@@ -45,6 +45,7 @@
       "edit": "Bearbeiten",
       "duplicate": "Duplizieren",
       "delete": "Löschen",
+      "test_connection": "Verbindung testen",
       "manage_tags": "Tags verwalten",
       "move_to_group": "In Gruppe verschieben",
       "confirm_delete": "Verbindung \"{{name}}\" löschen?",
@@ -65,7 +66,11 @@
       "connections_deleted": "{{count}} Verbindungen gelöscht",
       "connection_duplicated": "Verbindung dupliziert",
       "connections_moved": "{{count}} Verbindungen nach \"{{group}}\" verschoben",
-      "tags_updated": "Tags aktualisiert"
+      "tags_updated": "Tags aktualisiert",
+      "test_in_progress": "Verbindung wird getestet...",
+      "test_success": "Verbindung erfolgreich",
+      "test_failed": "Verbindungstest fehlgeschlagen",
+      "test_elapsed": "Verbunden in {{ms}}ms"
     },
     "edit_properties": {
       "title": "Verbindung bearbeiten",

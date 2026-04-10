@@ -347,6 +347,12 @@
         "configured": "已配置跳板机"
       },
       "cancel": "取消",
+      "test": "测试",
+      "testing": "测试中...",
+      "test_success": "连接成功",
+      "test_failed": "连接测试失败",
+      "test_elapsed": "已在 {{ms}}ms 内连接",
+      "test_not_supported_kbi": "双因素认证不支持测试连接",
       "connect": "连接",
       "connecting": "连接中...",
       "connect_failed": "连接失败",

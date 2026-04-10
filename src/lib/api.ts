@@ -57,6 +57,81 @@ import type { PluginManifest } from '../types/plugin';
 // Toggle this for development without a backend
 const USE_MOCK = false;
 
+export type TestConnectionRequest =
+  | {
+      host: string;
+      port: number;
+      username: string;
+      name?: string;
+      auth_type: 'password';
+      password: string;
+    }
+  | {
+      host: string;
+      port: number;
+      username: string;
+      name?: string;
+      auth_type: 'key';
+      key_path: string;
+      passphrase?: string;
+    }
+  | {
+      host: string;
+      port: number;
+      username: string;
+      name?: string;
+      auth_type: 'default_key';
+      passphrase?: string;
+    }
+  | {
+      host: string;
+      port: number;
+      username: string;
+      name?: string;
+      auth_type: 'agent';
+    }
+  | {
+      host: string;
+      port: number;
+      username: string;
+      name?: string;
+      auth_type: 'certificate';
+      key_path: string;
+      cert_path: string;
+      passphrase?: string;
+    };
+
+export type TestConnectionResponse = {
+  success: boolean;
+  elapsedMs: number;
+};
+
+export type SavedConnectionProxyHopForConnect = {
+  host: string;
+  port: number;
+  username: string;
+  auth_type: string;
+  password?: string;
+  key_path?: string;
+  cert_path?: string;
+  passphrase?: string;
+  agent_forwarding: boolean;
+};
+
+export type SavedConnectionForConnect = {
+  host: string;
+  port: number;
+  username: string;
+  auth_type: 'password' | 'key' | 'agent' | 'certificate';
+  password?: string;
+  key_path?: string;
+  cert_path?: string;
+  passphrase?: string;
+  name: string;
+  agent_forwarding: boolean;
+  proxy_chain: SavedConnectionProxyHopForConnect[];
+};
+
 export type CliCompanionStatus = {
   bundled: boolean;
   installed: boolean;
@@ -135,6 +210,15 @@ export const api = {
   sshSetKeepAlive: async (connectionId: string, keepAlive: boolean): Promise<void> => {
     if (USE_MOCK) return;
     return invoke('ssh_set_keep_alive', { connectionId, keepAlive });
+  },
+
+  /**
+   * Test an SSH connection without creating a persistent session.
+   * Performs full SSH handshake + auth, then immediately disconnects.
+   */
+  testConnection: async (request: TestConnectionRequest): Promise<TestConnectionResponse> => {
+    if (USE_MOCK) return { success: true, elapsedMs: 42 };
+    return invoke('test_connection', { request });
   },
 
   // ============ SSH Host Key Preflight (TOFU) ============
@@ -347,27 +431,7 @@ export const api = {
    * Get saved connection with credentials for connecting
    * Returns full connection info including passwords from keychain
    */
-  getSavedConnectionForConnect: async (id: string): Promise<{
-    host: string;
-    port: number;
-    username: string;
-    auth_type: string;
-    password?: string;
-    key_path?: string;
-    passphrase?: string;
-    name: string;
-    agent_forwarding: boolean;
-    proxy_chain: Array<{
-      host: string;
-      port: number;
-      username: string;
-      auth_type: string;
-      password?: string;
-      key_path?: string;
-      passphrase?: string;
-      agent_forwarding: boolean;
-    }>;
-  }> => {
+  getSavedConnectionForConnect: async (id: string): Promise<SavedConnectionForConnect> => {
     if (USE_MOCK) {
       return {
         host: 'mock.example.com',

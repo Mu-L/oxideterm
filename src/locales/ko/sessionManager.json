@@ -45,6 +45,7 @@
       "edit": "편집",
       "duplicate": "복제",
       "delete": "삭제",
+      "test_connection": "연결 테스트",
       "manage_tags": "태그 관리",
       "move_to_group": "그룹으로 이동",
       "confirm_delete": "연결 \"{{name}}\"을(를) 삭제하시겠습니까?",
@@ -65,7 +66,11 @@
       "connections_deleted": "{{count}}개 연결이 삭제되었습니다",
       "connection_duplicated": "연결이 복제되었습니다",
       "connections_moved": "{{count}}개 연결이 \"{{group}}\"(으)로 이동되었습니다",
-      "tags_updated": "태그가 업데이트되었습니다"
+      "tags_updated": "태그가 업데이트되었습니다",
+      "test_in_progress": "연결 테스트 중...",
+      "test_success": "연결 성공",
+      "test_failed": "연결 테스트 실패",
+      "test_elapsed": "{{ms}}ms 만에 연결됨"
     },
     "edit_properties": {
       "title": "연결 편집",

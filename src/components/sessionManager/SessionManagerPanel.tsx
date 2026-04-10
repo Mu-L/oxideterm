@@ -17,7 +17,13 @@ import { useToast } from '../../hooks/useToast';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useTabBgActive } from '../../hooks/useTabBackground';
 import { api } from '../../lib/api';
+import {
+  buildSavedConnectionTestRequest,
+  buildTestConnectionRequest,
+  requiresSavedConnectionPasswordPrompt,
+} from '../../lib/testConnectionRequest';
 import type { ConnectionInfo } from '../../types';
+import type { EditConnectionSubmitPayload } from '../modals/EditConnectionModal';
 
 export const SessionManagerPanel = () => {
   const { t } = useTranslation();
@@ -53,6 +59,7 @@ export const SessionManagerPanel = () => {
   const [showImport, setShowImport] = useState(false);
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
   const [connectPromptConnectionId, setConnectPromptConnectionId] = useState<string | null>(null);
+  const [connectPromptAction, setConnectPromptAction] = useState<'connect' | 'test'>('connect');
 
   const notifySavedConnectionsChanged = useCallback(() => {
     window.dispatchEvent(new CustomEvent('saved-connections-changed', {
@@ -68,6 +75,7 @@ export const SessionManagerPanel = () => {
       t,
       onError: (id, reason) => {
         if (reason === 'missing-password') {
+          setConnectPromptAction('connect');
           setConnectPromptConnectionId(id);
           return;
         }
@@ -129,6 +137,64 @@ export const SessionManagerPanel = () => {
     }
   }, [notifySavedConnectionsChanged, refresh, toast, t]);
 
+  // Test connection action
+  const runTestConnection = useCallback(async (label: string, request: Parameters<typeof api.testConnection>[0]) => {
+    toast({
+      title: t('sessionManager.toast.test_in_progress'),
+      description: label,
+    });
+    const result = await api.testConnection(request);
+    toast({
+      title: t('sessionManager.toast.test_success'),
+      description: t('sessionManager.toast.test_elapsed', { ms: result.elapsedMs }),
+      variant: 'success',
+    });
+  }, [toast, t]);
+
+  const handleTestConnection = useCallback(async (conn: ConnectionInfo) => {
+    try {
+      const savedConn = await api.getSavedConnectionForConnect(conn.id);
+      if (requiresSavedConnectionPasswordPrompt(savedConn)) {
+        setConnectPromptAction('test');
+        setConnectPromptConnectionId(conn.id);
+        return;
+      }
+
+      await runTestConnection(
+        `${conn.username}@${conn.host}:${conn.port}`,
+        buildSavedConnectionTestRequest(savedConn),
+      );
+    } catch (err) {
+      toast({
+        title: t('sessionManager.toast.test_failed'),
+        description: String(err),
+        variant: 'error',
+      });
+    }
+  }, [runTestConnection, t, toast]);
+
+  const handlePromptTestConnection = useCallback(async ({
+    connection,
+    authType,
+    password,
+    keyPath,
+    passphrase,
+  }: EditConnectionSubmitPayload) => {
+    await runTestConnection(
+      `${connection.username}@${connection.host}:${connection.port}`,
+      buildTestConnectionRequest({
+        host: connection.host,
+        port: connection.port,
+        username: connection.username,
+        name: connection.name,
+        authType,
+        password,
+        keyPath,
+        passphrase,
+      }),
+    );
+  }, [runTestConnection]);
+
   // Handle import/export close with refresh
   const handleImportClose = useCallback(async () => {
     setShowImport(false);
@@ -184,6 +250,7 @@ export const SessionManagerPanel = () => {
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
               onDelete={handleDelete}
+              onTestConnection={handleTestConnection}
             />
           )}
         </div>
@@ -206,10 +273,13 @@ export const SessionManagerPanel = () => {
         onOpenChange={(open) => {
           if (!open) {
             setConnectPromptConnectionId(null);
+            setConnectPromptAction('connect');
           }
         }}
         connection={connectPromptConnectionId ? allConnections.find(c => c.id === connectPromptConnectionId) ?? null : null}
-        onConnect={refresh}
+        action={connectPromptAction}
+        onSubmit={connectPromptAction === 'test' ? handlePromptTestConnection : undefined}
+        onConnect={connectPromptAction === 'connect' ? refresh : undefined}
       />
 
       <OxideExportModal

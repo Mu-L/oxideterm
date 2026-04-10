@@ -72,6 +72,11 @@ pub enum AuthRequest {
     DefaultKey {
         passphrase: Option<Zeroizing<String>>,
     },
+    Certificate {
+        key_path: String,
+        cert_path: String,
+        passphrase: Option<Zeroizing<String>>,
+    },
     Agent,
 }
 
@@ -119,6 +124,15 @@ where
                 passphrase,
             })
         }
+        AuthRequest::Certificate {
+            key_path,
+            cert_path,
+            passphrase,
+        } => Ok(AuthMethod::Certificate {
+            key_path,
+            cert_path,
+            passphrase,
+        }),
         AuthRequest::Agent => Ok(AuthMethod::Agent),
     }
 }
@@ -386,6 +400,74 @@ pub async fn establish_connection(
         connection_id,
         reused: false,
         connection: connection_info,
+    })
+}
+
+/// Test connection response
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestConnectionResponse {
+    /// Whether the connection succeeded
+    pub success: bool,
+    /// Time in milliseconds for the connection attempt
+    pub elapsed_ms: u64,
+}
+
+/// Test an SSH connection without creating a persistent session.
+///
+/// Performs the full SSH handshake + authentication, then immediately
+/// disconnects. This verifies connectivity, authentication, and
+/// reports the round-trip time.
+#[tauri::command]
+pub async fn test_connection(
+    request: ConnectRequest,
+    connection_registry: State<'_, Arc<SshConnectionRegistry>>,
+) -> Result<TestConnectionResponse, String> {
+    info!(
+        "Testing connection: {}@{}:{}",
+        request.username, request.host, request.port
+    );
+
+    let start = std::time::Instant::now();
+
+    let auth = build_session_auth(request.auth)?;
+
+    let config = SessionConfig {
+        host: request.host.clone(),
+        port: request.port,
+        username: request.username.clone(),
+        auth,
+        name: request.name.clone(),
+        color: None,
+        cols: request.cols,
+        rows: request.rows,
+        agent_forwarding: false,
+    };
+
+    // Establish the connection through the pool
+    let connection_id = connection_registry
+        .connect(config)
+        .await
+        .map_err(|e| format!("{}", e))?;
+
+    let elapsed = start.elapsed();
+
+    // Immediately disconnect — this is just a test
+    if let Err(e) = connection_registry.disconnect(&connection_id).await {
+        warn!("Failed to disconnect test connection: {}", e);
+    }
+
+    info!(
+        "Test connection succeeded in {}ms: {}@{}:{}",
+        elapsed.as_millis(),
+        request.username,
+        request.host,
+        request.port
+    );
+
+    Ok(TestConnectionResponse {
+        success: true,
+        elapsed_ms: elapsed.as_millis() as u64,
     })
 }
 

@@ -349,6 +349,12 @@
         "configured": "已設定跳板伺服器"
       },
       "cancel": "取消",
+      "test": "測試",
+      "testing": "測試中...",
+      "test_success": "連線成功",
+      "test_failed": "連線測試失敗",
+      "test_elapsed": "已在 {{ms}}ms 內連線",
+      "test_not_supported_kbi": "雙因素驗證不支援測試連線",
       "connect": "連線",
       "connecting": "連線中...",
       "connect_failed": "連線失敗",

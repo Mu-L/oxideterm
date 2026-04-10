@@ -347,6 +347,12 @@
         "configured": "점프 서버 구성됨"
       },
       "cancel": "취소",
+      "test": "테스트",
+      "testing": "테스트 중...",
+      "test_success": "연결 성공",
+      "test_failed": "연결 테스트 실패",
+      "test_elapsed": "{{ms}}ms 만에 연결됨",
+      "test_not_supported_kbi": "2단계 인증에서는 연결 테스트를 지원하지 않습니다",
       "connect": "연결",
       "connecting": "연결 중...",
       "connect_failed": "연결 실패",

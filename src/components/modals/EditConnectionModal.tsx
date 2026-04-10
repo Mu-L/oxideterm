@@ -20,19 +20,32 @@ import { ConnectionInfo } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
 import { api } from '../../lib/api';
+import { buildTestConnectionRequest } from '../../lib/testConnectionRequest';
+
+export type EditConnectionSubmitPayload = {
+  connection: ConnectionInfo;
+  authType: 'password' | 'key' | 'agent';
+  password?: string;
+  keyPath?: string;
+  passphrase?: string;
+};
 
 interface EditConnectionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   connection: ConnectionInfo | null;
   onConnect?: () => void;
+  action?: 'connect' | 'test';
+  onSubmit?: (payload: EditConnectionSubmitPayload) => Promise<void>;
 }
 
 export const EditConnectionModal: React.FC<EditConnectionModalProps> = ({
   open,
   onOpenChange,
   connection,
-  onConnect
+  onConnect,
+  action = 'connect',
+  onSubmit,
 }) => {
   const { t } = useTranslation();
   const { groups, loadGroups } = useAppStore();
@@ -67,30 +80,40 @@ export const EditConnectionModal: React.FC<EditConnectionModalProps> = ({
     setError('');
 
     try {
-      // Build the preset chain request (direct connection, no hops)
-      const target = {
-        host: connection.host,
-        port: connection.port,
-        username: connection.username,
-        authType: authType,
-        password: authType === 'password' ? password : undefined,
-        keyPath: authType === 'key' ? keyPath : undefined,
-        passphrase: authType === 'key' && passphrase ? passphrase : undefined,
-      };
+      if (onSubmit) {
+        await onSubmit({
+          connection,
+          authType,
+          password: authType === 'password' ? password : undefined,
+          keyPath: authType === 'key' ? keyPath : undefined,
+          passphrase: authType === 'key' && passphrase ? passphrase : undefined,
+        });
+      } else {
+        // Build the preset chain request (direct connection, no hops)
+        const target = {
+          host: connection.host,
+          port: connection.port,
+          username: connection.username,
+          authType: authType,
+          password: authType === 'password' ? password : undefined,
+          keyPath: authType === 'key' ? keyPath : undefined,
+          passphrase: authType === 'key' && passphrase ? passphrase : undefined,
+        };
 
-      // Expand the preset into a session tree node
-      const { expandManualPreset } = useSessionTreeStore.getState();
-      const result = await expandManualPreset({
-        savedConnectionId: connection.id,
-        hops: [],
-        target,
-      });
+        // Expand the preset into a session tree node
+        const { expandManualPreset } = useSessionTreeStore.getState();
+        const result = await expandManualPreset({
+          savedConnectionId: connection.id,
+          hops: [],
+          target,
+        });
 
-      // Connect via the session tree
-      await connectNodeWithAncestors(result.targetNodeId);
+        // Connect via the session tree
+        await connectNodeWithAncestors(result.targetNodeId);
 
-      // Mark as used
-      await api.markConnectionUsed(connection.id);
+        // Mark as used
+        await api.markConnectionUsed(connection.id);
+      }
       
       onOpenChange(false);
       if (onConnect) onConnect();
@@ -229,7 +252,9 @@ export const EditConnectionModal: React.FC<EditConnectionModalProps> = ({
             disabled={isConnecting || (authType === 'password' && !password) || (authType === 'key' && !keyPath)}
             className="bg-theme-accent hover:bg-theme-accent-hover text-white"
           >
-            {isConnecting ? t('modals.edit_connection.connecting') : t('modals.edit_connection.connect')}
+            {isConnecting
+              ? (action === 'test' ? t('modals.new_connection.testing') : t('modals.edit_connection.connecting'))
+              : (action === 'test' ? t('modals.new_connection.test') : t('modals.edit_connection.connect'))}
           </Button>
         </DialogFooter>
       </DialogContent>

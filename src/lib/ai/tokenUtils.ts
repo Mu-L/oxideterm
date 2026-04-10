@@ -161,7 +161,7 @@ const MODEL_CONTEXT_WINDOWS: Array<[RegExp, number]> = [
 ];
 
 /** Default context window for unknown models (re-exported from constants) */
-const DEFAULT_CONTEXT_WINDOW = DEFAULT_CTX;
+export const DEFAULT_CONTEXT_WINDOW = DEFAULT_CTX;
 
 /**
  * Try to extract context window size from the model name.

@@ -45,6 +45,7 @@
       "edit": "Edit",
       "duplicate": "Duplicate",
       "delete": "Delete",
+      "test_connection": "Test Connection",
       "manage_tags": "Manage Tags",
       "move_to_group": "Move to Group",
       "confirm_delete": "Delete connection \"{{name}}\"?",
@@ -65,7 +66,11 @@
       "connections_deleted": "{{count}} connections deleted",
       "connection_duplicated": "Connection duplicated",
       "connections_moved": "{{count}} connections moved to \"{{group}}\"",
-      "tags_updated": "Tags updated"
+      "tags_updated": "Tags updated",
+      "test_in_progress": "Testing connection...",
+      "test_success": "Connection successful",
+      "test_failed": "Connection test failed",
+      "test_elapsed": "Connected in {{ms}}ms"
     },
     "edit_properties": {
       "title": "Edit Connection",

@@ -45,6 +45,7 @@
       "edit": "Modifier",
       "duplicate": "Dupliquer",
       "delete": "Supprimer",
+      "test_connection": "Tester la connexion",
       "manage_tags": "Gérer les tags",
       "move_to_group": "Déplacer vers le groupe",
       "confirm_delete": "Supprimer la connexion \"{{name}}\" ?",
@@ -65,7 +66,11 @@
       "connections_deleted": "{{count}} connexions supprimées",
       "connection_duplicated": "Connexion dupliquée",
       "connections_moved": "{{count}} connexions déplacées vers \"{{group}}\"",
-      "tags_updated": "Tags mis à jour"
+      "tags_updated": "Tags mis à jour",
+      "test_in_progress": "Test de connexion en cours...",
+      "test_success": "Connexion réussie",
+      "test_failed": "Échec du test de connexion",
+      "test_elapsed": "Connecté en {{ms}}ms"
     },
     "edit_properties": {
       "title": "Modifier la connexion",

@@ -349,6 +349,12 @@
         "configured": "Jump-Server konfiguriert"
       },
       "cancel": "Abbrechen",
+      "test": "Testen",
+      "testing": "Teste...",
+      "test_success": "Verbindung erfolgreich",
+      "test_failed": "Verbindungstest fehlgeschlagen",
+      "test_elapsed": "Verbunden in {{ms}}ms",
+      "test_not_supported_kbi": "Verbindungstest wird bei Zwei-Faktor-Authentifizierung nicht unterstützt",
       "connect": "Verbinden",
       "connecting": "Verbindung wird hergestellt...",
       "connect_failed": "Verbindung fehlgeschlagen",

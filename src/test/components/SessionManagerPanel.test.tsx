@@ -97,17 +97,33 @@ vi.mock('@/components/sessionManager/ManagerToolbar', () => ({
 }));
 
 vi.mock('@/components/sessionManager/ConnectionTable', () => ({
-  ConnectionTable: ({ onConnect, onDelete, connections }: { onConnect: (id: string) => void; onDelete: (conn: { id: string; name: string }) => void; connections: Array<{ id: string; name: string }> }) => (
+  ConnectionTable: ({ onConnect, onDelete, onTestConnection, connections }: { onConnect: (id: string) => void; onDelete: (conn: { id: string; name: string }) => void; onTestConnection?: (conn: { id: string; name: string }) => void; connections: Array<{ id: string; name: string }> }) => (
     <>
       <button onClick={() => onConnect('conn-1')}>connect-row</button>
+      <button onClick={() => onTestConnection?.(connections[0])}>test-row</button>
       <button onClick={() => onDelete(connections[0])}>delete-row</button>
     </>
   ),
 }));
 
 vi.mock('@/components/modals/EditConnectionModal', () => ({
-  EditConnectionModal: ({ open, connection }: { open: boolean; connection: { id: string } | null }) => (
-    open ? <div data-testid="connect-modal">{connection?.id}</div> : null
+  EditConnectionModal: ({ open, connection, action, onSubmit }: { open: boolean; connection: { id: string; name?: string; host?: string; port?: number; username?: string } | null; action?: 'connect' | 'test'; onSubmit?: (payload: { connection: { id: string; name: string; host: string; port: number; username: string }; authType: 'password'; password: string }) => Promise<void> }) => (
+    open ? (
+      <div>
+        <div data-testid="connect-modal" data-action={action ?? 'connect'}>{connection?.id}</div>
+        <button onClick={() => connection && onSubmit?.({
+          connection: {
+            id: connection.id,
+            name: connection.name ?? 'Test Conn',
+            host: connection.host ?? 'example.com',
+            port: connection.port ?? 22,
+            username: connection.username ?? 'tester',
+          },
+          authType: 'password',
+          password: 'secret',
+        })}>submit-connect-modal</button>
+      </div>
+    ) : null
   ),
 }));
 
@@ -129,6 +145,8 @@ vi.mock('@/lib/api', () => ({
   api: {
     saveConnection: vi.fn(),
     deleteConnection: vi.fn(),
+    getSavedConnectionForConnect: vi.fn(),
+    testConnection: vi.fn(),
   },
 }));
 
@@ -158,6 +176,61 @@ describe('SessionManagerPanel', () => {
       expect(screen.getByTestId('connect-modal')).toHaveTextContent('conn-1');
     });
     expect(screen.queryByTestId('properties-modal')).toBeNull();
+  });
+
+  it('opens the password modal in test mode when testing a saved password connection without a stored password', async () => {
+    vi.mocked(api.getSavedConnectionForConnect).mockResolvedValue({
+      name: 'Test Conn',
+      host: 'example.com',
+      port: 22,
+      username: 'tester',
+      auth_type: 'password',
+      agent_forwarding: false,
+      proxy_chain: [],
+    });
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('test-row'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('connect-modal')).toHaveTextContent('conn-1');
+      expect(screen.getByTestId('connect-modal')).toHaveAttribute('data-action', 'test');
+    });
+    expect(api.testConnection).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('properties-modal')).toBeNull();
+  });
+
+  it('submits prompted credentials into testConnection after opening the test modal', async () => {
+    vi.mocked(api.getSavedConnectionForConnect).mockResolvedValue({
+      name: 'Test Conn',
+      host: 'example.com',
+      port: 22,
+      username: 'tester',
+      auth_type: 'password',
+      agent_forwarding: false,
+      proxy_chain: [],
+    });
+    vi.mocked(api.testConnection).mockResolvedValue({ success: true, elapsedMs: 12 });
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('test-row'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('connect-modal')).toHaveAttribute('data-action', 'test');
+    });
+
+    fireEvent.click(screen.getByText('submit-connect-modal'));
+
+    await waitFor(() => {
+      expect(api.testConnection).toHaveBeenCalledWith({
+        host: 'example.com',
+        port: 22,
+        username: 'tester',
+        name: 'Test Conn',
+        auth_type: 'password',
+        password: 'secret',
+      });
+    });
   });
 
   it('broadcasts saved connection changes after deleting a connection', async () => {

@@ -45,6 +45,7 @@
       "edit": "编辑",
       "duplicate": "复制",
       "delete": "删除",
+      "test_connection": "测试连接",
       "manage_tags": "管理标签",
       "move_to_group": "移动到分组",
       "confirm_delete": "删除连接 \"{{name}}\"？",
@@ -65,7 +66,11 @@
       "connections_deleted": "已删除 {{count}} 个连接",
       "connection_duplicated": "连接已复制",
       "connections_moved": "{{count}} 个连接已移至 \"{{group}}\"",
-      "tags_updated": "标签已更新"
+      "tags_updated": "标签已更新",
+      "test_in_progress": "正在测试连接...",
+      "test_success": "连接成功",
+      "test_failed": "连接测试失败",
+      "test_elapsed": "已在 {{ms}}ms 内连接"
     },
     "edit_properties": {
       "title": "编辑连接",

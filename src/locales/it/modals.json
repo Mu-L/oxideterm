@@ -349,6 +349,12 @@
         "configured": "Jump server configurati"
       },
       "cancel": "Annulla",
+      "test": "Test",
+      "testing": "Test in corso...",
+      "test_success": "Connessione riuscita",
+      "test_failed": "Test di connessione fallito",
+      "test_elapsed": "Connesso in {{ms}}ms",
+      "test_not_supported_kbi": "Il test di connessione non è supportato per l'autenticazione 2FA",
       "connect": "Connetti",
       "connecting": "Connessione...",
       "connect_failed": "Connessione fallita",

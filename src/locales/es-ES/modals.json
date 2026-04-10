@@ -347,6 +347,12 @@
         "configured": "Servidores de salto configurados"
       },
       "cancel": "Cancelar",
+      "test": "Probar",
+      "testing": "Probando...",
+      "test_success": "Conexión exitosa",
+      "test_failed": "Prueba de conexión fallida",
+      "test_elapsed": "Conectado en {{ms}}ms",
+      "test_not_supported_kbi": "La prueba de conexión no es compatible con la autenticación 2FA",
       "connect": "Conectar",
       "connecting": "Conectando...",
       "connect_failed": "Error de conexión",

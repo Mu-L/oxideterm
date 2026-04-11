@@ -49,6 +49,10 @@ import {
   AlertTriangle,
   Brain,
   ExternalLink,
+  Key,
+  ToggleRight,
+  Wand2,
+  Wrench,
 } from 'lucide-react';
 
 // ============================================================================
@@ -86,7 +90,7 @@ const FONT_OPTIONS: { value: FontFamily; label: string; bundled: boolean }[] = [
   { value: 'menlo', label: 'Menlo', bundled: false },
 ];
 
-const TOTAL_STEPS = 7; // 0..6
+const TOTAL_STEPS = 9; // 0..8
 
 /** Mini terminal preview for theme cards */
 const ThemeCard = ({
@@ -152,8 +156,11 @@ export const OnboardingModal = () => {
   const terminalTheme = useSettingsStore((s) => s.settings.terminal.theme);
   const fontFamily = useSettingsStore((s) => s.settings.terminal.fontFamily);
   const fontSize = useSettingsStore((s) => s.settings.terminal.fontSize);
+  const aiEnabled = useSettingsStore((s) => s.settings.ai.enabled);
+  const toolUseEnabled = useSettingsStore((s) => s.settings.ai.toolUse?.enabled ?? false);
   const setLanguage = useSettingsStore((s) => s.setLanguage);
   const updateTerminal = useSettingsStore((s) => s.updateTerminal);
+  const updateAi = useSettingsStore((s) => s.updateAi);
   const { toggleModal } = useAppStore();
   const createLocalTerminal = useLocalTerminalStore((s) => s.createTerminal);
   const createTab = useAppStore((s) => s.createTab);
@@ -164,6 +171,8 @@ export const OnboardingModal = () => {
   const [importState, setImportState] = useState<'idle' | 'loading' | 'done'>('idle');
   const [importedCount, setImportedCount] = useState(0);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const [aiOptIn, setAiOptIn] = useState(false);
+  const [toolUseOptIn, setToolUseOptIn] = useState(false);
   const [cliStatus, setCliStatus] = useState<(CliCompanionStatus & { error?: boolean }) | null>(null);
   const [cliInstalling, setCliInstalling] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -183,10 +192,12 @@ export const OnboardingModal = () => {
       setImportState('idle');
       setImportedCount(0);
       setDisclaimerAccepted(false);
+      setAiOptIn(aiEnabled);
+      setToolUseOptIn(aiEnabled && toolUseEnabled);
       setCliStatus(null);
       setCliInstalling(false);
     }
-  }, [open]);
+  }, [open, aiEnabled, toolUseEnabled]);
 
   // Scroll to top on step change
   useEffect(() => {
@@ -195,7 +206,7 @@ export const OnboardingModal = () => {
 
   // Scan SSH config hosts when reaching the quick-start step
   useEffect(() => {
-    if (!open || step !== 6) return;
+    if (!open || step !== 8) return;
     api.listSshConfigHosts()
       .then((hosts) => setHostCount(hosts.filter((h) => h.alias !== '*').length))
       .catch(() => setHostCount(0));
@@ -203,16 +214,26 @@ export const OnboardingModal = () => {
 
   // Fetch CLI companion status when reaching the CLI step
   useEffect(() => {
-    if (!open || step !== 5) return;
+    if (!open || step !== 7) return;
     api.cliGetStatus()
       .then((status) => setCliStatus(status))
       .catch(() => setCliStatus({ bundled: false, installed: false, install_path: null, bundle_path: null, app_version: '0.0.0', matches_bundled: null, needs_reinstall: false, error: true }));
   }, [open, step]);
 
   const handleClose = useCallback(() => {
+    if (aiOptIn) {
+      updateAi('enabled', true);
+      updateAi('enabledConfirmed', true);
+    }
+    if (aiOptIn && toolUseOptIn) {
+      updateAi('toolUse', {
+        ...(useSettingsStore.getState().settings.ai.toolUse ?? { enabled: false, autoApproveTools: {}, disabledTools: [] }),
+        enabled: true,
+      });
+    }
     setOpen(false);
     completeOnboarding();
-  }, [completeOnboarding]);
+  }, [aiOptIn, toolUseOptIn, updateAi, completeOnboarding]);
 
   const handleOpenTerminal = useCallback(async () => {
     handleClose();
@@ -463,7 +484,7 @@ export const OnboardingModal = () => {
     );
   };
 
-  /** Step 6 — Quick Start + Shortcuts */
+  /** Step 8 — Quick Start + Shortcuts */
   const renderQuickStart = () => {
     const mod = isMac ? '⌘' : 'Ctrl';
     const shortcutGroups = [
@@ -605,20 +626,20 @@ export const OnboardingModal = () => {
       </div>
       <div className="grid grid-cols-2 gap-2.5">
         {([
-          { icon: Command, key: 'cmd_palette', shortcut: isMac ? '⌘K' : 'Ctrl+K', platform: null },
-          { icon: Bot, key: 'ai_chat', shortcut: null, platform: null },
-          { icon: FolderOpen, key: 'sftp', shortcut: null, platform: null },
-          { icon: HardDrive, key: 'local_file_manager', shortcut: null, platform: null },
-          { icon: Waypoints, key: 'port_forwarding', shortcut: null, platform: null },
-          { icon: RefreshCw, key: 'reconnect', shortcut: null, platform: null },
-          { icon: Puzzle, key: 'plugin_system', shortcut: null, platform: null },
-          { icon: FileCode, key: 'custom_themes', shortcut: null, platform: null },
-          { icon: Rocket, key: 'launchpad', shortcut: null, platform: 'macOS' },
-          { icon: Monitor, key: 'wsl_graphics', shortcut: null, platform: 'Windows' },
-          { icon: ArrowUpDown, key: 'multiplexing', shortcut: null, platform: null },
-          { icon: Shield, key: 'security', shortcut: null, platform: null },
+          { icon: Command, key: 'cmd_palette', shortcut: isMac ? '⌘K' : 'Ctrl+K', platform: null, highlight: true },
+          { icon: Bot, key: 'ai_chat', shortcut: null, platform: null, highlight: false },
+          { icon: FolderOpen, key: 'sftp', shortcut: null, platform: null, highlight: false },
+          { icon: HardDrive, key: 'local_file_manager', shortcut: null, platform: null, highlight: false },
+          { icon: Waypoints, key: 'port_forwarding', shortcut: null, platform: null, highlight: false },
+          { icon: RefreshCw, key: 'reconnect', shortcut: null, platform: null, highlight: false },
+          { icon: Puzzle, key: 'plugin_system', shortcut: null, platform: null, highlight: false },
+          { icon: FileCode, key: 'custom_themes', shortcut: null, platform: null, highlight: false },
+          { icon: Rocket, key: 'launchpad', shortcut: null, platform: 'macOS', highlight: false },
+          { icon: Monitor, key: 'wsl_graphics', shortcut: null, platform: 'Windows', highlight: false },
+          { icon: ArrowUpDown, key: 'multiplexing', shortcut: null, platform: null, highlight: false },
+          { icon: Shield, key: 'security', shortcut: null, platform: null, highlight: false },
         ] as const).map((item) => (
-          <div key={item.key} className="flex gap-2.5 p-3.5 rounded-md border border-theme-border bg-theme-bg-panel">
+          <div key={item.key} className={`flex gap-2.5 p-3.5 rounded-md border ${item.highlight ? 'border-[var(--theme-accent)]/40 bg-[var(--theme-accent)]/5' : 'border-theme-border bg-theme-bg-panel'}`}>
             <item.icon className="h-4 w-4 mt-0.5 shrink-0 text-[var(--theme-accent)]" />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
@@ -642,7 +663,136 @@ export const OnboardingModal = () => {
     </div>
   );
 
-  /** Step 5 — CLI Companion */
+  /** Step 5 — AI Introduction */
+  const renderAiIntro = () => (
+    <div className="px-8 pt-6 pb-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <Wand2 className="h-5 w-5 text-[var(--theme-accent)]" />
+        <div>
+          <h3 className="text-lg font-semibold text-theme-text">{t('onboarding.ai_tools_title')}</h3>
+          <p className="text-xs text-theme-text-muted">{t('onboarding.ai_tools_desc')}</p>
+        </div>
+      </div>
+
+      {/* OxideSens overview */}
+      <div className="flex gap-3 p-3.5 rounded-md border border-theme-border bg-theme-bg-panel">
+        <Bot className="h-4 w-4 mt-0.5 shrink-0 text-purple-400" />
+        <div className="min-w-0">
+          <span className="text-xs font-medium text-theme-text">{t('onboarding.ai_tools_oxidesens')}</span>
+          <p className="text-[11px] text-theme-text-muted mt-0.5 leading-relaxed">{t('onboarding.ai_tools_oxidesens_desc')}</p>
+        </div>
+      </div>
+
+      {/* Capabilities */}
+      <div className="space-y-2">
+        <span className="text-xs font-medium text-theme-text-muted">{t('onboarding.ai_tools_capabilities')}</span>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { icon: Terminal, key: 'ai_tools_cap_sidebar' },
+            { icon: Zap, key: 'ai_tools_cap_inline' },
+            { icon: Bot, key: 'ai_tools_cap_agent' },
+            { icon: Key, key: 'ai_tools_cap_byok' },
+          ] as const).map((item) => (
+            <div key={item.key} className="flex gap-2 p-2.5 rounded-md bg-theme-bg-panel/50 border border-theme-border/50">
+              <item.icon className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[var(--theme-accent)]" />
+              <span className="text-[11px] text-theme-text leading-snug">{t(`onboarding.${item.key}`)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Privacy info */}
+      <div className="space-y-2">
+        <span className="text-xs font-medium text-theme-text-muted">{t('onboarding.ai_tools_privacy')}</span>
+        <div className="space-y-1.5">
+          {([
+            { icon: Lock, key: 'ai_tools_privacy_local' },
+            { icon: Key, key: 'ai_tools_privacy_keys' },
+            { icon: Shield, key: 'ai_tools_privacy_context' },
+          ] as const).map((item) => (
+            <div key={item.key} className="flex gap-2.5 p-2.5 rounded-md bg-theme-bg-panel/50 border border-theme-border/50">
+              <item.icon className="h-3.5 w-3.5 mt-0.5 shrink-0 text-theme-text-muted" />
+              <span className="text-[11px] text-theme-text-muted leading-snug">{t(`onboarding.${item.key}`)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  /** Step 6 — AI Setup */
+  const renderAiSetup = () => (
+    <div className="px-8 pt-6 pb-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <ToggleRight className="h-5 w-5 text-[var(--theme-accent)]" />
+        <div>
+          <h3 className="text-lg font-semibold text-theme-text">{t('onboarding.ai_setup_title')}</h3>
+          <p className="text-xs text-theme-text-muted">{t('onboarding.ai_setup_desc')}</p>
+        </div>
+      </div>
+
+      {/* Enable AI toggle */}
+      <label className="flex items-center gap-3 p-3.5 rounded-md border border-[var(--theme-accent)]/30 bg-[var(--theme-accent)]/5 cursor-pointer hover:bg-[var(--theme-accent)]/10 transition-colors select-none">
+        <input
+          type="checkbox"
+          checked={aiOptIn}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setAiOptIn(checked);
+            if (!checked) setToolUseOptIn(false);
+          }}
+          className="rounded border-theme-border accent-[var(--theme-accent)]"
+        />
+        <div className="flex-1 min-w-0">
+          <span className="text-xs font-medium text-theme-text">{t('onboarding.ai_tools_enable')}</span>
+          <p className="text-[11px] text-theme-text-muted mt-0.5">{t('onboarding.ai_tools_enable_hint')}</p>
+        </div>
+        <ToggleRight className={`h-5 w-5 shrink-0 transition-colors ${aiOptIn ? 'text-[var(--theme-accent)]' : 'text-theme-text-muted'}`} />
+      </label>
+
+      {/* Enable Tools toggle */}
+      <label className={`flex items-center gap-3 p-3.5 rounded-md border transition-colors select-none ${aiOptIn ? 'border-theme-border bg-theme-bg-panel cursor-pointer hover:bg-theme-bg-hover' : 'border-theme-border/50 bg-theme-bg-sunken opacity-60 cursor-not-allowed'}`}>
+        <input
+          type="checkbox"
+          checked={toolUseOptIn}
+          disabled={!aiOptIn}
+          onChange={(e) => setToolUseOptIn(e.target.checked)}
+          className="rounded border-theme-border accent-[var(--theme-accent)]"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-theme-text">{t('onboarding.ai_tools_enable_tools')}</span>
+            <Wrench className="h-3.5 w-3.5 text-theme-text-muted" />
+          </div>
+          <p className="text-[11px] text-theme-text-muted mt-0.5">{t('onboarding.ai_tools_enable_tools_hint')}</p>
+          <p className="text-[11px] text-theme-text-muted mt-1">{t('onboarding.ai_tools_enable_tools_warning')}</p>
+        </div>
+        <ToggleRight className={`h-5 w-5 shrink-0 transition-colors ${toolUseOptIn && aiOptIn ? 'text-[var(--theme-accent)]' : 'text-theme-text-muted'}`} />
+      </label>
+
+      {/* Command Palette highlight */}
+      <div className="flex gap-3 p-3.5 rounded-md border border-[var(--theme-accent)]/20 bg-[var(--theme-accent)]/5">
+        <Command className="h-4 w-4 mt-0.5 shrink-0 text-[var(--theme-accent)]" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-theme-text">{t('onboarding.ai_tools_cmd_palette')}</span>
+            <kbd className="px-1.5 py-0.5 rounded-sm bg-theme-bg border border-theme-border text-theme-text-muted font-mono text-[10px] leading-tight">
+              {isMac ? '⌘K' : 'Ctrl+K'}
+            </kbd>
+          </div>
+          <p className="text-[11px] text-theme-text-muted mt-0.5 leading-relaxed">{t('onboarding.ai_tools_cmd_palette_desc')}</p>
+        </div>
+      </div>
+
+      {/* Later hint */}
+      <div className="flex gap-2.5 p-3 rounded-md bg-theme-bg-sunken border border-theme-border">
+        <Lightbulb className="h-3.5 w-3.5 mt-0.5 shrink-0 text-theme-text-muted" />
+        <p className="text-[11px] text-theme-text-muted leading-relaxed">{t('onboarding.ai_tools_later_hint')}</p>
+      </div>
+    </div>
+  );
+
+  /** Step 7 — CLI Companion */
   const renderCliCompanion = () => (
     <div className="px-8 pt-6 pb-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -840,9 +990,9 @@ export const OnboardingModal = () => {
     </div>
   );
 
-  const STEP_ICONS = [Globe, ScrollText, Palette, Route, Shield, SquareTerminal, Sparkles];
-  const STEP_TITLE_KEYS = ['welcome', 'disclaimer_title', 'appearance_title', 'workflow_title', 'features', 'cli_step_title', 'quick_start'];
-  const stepRenderers = [renderWelcome, renderDisclaimer, renderAppearance, renderWorkflow, renderFeatures, renderCliCompanion, renderQuickStart];
+  const STEP_ICONS = [Globe, ScrollText, Palette, Route, Shield, Wand2, ToggleRight, SquareTerminal, Sparkles];
+  const STEP_TITLE_KEYS = ['welcome', 'disclaimer_title', 'appearance_title', 'workflow_title', 'features', 'ai_tools_title', 'ai_setup_title', 'cli_step_title', 'quick_start'];
+  const stepRenderers = [renderWelcome, renderDisclaimer, renderAppearance, renderWorkflow, renderFeatures, renderAiIntro, renderAiSetup, renderCliCompanion, renderQuickStart];
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && disclaimerAccepted) handleClose(); }}>

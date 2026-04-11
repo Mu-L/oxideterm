@@ -904,6 +904,25 @@ export interface StartTerminalHistorySearchResponse {
   search_id: string;
 }
 
+export interface TerminalHistorySearchResultsResponse {
+  search_id: string;
+  session_id: string;
+  cursor: number;
+  next_cursor: number;
+  matches: HistorySearchMatch[];
+  total_buffered_matches: number;
+  total_matches: number;
+  duration_ms: number;
+  searched_layers: HistorySearchSource[];
+  searched_chunks: number;
+  total_chunks?: number;
+  truncated: boolean;
+  partial_failure: boolean;
+  archive_status: ArchiveHealthSnapshot;
+  done: boolean;
+  error?: string;
+}
+
 export interface ArchivedExcerptLine {
   line_number: number;
   text: string;

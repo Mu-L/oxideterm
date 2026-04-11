@@ -95,6 +95,8 @@ import {
 import { getDefaults, getBinding } from '../keybindingRegistry';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
+const TERMINAL_HISTORY_POLL_INTERVAL_MS = 40;
+const TERMINAL_HISTORY_SEARCH_TIMEOUT_MS = 60_000;
 
 // Lazy store imports — loaded on first use to avoid circular deps
 let _useTransferStore: typeof import('../../store/transferStore').useTransferStore | null = null;
@@ -838,11 +840,55 @@ export function buildPluginContext(manifest: PluginManifest): PluginContext {
     async search(nodeId: string, query: string, options?: { caseSensitive?: boolean; regex?: boolean; wholeWord?: boolean }) {
       const sessionId = resolveNodeToFirstSession(nodeId);
       if (!sessionId) return Object.freeze({ matches: [], total_matches: 0 });
-      const result = await invoke<{ matches: unknown[]; total_matches: number; duration_ms: number }>('search_terminal', {
+      const { search_id } = await invoke<{ search_id: string }>('start_terminal_history_search', {
         sessionId,
-        options: { query, case_sensitive: options?.caseSensitive ?? false, regex: options?.regex ?? false, whole_word: options?.wholeWord ?? false },
+        options: {
+          query,
+          case_sensitive: options?.caseSensitive ?? false,
+          regex: options?.regex ?? false,
+          whole_word: options?.wholeWord ?? false,
+        },
       });
-      return Object.freeze({ matches: Object.freeze(result.matches), total_matches: result.total_matches });
+
+      let cursor = 0;
+      const startedAt = Date.now();
+      let totalMatches = 0;
+      const matches: unknown[] = [];
+      try {
+        while (true) {
+          if (Date.now() - startedAt > TERMINAL_HISTORY_SEARCH_TIMEOUT_MS) {
+            throw new Error(`Terminal history search timed out after ${TERMINAL_HISTORY_SEARCH_TIMEOUT_MS}ms`);
+          }
+
+          const page = await invoke<{
+            cursor: number;
+            done: boolean;
+            next_cursor: number;
+            matches: unknown[];
+            total_matches: number;
+          }>('get_terminal_history_search_results', { searchId: search_id, cursor });
+
+          if (page.cursor !== cursor) {
+            throw new Error(
+              `Terminal history search cursor mismatch: expected ${cursor}, received ${page.cursor}`,
+            );
+          }
+
+          matches.push(...page.matches);
+          cursor = page.next_cursor;
+          totalMatches = page.total_matches;
+
+          if (page.done) {
+            break;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, TERMINAL_HISTORY_POLL_INTERVAL_MS));
+        }
+      } finally {
+        await invoke('cancel_terminal_history_search', { searchId: search_id }).catch(() => undefined);
+      }
+
+      return Object.freeze({ matches: Object.freeze(matches), total_matches: totalMatches });
     },
     async getScrollBuffer(nodeId: string, startLine: number, count: number) {
       const sessionId = resolveNodeToFirstSession(nodeId);

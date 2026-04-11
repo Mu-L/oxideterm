@@ -579,6 +579,7 @@ pub fn run() {
         // Search commands
         commands::search_terminal,
         commands::start_terminal_history_search,
+        commands::get_terminal_history_search_results,
         commands::cancel_terminal_history_search,
         commands::get_archived_history_excerpt,
         commands::get_terminal_history_status,
@@ -921,6 +922,7 @@ pub fn run() {
         // Search commands
         commands::search_terminal,
         commands::start_terminal_history_search,
+        commands::get_terminal_history_search_results,
         commands::cancel_terminal_history_search,
         commands::get_archived_history_excerpt,
         commands::get_terminal_history_status,

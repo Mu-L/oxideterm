@@ -895,7 +895,7 @@ async function execSearchTerminal(
   }
 
   const maxResults = clamp(Number(args.max_results) || 50, 1, 100);
-  const result = await api.searchTerminal(sessionId, {
+  const result = await api.searchTerminalLayered(sessionId, {
     query,
     case_sensitive: (args.case_sensitive as boolean) ?? false,
     regex: (args.regex as boolean) ?? false,
@@ -911,8 +911,15 @@ async function execSearchTerminal(
     return { toolCallId, toolName: 'search_terminal', success: true, output: 'No matches found.', durationMs: Date.now() - startTime };
   }
 
-  const lines = result.matches.map(m => `L${m.line_number}:${m.column_start}: ${m.line_content}`);
-  const footer = `\n${result.total_matches} match(es) in ${result.duration_ms}ms` + (result.truncated ? ' (results truncated)' : '');
+  const lines = result.matches.map(m => {
+    const sourceLabel = m.source === 'cold' ? '[archived]' : '[recent]';
+    return `${sourceLabel} L${m.line_number}:${m.column_start}: ${m.line_content}`;
+  });
+  const footerParts = [`${result.total_matches} match(es) in ${result.duration_ms}ms`];
+  if (result.truncated) footerParts.push('results truncated');
+  if (result.partial_failure) footerParts.push('partial archived search failure');
+  if (result.archive_status.degraded) footerParts.push('archive degraded');
+  const footer = `\n${footerParts.join(' | ')}`;
   const { text, truncated } = truncateOutput(lines.join('\n') + footer);
   return { toolCallId, toolName: 'search_terminal', success: true, output: text, truncated, durationMs: Date.now() - startTime };
 }

@@ -26,7 +26,9 @@ import {
   SearchResult,
   ArchiveHealthSnapshot,
   StartTerminalHistorySearchResponse,
+  TerminalHistorySearchResultsResponse,
   ArchivedHistoryExcerpt,
+  HistorySearchMatch,
   SessionStats,
   QuickHealthCheck,
   IncompleteTransferInfo,
@@ -59,6 +61,8 @@ import type { PluginManifest, UrlInstallResult } from '../types/plugin';
 
 // Toggle this for development without a backend
 const USE_MOCK = false;
+const TERMINAL_HISTORY_POLL_INTERVAL_MS = 40;
+const TERMINAL_HISTORY_SEARCH_TIMEOUT_MS = 60_000;
 
 type TestConnectionRequestOptions = {
   trust_host_key?: boolean;
@@ -982,6 +986,40 @@ export const api = {
     return invoke('start_terminal_history_search', { sessionId, options });
   },
 
+  getTerminalHistorySearchResults: async (
+    searchId: string,
+    cursor: number,
+  ): Promise<TerminalHistorySearchResultsResponse> => {
+    if (USE_MOCK) {
+      return {
+        search_id: searchId,
+        session_id: 'mock-session',
+        cursor,
+        next_cursor: cursor,
+        matches: [],
+        total_buffered_matches: 0,
+        total_matches: 0,
+        duration_ms: 0,
+        searched_layers: [],
+        searched_chunks: 0,
+        truncated: false,
+        partial_failure: false,
+        archive_status: {
+          available: false,
+          degraded: false,
+          closing: false,
+          queued_commands: 0,
+          max_queue_depth: 0,
+          dropped_appends: 0,
+          dropped_lines: 0,
+          sealed_chunks: 0,
+        },
+        done: true,
+      };
+    }
+    return invoke('get_terminal_history_search_results', { searchId, cursor });
+  },
+
   cancelTerminalHistorySearch: async (searchId: string): Promise<void> => {
     if (USE_MOCK) return;
     return invoke('cancel_terminal_history_search', { searchId });
@@ -1023,6 +1061,82 @@ export const api = {
       };
     }
     return invoke('get_terminal_history_status', { sessionId });
+  },
+
+  searchTerminalLayered: async (
+    sessionId: string,
+    options: SearchOptions,
+  ): Promise<{
+    matches: HistorySearchMatch[];
+    total_matches: number;
+    duration_ms: number;
+    truncated: boolean;
+    partial_failure: boolean;
+    archive_status: ArchiveHealthSnapshot;
+    error?: string;
+  }> => {
+    const { search_id } = await api.startTerminalHistorySearch(sessionId, options);
+    const startedAt = Date.now();
+    const matches: HistorySearchMatch[] = [];
+    let cursor = 0;
+    let totalMatches = 0;
+    let durationMs = 0;
+    let truncated = false;
+    let partialFailure = false;
+    let archiveStatus: ArchiveHealthSnapshot = {
+      available: false,
+      degraded: false,
+      closing: false,
+      queued_commands: 0,
+      max_queue_depth: 0,
+      dropped_appends: 0,
+      dropped_lines: 0,
+      sealed_chunks: 0,
+    };
+    let error: string | undefined;
+
+    try {
+      while (true) {
+        if (Date.now() - startedAt > TERMINAL_HISTORY_SEARCH_TIMEOUT_MS) {
+          throw new Error(`Terminal history search timed out after ${TERMINAL_HISTORY_SEARCH_TIMEOUT_MS}ms`);
+        }
+
+        const page = await api.getTerminalHistorySearchResults(search_id, cursor);
+        if (page.cursor !== cursor) {
+          throw new Error(
+            `Terminal history search cursor mismatch: expected ${cursor}, received ${page.cursor}`,
+          );
+        }
+        if (page.matches.length > 0) {
+          matches.push(...page.matches);
+        }
+        cursor = page.next_cursor;
+        totalMatches = page.total_matches;
+        durationMs = page.duration_ms;
+        truncated = page.truncated;
+        partialFailure = page.partial_failure;
+        archiveStatus = page.archive_status;
+        error = page.error;
+
+        if (page.done) {
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, TERMINAL_HISTORY_POLL_INTERVAL_MS));
+      }
+    } finally {
+      await api.cancelTerminalHistorySearch(search_id).catch(() => undefined);
+    }
+
+    return {
+      matches,
+      total_matches: totalMatches,
+      duration_ms: durationMs,
+      truncated,
+      partial_failure: partialFailure,
+      archive_status: archiveStatus,
+      error,
+    };
   },
 
   scrollToLine: async (sessionId: string, lineNumber: number, contextLines: number): Promise<TerminalLine[]> => {

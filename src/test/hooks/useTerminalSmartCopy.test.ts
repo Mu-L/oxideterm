@@ -165,9 +165,10 @@ describe('attachTerminalSmartCopy', () => {
     expect(restoredHandler(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))).toBe(true);
   });
 
-  it('lets the native paste shortcut pass through to xterm', () => {
+  it('consumes the native paste shortcut and invokes the callback (fixes double-paste #62)', () => {
     const { term, getHandler } = createTerminalMock();
     const onPasteShortcut = vi.fn();
+    const event = createShortcutEvent({ key: 'v', ctrlKey: true, shiftKey: true });
 
     attachTerminalSmartCopy(term, {
       isActive: () => true,
@@ -175,10 +176,12 @@ describe('attachTerminalSmartCopy', () => {
       onPasteShortcut,
     });
 
-    const handled = getHandler()?.(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, shiftKey: true }));
+    const handled = getHandler()?.(event);
 
-    expect(handled).toBe(true);
-    expect(onPasteShortcut).not.toHaveBeenCalled();
+    expect(handled).toBe(false);
+    expect(onPasteShortcut).toHaveBeenCalledOnce();
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(event.stopPropagation).toHaveBeenCalledOnce();
   });
 
   it('consumes a customized terminal paste shortcut and invokes the callback', () => {

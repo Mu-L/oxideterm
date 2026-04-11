@@ -107,4 +107,32 @@ describe('keybindingStore', () => {
       meta: false,
     });
   });
+
+  it('restores persisted terminal.paste overrides on startup before settings are opened', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      'terminal.paste': {
+        other: { key: 'v', ctrl: true, shift: false, alt: false, meta: false },
+      },
+    }));
+
+    const registry = await import('@/lib/keybindingRegistry');
+
+    expect(registry.getBinding('terminal.paste')).toEqual({
+      key: 'v',
+      ctrl: true,
+      shift: true,
+      alt: false,
+      meta: false,
+    });
+
+    await import('@/bootstrap/initKeybindings');
+
+    expect(registry.getBinding('terminal.paste')).toEqual({
+      key: 'v',
+      ctrl: true,
+      shift: false,
+      alt: false,
+      meta: false,
+    });
+  });
 });

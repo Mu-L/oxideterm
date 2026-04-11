@@ -13,6 +13,7 @@ import packageJson from '../package.json'
 import App from './App'
 import './styles.css'
 import { i18nReady } from './i18n'
+import './bootstrap/initKeybindings'
 import { initializeSettings } from './store/settingsStore'
 
 // Dev-only: register fault injection API (window.__faultInjection)

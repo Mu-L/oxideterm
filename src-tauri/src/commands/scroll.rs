@@ -13,8 +13,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::session::history_archive::{get_archived_excerpt, load_manifest, read_chunk_records};
 use crate::session::{
-    ArchiveHealthSnapshot, ArchivedHistoryExcerpt, BufferStats, SearchOptions, SearchResult,
-    SessionRegistry, TerminalLine, search_lines,
+    ArchiveHealthSnapshot, ArchivedHistoryExcerpt, BufferStats, SearchOptions, SessionRegistry,
+    TerminalLine, search_lines,
 };
 
 const TERMINAL_HISTORY_SEARCH_PROGRESS_EVENT: &str = "terminal-history-search-progress";
@@ -553,20 +553,6 @@ pub async fn get_all_buffer_lines(
         returned_lines,
         truncated,
     })
-}
-
-/// Search terminal buffer
-#[tauri::command]
-pub async fn search_terminal(
-    session_id: String,
-    options: SearchOptions,
-    registry: State<'_, Arc<SessionRegistry>>,
-) -> Result<SearchResult, String> {
-    let scroll_buffer = registry
-        .with_session(&session_id, |entry| entry.scroll_buffer.clone())
-        .ok_or_else(|| format!("Session {} not found", session_id))?;
-
-    Ok(scroll_buffer.search(options).await)
 }
 
 /// Scroll to specific line and get context

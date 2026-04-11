@@ -17,7 +17,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::RwLock;
 
 use super::history_archive::TerminalHistoryArchive;
-use super::search::{SearchOptions, SearchResult, search_lines};
 
 /// Default maximum lines to keep in buffer.
 /// 8K lines keeps interactive history useful while reducing per-session memory pressure.
@@ -269,27 +268,6 @@ impl ScrollBuffer {
         self.total_lines.load(Ordering::Relaxed)
     }
 
-    /// Search buffer contents asynchronously
-    /// Uses spawn_blocking to avoid blocking the tokio runtime.
-    /// Reads directly from the lock to avoid cloning all lines.
-    pub async fn search(&self, options: SearchOptions) -> SearchResult {
-        let lines = self.lines.read().await;
-        // Collect a Vec<TerminalLine> only of the current buffer snapshot
-        // so we can move it into spawn_blocking (RwLockReadGuard is !Send).
-        let snapshot: Vec<TerminalLine> = lines.iter().cloned().collect();
-        drop(lines); // release lock before blocking
-
-        // Execute search in a blocking task to avoid blocking the async runtime
-        tokio::task::spawn_blocking(move || search_lines(&snapshot, options))
-            .await
-            .unwrap_or_else(|_| SearchResult {
-                matches: vec![],
-                total_matches: 0,
-                duration_ms: 0,
-                truncated: false,
-                error: Some("Search task failed".to_string()),
-            })
-    }
 }
 
 impl Default for ScrollBuffer {

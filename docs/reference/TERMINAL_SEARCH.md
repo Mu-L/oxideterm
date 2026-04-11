@@ -457,10 +457,25 @@ const searchAddon = new SearchAddon();
 terminal.loadAddon(searchAddon);
 searchAddon.findNext(query, { ...options });
 
-// Deep History: Tauri Command
-await invoke('search_terminal', { sessionId, options });
+// Deep History: layered archive search
+const { search_id } = await invoke('start_terminal_history_search', { sessionId, options });
+
+try {
+  let cursor = 0;
+
+  while (true) {
+    const page = await invoke('get_terminal_history_search_results', { searchId: search_id, cursor });
+    cursor = page.next_cursor;
+
+    if (page.done) {
+      break;
+    }
+  }
+} finally {
+  await invoke('cancel_terminal_history_search', { searchId: search_id });
+}
 ```
 
 ---
 
-*文档版本: v1.9.1 | 最后更新: 2026-02-11*
+*文档版本: v1.10.0 | 最后更新: 2026-04-12*

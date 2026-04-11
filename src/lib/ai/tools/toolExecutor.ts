@@ -10,7 +10,7 @@
  *
  * Tools are categorized into three routing modes:
  * - CONTEXT_FREE: No nodeId needed (list_sessions, list_connections, get_connection_health)
- * - SESSION_ID: Uses session_id parameter (get_terminal_buffer, search_terminal)
+ * - SESSION_ID: Uses session_id parameter (get_terminal_buffer, search_terminal layered history search)
  * - NODE_ID: Resolves target node via explicit node_id param or active terminal fallback
  */
 

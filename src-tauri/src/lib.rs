@@ -577,7 +577,6 @@ pub fn run() {
         commands::clear_buffer,
         commands::get_all_buffer_lines,
         // Search commands
-        commands::search_terminal,
         commands::start_terminal_history_search,
         commands::get_terminal_history_search_results,
         commands::cancel_terminal_history_search,
@@ -920,7 +919,6 @@ pub fn run() {
         commands::clear_buffer,
         commands::get_all_buffer_lines,
         // Search commands
-        commands::search_terminal,
         commands::start_terminal_history_search,
         commands::get_terminal_history_search_results,
         commands::cancel_terminal_history_search,

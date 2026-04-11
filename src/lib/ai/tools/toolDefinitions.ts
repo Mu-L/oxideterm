@@ -225,7 +225,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
   {
     name: 'search_terminal',
     description:
-      'Search for a text pattern in a terminal session\'s buffer. Returns matching lines with line numbers.',
+      'Search for a text pattern in a terminal session\'s layered history. Returns matching lines with line numbers and recent or archived source labels.',
     parameters: {
       type: 'object',
       properties: {

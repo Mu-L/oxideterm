@@ -23,7 +23,6 @@ import {
   TerminalLine,
   BufferStats,
   SearchOptions,
-  SearchResult,
   ArchiveHealthSnapshot,
   StartTerminalHistorySearchResponse,
   TerminalHistorySearchResultsResponse,
@@ -972,11 +971,6 @@ export const api = {
   },
 
   // --- Search APIs ---
-  
-  searchTerminal: async (sessionId: string, options: SearchOptions): Promise<SearchResult> => {
-    if (USE_MOCK) return { matches: [], total_matches: 0, duration_ms: 0 };
-    return invoke('search_terminal', { sessionId, options });
-  },
 
   startTerminalHistorySearch: async (
     sessionId: string,

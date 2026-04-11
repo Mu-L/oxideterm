@@ -742,6 +742,7 @@ pub fn run() {
         commands::ai_fetch,
         commands::ai_fetch_stream,
         commands::ai_fetch_stream_cancel,
+        commands::plugin_http_request,
         // Plugin system commands
         commands::list_plugins,
         commands::read_plugin_file,
@@ -1077,6 +1078,7 @@ pub fn run() {
         commands::ai_fetch,
         commands::ai_fetch_stream,
         commands::ai_fetch_stream_cancel,
+        commands::plugin_http_request,
         // Plugin system commands
         commands::list_plugins,
         commands::read_plugin_file,

@@ -12,6 +12,7 @@
 //! - Non-streaming response body capped at 10 MB
 //! - Streaming channel auto-closes on frontend disconnect
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use dashmap::DashMap;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -33,6 +34,15 @@ const MAX_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
 pub struct AiFetchResponse {
     pub status: u16,
     pub body: String,
+}
+
+/// Binary-safe HTTP response for plugin API calls.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginHttpResponse {
+    pub status: u16,
+    pub headers: HashMap<String, String>,
+    pub body_base64: String,
 }
 
 /// Chunk events for streaming AI fetch
@@ -85,6 +95,38 @@ fn build_request(
 
     if let Some(body_str) = body {
         builder = builder.body(body_str);
+    }
+
+    Ok(builder)
+}
+
+fn build_request_binary(
+    client: &reqwest::Client,
+    url: &str,
+    method: &str,
+    headers: &HashMap<String, String>,
+    body: Option<Vec<u8>>,
+) -> Result<reqwest::RequestBuilder, String> {
+    let mut builder = match method.to_uppercase().as_str() {
+        "GET" => client.get(url),
+        "POST" => client.post(url),
+        "PUT" => client.put(url),
+        "DELETE" => client.delete(url),
+        "PATCH" => client.patch(url),
+        "MKCOL" => client.request(
+            reqwest::Method::from_bytes(b"MKCOL").map_err(|e| e.to_string())?,
+            url,
+        ),
+        "HEAD" => client.head(url),
+        other => return Err(format!("Unsupported HTTP method: {}", other)),
+    };
+
+    for (key, value) in headers {
+        builder = builder.header(key.as_str(), value.as_str());
+    }
+
+    if let Some(body_bytes) = body {
+        builder = builder.body(body_bytes);
     }
 
     Ok(builder)
@@ -148,6 +190,87 @@ pub async fn ai_fetch(
     let body = String::from_utf8_lossy(&bytes).to_string();
 
     Ok(AiFetchResponse { status, body })
+}
+
+/// Binary-safe HTTP proxy for plugins (bypasses browser CORS).
+#[tauri::command]
+pub async fn plugin_http_request(
+    url: String,
+    method: String,
+    headers: HashMap<String, String>,
+    body_base64: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Result<PluginHttpResponse, String> {
+    validate_url(&url)?;
+
+    let body = match body_base64 {
+        Some(encoded) if !encoded.is_empty() => {
+            let decoded = STANDARD
+                .decode(encoded)
+                .map_err(|e| format!("Invalid base64 request body: {}", e))?;
+            if decoded.len() > MAX_RESPONSE_SIZE {
+                return Err(format!(
+                    "Request body too large: {} bytes (max {} bytes)",
+                    decoded.len(),
+                    MAX_RESPONSE_SIZE
+                ));
+            }
+            Some(decoded)
+        }
+        _ => None,
+    };
+
+    tracing::debug!(
+        "[plugin_http_request] {} {} (timeout: {:?}ms)",
+        method,
+        url,
+        timeout_ms
+    );
+
+    let client = reqwest::Client::new();
+    let mut builder = build_request_binary(&client, &url, &method, &headers, body)?;
+
+    if let Some(ms) = timeout_ms {
+        if ms > 0 {
+            builder = builder.timeout(std::time::Duration::from_millis(ms));
+        }
+    }
+
+    let response = builder
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    let status = response.status().as_u16();
+    let response_headers = response
+        .headers()
+        .iter()
+        .map(|(key, value)| {
+            (
+                key.to_string(),
+                value.to_str().unwrap_or_default().to_string(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    if bytes.len() > MAX_RESPONSE_SIZE {
+        return Err(format!(
+            "Response too large: {} bytes (max {} bytes)",
+            bytes.len(),
+            MAX_RESPONSE_SIZE
+        ));
+    }
+
+    Ok(PluginHttpResponse {
+        status,
+        headers: response_headers,
+        body_base64: STANDARD.encode(bytes),
+    })
 }
 
 /// Streaming HTTP fetch for AI API calls (bypasses browser CORS).

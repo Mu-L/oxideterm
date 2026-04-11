@@ -543,8 +543,7 @@ mod tests {
 
         assert_eq!(
             AgentDeployer::parse_remote_version_output("oxideterm-agent 0.12.1"),
-            if AgentDeployer::expected_compatibility_version()
-                == LEGACY_AGENT_COMPATIBILITY_VERSION
+            if AgentDeployer::expected_compatibility_version() == LEGACY_AGENT_COMPATIBILITY_VERSION
             {
                 RemoteAgentInstallState::Current
             } else {

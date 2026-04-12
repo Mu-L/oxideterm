@@ -232,6 +232,12 @@ export function OxideImportModal({ isOpen, onClose }: OxideImportModalProps) {
                 {result.merged > 0 && (
                   <p className="text-sm mt-1">{t('modals.import.merged', { count: result.merged })}</p>
                 )}
+                {result.importedAppSettings && (
+                  <p className="text-sm mt-1">{t('modals.import.imported_app_settings')}</p>
+                )}
+                {result.importedPluginSettings > 0 && (
+                  <p className="text-sm mt-1">{t('modals.import.imported_plugin_settings', { count: result.importedPluginSettings })}</p>
+                )}
                 {result.replaced > 0 && (
                   <p className="text-sm mt-1">{t('modals.import.replaced', { count: result.replaced })}</p>
                 )}
@@ -428,6 +434,18 @@ export function OxideImportModal({ isOpen, onClose }: OxideImportModalProps) {
                     {t('modals.import.preview_forwards', { count: preview.totalForwards })}
                   </div>
                 )}
+
+                {preview.hasAppSettings && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 text-blue-500 px-3 py-2 rounded text-xs">
+                    {t('modals.import.preview_app_settings')}
+                  </div>
+                )}
+
+                {preview.pluginSettingsCount > 0 && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 text-blue-500 px-3 py-2 rounded text-xs">
+                    {t('modals.import.preview_plugin_settings', { count: preview.pluginSettingsCount })}
+                  </div>
+                )}
               </div>
 
               {/* Actions */}
@@ -462,6 +480,12 @@ export function OxideImportModal({ isOpen, onClose }: OxideImportModalProps) {
                       <p><span className="text-theme-text-muted">{t('modals.import.description')}</span> {metadata.description}</p>
                     )}
                     <p><span className="text-theme-text-muted">{t('modals.import.contains')}</span> {t('modals.import.connections_count', { count: metadata.num_connections })}</p>
+                    {metadata.has_app_settings && (
+                      <p><span className="text-theme-text-muted">{t('modals.import.contains_app_settings')}</span> {t('common.yes')}</p>
+                    )}
+                    {typeof metadata.plugin_settings_count === 'number' && metadata.plugin_settings_count > 0 && (
+                      <p><span className="text-theme-text-muted">{t('modals.import.contains_plugin_settings')}</span> {t('modals.import.plugin_settings_count', { count: metadata.plugin_settings_count })}</p>
+                    )}
                   </div>
 
                   <div className="mt-3">
@@ -525,6 +549,9 @@ export function OxideImportModal({ isOpen, onClose }: OxideImportModalProps) {
                 <p className="font-semibold">{t('modals.import.warning_title')}</p>
                 <p className="text-xs mt-1 opacity-90">
                   {t('modals.import.warning_text')}
+                </p>
+                <p className="text-xs mt-1 opacity-90">
+                  {t('modals.import.passwords_not_included')}
                 </p>
               </div>
 

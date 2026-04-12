@@ -27,6 +27,8 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
   const { t } = useTranslation();
   const { savedConnections, loadSavedConnections } = useAppStore();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [includeAppSettings, setIncludeAppSettings] = useState(true);
+  const [includePluginSettings, setIncludePluginSettings] = useState(true);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [description, setDescription] = useState('');
@@ -53,6 +55,8 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
     if (isOpen) {
       loadSavedConnections();
       setSelectedIds([]);
+      setIncludeAppSettings(true);
+      setIncludePluginSettings(true);
       setPassword('');
       setConfirmPassword('');
       setDescription('');
@@ -168,6 +172,8 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
         password,
         description: description || null,
         embedKeys: embedKeys || null,
+        includeAppSettings,
+        includePluginSettings,
       });
 
       // Stage 3: Save file dialog
@@ -298,6 +304,12 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
                 </div>
               )}
 
+              {preflight && preflight.connectionsWithPasswords > 0 && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 px-2 py-1.5 rounded text-xs">
+                  {t('modals.export.warning_passwords_excluded', { count: preflight.connectionsWithPasswords })}
+                </div>
+              )}
+
               {/* Missing keys warning */}
               {preflight && embedKeys && preflight.missingKeys.length > 0 && (
                 <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 px-2 py-1.5 rounded text-xs">
@@ -331,6 +343,42 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1 bg-theme-bg border-theme-border text-theme-text placeholder:text-theme-text-muted focus-visible:ring-theme-accent"
             />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="includeAppSettings"
+                checked={includeAppSettings}
+                onCheckedChange={(checked) => setIncludeAppSettings(checked === true)}
+                className="mt-0.5 border-theme-text-muted data-[state=checked]:bg-theme-accent data-[state=checked]:border-theme-accent"
+              />
+              <div className="flex flex-col">
+                <Label htmlFor="includeAppSettings" className="cursor-pointer text-theme-text">
+                  {t('modals.export.include_app_settings')}
+                </Label>
+                <p className="text-xs text-theme-text-muted mt-0.5">
+                  {t('modals.export.include_app_settings_description')}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="includePluginSettings"
+                checked={includePluginSettings}
+                onCheckedChange={(checked) => setIncludePluginSettings(checked === true)}
+                className="mt-0.5 border-theme-text-muted data-[state=checked]:bg-theme-accent data-[state=checked]:border-theme-accent"
+              />
+              <div className="flex flex-col">
+                <Label htmlFor="includePluginSettings" className="cursor-pointer text-theme-text">
+                  {t('modals.export.include_plugin_settings')}
+                </Label>
+                <p className="text-xs text-theme-text-muted mt-0.5">
+                  {t('modals.export.include_plugin_settings_description')}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Embed Keys Option */}
@@ -388,6 +436,11 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
               <li>• {t('modals.export.security_encryption')}</li>
               <li>• {t('modals.export.security_kdf')}</li>
               <li>• {t('modals.export.security_contains')}</li>
+              <li>• {t('modals.export.security_settings', {
+                app: includeAppSettings ? t('common.yes') : t('common.no'),
+                plugin: includePluginSettings ? t('common.yes') : t('common.no'),
+              })}</li>
+              <li>• {t('modals.export.security_passwords_excluded')}</li>
               <li>• <strong>{t('modals.export.security_no_session')}</strong></li>
               <li>• {t('modals.export.security_keep_safe')}</li>
             </ul>

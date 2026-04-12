@@ -276,15 +276,9 @@ pub async fn export_to_oxide(
         // Helper function to convert SavedAuth to EncryptedAuth
         let convert_auth = |auth: &SavedAuth, context: &str| -> Result<EncryptedAuth, String> {
             match auth {
-                SavedAuth::Password { keychain_id } => {
-                    let password = keychain_id
-                        .as_ref()
-                        .map(|kc_id| config_state.get_keychain_value(kc_id))
-                        .transpose()
-                        .map_err(|e| format!("Keychain error for {}: {}", context, e))?
-                        .unwrap_or_default();
+                SavedAuth::Password { .. } => {
                     Ok(EncryptedAuth::Password {
-                        password: Zeroizing::new(password),
+                        password: Zeroizing::new(String::new()),
                     })
                 }
                 SavedAuth::Key {

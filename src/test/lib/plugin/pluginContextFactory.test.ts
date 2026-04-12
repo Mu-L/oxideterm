@@ -172,6 +172,7 @@ vi.mock('@/store/sessionTreeStore', () => ({ useSessionTreeStore: sessionTreeSto
 vi.mock('@/lib/plugin/pluginStorage', () => ({ createPluginStorage: vi.fn(() => storageManagerMock) }));
 vi.mock('@/lib/plugin/pluginEventBridge', () => ({ pluginEventBridge: pluginEventBridgeMock }));
 vi.mock('@/lib/plugin/pluginSettingsManager', () => ({
+  buildPluginSettingsRevisionMap: vi.fn(() => ({})),
   createPluginSettingsManager: vi.fn(() => settingsManagerMock),
   collectPluginSettingsSnapshot: vi.fn(() => []),
   applyImportedPluginSettingsSnapshot: vi.fn(() => 0),
@@ -193,8 +194,23 @@ vi.mock('@/store/eventLogStore', () => ({ useEventLogStore: createMockStore({ en
 vi.mock('@/store/ideStore', () => ({ useIdeStore: createMockStore({ nodeId: null, project: null, tabs: [], activeTabId: null }) }));
 vi.mock('@/store/aiChatStore', () => ({ useAiChatStore: createMockStore({ conversations: [] }) }));
 vi.mock('@/store/settingsStore', () => ({
+  OXIDE_APP_SETTINGS_SECTION_IDS: [
+    'general',
+    'terminalAppearance',
+    'terminalBehavior',
+    'appearance',
+    'connections',
+    'fileAndEditor',
+    'localTerminal',
+  ],
   useSettingsStore: settingsStoreMock,
   exportCurrentSettingsSnapshot: vi.fn(() => JSON.stringify(settingsStoreState.settings)),
+  exportOxideAppSettingsSnapshot: vi.fn((options?: { selectedSections?: string[] }) => JSON.stringify({
+    format: 'oxide-settings-sections-v1',
+    version: 1,
+    sectionIds: options?.selectedSections ?? [],
+    settings: {},
+  })),
   applyImportedSettingsSnapshot: vi.fn(async () => true),
 }));
 
@@ -240,6 +256,7 @@ function manifest(): PluginManifest {
 describe('pluginContextFactory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invokeMock.mockReset();
     eventHandlers.clear();
     resetPluginStore();
     appStoreState.tabs = [];

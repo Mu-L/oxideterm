@@ -1454,6 +1454,7 @@ mod tests {
                 id: "forward-1".to_string(),
                 session_id: "remote-session".to_string(),
                 owner_connection_id: Some("conn-1".to_string()),
+                owner_connection_name: Some("example-connection".to_string()),
                 forward_type: "local".to_string(),
                 bind_address: "127.0.0.1".to_string(),
                 bind_port: 8080,

@@ -15,6 +15,9 @@ const settingsStoreMock = vi.hoisted(() => {
       buffer: {
         maxLines: 5000,
       },
+      terminal: {
+        scrollback: 3000,
+      },
       treeUI: {
         expandedIds: [] as string[],
         focusedNodeId: null as string | null,
@@ -70,6 +73,10 @@ vi.mock('@/lib/api', () => ({
 }));
 
 vi.mock('@/store/settingsStore', () => ({
+  deriveBackendHotLines: vi.fn((scrollback: number) => {
+    const normalizedScrollback = Number.isFinite(scrollback) ? Math.round(scrollback) : 3000;
+    return Math.min(12000, Math.max(5000, normalizedScrollback * 2));
+  }),
   useSettingsStore: settingsStoreMock.store,
 }));
 

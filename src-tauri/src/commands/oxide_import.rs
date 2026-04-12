@@ -365,7 +365,9 @@ fn build_sectioned_app_settings_sections(
             }
             "connections" => {
                 add_preview_fields(
-                    settings.get("connectionDefaults").and_then(Value::as_object),
+                    settings
+                        .get("connectionDefaults")
+                        .and_then(Value::as_object),
                     &["username", "port"],
                     Some("connectionDefaults"),
                     &mut field_values,
@@ -397,7 +399,13 @@ fn build_sectioned_app_settings_sections(
                 );
                 add_preview_fields(
                     settings.get("ide").and_then(Value::as_object),
-                    &["autoSave", "fontSize", "lineHeight", "agentMode", "wordWrap"],
+                    &[
+                        "autoSave",
+                        "fontSize",
+                        "lineHeight",
+                        "agentMode",
+                        "wordWrap",
+                    ],
                     Some("ide"),
                     &mut field_values,
                 );
@@ -451,7 +459,12 @@ fn build_app_settings_preview(
 
     if map.get("format").and_then(Value::as_str) == Some(OXIDE_APP_SETTINGS_ENVELOPE_FORMAT) {
         let Some(settings) = map.get("settings").and_then(Value::as_object) else {
-            return (Some("sectioned".to_string()), Vec::new(), HashMap::new(), Vec::new());
+            return (
+                Some("sectioned".to_string()),
+                Vec::new(),
+                HashMap::new(),
+                Vec::new(),
+            );
         };
 
         let section_ids: Vec<String> = map
@@ -1392,9 +1405,38 @@ pub async fn import_from_oxide(
             forward_ids_to_delete,
             forwards_to_persist,
             imported_forward_count,
-        ) =
-            match action {
-                PlannedImportAction::Import => {
+        ) = match action {
+            PlannedImportAction::Import => {
+                let imported_at = Utc::now();
+                let saved_conn = build_saved_connection(
+                    credential_base_id.clone(),
+                    imported_at,
+                    None,
+                    imported_connection,
+                );
+                let forwards_to_persist = if should_import_forwards {
+                    imported_forwards
+                        .into_iter()
+                        .map(|forward| {
+                            encrypted_forward_to_persisted(forward, &saved_conn.id, imported_at)
+                        })
+                        .collect::<Result<Vec<_>, _>>()?
+                } else {
+                    Vec::new()
+                };
+                (
+                    saved_conn,
+                    Vec::new(),
+                    Vec::new(),
+                    forwards_to_persist,
+                    imported_forward_count,
+                )
+            }
+            PlannedImportAction::Rename(new_name) => {
+                info!("Name conflict: '{}' -> '{}'", original_name, new_name);
+                renames.push((original_name.clone(), new_name.clone()));
+                imported_connection.name = new_name;
+                {
                     let imported_at = Utc::now();
                     let saved_conn = build_saved_connection(
                         credential_base_id.clone(),
@@ -1420,116 +1462,77 @@ pub async fn import_from_oxide(
                         imported_forward_count,
                     )
                 }
-                PlannedImportAction::Rename(new_name) => {
-                    info!("Name conflict: '{}' -> '{}'", original_name, new_name);
-                    renames.push((original_name.clone(), new_name.clone()));
-                    imported_connection.name = new_name;
-                    {
-                        let imported_at = Utc::now();
-                        let saved_conn = build_saved_connection(
-                            credential_base_id.clone(),
-                            imported_at,
-                            None,
-                            imported_connection,
-                        );
-                        let forwards_to_persist = if should_import_forwards {
-                            imported_forwards
-                                .into_iter()
-                                .map(|forward| {
-                                    encrypted_forward_to_persisted(
-                                        forward,
-                                        &saved_conn.id,
-                                        imported_at,
-                                    )
-                                })
-                                .collect::<Result<Vec<_>, _>>()?
-                        } else {
-                            Vec::new()
-                        };
-                        (
-                            saved_conn,
-                            Vec::new(),
-                            Vec::new(),
-                            forwards_to_persist,
-                            imported_forward_count,
-                        )
-                    }
+            }
+            PlannedImportAction::Replace(target) => {
+                replaced_count += 1;
+                imported_connection.name = target.existing.name.clone();
+                {
+                    let imported_at = Utc::now();
+                    let saved_conn = build_saved_connection(
+                        target.existing.id.clone(),
+                        target.existing.created_at,
+                        target.existing.last_used_at,
+                        imported_connection,
+                    );
+                    let (forward_ids_to_delete, forwards_to_persist) = if should_import_forwards {
+                        let existing_forwards = forwarding_registry
+                            .load_owned_forwards(&target.existing.id)
+                            .await?;
+                        let forward_ids_to_delete = existing_forwards
+                            .iter()
+                            .map(|forward| forward.id.clone())
+                            .collect();
+                        let forwards_to_persist = imported_forwards
+                            .into_iter()
+                            .map(|forward| {
+                                encrypted_forward_to_persisted(forward, &saved_conn.id, imported_at)
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        (forward_ids_to_delete, forwards_to_persist)
+                    } else {
+                        (Vec::new(), Vec::new())
+                    };
+                    (
+                        saved_conn,
+                        target.old_keychain_ids,
+                        forward_ids_to_delete,
+                        forwards_to_persist,
+                        imported_forward_count,
+                    )
                 }
-                PlannedImportAction::Replace(target) => {
-                    replaced_count += 1;
-                    imported_connection.name = target.existing.name.clone();
-                    {
-                        let imported_at = Utc::now();
-                        let saved_conn = build_saved_connection(
-                            target.existing.id.clone(),
-                            target.existing.created_at,
-                            target.existing.last_used_at,
-                            imported_connection,
-                        );
-                        let (forward_ids_to_delete, forwards_to_persist) = if should_import_forwards {
-                            let existing_forwards = forwarding_registry
-                                .load_owned_forwards(&target.existing.id)
-                                .await?;
-                            let forward_ids_to_delete = existing_forwards
-                                .iter()
-                                .map(|forward| forward.id.clone())
-                                .collect();
-                            let forwards_to_persist = imported_forwards
-                                .into_iter()
-                                .map(|forward| {
-                                    encrypted_forward_to_persisted(
-                                        forward,
-                                        &saved_conn.id,
-                                        imported_at,
-                                    )
-                                })
-                                .collect::<Result<Vec<_>, _>>()?;
-                            (forward_ids_to_delete, forwards_to_persist)
-                        } else {
-                            (Vec::new(), Vec::new())
-                        };
-                        (
-                            saved_conn,
-                            target.old_keychain_ids,
-                            forward_ids_to_delete,
-                            forwards_to_persist,
-                            imported_forward_count,
-                        )
-                    }
+            }
+            PlannedImportAction::Merge(target) => {
+                merged_count += 1;
+                {
+                    let saved_conn = merge_saved_connection(&target.existing, imported_connection);
+                    let (forward_ids_to_delete, forwards_to_persist) = if should_import_forwards {
+                        let existing_forwards = forwarding_registry
+                            .load_owned_forwards(&target.existing.id)
+                            .await?;
+                        let forward_ids_to_delete = existing_forwards
+                            .iter()
+                            .map(|forward| forward.id.clone())
+                            .collect();
+                        let forwards_to_persist = merge_owned_forwards(
+                            existing_forwards,
+                            imported_forwards,
+                            &saved_conn.id,
+                        )?;
+                        (forward_ids_to_delete, forwards_to_persist)
+                    } else {
+                        (Vec::new(), Vec::new())
+                    };
+                    (
+                        saved_conn,
+                        target.old_keychain_ids,
+                        forward_ids_to_delete,
+                        forwards_to_persist,
+                        imported_forward_count,
+                    )
                 }
-                PlannedImportAction::Merge(target) => {
-                    merged_count += 1;
-                    {
-                        let saved_conn =
-                            merge_saved_connection(&target.existing, imported_connection);
-                        let (forward_ids_to_delete, forwards_to_persist) = if should_import_forwards {
-                            let existing_forwards = forwarding_registry
-                                .load_owned_forwards(&target.existing.id)
-                                .await?;
-                            let forward_ids_to_delete = existing_forwards
-                                .iter()
-                                .map(|forward| forward.id.clone())
-                                .collect();
-                            let forwards_to_persist = merge_owned_forwards(
-                                existing_forwards,
-                                imported_forwards,
-                                &saved_conn.id,
-                            )?;
-                            (forward_ids_to_delete, forwards_to_persist)
-                        } else {
-                            (Vec::new(), Vec::new())
-                        };
-                        (
-                            saved_conn,
-                            target.old_keychain_ids,
-                            forward_ids_to_delete,
-                            forwards_to_persist,
-                            imported_forward_count,
-                        )
-                    }
-                }
-                PlannedImportAction::Skip => unreachable!(),
-            };
+            }
+            PlannedImportAction::Skip => unreachable!(),
+        };
 
         pending_connections.push(PendingConnection {
             connection: saved_conn,
@@ -1945,7 +1948,10 @@ mod tests {
 
     #[test]
     fn preview_reason_code_marks_new_connection_imports() {
-        assert_eq!(preview_reason_code(&PlannedImportAction::Import), "new-connection");
+        assert_eq!(
+            preview_reason_code(&PlannedImportAction::Import),
+            "new-connection"
+        );
     }
 
     #[test]

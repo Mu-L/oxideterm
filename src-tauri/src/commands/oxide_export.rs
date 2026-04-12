@@ -14,9 +14,8 @@ use crate::commands::config::ConfigState;
 use crate::commands::forwarding::ForwardingRegistry;
 use crate::config::types::SavedAuth;
 use crate::oxide_file::{
-    EncryptedAuth, EncryptedConnection, EncryptedForward, EncryptedPayload,
-    EncryptedPluginSetting, EncryptedProxyHop, OxideMetadata, compute_checksum,
-    encrypt_oxide_file,
+    EncryptedAuth, EncryptedConnection, EncryptedForward, EncryptedPayload, EncryptedPluginSetting,
+    EncryptedProxyHop, OxideMetadata, compute_checksum, encrypt_oxide_file,
 };
 use zeroize::Zeroizing;
 
@@ -267,8 +266,8 @@ pub async fn export_to_oxide(
 
     // 2. Load selected connections from config
     let config = config_state.get_config_snapshot();
-    let selected_forward_ids = selected_forward_ids
-        .map(|ids| ids.into_iter().collect::<std::collections::HashSet<_>>());
+    let selected_forward_ids =
+        selected_forward_ids.map(|ids| ids.into_iter().collect::<std::collections::HashSet<_>>());
     let mut connections = Vec::new();
 
     for id in &connection_ids {
@@ -279,11 +278,9 @@ pub async fn export_to_oxide(
         // Helper function to convert SavedAuth to EncryptedAuth
         let convert_auth = |auth: &SavedAuth, context: &str| -> Result<EncryptedAuth, String> {
             match auth {
-                SavedAuth::Password { .. } => {
-                    Ok(EncryptedAuth::Password {
-                        password: Zeroizing::new(String::new()),
-                    })
-                }
+                SavedAuth::Password { .. } => Ok(EncryptedAuth::Password {
+                    password: Zeroizing::new(String::new()),
+                }),
                 SavedAuth::Key {
                     key_path,
                     has_passphrase,
@@ -434,7 +431,9 @@ pub async fn export_to_oxide(
     // 3. Compute checksum and build payload
     let mut payload = EncryptedPayload {
         version: if app_settings_json.is_some()
-            || plugin_settings.as_ref().is_some_and(|entries| !entries.is_empty())
+            || plugin_settings
+                .as_ref()
+                .is_some_and(|entries| !entries.is_empty())
         {
             2
         } else {
@@ -445,8 +444,8 @@ pub async fn export_to_oxide(
         plugin_settings: plugin_settings.unwrap_or_default(),
         checksum: String::new(),
     };
-    payload.checksum = compute_checksum(&payload)
-        .map_err(|e| format!("Failed to compute checksum: {:?}", e))?;
+    payload.checksum =
+        compute_checksum(&payload).map_err(|e| format!("Failed to compute checksum: {:?}", e))?;
 
     // 4. Build metadata
     let metadata = OxideMetadata {

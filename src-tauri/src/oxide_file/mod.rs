@@ -17,6 +17,6 @@ pub mod format;
 pub use crypto::{compute_checksum, decrypt_oxide_file, encrypt_oxide_file};
 pub use error::OxideFileError;
 pub use format::{
-    EncryptedAuth, EncryptedConnection, EncryptedForward, EncryptedPayload,
-    EncryptedPluginSetting, EncryptedProxyHop, OxideFile, OxideMetadata,
+    EncryptedAuth, EncryptedConnection, EncryptedForward, EncryptedPayload, EncryptedPluginSetting,
+    EncryptedProxyHop, OxideFile, OxideMetadata,
 };

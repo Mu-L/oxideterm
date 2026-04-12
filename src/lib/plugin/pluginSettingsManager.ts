@@ -90,10 +90,13 @@ export function buildPluginSettingsRevisionMap(
       continue;
     }
 
-    if (!groupedEntries.has(parsed.pluginId)) {
-      groupedEntries.set(parsed.pluginId, []);
+    const pluginEntries = groupedEntries.get(parsed.pluginId);
+    if (pluginEntries) {
+      pluginEntries.push(entry);
+      continue;
     }
-    groupedEntries.get(parsed.pluginId).push(entry);
+
+    groupedEntries.set(parsed.pluginId, [entry]);
   }
 
   return Object.fromEntries(

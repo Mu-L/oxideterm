@@ -24,6 +24,7 @@ type OxideExportModalProps = {
 };
 
 type ExportStage = 'idle' | 'reading_keys' | 'encrypting' | 'writing' | 'done';
+type PasswordStrength = 'weak' | 'fair' | 'strong';
 
 export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
   const { t } = useTranslation();
@@ -187,8 +188,8 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
   };
 
   const validatePassword = (): boolean => {
-    if (password.length < 12) {
-      setError(t('modals.export.error_password_length'));
+    if (password.length < 6) {
+      setError(t('modals.export.error_password_too_short'));
       return false;
     }
 
@@ -197,18 +198,54 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
       return false;
     }
 
-    const hasUpper = /[A-Z]/.test(password);
-    const hasLower = /[a-z]/.test(password);
-    const hasDigit = /[0-9]/.test(password);
-    const hasSpecial = /[^A-Za-z0-9]/.test(password);
-
-    if (!(hasUpper && hasLower && hasDigit && hasSpecial)) {
-      setError(t('modals.export.error_password_complexity'));
-      return false;
-    }
-
     return true;
   };
+
+  const getPasswordStrength = (value: string): PasswordStrength => {
+    if (value.length < 8) {
+      return 'weak';
+    }
+
+    const hasUpper = /[A-Z]/.test(value);
+    const hasLower = /[a-z]/.test(value);
+    const hasDigit = /[0-9]/.test(value);
+    const hasSpecial = /[^A-Za-z0-9]/.test(value);
+    const classes = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+
+    if (value.length >= 12 && classes >= 3) {
+      return 'strong';
+    }
+
+    return 'fair';
+  };
+
+  const getStrengthLabel = (strength: PasswordStrength): string => {
+    switch (strength) {
+      case 'weak':
+        return t('modals.export.password_strength_weak');
+      case 'strong':
+        return t('modals.export.password_strength_strong');
+      default:
+        return t('modals.export.password_strength_fair');
+    }
+  };
+
+  const getStrengthTone = (strength: PasswordStrength, active: boolean): string => {
+    if (!active) {
+      return 'bg-theme-border';
+    }
+
+    switch (strength) {
+      case 'weak':
+        return 'bg-yellow-500';
+      case 'strong':
+        return 'bg-green-500';
+      default:
+        return 'bg-theme-accent';
+    }
+  };
+
+  const passwordStrength = password ? getPasswordStrength(password) : null;
 
   const formatBytes = (bytes: number): string => {
     if (bytes < 1024) {
@@ -542,6 +579,18 @@ export function OxideExportModal({ isOpen, onClose }: OxideExportModalProps) {
               onChange={(event) => setPassword(event.target.value)}
               className="mt-1 bg-theme-bg border-theme-border text-theme-text placeholder:text-theme-text-muted focus-visible:ring-theme-accent"
             />
+            {passwordStrength && (
+              <div className="mt-2 space-y-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
+                  <div className={`h-1.5 rounded-full ${getStrengthTone(passwordStrength, true)}`} />
+                  <div className={`h-1.5 rounded-full ${getStrengthTone(passwordStrength, passwordStrength !== 'weak')}`} />
+                  <div className={`h-1.5 rounded-full ${getStrengthTone(passwordStrength, passwordStrength === 'strong')}`} />
+                </div>
+                <p className={`text-xs ${passwordStrength === 'weak' ? 'text-yellow-500' : passwordStrength === 'strong' ? 'text-green-500' : 'text-theme-text-muted'}`}>
+                  {getStrengthLabel(passwordStrength)}
+                </p>
+              </div>
+            )}
           </div>
 
           <div>

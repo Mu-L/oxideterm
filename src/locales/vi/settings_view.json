@@ -540,6 +540,7 @@
       "open_logs_hint": "Mở thư mục nhật ký ứng dụng trong trình quản lý tệp",
       "open": "Mở",
       "license": "OxideTerm là phần mềm tự do được cấp phép theo Giấy phép Công cộng GNU v3.0 (GPL-3.0).",
+      "copyright": "Bản quyền © {{year}} {{author}}",
       "shortcut_keyboard_shortcuts": "Phím tắt bàn phím",
       "check_update": "Kiểm tra cập nhật",
       "checking": "Đang kiểm tra cập nhật...",

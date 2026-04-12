@@ -540,6 +540,7 @@
       "open_logs_hint": "Das Protokollverzeichnis der Anwendung im Dateimanager öffnen",
       "open": "Öffnen",
       "license": "OxideTerm ist freie Software unter der GNU General Public License v3.0 (GPL-3.0).",
+      "copyright": "Urheberrecht © {{year}} {{author}}",
       "shortcut_keyboard_shortcuts": "Tastenkürzel",
       "check_update": "Nach Updates suchen",
       "checking": "Suche nach Updates...",

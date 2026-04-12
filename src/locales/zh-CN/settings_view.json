@@ -540,6 +540,7 @@
       "open_logs_hint": "在文件管理器中打开应用日志目录",
       "open": "打开",
       "license": "OxideTerm 是基于 GNU 通用公共许可证 v3.0 (GPL-3.0) 的开源软件。",
+      "copyright": "版权所有 © {{year}} {{author}}",
       "shortcut_keyboard_shortcuts": "键盘快捷键",
       "check_update": "检查更新",
       "checking": "正在检查更新...",

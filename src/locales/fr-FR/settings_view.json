@@ -540,6 +540,7 @@
       "open_logs_hint": "Ouvrir le répertoire des journaux de l'application dans le gestionnaire de fichiers",
       "open": "Ouvrir",
       "license": "OxideTerm est un logiciel libre sous licence GNU General Public License v3.0 (GPL-3.0).",
+      "copyright": "Copyright © {{year}} {{author}}",
       "shortcut_keyboard_shortcuts": "Raccourcis clavier",
       "check_update": "Vérifier les mises à jour",
       "checking": "Vérification des mises à jour...",

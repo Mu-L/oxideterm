@@ -540,6 +540,7 @@
       "open_logs_hint": "在檔案管理員中開啟應用程式日誌目錄",
       "open": "開啟",
       "license": "OxideTerm 是基於 GNU 通用公共授權條款 v3.0 (GPL-3.0) 的開源軟體。",
+      "copyright": "版權所有 © {{year}} {{author}}",
       "shortcut_keyboard_shortcuts": "鍵盤快捷鍵",
       "check_update": "檢查更新",
       "checking": "正在檢查更新...",

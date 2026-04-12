@@ -540,6 +540,7 @@
       "open_logs_hint": "Abrir el directorio de registros de la aplicación en el gestor de archivos",
       "open": "Abrir",
       "license": "OxideTerm es software libre bajo la Licencia Pública General de GNU v3.0 (GPL-3.0).",
+      "copyright": "Copyright © {{year}} {{author}}",
       "shortcut_keyboard_shortcuts": "Atajos de teclado",
       "check_update": "Buscar actualizaciones",
       "checking": "Buscando actualizaciones...",

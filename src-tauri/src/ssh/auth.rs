@@ -20,7 +20,7 @@ use signature::Signer as SignatureSigner;
 use ssh_encoding::Encode;
 use tauri::AppHandle;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use super::client::ClientHandler;
 use super::error::SshError;
@@ -174,6 +174,104 @@ pub(crate) fn ensure_auth_success(
 
 /// Timeout for waiting on user KBI input during auth chaining (60s)
 const KBI_CHAIN_USER_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// When password auth fails with `partial_success: false` and the server
+/// advertises `KeyboardInteractive` in remaining_methods, automatically
+/// attempt KBI using the same password as the response to all prompts.
+///
+/// This handles servers (e.g. FreeBSD-based serv00) that only support
+/// keyboard-interactive and not the `password` auth method.
+///
+/// Returns `Ok(true)` if KBI succeeded, `Ok(false)` if not applicable.
+pub(crate) async fn try_password_as_kbi_fallback(
+    result: &client::AuthResult,
+    handle: &mut client::Handle<ClientHandler>,
+    username: &str,
+    password: &str,
+) -> Result<bool, SshError> {
+    let remaining = match result {
+        client::AuthResult::Failure {
+            partial_success: false,
+            remaining_methods,
+        } => remaining_methods,
+        _ => return Ok(false),
+    };
+
+    if !remaining.contains(&MethodKind::KeyboardInteractive) {
+        return Ok(false);
+    }
+
+    info!(
+        "Password auth rejected but server supports keyboard-interactive. \
+         Attempting KBI fallback for {}",
+        username
+    );
+
+    use russh::client::KeyboardInteractiveAuthResponse;
+    use zeroize::Zeroizing;
+
+    /// Maximum KBI round-trips to prevent malicious servers from looping.
+    const MAX_KBI_FALLBACK_ROUNDS: usize = 5;
+
+    let kbi_timeout = Duration::from_secs(DEFAULT_AUTH_TIMEOUT_SECS);
+
+    let mut kbi_result = tokio::time::timeout(
+        kbi_timeout,
+        handle.authenticate_keyboard_interactive_start(username, None::<String>),
+    )
+    .await
+    .map_err(|_| SshError::Timeout("KBI fallback start timed out".to_string()))?
+    .map_err(|e| SshError::AuthenticationFailed(format!("KBI fallback start failed: {}", e)))?;
+
+    for round in 0..MAX_KBI_FALLBACK_ROUNDS {
+        match kbi_result {
+            KeyboardInteractiveAuthResponse::Success => {
+                info!("KBI fallback: authentication successful");
+                return Ok(true);
+            }
+            KeyboardInteractiveAuthResponse::Failure { .. } => {
+                debug!("KBI fallback: server rejected responses");
+                return Ok(false);
+            }
+            KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
+                debug!("KBI fallback round {}: {} prompts", round, prompts.len());
+                // Only auto-fill password for a single non-echo prompt.
+                // Multi-prompt or echo:true prompts likely require user interaction.
+                let responses: Vec<String> = if prompts.is_empty() {
+                    // Informational request with no prompts — send empty response
+                    Vec::new()
+                } else if prompts.len() == 1 && !prompts[0].echo {
+                    // Single non-echo prompt (typical "Password:" case)
+                    let pwd = Zeroizing::new(password.to_string());
+                    vec![(*pwd).clone()]
+                } else {
+                    // Multi-prompt or echo:true — cannot safely auto-fill
+                    debug!(
+                        "KBI fallback: {} prompts or echo=true, aborting auto-fill",
+                        prompts.len()
+                    );
+                    return Ok(false);
+                };
+
+                kbi_result = tokio::time::timeout(
+                    kbi_timeout,
+                    handle.authenticate_keyboard_interactive_respond(responses),
+                )
+                .await
+                .map_err(|_| SshError::Timeout("KBI fallback respond timed out".to_string()))?
+                .map_err(|e| {
+                    SshError::AuthenticationFailed(format!("KBI fallback respond failed: {}", e))
+                })?;
+            }
+        }
+    }
+
+    warn!(
+        "KBI fallback: exceeded {} rounds, aborting",
+        MAX_KBI_FALLBACK_ROUNDS
+    );
+    Ok(false)
+}
 
 fn emit_kbi_chain_result(
     app: &AppHandle,

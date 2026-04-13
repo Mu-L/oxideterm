@@ -15,6 +15,7 @@ use super::auth::{
     DEFAULT_AUTH_TIMEOUT_SECS, authenticate_certificate_best_algo, authenticate_password,
     authenticate_publickey_best_algo, build_client_config, ensure_auth_success,
     load_certificate_auth_material, load_private_key_material, try_kbi_auth_chain,
+    try_password_as_kbi_fallback,
 };
 use super::config::{AuthMethod, SshConfig};
 use super::error::SshError;
@@ -137,6 +138,30 @@ impl SshClient {
                 ));
             }
         };
+
+        // Password-to-KBI fallback: if the server rejected password auth
+        // but advertises keyboard-interactive, retry with the same password
+        // via KBI (handles servers like serv00 that only support KBI).
+        if !authenticated.success() {
+            if let AuthMethod::Password { password } = &self.config.auth {
+                if try_password_as_kbi_fallback(
+                    &authenticated,
+                    &mut handle,
+                    &self.config.username,
+                    password,
+                )
+                .await?
+                {
+                    info!("SSH authentication successful (password→KBI fallback)");
+                    return Ok(SshSession::new(
+                        handle,
+                        self.config.cols,
+                        self.config.rows,
+                        self.config.agent_forwarding,
+                    ));
+                }
+            }
+        }
 
         // Multi-step auth chaining: if server returned partial_success with
         // keyboard-interactive in remaining_methods, automatically run KBI flow

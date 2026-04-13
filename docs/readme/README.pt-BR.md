@@ -137,7 +137,7 @@ OxideTerm separa dados do terminal dos comandos de controle em dois planos indep
 ```
 ┌─────────────────────────────────────┐
 │        Frontend (React 19)          │
-│  xterm.js 6 (WebGL) + 19 stores    │
+│  xterm.js 6 (WebGL) + 19 stores     │
 └──────────┬──────────────┬───────────┘
            │ Tauri IPC    │ WebSocket (binário)
            │ (JSON)       │ porta por sessão
@@ -145,7 +145,7 @@ OxideTerm separa dados do terminal dos comandos de controle em dois planos indep
 │         Backend (Rust)              │
 │  NodeRouter → SshConnectionRegistry │
 │  Wire Protocol v1                   │
-│  [Type:1][Length:4][Payload:n]       │
+│  [Type:1][Length:4][Payload:n]      │
 └─────────────────────────────────────┘
 ```
 

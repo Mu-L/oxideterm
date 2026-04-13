@@ -137,7 +137,7 @@ OxideTerm은 터미널 데이터와 제어 명령을 두 개의 독립적인 평
 ```
 ┌─────────────────────────────────────┐
 │        Frontend (React 19)          │
-│  xterm.js 6 (WebGL) + 19 stores    │
+│  xterm.js 6 (WebGL) + 19 stores     │
 └──────────┬──────────────┬───────────┘
            │ Tauri IPC    │ WebSocket (binary)
            │ (JSON)       │ per-session port
@@ -145,7 +145,7 @@ OxideTerm은 터미널 데이터와 제어 명령을 두 개의 독립적인 평
 │         Backend (Rust)              │
 │  NodeRouter → SshConnectionRegistry │
 │  Wire Protocol v1                   │
-│  [Type:1][Length:4][Payload:n]       │
+│  [Type:1][Length:4][Payload:n]      │
 └─────────────────────────────────────┘
 ```
 

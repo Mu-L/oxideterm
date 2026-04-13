@@ -34,6 +34,10 @@ ignore = [
     # OxideTerm uses RSA only for client-side SSH key authentication (signing),
     # not RSA decryption, limiting practical exploitability.
     { id = "RUSTSEC-2023-0071", reason = "rsa crate Marvin Attack; client-side SSH auth signing only, no RSA decryption exposure" },
+    # rand 0.8.5 unsound with custom logger + thread_rng reseed — transitive dep
+    # from russh, tungstenite, num-bigint, phf_generator; no patch for 0.8.x.
+    # OxideTerm has no custom logger impl and uses OsRng directly; not exploitable.
+    { id = "RUSTSEC-2026-0097", reason = "rand 0.8 unsound via custom logger; transitive dep, no custom logger in OxideTerm, not exploitable" },
 ]
 
 [licenses]

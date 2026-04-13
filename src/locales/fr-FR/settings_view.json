@@ -157,7 +157,61 @@
       "bg_tab_files": "Gestionnaire de fichiers",
       "bg_tab_sessions": "Gestionnaire de sessions",
       "bg_tab_launcher": "Lanceur",
-      "bg_tab_plugins": "Extensions"
+      "bg_tab_plugins": "Extensions",
+      "highlight_rules": {
+        "title": "Règles de surbrillance",
+        "description": "Conserve des surbrillances basées sur des mots-clés ou des regex pour la sortie du terminal. En cas de chevauchement, la règle la plus prioritaire l'emporte.",
+        "preset_status": "Ajouter le préréglage d'état",
+        "preset_ip": "Ajouter le préréglage IPv4",
+        "preset_mac": "Ajouter le préréglage MAC",
+        "add_rule": "Ajouter une règle",
+        "limit": "Jusqu'à {{count}} règles par profil.",
+        "priority_hint": "Faites glisser pour réordonner la priorité de haut en bas.",
+        "empty": "Aucune règle de surbrillance pour l'instant. Ajoutez une règle ou partez d'un préréglage.",
+        "preview": "Aperçu",
+        "preview_hint": "Les correspondances sont résolues avec les mêmes règles de priorité que dans le terminal.",
+        "drag_rule": "Faire glisser la règle",
+        "label": "Libellé",
+        "label_placeholder": "Nom facultatif pour cette règle",
+        "pattern": "Motif",
+        "pattern_placeholder": "Mot-clé ou motif regex",
+        "render_mode": "Mode de rendu",
+        "render_mode_background": "Arrière-plan",
+        "render_mode_underline": "Soulignement",
+        "render_mode_outline": "Contour",
+        "foreground": "Premier plan",
+        "background": "Arrière-plan",
+        "enabled": "Activé",
+        "regex": "Regex",
+        "case_sensitive": "Sensible à la casse",
+        "delete": "Supprimer",
+        "invalid_rule": "Règle invalide",
+        "toast_auto_disabled_title": "Règle de surbrillance désactivée",
+        "toast_auto_disabled_description": "{{count}} règle a été désactivée automatiquement car la correspondance a échoué : {{reason}}.",
+        "preset_label_error": "Erreur",
+        "preset_label_warning": "Avertissement",
+        "preset_label_ok": "OK",
+        "preset_label_ip": "IPv4",
+        "preset_label_mac": "MAC",
+        "preview_line_error": "2026-04-13 21:52:33 ERROR délai du bridge sur la session 127.0.0.1",
+        "preview_line_warning": "warning : nouvelle tentative de connexion ssh vers 10.0.0.25 via la passerelle",
+        "preview_line_ok": "OK 02:3B:4C:5D:6E:7F artefact téléversé vers 192.168.1.52",
+        "mode_hint": {
+          "literal": "Le mode littéral correspond au texte brut exactement tel qu'il est écrit.",
+          "regex": "Le mode regex utilise une syntaxe compatible RE2 pour une correspondance sûre."
+        },
+        "runtime_reason": {
+          "timeout": "le moteur de correspondance a expiré",
+          "error": "le moteur de correspondance a renvoyé une erreur"
+        },
+        "validation": {
+          "empty-pattern": "Saisissez un mot-clé ou un motif regex.",
+          "pattern-too-long": "Le motif est trop long.",
+          "invalid-regex": "La syntaxe regex est invalide.",
+          "unsupported-regex-syntax": "Cette regex utilise une syntaxe non prise en charge par RE2.",
+          "empty-match": "La regex ne peut pas correspondre à un texte vide."
+        }
+      }
     },
     "appearance": {
       "title": "Apparence",

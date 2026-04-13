@@ -157,7 +157,61 @@
       "bg_tab_files": "Gerenciador de arquivos",
       "bg_tab_sessions": "Gerenciador de sessões",
       "bg_tab_launcher": "Lançador",
-      "bg_tab_plugins": "Plugins"
+      "bg_tab_plugins": "Plugins",
+      "highlight_rules": {
+        "title": "Regras de destaque",
+        "description": "Mantém destaques por palavra-chave ou regex na saída do terminal. Em sobreposição, vale a regra de maior prioridade.",
+        "preset_status": "Adicionar predefinição de status",
+        "preset_ip": "Adicionar predefinição de IPv4",
+        "preset_mac": "Adicionar predefinição de MAC",
+        "add_rule": "Adicionar regra",
+        "limit": "Até {{count}} regras por perfil.",
+        "priority_hint": "Arraste para reordenar a prioridade de cima para baixo.",
+        "empty": "Ainda não há regras de destaque. Adicione uma regra ou comece com uma predefinição.",
+        "preview": "Pré-visualização",
+        "preview_hint": "As correspondências são resolvidas com as mesmas regras de prioridade usadas no terminal.",
+        "drag_rule": "Arrastar regra",
+        "label": "Rótulo",
+        "label_placeholder": "Nome opcional para esta regra",
+        "pattern": "Padrão",
+        "pattern_placeholder": "Palavra-chave ou padrão regex",
+        "render_mode": "Modo de renderização",
+        "render_mode_background": "Fundo",
+        "render_mode_underline": "Sublinhado",
+        "render_mode_outline": "Contorno",
+        "foreground": "Primeiro plano",
+        "background": "Fundo",
+        "enabled": "Ativado",
+        "regex": "Regex",
+        "case_sensitive": "Diferenciar maiúsculas de minúsculas",
+        "delete": "Excluir",
+        "invalid_rule": "Regra inválida",
+        "toast_auto_disabled_title": "Regra de destaque desativada",
+        "toast_auto_disabled_description": "{{count}} regra foi desativada automaticamente porque a correspondência falhou: {{reason}}.",
+        "preset_label_error": "Erro",
+        "preset_label_warning": "Aviso",
+        "preset_label_ok": "OK",
+        "preset_label_ip": "IPv4",
+        "preset_label_mac": "MAC",
+        "preview_line_error": "2026-04-13 21:52:33 ERROR tempo limite da bridge na sessão 127.0.0.1",
+        "preview_line_warning": "warning: tentando novamente conexão ssh para 10.0.0.25 via gateway",
+        "preview_line_ok": "OK 02:3B:4C:5D:6E:7F artefato enviado para 192.168.1.52",
+        "mode_hint": {
+          "literal": "O modo literal corresponde ao texto simples exatamente como foi escrito.",
+          "regex": "O modo regex usa sintaxe compatível com RE2 para uma correspondência segura."
+        },
+        "runtime_reason": {
+          "timeout": "o matcher excedeu o tempo limite",
+          "error": "o matcher retornou um erro"
+        },
+        "validation": {
+          "empty-pattern": "Digite uma palavra-chave ou padrão regex.",
+          "pattern-too-long": "O padrão é longo demais.",
+          "invalid-regex": "A sintaxe regex é inválida.",
+          "unsupported-regex-syntax": "Esta regex usa uma sintaxe que o RE2 não suporta.",
+          "empty-match": "A regex não pode corresponder a texto vazio."
+        }
+      }
     },
     "appearance": {
       "title": "Aparência",

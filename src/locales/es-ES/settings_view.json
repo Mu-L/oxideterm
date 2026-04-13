@@ -157,7 +157,61 @@
       "bg_tab_files": "Gestor de archivos",
       "bg_tab_sessions": "Gestor de sesiones",
       "bg_tab_launcher": "Lanzador",
-      "bg_tab_plugins": "Complementos"
+      "bg_tab_plugins": "Complementos",
+      "highlight_rules": {
+        "title": "Reglas de resaltado",
+        "description": "Guarda resaltados basados en palabras clave o regex para la salida del terminal. Si hay solapamientos, gana la regla con mayor prioridad.",
+        "preset_status": "Agregar preset de estado",
+        "preset_ip": "Agregar preset de IPv4",
+        "preset_mac": "Agregar preset de MAC",
+        "add_rule": "Agregar regla",
+        "limit": "Hasta {{count}} reglas por perfil.",
+        "priority_hint": "Arrastra para reordenar la prioridad de arriba abajo.",
+        "empty": "Todavía no hay reglas de resaltado. Agrega una regla o empieza con un preset.",
+        "preview": "Vista previa",
+        "preview_hint": "Las coincidencias se resuelven con las mismas reglas de prioridad que usa el terminal.",
+        "drag_rule": "Arrastrar regla",
+        "label": "Etiqueta",
+        "label_placeholder": "Nombre opcional para esta regla",
+        "pattern": "Patrón",
+        "pattern_placeholder": "Palabra clave o patrón regex",
+        "render_mode": "Modo de renderizado",
+        "render_mode_background": "Fondo",
+        "render_mode_underline": "Subrayado",
+        "render_mode_outline": "Contorno",
+        "foreground": "Primer plano",
+        "background": "Fondo",
+        "enabled": "Activado",
+        "regex": "Regex",
+        "case_sensitive": "Distinguir mayúsculas y minúsculas",
+        "delete": "Eliminar",
+        "invalid_rule": "Regla no válida",
+        "toast_auto_disabled_title": "Regla de resaltado desactivada",
+        "toast_auto_disabled_description": "Se desactivó automáticamente {{count}} regla porque la coincidencia falló: {{reason}}.",
+        "preset_label_error": "Error",
+        "preset_label_warning": "Advertencia",
+        "preset_label_ok": "OK",
+        "preset_label_ip": "IPv4",
+        "preset_label_mac": "MAC",
+        "preview_line_error": "2026-04-13 21:52:33 ERROR tiempo de espera del bridge en la sesión 127.0.0.1",
+        "preview_line_warning": "warning: reintentando conexión ssh a 10.0.0.25 a través de la puerta de enlace",
+        "preview_line_ok": "OK 02:3B:4C:5D:6E:7F artefacto cargado a 192.168.1.52",
+        "mode_hint": {
+          "literal": "El modo literal coincide con el texto plano exactamente como está escrito.",
+          "regex": "El modo regex usa sintaxis compatible con RE2 para una coincidencia segura."
+        },
+        "runtime_reason": {
+          "timeout": "el comparador agotó el tiempo",
+          "error": "el comparador devolvió un error"
+        },
+        "validation": {
+          "empty-pattern": "Introduce una palabra clave o patrón regex.",
+          "pattern-too-long": "El patrón es demasiado largo.",
+          "invalid-regex": "La sintaxis regex no es válida.",
+          "unsupported-regex-syntax": "Esta regex usa una sintaxis que RE2 no admite.",
+          "empty-match": "La regex no puede coincidir con texto vacío."
+        }
+      }
     },
     "appearance": {
       "title": "Apariencia",

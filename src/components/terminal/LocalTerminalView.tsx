@@ -48,8 +48,16 @@ import { useTerminalRecording } from '../../hooks/useTerminalRecording';
 import { useAdaptiveRenderer } from '../../hooks/useAdaptiveRenderer';
 import { RecordingControls } from './RecordingControls';
 import { FpsOverlay } from './FpsOverlay';
+import { useToastStore } from '../../hooks/useToast';
+import { HighlightEngine } from '../../lib/terminal/highlightEngine';
+import {
+  applyRuntimeDisabledHighlightRules,
+  getHighlightRulesSignature,
+  markRuntimeDisabledHighlightRules,
+} from '../../lib/terminal/runtimeDisabledHighlightRules';
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
+import type { HighlightRule } from '../../types';
 
 interface LocalTerminalViewProps {
   sessionId: string;
@@ -80,6 +88,9 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   const imageAddonRef = useRef<ImageAddon | null>(null);
   const clipboardAddonRef = useRef<{ dispose: () => void } | null>(null);
   const smartCopyDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const highlightEngineRef = useRef<HighlightEngine | null>(null);
+  const runtimeDisabledHighlightRulesRef = useRef<Map<string, string>>(new Map());
+  const runtimeDisabledHighlightRulesSourceRef = useRef<string | null>(null);
   const rendererAddonRef = useRef<{ dispose: () => void } | null>(null);
   const rendererSuspendedRef = useRef(false);
   const rendererTransitionTokenRef = useRef(0);
@@ -146,6 +157,19 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   // Callbacks read .current at call-time, making the effect deps truly stable.
   const adaptiveRendererRef = useRef(adaptiveRenderer);
   adaptiveRendererRef.current = adaptiveRenderer;
+
+  const getEffectiveHighlightRules = useCallback((rules: HighlightRule[]) => {
+    const rulesSignature = getHighlightRulesSignature(rules);
+    if (
+      runtimeDisabledHighlightRulesSourceRef.current
+      && runtimeDisabledHighlightRulesSourceRef.current !== rulesSignature
+    ) {
+      runtimeDisabledHighlightRulesRef.current.clear();
+    }
+
+    runtimeDisabledHighlightRulesSourceRef.current = rulesSignature;
+    return applyRuntimeDisabledHighlightRules(runtimeDisabledHighlightRulesRef.current, rules);
+  }, []);
 
   const ensureSearchAddon = useCallback(() => {
     const term = terminalRef.current;
@@ -276,6 +300,8 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         } else {
           clearViewportTransparent(containerRef.current);
         }
+
+        highlightEngineRef.current?.updateRules(getEffectiveHighlightRules(terminal.highlightRules));
         
         term.refresh(0, term.rows - 1);
         // Delay fit to next frame so xterm recalculates glyph metrics with new fontSize
@@ -541,6 +567,10 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       isActive: () => isActiveRef.current,
       isEnabled: () => useSettingsStore.getState().settings.terminal.smartCopy,
       onPasteShortcut: handlePasteShortcut,
+    });
+
+    highlightEngineRef.current = new HighlightEngine(term, getEffectiveHighlightRules(terminalSettings.highlightRules), {
+      onRulesAutoDisabled: handleHighlightRulesAutoDisabled,
     });
 
     // Detect mouse tracking mode changes (tmux, vim, etc.)
@@ -824,6 +854,18 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         }
         smartCopyDisposableRef.current = null;
       }
+
+      if (highlightEngineRef.current) {
+        try {
+          highlightEngineRef.current.dispose();
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+        highlightEngineRef.current = null;
+      }
+
+      runtimeDisabledHighlightRulesRef.current.clear();
+      runtimeDisabledHighlightRulesSourceRef.current = null;
 
       if (imageAddonRef.current) {
         try {
@@ -1268,6 +1310,22 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       processTerminalPaste(text, false);
     });
   }, [processTerminalPaste]);
+
+  const handleHighlightRulesAutoDisabled = useCallback((ruleIds: string[], reason: 'timeout' | 'error') => {
+    markRuntimeDisabledHighlightRules(
+      runtimeDisabledHighlightRulesRef.current,
+      useSettingsStore.getState().settings.terminal.highlightRules,
+      ruleIds,
+    );
+    useToastStore.getState().addToast({
+      title: t('settings_view.terminal.highlight_rules.toast_auto_disabled_title'),
+      description: t('settings_view.terminal.highlight_rules.toast_auto_disabled_description', {
+        count: ruleIds.length,
+        reason: t(`settings_view.terminal.highlight_rules.runtime_reason.${reason}`),
+      }),
+      variant: 'warning',
+    });
+  }, [t]);
 
   // Paste protection: intercept paste events
   useEffect(() => {

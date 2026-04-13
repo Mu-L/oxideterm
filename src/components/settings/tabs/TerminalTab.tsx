@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
 import { platform } from '@/lib/platform';
+import { TerminalHighlightRulesSection } from '@/components/settings/TerminalHighlightRulesSection';
 import type { AdaptiveRendererMode, CursorStyle, FontFamily, RendererType, TerminalSettings } from '@/store/settingsStore';
 
 type TerminalTabProps = {
@@ -275,6 +276,11 @@ export const TerminalTab = ({ terminal, updateTerminal }: TerminalTabProps) => {
                     />
                 </div>
             </div>
+
+            <TerminalHighlightRulesSection
+                rules={terminal.highlightRules}
+                updateRules={(rules) => updateTerminal('highlightRules', rules)}
+            />
         </div>
     );
 };

@@ -157,7 +157,61 @@
       "bg_tab_files": "Quản lý tệp",
       "bg_tab_sessions": "Quản lý phiên",
       "bg_tab_launcher": "Trình khởi chạy",
-      "bg_tab_plugins": "Plugin"
+      "bg_tab_plugins": "Plugin",
+      "highlight_rules": {
+        "title": "Quy tắc tô nổi bật",
+        "description": "Lưu các điểm tô nổi bật dựa trên từ khóa hoặc regex cho đầu ra terminal. Khi chồng lấp, quy tắc có ưu tiên cao hơn sẽ được áp dụng.",
+        "preset_status": "Thêm preset trạng thái",
+        "preset_ip": "Thêm preset IPv4",
+        "preset_mac": "Thêm preset MAC",
+        "add_rule": "Thêm quy tắc",
+        "limit": "Tối đa {{count}} quy tắc cho mỗi hồ sơ.",
+        "priority_hint": "Kéo để sắp xếp lại mức ưu tiên từ trên xuống dưới.",
+        "empty": "Chưa có quy tắc tô nổi bật. Hãy thêm quy tắc hoặc bắt đầu từ preset.",
+        "preview": "Xem trước",
+        "preview_hint": "Kết quả khớp được xử lý bằng cùng quy tắc ưu tiên như trong terminal.",
+        "drag_rule": "Kéo quy tắc",
+        "label": "Nhãn",
+        "label_placeholder": "Tên tùy chọn cho quy tắc này",
+        "pattern": "Mẫu",
+        "pattern_placeholder": "Từ khóa hoặc mẫu regex",
+        "render_mode": "Chế độ hiển thị",
+        "render_mode_background": "Nền",
+        "render_mode_underline": "Gạch chân",
+        "render_mode_outline": "Viền",
+        "foreground": "Tiền cảnh",
+        "background": "Nền",
+        "enabled": "Bật",
+        "regex": "Regex",
+        "case_sensitive": "Phân biệt hoa thường",
+        "delete": "Xóa",
+        "invalid_rule": "Quy tắc không hợp lệ",
+        "toast_auto_disabled_title": "Đã tắt quy tắc tô nổi bật",
+        "toast_auto_disabled_description": "{{count}} quy tắc đã tự động bị tắt vì đối sánh thất bại: {{reason}}.",
+        "preset_label_error": "Lỗi",
+        "preset_label_warning": "Cảnh báo",
+        "preset_label_ok": "OK",
+        "preset_label_ip": "IPv4",
+        "preset_label_mac": "MAC",
+        "preview_line_error": "2026-04-13 21:52:33 ERROR bridge hết thời gian chờ trên phiên 127.0.0.1",
+        "preview_line_warning": "warning: đang thử lại kết nối ssh tới 10.0.0.25 qua gateway",
+        "preview_line_ok": "OK 02:3B:4C:5D:6E:7F đã tải artifact lên 192.168.1.52",
+        "mode_hint": {
+          "literal": "Chế độ literal khớp chính xác văn bản thuần như đã nhập.",
+          "regex": "Chế độ regex dùng cú pháp tương thích RE2 để đối sánh an toàn."
+        },
+        "runtime_reason": {
+          "timeout": "bộ đối sánh đã hết thời gian",
+          "error": "bộ đối sánh trả về lỗi"
+        },
+        "validation": {
+          "empty-pattern": "Nhập từ khóa hoặc mẫu regex.",
+          "pattern-too-long": "Mẫu quá dài.",
+          "invalid-regex": "Cú pháp regex không hợp lệ.",
+          "unsupported-regex-syntax": "Regex này dùng cú pháp mà RE2 không hỗ trợ.",
+          "empty-match": "Regex không thể khớp với văn bản rỗng."
+        }
+      }
     },
     "appearance": {
       "title": "Giao diện",

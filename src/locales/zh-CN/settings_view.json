@@ -157,7 +157,61 @@
       "bg_tab_files": "文件管理",
       "bg_tab_sessions": "会话管理",
       "bg_tab_launcher": "启动器",
-      "bg_tab_plugins": "插件"
+      "bg_tab_plugins": "插件",
+      "highlight_rules": {
+        "title": "高亮规则",
+        "description": "为终端输出保存基于关键词或正则的高亮。匹配重叠时，优先级更高的规则生效。",
+        "preset_status": "添加状态预设",
+        "preset_ip": "添加 IPv4 预设",
+        "preset_mac": "添加 MAC 预设",
+        "add_rule": "添加规则",
+        "limit": "每个配置最多 {{count}} 条规则。",
+        "priority_hint": "拖动以按从上到下的顺序调整优先级。",
+        "empty": "还没有高亮规则。添加一条规则，或从预设开始。",
+        "preview": "预览",
+        "preview_hint": "匹配结果会按与终端相同的优先级规则解析。",
+        "drag_rule": "拖动规则",
+        "label": "标签",
+        "label_placeholder": "此规则的可选名称",
+        "pattern": "模式",
+        "pattern_placeholder": "关键词或正则模式",
+        "render_mode": "渲染方式",
+        "render_mode_background": "背景",
+        "render_mode_underline": "下划线",
+        "render_mode_outline": "描边",
+        "foreground": "前景",
+        "background": "背景",
+        "enabled": "启用",
+        "regex": "正则",
+        "case_sensitive": "区分大小写",
+        "delete": "删除",
+        "invalid_rule": "无效规则",
+        "toast_auto_disabled_title": "高亮规则已禁用",
+        "toast_auto_disabled_description": "由于匹配失败，系统已自动禁用 {{count}} 条规则：{{reason}}。",
+        "preset_label_error": "错误",
+        "preset_label_warning": "警告",
+        "preset_label_ok": "OK",
+        "preset_label_ip": "IPv4",
+        "preset_label_mac": "MAC",
+        "preview_line_error": "2026-04-13 21:52:33 ERROR 会话 127.0.0.1 上的 bridge 超时",
+        "preview_line_warning": "warning: 正在通过 gateway 重试连接到 10.0.0.25 的 ssh",
+        "preview_line_ok": "OK 02:3B:4C:5D:6E:7F 已将制品上传到 192.168.1.52",
+        "mode_hint": {
+          "literal": "字面量模式会完全按输入的纯文本进行匹配。",
+          "regex": "正则模式使用与 RE2 兼容的语法以保证安全匹配。"
+        },
+        "runtime_reason": {
+          "timeout": "匹配器超时",
+          "error": "匹配器返回了错误"
+        },
+        "validation": {
+          "empty-pattern": "请输入关键词或正则模式。",
+          "pattern-too-long": "模式过长。",
+          "invalid-regex": "正则语法无效。",
+          "unsupported-regex-syntax": "此正则使用了 RE2 不支持的语法。",
+          "empty-match": "正则不能匹配空文本。"
+        }
+      }
     },
     "appearance": {
       "title": "外观",

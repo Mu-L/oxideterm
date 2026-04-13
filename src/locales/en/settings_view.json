@@ -157,7 +157,61 @@
       "bg_tab_files": "File Manager",
       "bg_tab_sessions": "Session Manager",
       "bg_tab_launcher": "Launcher",
-      "bg_tab_plugins": "Plugins"
+      "bg_tab_plugins": "Plugins",
+      "highlight_rules": {
+        "title": "Highlight Rules",
+        "description": "Persist keyword or regex-based highlights for terminal output. Higher rules win when matches overlap.",
+        "preset_status": "Add Status Preset",
+        "preset_ip": "Add IPv4 Preset",
+        "preset_mac": "Add MAC Preset",
+        "add_rule": "Add Rule",
+        "limit": "Up to {{count}} rules per profile.",
+        "priority_hint": "Drag to reorder priority from top to bottom.",
+        "empty": "No highlight rules yet. Add a rule or start from a preset.",
+        "preview": "Preview",
+        "preview_hint": "Matches are resolved with the same priority rules used in the terminal.",
+        "drag_rule": "Drag rule",
+        "label": "Label",
+        "label_placeholder": "Optional name for this rule",
+        "pattern": "Pattern",
+        "pattern_placeholder": "Keyword or regex pattern",
+        "render_mode": "Render Mode",
+        "render_mode_background": "Background",
+        "render_mode_underline": "Underline",
+        "render_mode_outline": "Outline",
+        "foreground": "Foreground",
+        "background": "Background",
+        "enabled": "Enabled",
+        "regex": "Regex",
+        "case_sensitive": "Case Sensitive",
+        "delete": "Delete",
+        "invalid_rule": "Invalid rule",
+        "toast_auto_disabled_title": "Highlight rule disabled",
+        "toast_auto_disabled_description": "{{count}} rule was disabled automatically because matching failed: {{reason}}.",
+        "preset_label_error": "Error",
+        "preset_label_warning": "Warning",
+        "preset_label_ok": "OK",
+        "preset_label_ip": "IPv4",
+        "preset_label_mac": "MAC",
+        "preview_line_error": "2026-04-13 21:52:33 ERROR bridge timeout on session 127.0.0.1",
+        "preview_line_warning": "warning: retrying ssh connection to 10.0.0.25 via gateway",
+        "preview_line_ok": "OK 02:3B:4C:5D:6E:7F uploaded artifact to 192.168.1.52",
+        "mode_hint": {
+          "literal": "Literal mode matches plain text exactly as written.",
+          "regex": "Regex mode uses RE2-compatible syntax for safe matching."
+        },
+        "runtime_reason": {
+          "timeout": "the matcher timed out",
+          "error": "the matcher returned an error"
+        },
+        "validation": {
+          "empty-pattern": "Enter a keyword or regex pattern.",
+          "pattern-too-long": "Pattern is too long.",
+          "invalid-regex": "Regex syntax is invalid.",
+          "unsupported-regex-syntax": "This regex uses syntax that RE2 does not support.",
+          "empty-match": "Regex cannot match empty text."
+        }
+      }
     },
     "appearance": {
       "title": "Appearance",

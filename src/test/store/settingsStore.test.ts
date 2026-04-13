@@ -207,6 +207,46 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().settings.terminal.osc52Clipboard).toBe(true);
   });
 
+  it('sanitizes persisted terminal highlight rules on load', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      terminal: {
+        theme: 'default',
+        renderer: 'auto',
+        highlightRules: [
+          {
+            id: 'duplicate',
+            label: 'Error',
+            pattern: 'error',
+            enabled: true,
+            isRegex: false,
+            caseSensitive: false,
+            foreground: '#ff0000',
+            background: 'bad-color',
+            renderMode: 'background',
+            priority: 2,
+          },
+          {
+            id: 'duplicate',
+            label: 'Warn',
+            pattern: 'warn',
+            enabled: true,
+            isRegex: false,
+            caseSensitive: false,
+            priority: 2,
+          },
+        ],
+      },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+    const rules = useSettingsStore.getState().settings.terminal.highlightRules;
+
+    expect(rules).toHaveLength(2);
+    expect(new Set(rules.map((rule) => rule.id)).size).toBe(2);
+    expect(rules[0].background).toBeUndefined();
+    expect(new Set(rules.map((rule) => rule.priority)).size).toBe(2);
+  });
+
   it('setLanguage persists app_lang and delegates to i18n', async () => {
     const useSettingsStore = await loadSettingsStore();
 
@@ -227,6 +267,38 @@ describe('settingsStore', () => {
     useSettingsStore.getState().updateTerminal('scrollback', 100000);
     expect(useSettingsStore.getState().settings.terminal.scrollback).toBe(20000);
     expect(useSettingsStore.getState().settings.buffer.maxLines).toBe(12000);
+  });
+
+  it('sanitizes highlight rules on terminal updates before persisting', async () => {
+    const useSettingsStore = await loadSettingsStore();
+
+    useSettingsStore.getState().updateTerminal('highlightRules', [
+      {
+        id: 'rule-a',
+        label: 'A',
+        pattern: 'error',
+        enabled: true,
+        isRegex: false,
+        caseSensitive: false,
+        priority: 3,
+      },
+      {
+        id: 'rule-a',
+        label: 'B',
+        pattern: 'warn',
+        enabled: true,
+        isRegex: false,
+        caseSensitive: false,
+        priority: 3,
+      },
+    ]);
+
+    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    const rules = persisted.terminal.highlightRules;
+
+    expect(rules).toHaveLength(2);
+    expect(new Set(rules.map((rule: { id: string }) => rule.id)).size).toBe(2);
+    expect(new Set(rules.map((rule: { priority: number }) => rule.priority)).size).toBe(2);
   });
 
   it('clamps sidebar widths and records MRU commands without duplicates', async () => {

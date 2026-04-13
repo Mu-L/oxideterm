@@ -5,6 +5,21 @@
 export type SessionState = 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting';
 export type AuthType = 'password' | 'key' | 'default_key' | 'agent' | 'certificate' | 'keyboard_interactive';
 
+export type HighlightRuleRenderMode = 'background' | 'underline' | 'outline';
+
+export type HighlightRule = {
+  id: string;
+  label: string;
+  pattern: string;
+  isRegex: boolean;
+  caseSensitive: boolean;
+  foreground?: string;
+  background?: string;
+  renderMode?: HighlightRuleRenderMode;
+  enabled: boolean;
+  priority: number;
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SSH Connection Pool Types (New Architecture)
 // ═══════════════════════════════════════════════════════════════════════════

@@ -58,9 +58,16 @@ import { useTerminalRecording } from '../../hooks/useTerminalRecording';
 import { useAdaptiveRenderer } from '../../hooks/useAdaptiveRenderer';
 import { RecordingControls } from './RecordingControls';
 import { FpsOverlay } from './FpsOverlay';
+import { useToastStore } from '../../hooks/useToast';
+import { HighlightEngine } from '../../lib/terminal/highlightEngine';
+import {
+  applyRuntimeDisabledHighlightRules,
+  getHighlightRulesSignature,
+  markRuntimeDisabledHighlightRules,
+} from '../../lib/terminal/runtimeDisabledHighlightRules';
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
-import { HistorySearchMatch, TerminalHistorySearchProgress } from '../../types';
+import { HistorySearchMatch, TerminalHistorySearchProgress, type HighlightRule } from '../../types';
 
 const PREFILL_REPLAY_LINE_COUNT = 50; // Keep aligned with backend replay count
 
@@ -129,6 +136,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const onResizeDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const smartCopyDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const highlightEngineRef = useRef<HighlightEngine | null>(null);
+  const runtimeDisabledHighlightRulesRef = useRef<Map<string, string>>(new Map());
+  const runtimeDisabledHighlightRulesSourceRef = useRef<string | null>(null);
   const isMountedRef = useRef(true); // Track mount state for StrictMode
   const isActiveRef = useRef(isActive);
   const reconnectingRef = useRef(false); // Suppress close/error during intentional reconnect
@@ -161,6 +171,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     resultIndex: -1, 
     resultCount: 0 
   });
+  const getEffectiveHighlightRules = useCallback((rules: HighlightRule[]) => {
+    const rulesSignature = getHighlightRulesSignature(rules);
+    if (
+      runtimeDisabledHighlightRulesSourceRef.current
+      && runtimeDisabledHighlightRulesSourceRef.current !== rulesSignature
+    ) {
+      runtimeDisabledHighlightRulesRef.current.clear();
+    }
+
+    runtimeDisabledHighlightRulesSourceRef.current = rulesSignature;
+    return applyRuntimeDisabledHighlightRules(runtimeDisabledHighlightRulesRef.current, rules);
+  }, []);
+
   // Track current search query for navigation
   const currentSearchQueryRef = useRef<string>('');
   const currentSearchOptionsRef = useRef<ISearchOptions | undefined>(undefined);
@@ -708,6 +731,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         } else {
           clearViewportTransparent(containerRef.current);
         }
+
+        highlightEngineRef.current?.updateRules(getEffectiveHighlightRules(terminal.highlightRules));
         
         term.refresh(0, term.rows - 1);
         // Delay fit to next frame so xterm recalculates glyph metrics with new fontSize
@@ -1099,6 +1124,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       isActive: () => isActiveRef.current,
       isEnabled: () => useSettingsStore.getState().settings.terminal.smartCopy,
       onPasteShortcut: handlePasteShortcut,
+    });
+
+    highlightEngineRef.current = new HighlightEngine(term, getEffectiveHighlightRules(terminalSettings.highlightRules), {
+      onRulesAutoDisabled: handleHighlightRulesAutoDisabled,
     });
 
     // Detect mouse tracking mode changes (tmux, vim, etc.)
@@ -1720,6 +1749,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           smartCopyDisposableRef.current = null;
         }
 
+        if (highlightEngineRef.current) {
+          try {
+            highlightEngineRef.current.dispose();
+          } catch (e) {
+            // Ignore errors during cleanup
+          }
+          highlightEngineRef.current = null;
+        }
+
+        runtimeDisabledHighlightRulesRef.current.clear();
+        runtimeDisabledHighlightRulesSourceRef.current = null;
+
         if (imageAddonRef.current) {
           try {
             imageAddonRef.current.dispose();
@@ -2251,6 +2292,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       processTerminalPaste(text, false);
     });
   }, [processTerminalPaste]);
+
+  const handleHighlightRulesAutoDisabled = useCallback((ruleIds: string[], reason: 'timeout' | 'error') => {
+    markRuntimeDisabledHighlightRules(
+      runtimeDisabledHighlightRulesRef.current,
+      useSettingsStore.getState().settings.terminal.highlightRules,
+      ruleIds,
+    );
+    useToastStore.getState().addToast({
+      title: t('settings_view.terminal.highlight_rules.toast_auto_disabled_title'),
+      description: t('settings_view.terminal.highlight_rules.toast_auto_disabled_description', {
+        count: ruleIds.length,
+        reason: t(`settings_view.terminal.highlight_rules.runtime_reason.${reason}`),
+      }),
+      variant: 'warning',
+    });
+  }, [t]);
 
   // Paste protection: intercept paste events
   useEffect(() => {

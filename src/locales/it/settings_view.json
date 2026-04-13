@@ -157,7 +157,61 @@
       "bg_tab_files": "Gestore file",
       "bg_tab_sessions": "Gestione sessioni",
       "bg_tab_launcher": "Launcher",
-      "bg_tab_plugins": "Plugin"
+      "bg_tab_plugins": "Plugin",
+      "highlight_rules": {
+        "title": "Regole di evidenziazione",
+        "description": "Mantiene evidenziazioni basate su parole chiave o regex per l'output del terminale. In caso di sovrapposizione prevale la regola con priorità maggiore.",
+        "preset_status": "Aggiungi preset stato",
+        "preset_ip": "Aggiungi preset IPv4",
+        "preset_mac": "Aggiungi preset MAC",
+        "add_rule": "Aggiungi regola",
+        "limit": "Fino a {{count}} regole per profilo.",
+        "priority_hint": "Trascina per riordinare la priorità dall'alto verso il basso.",
+        "empty": "Nessuna regola di evidenziazione. Aggiungi una regola o parti da un preset.",
+        "preview": "Anteprima",
+        "preview_hint": "Le corrispondenze vengono risolte con le stesse regole di priorità usate nel terminale.",
+        "drag_rule": "Trascina regola",
+        "label": "Etichetta",
+        "label_placeholder": "Nome facoltativo per questa regola",
+        "pattern": "Pattern",
+        "pattern_placeholder": "Parola chiave o pattern regex",
+        "render_mode": "Modalità di rendering",
+        "render_mode_background": "Sfondo",
+        "render_mode_underline": "Sottolineatura",
+        "render_mode_outline": "Contorno",
+        "foreground": "Primo piano",
+        "background": "Sfondo",
+        "enabled": "Abilitata",
+        "regex": "Regex",
+        "case_sensitive": "Maiuscole/minuscole",
+        "delete": "Elimina",
+        "invalid_rule": "Regola non valida",
+        "toast_auto_disabled_title": "Regola di evidenziazione disattivata",
+        "toast_auto_disabled_description": "{{count}} regola è stata disattivata automaticamente perché la corrispondenza non è riuscita: {{reason}}.",
+        "preset_label_error": "Errore",
+        "preset_label_warning": "Avviso",
+        "preset_label_ok": "OK",
+        "preset_label_ip": "IPv4",
+        "preset_label_mac": "MAC",
+        "preview_line_error": "2026-04-13 21:52:33 ERROR timeout del bridge sulla sessione 127.0.0.1",
+        "preview_line_warning": "warning: nuovo tentativo di connessione ssh a 10.0.0.25 tramite gateway",
+        "preview_line_ok": "OK 02:3B:4C:5D:6E:7F artefatto caricato su 192.168.1.52",
+        "mode_hint": {
+          "literal": "La modalità letterale corrisponde al testo semplice esattamente come è scritto.",
+          "regex": "La modalità regex usa una sintassi compatibile con RE2 per una corrispondenza sicura."
+        },
+        "runtime_reason": {
+          "timeout": "il matcher ha superato il tempo limite",
+          "error": "il matcher ha restituito un errore"
+        },
+        "validation": {
+          "empty-pattern": "Inserisci una parola chiave o un pattern regex.",
+          "pattern-too-long": "Il pattern è troppo lungo.",
+          "invalid-regex": "La sintassi regex non è valida.",
+          "unsupported-regex-syntax": "Questa regex usa una sintassi non supportata da RE2.",
+          "empty-match": "La regex non può corrispondere a un testo vuoto."
+        }
+      }
     },
     "appearance": {
       "title": "Aspetto",

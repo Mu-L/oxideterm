@@ -22,6 +22,8 @@ import { getFontFamilyCSS } from '../components/fileManager/fontUtils';
 import i18n from '../i18n';
 import { DEFAULT_PROVIDERS } from '../lib/ai/providers';
 import { platform } from '../lib/platform';
+import { sanitizeHighlightRules } from '../lib/terminal/highlightPattern';
+import type { HighlightRule } from '../types';
 
 // ============================================================================
 // Constants
@@ -143,6 +145,7 @@ export interface TerminalSettings {
   backgroundBlur: number;            // Blur in px 0-20 (default 0)
   backgroundFit: BackgroundFit;      // How the image fills the terminal area
   backgroundEnabledTabs: string[];   // Which tab types show the background image
+  highlightRules: HighlightRule[];
 }
 
 /** Buffer settings (used by backend) */
@@ -377,6 +380,7 @@ const defaultTerminalSettings: TerminalSettings = {
   backgroundBlur: 0,
   backgroundFit: 'cover',
   backgroundEnabledTabs: ['terminal', 'local_terminal'],
+  highlightRules: [],
 };
 
 const defaultBufferSettings: BufferSettings = {
@@ -573,14 +577,20 @@ function createDefaultSettings(): PersistedSettingsV2 {
   };
 }
 
-function normalizeHistorySettings(settings: PersistedSettingsV2): PersistedSettingsV2 {
-  const scrollback = clampTerminalScrollback(settings.terminal.scrollback);
+function normalizeTerminalSettings(settings: TerminalSettings): TerminalSettings {
   return {
     ...settings,
-    terminal: {
-      ...settings.terminal,
-      scrollback,
-    },
+    scrollback: clampTerminalScrollback(settings.scrollback),
+    highlightRules: sanitizeHighlightRules(settings.highlightRules),
+  };
+}
+
+function normalizeHistorySettings(settings: PersistedSettingsV2): PersistedSettingsV2 {
+  const terminal = normalizeTerminalSettings(settings.terminal);
+  const scrollback = terminal.scrollback;
+  return {
+    ...settings,
+    terminal,
     buffer: {
       ...settings.buffer,
       maxLines: deriveBackendHotLines(scrollback),
@@ -909,9 +919,7 @@ export const useSettingsStore = create<SettingsStore>()(
     updateTerminal: (key, value) => {
       set((state) => {
         const nextTerminal = { ...state.settings.terminal, [key]: value };
-        const normalizedTerminal = key === 'scrollback'
-          ? { ...nextTerminal, scrollback: clampTerminalScrollback(Number(value)) }
-          : nextTerminal;
+        const normalizedTerminal = normalizeTerminalSettings(nextTerminal);
         const newSettings: PersistedSettingsV2 = {
           ...state.settings,
           terminal: normalizedTerminal,
@@ -1525,6 +1533,7 @@ const TERMINAL_BEHAVIOR_KEYS: Array<keyof TerminalSettings> = [
   'pasteProtection',
   'smartCopy',
   'osc52Clipboard',
+  'highlightRules',
 ];
 
 const GENERAL_KEYS: Array<keyof GeneralSettings> = ['language', 'updateChannel'];

@@ -63,6 +63,8 @@ const PROMPT_GRACE_MS = 200;
 const MAX_ADAPTIVE_STABLE_SECS = 5;
 /** Number of buffer tail lines to include when output is empty */
 const EMPTY_OUTPUT_TAIL_LINES = 20;
+/** Default tail window used when only a lightweight snapshot is needed */
+const TERMINAL_BUFFER_TAIL_FALLBACK_LINES = 500;
 
 /** Context needed to execute tools — activeNodeId may be null when no terminal is focused */
 export type ToolExecutionContext = {
@@ -443,8 +445,7 @@ async function execTerminalCommandToSession(
 
   // Pre-command snapshot: take BEFORE writing command to avoid race condition
   // where backend buffer updates before our snapshot read completes.
-  const preSnapshot = await readBufferLines(sessionId);
-  const preSnapshotLineCount = preSnapshot?.length ?? null;
+  const preSnapshotLineCount = await readBufferLineCount(sessionId);
   if (preSnapshotLineCount !== null) {
     console.debug(`[AI:ToolExec] pre-command snapshot: ${preSnapshotLineCount} lines`);
   }
@@ -920,15 +921,10 @@ async function execGetTerminalBuffer(
   }
   const maxLines = clamp(Number(args.max_lines) || 200, 1, 500);
 
-  // Path 1: Backend buffer (SSH terminals)
-  try {
-    const response = await api.getAllBufferLines(sessionId);
-    const allLines = response.lines.map(l => l.text);
-    const sampled = semanticSample(allLines, maxLines);
-    const { text, truncated } = truncateOutput(sampled.join('\n'));
+  const snapshot = await readBufferTail(sessionId, maxLines);
+  if (snapshot) {
+    const { text, truncated } = truncateOutput(snapshot.lines.join('\n'));
     return { toolCallId, toolName: 'get_terminal_buffer', success: true, output: text || '(empty buffer)', truncated, durationMs: Date.now() - startTime };
-  } catch {
-    // May be a local terminal or invalid session — try frontend registry
   }
 
   // Path 2: Frontend terminalRegistry fallback (local terminals + rendered terminals)
@@ -936,9 +932,8 @@ async function execGetTerminalBuffer(
   if (paneId) {
     const buffer = getTerminalBuffer(paneId);
     if (buffer) {
-      const allLines = buffer.split('\n');
-      const sampled = semanticSample(allLines, maxLines);
-      const { text, truncated } = truncateOutput(sampled.join('\n'));
+      const tailLines = buffer.split('\n').slice(-maxLines);
+      const { text, truncated } = truncateOutput(tailLines.join('\n'));
       return { toolCallId, toolName: 'get_terminal_buffer', success: true, output: text || '(empty buffer)', truncated, durationMs: Date.now() - startTime };
     }
   }
@@ -1026,11 +1021,11 @@ async function waitForTerminalOutput(
   if (preSnapshotLineCount != null) {
     initialLineCount = preSnapshotLineCount;
   } else {
-    const initialLines = await readBufferLines(sessionId);
-    if (initialLines === null) {
+    const initialSnapshot = await readBufferStats(sessionId, 0);
+    if (initialSnapshot === null) {
       return { success: false, output: '', error: 'Session not found or buffer unavailable.' };
     }
-    initialLineCount = initialLines.length;
+    initialLineCount = initialSnapshot.totalLines;
   }
 
   const timeoutMs = timeoutSecs * 1000;
@@ -1091,9 +1086,17 @@ async function waitForTerminalOutput(
       checking = true;
       lastCheckedCounter = outputCounter;
 
+      let currentLineCount: number | null;
       let currentLines: string[] | null;
       try {
-        currentLines = await readBufferLines(sessionId);
+        currentLineCount = await readBufferLineCount(sessionId);
+        if (currentLineCount === null) {
+          currentLines = null;
+        } else if (currentLineCount <= initialLineCount) {
+          currentLines = [];
+        } else {
+          currentLines = await readBufferRange(sessionId, initialLineCount, currentLineCount - initialLineCount);
+        }
       } catch {
         if (!settled) done('lost');
         checking = false;
@@ -1108,12 +1111,11 @@ async function waitForTerminalOutput(
         return;
       }
 
-      const delta = currentLines.length - initialLineCount;
+      const delta = (currentLineCount ?? initialLineCount) - initialLineCount;
 
       // Check explicit pattern match on new lines
       if (patternRe && delta > 0) {
-        const newLines = currentLines.slice(initialLineCount);
-        if (newLines.some(line => patternRe!.test(line))) {
+        if (currentLines.some(line => patternRe!.test(line))) {
           done('pattern');
           checking = false;
           return;
@@ -1151,19 +1153,26 @@ async function waitForTerminalOutput(
     return { success: false, output: '', error: 'Generation was stopped.' };
   }
 
-  // Read final buffer and extract delta
-  const finalLines = await readBufferLines(sessionId);
-  if (finalLines === null || result === 'lost') {
+  const finalSnapshot = await readBufferStats(sessionId, TERMINAL_BUFFER_TAIL_FALLBACK_LINES);
+  if (finalSnapshot === null || result === 'lost') {
     return { success: false, output: '', error: 'Session became unavailable during wait.' };
   }
 
+  const finalLineCount = finalSnapshot.totalLines;
+
   // Handle buffer shrink (e.g. terminal clear/reset)
-  if (finalLines.length < initialLineCount) {
-    const { text, truncated } = truncateOutput(finalLines.join('\n'));
+  if (finalLineCount < initialLineCount) {
+    const { text, truncated } = truncateOutput(finalSnapshot.lines.join('\n'));
     return { success: true, output: `⚠ Buffer was cleared or reset during command execution. Showing current buffer content:\n${text}`, truncated };
   }
 
-  let newLines = finalLines.slice(initialLineCount);
+  let newLines = finalLineCount > initialLineCount
+    ? await readBufferRange(sessionId, initialLineCount, finalLineCount - initialLineCount)
+    : [];
+
+  if (newLines === null) {
+    return { success: false, output: '', error: 'Session became unavailable during wait.' };
+  }
 
   // Strip trailing prompt line when completion was via prompt detection
   if (result === 'prompt' && newLines.length > 0) {
@@ -1176,7 +1185,7 @@ async function waitForTerminalOutput(
   if (newLines.length === 0) {
     // Fallback: provide buffer tail so the AI always gets useful context
     if (result !== 'timeout') {
-      const tail = finalLines.slice(-EMPTY_OUTPUT_TAIL_LINES);
+      const tail = finalSnapshot.lines.slice(-EMPTY_OUTPUT_TAIL_LINES);
       if (tail.length > 0) {
         const { text, truncated } = truncateOutput(tail.join('\n'));
         return { success: true, output: `No new terminal output detected. Here are the last ${tail.length} lines of the terminal:\n${text}`, truncated };
@@ -1241,22 +1250,73 @@ async function execAwaitTerminalOutput(
   };
 }
 
-/** Read all buffer lines for a session (backend or frontend fallback). */
-async function readBufferLines(sessionId: string): Promise<string[] | null> {
-  // Path 1: Backend buffer (SSH terminals)
+type BufferSnapshot = {
+  totalLines: number;
+  lines: string[];
+};
+
+async function readBufferStats(sessionId: string, tailLines: number): Promise<BufferSnapshot | null> {
   try {
-    const response = await api.getAllBufferLines(sessionId);
-    return response.lines.map(l => l.text);
+    const stats = await api.getBufferStats(sessionId);
+    const totalLines = Math.max(0, stats.current_lines);
+    const tailCount = Math.min(totalLines, Math.max(0, tailLines));
+    const lines = tailCount > 0
+      ? (await api.getScrollBuffer(sessionId, Math.max(0, totalLines - tailCount), tailCount)).map(line => line.text)
+      : [];
+    return { totalLines, lines };
   } catch {
     // fallback
   }
-  // Path 2: Frontend registry (local terminals)
+
   const paneId = findPaneBySessionId(sessionId);
-  if (paneId) {
-    const buffer = getTerminalBuffer(paneId);
-    if (buffer) return buffer.split('\n');
+  if (!paneId) {
+    return null;
   }
-  return null;
+
+  const buffer = getTerminalBuffer(paneId);
+  if (buffer === null) {
+    return null;
+  }
+
+  const allLines = buffer.split('\n');
+  return {
+    totalLines: allLines.length,
+    lines: tailLines > 0 ? allLines.slice(-tailLines) : [],
+  };
+}
+
+async function readBufferTail(sessionId: string, maxLines: number): Promise<BufferSnapshot | null> {
+  return readBufferStats(sessionId, maxLines);
+}
+
+async function readBufferLineCount(sessionId: string): Promise<number | null> {
+  const snapshot = await readBufferStats(sessionId, 0);
+  return snapshot?.totalLines ?? null;
+}
+
+async function readBufferRange(sessionId: string, startLine: number, count: number): Promise<string[] | null> {
+  if (count <= 0) {
+    return [];
+  }
+
+  try {
+    const lines = await api.getScrollBuffer(sessionId, startLine, count);
+    return lines.map(line => line.text);
+  } catch {
+    // fallback
+  }
+
+  const paneId = findPaneBySessionId(sessionId);
+  if (!paneId) {
+    return null;
+  }
+
+  const buffer = getTerminalBuffer(paneId);
+  if (buffer === null) {
+    return null;
+  }
+
+  return buffer.split('\n').slice(startLine, startLine + count);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1376,8 +1436,7 @@ async function execBatchExec(
       }
 
       // Pre-command snapshot: capture buffer line count BEFORE sending the command
-      const preSnapshot = await readBufferLines(sessionId);
-      const preSnapshotLineCount = preSnapshot?.length ?? null;
+      const preSnapshotLineCount = await readBufferLineCount(sessionId);
 
       const sent = writeToTerminal(paneId, `${cmd}\r`);
       if (!sent) {
@@ -1390,7 +1449,7 @@ async function execBatchExec(
         AUTO_AWAIT_TIMEOUT_SECS,
         AUTO_AWAIT_STABLE_SECS,
         null,
-        Date.now(),
+        startTime,
         preSnapshotLineCount,
         abortSignal,
       );

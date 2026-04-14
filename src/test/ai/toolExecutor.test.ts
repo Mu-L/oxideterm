@@ -59,6 +59,8 @@ const nodeGetStateMock = vi.hoisted(() => vi.fn());
 const nodeAgentStatusMock = vi.hoisted(() => vi.fn());
 const sshSetPoolConfigMock = vi.hoisted(() => vi.fn());
 const getAllBufferLinesMock = vi.hoisted(() => vi.fn());
+const getBufferStatsMock = vi.hoisted(() => vi.fn());
+const getScrollBufferMock = vi.hoisted(() => vi.fn());
 const connectToSavedMock = vi.hoisted(() => vi.fn());
 const findPaneBySessionIdMock = vi.hoisted(() => vi.fn());
 const getTerminalBufferMock = vi.hoisted(() => vi.fn());
@@ -97,6 +99,8 @@ vi.mock('@/lib/api', () => ({
     localExecCommand: localExecCommandMock,
     sshSetPoolConfig: sshSetPoolConfigMock,
     getAllBufferLines: getAllBufferLinesMock,
+    getBufferStats: getBufferStatsMock,
+    getScrollBuffer: getScrollBufferMock,
   },
   ragSearch: vi.fn(),
   nodeIdeExecCommand: nodeIdeExecCommandMock,
@@ -215,6 +219,10 @@ describe('toolExecutor get_settings sanitization', () => {
     sshSetPoolConfigMock.mockResolvedValue(undefined);
     getAllBufferLinesMock.mockReset();
     getAllBufferLinesMock.mockRejectedValue(new Error('no backend buffer'));
+    getBufferStatsMock.mockReset();
+    getBufferStatsMock.mockRejectedValue(new Error('no backend buffer stats'));
+    getScrollBufferMock.mockReset();
+    getScrollBufferMock.mockRejectedValue(new Error('no backend scroll buffer'));
     connectToSavedMock.mockReset();
     findPaneBySessionIdMock.mockReset();
     getTerminalBufferMock.mockReset();
@@ -337,6 +345,27 @@ describe('toolExecutor get_settings sanitization', () => {
     );
 
     expect(localExecCommandMock).toHaveBeenCalledWith('sudo reboot', undefined, 5, false);
+  });
+
+  it('reads terminal buffer through paged backend APIs instead of full-buffer fetch', async () => {
+    getBufferStatsMock.mockResolvedValue({ current_lines: 1200, total_lines: 1200, max_lines: 100000, memory_usage_mb: 2 });
+    getScrollBufferMock.mockResolvedValue([
+      { text: 'tail line 1' },
+      { text: 'tail line 2' },
+      { text: 'tail line 3' },
+    ]);
+
+    const result = await executeTool(
+      'get_terminal_buffer',
+      { session_id: 'session-1', max_lines: 3 },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('tail line 1');
+    expect(getBufferStatsMock).toHaveBeenCalledWith('session-1');
+    expect(getScrollBufferMock).toHaveBeenCalledWith('session-1', 1197, 3);
+    expect(getAllBufferLinesMock).not.toHaveBeenCalled();
   });
 });
 

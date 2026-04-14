@@ -24,7 +24,15 @@ import { terminalLinkHandler } from '../../lib/safeUrl';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
-import { hexToRgba, getBackgroundFitStyles, isLowEndGPU, forceViewportTransparent, clearViewportTransparent } from '../../lib/terminalHelpers';
+import {
+  hexToRgba,
+  getBackgroundFitStyles,
+  isLowEndGPU,
+  forceViewportTransparent,
+  clearViewportTransparent,
+  isTerminalContainerRenderable,
+  resolveTerminalDimensions,
+} from '../../lib/terminalHelpers';
 import { encodeTerminalExecuteInput, encodeTerminalTextInput } from '../../lib/terminalInput';
 import { 
   registerTerminalBuffer, 
@@ -157,6 +165,13 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   // Callbacks read .current at call-time, making the effect deps truly stable.
   const adaptiveRendererRef = useRef(adaptiveRenderer);
   adaptiveRendererRef.current = adaptiveRenderer;
+
+  const syncLocalPtySize = useCallback(() => {
+    const dims = resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current);
+    if (!dims) return;
+
+    resizeTerminal(sessionId, dims.cols, dims.rows);
+  }, [resizeTerminal, sessionId]);
 
   const getEffectiveHighlightRules = useCallback((rules: HighlightRule[]) => {
     const rulesSignature = getHighlightRulesSignature(rules);
@@ -307,18 +322,14 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         // Delay fit to next frame so xterm recalculates glyph metrics with new fontSize
         requestAnimationFrame(() => {
           const fitAddon = fitAddonRef.current;
-          if (!fitAddon) return;
+          if (!fitAddon || !isTerminalContainerRenderable(containerRef.current)) return;
           fitAddon.fit();
-          // Explicitly sync new dimensions to local PTY
-          const dims = fitAddon.proposeDimensions();
-          if (dims) {
-            resizeTerminal(sessionId, dims.cols, dims.rows);
-          }
+          syncLocalPtySize();
         });
       }
     );
     return unsubscribe;
-  }, [sessionId, resizeTerminal]);
+  }, [sessionId, resizeTerminal, syncLocalPtySize]);
 
   // CJK Font lazy loading: refresh terminal ONCE when Maple Mono Regular loads
   // Only Regular triggers refresh, secondary weights (Bold/Italic) load silently
@@ -330,25 +341,22 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     const unsubscribe = onMapleRegularLoaded(() => {
       const term = terminalRef.current;
       const fitAddon = fitAddonRef.current;
-      if (!term || !fitAddon) return;
+      if (!term || !fitAddon || !isTerminalContainerRenderable(containerRef.current)) return;
       
       // Refresh terminal to apply newly loaded CJK font
       term.refresh(0, term.rows - 1);
       fitAddon.fit();
-      
-      // 🔴 关键修复：显式同步尺寸给本地 PTY
-      // fitAddon.fit() 不一定触发 resize 事件（如果尺寸没变），这里显式同步
-      const dims = fitAddon.proposeDimensions();
-      if (dims) {
-        resizeTerminal(sessionId, dims.cols, dims.rows);
-        if (import.meta.env.DEV) {
-          console.log(`[LocalTerminalView] CJK font loaded, synced resize: ${dims.cols}x${dims.rows}`);
-        }
+
+      const dims = resolveTerminalDimensions(containerRef.current, term, fitAddon);
+      if (dims && import.meta.env.DEV) {
+        console.log(`[LocalTerminalView] CJK font loaded, synced resize: ${dims.cols}x${dims.rows}`);
       }
+
+      syncLocalPtySize();
     });
     
     return unsubscribe;
-  }, [sessionId, resizeTerminal]);
+  }, [sessionId, resizeTerminal, syncLocalPtySize]);
 
   // Focus terminal when active
   useEffect(() => {
@@ -357,11 +365,13 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         if (!searchOpen && !aiPanelOpen) {
           terminalRef.current?.focus();
         }
+        if (!isTerminalContainerRenderable(containerRef.current)) return;
         fitAddonRef.current?.fit();
+        syncLocalPtySize();
       }, 50);
       return () => clearTimeout(focusTimeout);
     }
-  }, [isActive, searchOpen, aiPanelOpen]);
+  }, [isActive, searchOpen, aiPanelOpen, syncLocalPtySize]);
 
   // Suspend heavy renderer while tab is inactive, and restore on activation.
   useEffect(() => {
@@ -478,7 +488,9 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
             // were applied while the renderer was disposed.
             const t = terminalRef.current;
             if (t) t.refresh(0, t.rows - 1);
+            if (!isTerminalContainerRenderable(containerRef.current)) return;
             fitAddonRef.current?.fit();
+            syncLocalPtySize();
           }
         });
       });
@@ -490,7 +502,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       if (fitRaf1 !== null) cancelAnimationFrame(fitRaf1);
       if (fitRaf2 !== null) cancelAnimationFrame(fitRaf2);
     };
-  }, [isActive, terminalSettings.cursorBlink, terminalSettings.renderer]);
+  }, [isActive, terminalSettings.cursorBlink, terminalSettings.renderer, syncLocalPtySize]);
 
   // Initialize terminal
   useEffect(() => {
@@ -758,12 +770,9 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
 
     // Initial fit
     setTimeout(() => {
+      if (!isTerminalContainerRenderable(containerRef.current)) return;
       fitAddon.fit();
-      
-      const dims = fitAddon.proposeDimensions();
-      if (dims && Number.isFinite(dims.cols) && Number.isFinite(dims.rows) && dims.cols > 0 && dims.rows > 0) {
-        resizeTerminal(sessionId, dims.cols, dims.rows);
-      }
+      syncLocalPtySize();
     }, 0);
 
     loadRenderer();
@@ -1071,12 +1080,15 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       }
       resizeDebounceTimer = setTimeout(() => {
         const fitAddon = fitAddonRef.current;
-        if (!fitAddon || !isMountedRef.current) return;
+        if (!fitAddon || !isMountedRef.current || !isTerminalContainerRenderable(containerRef.current)) {
+          resizeDebounceTimer = null;
+          return;
+        }
         
         fitAddon.fit();
-        
-        const dims = fitAddon.proposeDimensions();
-        if (dims && Number.isFinite(dims.cols) && Number.isFinite(dims.rows) && dims.cols > 0 && dims.rows > 0) {
+
+        const dims = resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddon);
+        if (dims) {
           resizeTerminal(sessionId, dims.cols, dims.rows);
           // Feed recording (resize)
           feedResize(dims.cols, dims.rows);

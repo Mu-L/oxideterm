@@ -77,3 +77,39 @@ export function clearViewportTransparent(container: HTMLElement | null): void {
   const xtermEl = container.querySelector('.xterm') as HTMLElement | null;
   if (xtermEl) xtermEl.style.backgroundColor = '';
 }
+
+export interface TerminalDimensions {
+  cols: number;
+  rows: number;
+}
+
+/**
+ * Hidden tab panels collapse terminal containers to zero size. Fitting xterm in
+ * that state would incorrectly shrink the backing PTY and corrupt prompt layout.
+ */
+export function isTerminalContainerRenderable(container: HTMLElement | null): boolean {
+  if (!container || !container.isConnected) return false;
+  const rect = container.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+/**
+ * Use freshly measured dimensions when the terminal is visible. Otherwise keep
+ * the last stable xterm size instead of accepting hidden-tab measurements.
+ */
+export function resolveTerminalDimensions(
+  container: HTMLElement | null,
+  terminal: TerminalDimensions | null,
+  fitAddon: { proposeDimensions: () => TerminalDimensions | null | undefined } | null,
+): TerminalDimensions | null {
+  const proposed = isTerminalContainerRenderable(container)
+    ? fitAddon?.proposeDimensions() ?? null
+    : null;
+  const candidate = proposed ?? terminal;
+  if (!candidate) return null;
+  const { cols, rows } = candidate;
+  if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols <= 0 || rows <= 0) {
+    return null;
+  }
+  return { cols, rows };
+}

@@ -39,7 +39,15 @@ import { onMapleRegularLoaded, ensureCJKFallback } from '../../lib/fontLoader';
 import { runInputPipeline, runOutputPipeline } from '../../lib/plugin/pluginTerminalHooks';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
 import { useReconnectOrchestratorStore } from '../../store/reconnectOrchestratorStore';
-import { hexToRgba, getBackgroundFitStyles, isLowEndGPU, forceViewportTransparent, clearViewportTransparent } from '../../lib/terminalHelpers';
+import {
+  hexToRgba,
+  getBackgroundFitStyles,
+  isLowEndGPU,
+  forceViewportTransparent,
+  clearViewportTransparent,
+  isTerminalContainerRenderable,
+  resolveTerminalDimensions,
+} from '../../lib/terminalHelpers';
 import { encodeTerminalExecuteInput, encodeTerminalTextInput } from '../../lib/terminalInput';
 import {
   MSG_TYPE_DATA, MSG_TYPE_HEARTBEAT, MSG_TYPE_ERROR,
@@ -406,6 +414,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, []);
 
+  const syncRemotePtySize = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || inputLockedRef.current) return;
+
+    const dims = resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current);
+    if (!dims) return;
+
+    ws.send(encodeResizeFrame(dims.cols, dims.rows));
+  }, []);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // Unified WebSocket message handler
   // Shared by both initial connection and reconnection paths.
@@ -738,22 +756,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         // Delay fit to next frame so xterm recalculates glyph metrics with new fontSize
         requestAnimationFrame(() => {
           const fitAddon = fitAddonRef.current;
-          if (!fitAddon) return;
+          if (!fitAddon || !isTerminalContainerRenderable(containerRef.current)) return;
           fitAddon.fit();
-          // Explicitly sync new dimensions to remote PTY
-          const ws = wsRef.current;
-          if (ws && ws.readyState === WebSocket.OPEN && !inputLockedRef.current) {
-            const dims = fitAddon.proposeDimensions();
-            if (dims) {
-              const frame = encodeResizeFrame(dims.cols, dims.rows);
-              ws.send(frame);
-            }
-          }
+          syncRemotePtySize();
         });
       }
     );
     return unsubscribe;
-  }, []);
+  }, [syncRemotePtySize]);
 
   // CJK Font lazy loading: refresh terminal ONCE when Maple Mono Regular loads
   // Only Regular triggers refresh, secondary weights (Bold/Italic) load silently
@@ -765,29 +775,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const unsubscribe = onMapleRegularLoaded(() => {
       const term = terminalRef.current;
       const fitAddon = fitAddonRef.current;
-      if (!term || !fitAddon) return;
+      if (!term || !fitAddon || !isTerminalContainerRenderable(containerRef.current)) return;
       
       // Refresh terminal to apply newly loaded CJK font
       term.refresh(0, term.rows - 1);
       fitAddon.fit();
-      
-      // 🔴 关键修复：显式同步尺寸给远程 PTY
-      // fitAddon.fit() 会触发 term.onResize，但为避免竞态，这里显式发送
-      const ws = wsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN && !inputLockedRef.current) {
-        const dims = fitAddon.proposeDimensions();
-        if (dims) {
-          const frame = encodeResizeFrame(dims.cols, dims.rows);
-          ws.send(frame);
-          if (import.meta.env.DEV) {
-            console.log(`[TerminalView] CJK font loaded, synced resize: ${dims.cols}x${dims.rows}`);
-          }
-        }
+
+      const dims = resolveTerminalDimensions(containerRef.current, term, fitAddon);
+      if (dims && import.meta.env.DEV) {
+        console.log(`[TerminalView] CJK font loaded, synced resize: ${dims.cols}x${dims.rows}`);
       }
+
+      syncRemotePtySize();
     });
     
     return unsubscribe;
-  }, []);
+  }, [syncRemotePtySize]);
 
   // Focus terminal when it becomes active (tab switch)
   useEffect(() => {
@@ -797,11 +800,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         if (!searchOpen && !aiPanelOpen) { // Double-check before focusing
           terminalRef.current?.focus();
         }
+        if (!isTerminalContainerRenderable(containerRef.current)) return;
         fitAddonRef.current?.fit();
+        syncRemotePtySize();
       }, 50);
       return () => clearTimeout(focusTimeout);
     }
-  }, [isActive, searchOpen, aiPanelOpen]);
+  }, [isActive, searchOpen, aiPanelOpen, syncRemotePtySize]);
 
   // Suspend heavy renderer while tab is inactive, and restore on activation.
   useEffect(() => {
@@ -919,7 +924,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             // were applied while the renderer was disposed.
             const t = terminalRef.current;
             if (t) t.refresh(0, t.rows - 1);
+            if (!isTerminalContainerRenderable(containerRef.current)) return;
             fitAddonRef.current?.fit();
+            syncRemotePtySize();
           }
         });
       });
@@ -931,7 +938,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       if (fitRaf1 !== null) cancelAnimationFrame(fitRaf1);
       if (fitRaf2 !== null) cancelAnimationFrame(fitRaf2);
     };
-  }, [isActive, terminalSettings.cursorBlink, terminalSettings.renderer]);
+  }, [isActive, terminalSettings.cursorBlink, terminalSettings.renderer, syncRemotePtySize]);
 
   // WebSocket reconnection effect - triggers when ws_url changes (after auto-reconnect)
   useEffect(() => {
@@ -997,13 +1004,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         term.writeln(`\x1b[32m${i18n.t('terminal.ssh.reconnected')}\x1b[0m\r\n`);
         
         // Re-send current terminal size
-        if (fitAddonRef.current) {
-          const dims = fitAddonRef.current.proposeDimensions();
-          if (dims) {
-            const frame = encodeResizeFrame(dims.cols, dims.rows);
-            ws.send(frame);
-          }
-        }
+        syncRemotePtySize();
       };
 
       ws.onmessage = (e) => handleWsMessageRef.current(e, ws);
@@ -1035,7 +1036,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       console.error('Failed to reconnect WebSocket:', e);
       term.writeln(`\r\n\x1b[31m${i18n.t('terminal.ssh.ws_establish_failed', { error: e })}\x1b[0m`);
     }
-  }, [session?.ws_url, recoverWebSocket, cleanupWebSocket, connectionStatus]);
+  }, [session?.ws_url, recoverWebSocket, cleanupWebSocket, connectionStatus, syncRemotePtySize]);
 
   // Font family resolver — see src/lib/fontFamily.ts
 
@@ -1226,7 +1227,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       forceViewportTransparent(containerRef.current);
     }
 
-    fitAddon.fit();
+    if (isTerminalContainerRenderable(containerRef.current)) {
+      fitAddon.fit();
+    }
     term.focus(); // Focus immediately after opening
 
     terminalRef.current = term;
@@ -1419,9 +1422,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   }
 
                   term.writeln(i18n.t('terminal.ssh.connected') + "\r\n");
-                  // Initial resize using Wire Protocol v1
-                  const frame = encodeResizeFrame(term.cols, term.rows);
-                  ws.send(frame);
+                  // Initial resize using the current visible or last stable size.
+                  syncRemotePtySize();
                   // Focus terminal after connection
                   term.focus();
                   resolve();
@@ -1603,8 +1605,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     // IMPORTANT: Save IDisposable for cleanup to prevent memory leaks
     onResizeDisposableRef.current = term.onResize((size) => {
-        // Don't send resize when in Standby mode
-        if (inputLockedRef.current) return;
+        // Don't send resize when in Standby mode or while hidden.
+        if (inputLockedRef.current || !isTerminalContainerRenderable(containerRef.current)) return;
 
         // Feed recording (resize)
         feedResize(size.cols, size.rows);
@@ -1642,6 +1644,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         clearTimeout(resizeDebounceTimer);
       }
       resizeDebounceTimer = setTimeout(() => {
+        if (!isTerminalContainerRenderable(containerRef.current)) {
+          resizeDebounceTimer = null;
+          return;
+        }
         if (fitAddonRef.current && terminalRef.current && isMountedRef.current) {
           fitAddonRef.current.fit();
         }
@@ -1664,7 +1670,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     
     // Initial fit with delay for layout stabilization
     const initialFitTimer = setTimeout(() => {
-        if (isMountedRef.current && fitAddonRef.current) {
+        if (isMountedRef.current && fitAddonRef.current && isTerminalContainerRenderable(containerRef.current)) {
           fitAddonRef.current.fit();
         }
     }, 100);
@@ -1821,7 +1827,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         term.dispose();
         terminalRef.current = null;
     };
-  }, [sessionId]); // Only remount on session change — bg image is handled dynamically
+  }, [sessionId, syncRemotePtySize]); // Only remount on session change — bg image is handled dynamically
 
   // Listen for AI insert command events (only when this terminal is active and connected)
   useEffect(() => {

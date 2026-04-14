@@ -6,25 +6,23 @@
 //! Tauri IPC commands for persisting and querying agent task history.
 //! v2 separates metadata from steps for lazy loading and incremental persistence.
 
-use crate::state::AgentHistoryStore;
 use crate::state::agent_history::TaskMeta;
+use crate::state::{AgentHistoryStore, LazyManagedStore};
 use std::sync::Arc;
 use tauri::State;
 
-/// Extract the agent history store from optional state, returning an error if unavailable.
-fn require_agent_history_store<'a>(
-    state: &'a State<'_, Option<Arc<AgentHistoryStore>>>,
-) -> Result<&'a Arc<AgentHistoryStore>, String> {
-    state
-        .as_ref()
-        .ok_or_else(|| "Agent history store not available.".to_string())
+/// Extract the agent history store from lazy state, initializing it on first use.
+fn require_agent_history_store(
+    state: &State<'_, LazyManagedStore<AgentHistoryStore>>,
+) -> Result<Arc<AgentHistoryStore>, String> {
+    state.resolve()
 }
 
 /// Save task metadata (without steps). Creates or updates the index entry.
 #[tauri::command]
 pub async fn agent_history_save_meta(
     meta_json: String,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     let meta: TaskMeta =
@@ -38,7 +36,7 @@ pub async fn agent_history_save_meta(
 #[tauri::command]
 pub async fn agent_history_update_meta(
     meta_json: String,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     let meta: TaskMeta =
@@ -54,7 +52,7 @@ pub async fn agent_history_list_meta(
     limit: u32,
     status_filter: Option<String>,
     search_query: Option<String>,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<Vec<String>, String> {
     let store = require_agent_history_store(&store)?;
     let metas = store
@@ -65,10 +63,9 @@ pub async fn agent_history_list_meta(
         )
         .map_err(|e| format!("Failed to list task meta: {}", e))?;
 
-    // Serialize each TaskMeta back to JSON for the frontend
     metas
         .iter()
-        .map(|m| serde_json::to_string(m).map_err(|e| format!("Serialization error: {}", e)))
+        .map(|meta| serde_json::to_string(meta).map_err(|e| format!("Serialization error: {}", e)))
         .collect()
 }
 
@@ -78,7 +75,7 @@ pub async fn agent_history_append_step(
     task_id: String,
     step_index: u32,
     step_json: String,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -91,7 +88,7 @@ pub async fn agent_history_append_step(
 pub async fn agent_history_save_steps(
     task_id: String,
     steps_json: Vec<String>,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -105,7 +102,7 @@ pub async fn agent_history_get_steps(
     task_id: String,
     offset: u32,
     limit: u32,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<Vec<String>, String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -117,7 +114,7 @@ pub async fn agent_history_get_steps(
 #[tauri::command]
 pub async fn agent_history_save_checkpoint(
     task_json: String,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -128,7 +125,7 @@ pub async fn agent_history_save_checkpoint(
 /// Load checkpoint (if any).
 #[tauri::command]
 pub async fn agent_history_load_checkpoint(
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<Option<String>, String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -139,7 +136,7 @@ pub async fn agent_history_load_checkpoint(
 /// Clear the checkpoint.
 #[tauri::command]
 pub async fn agent_history_clear_checkpoint(
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -153,7 +150,7 @@ pub async fn agent_history_save_handoff(
     lineage_id: String,
     handoff_id: String,
     handoff_json: String,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -165,7 +162,7 @@ pub async fn agent_history_save_handoff(
 #[tauri::command]
 pub async fn agent_history_get_handoff(
     handoff_id: String,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<Option<String>, String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -177,7 +174,7 @@ pub async fn agent_history_get_handoff(
 #[tauri::command]
 pub async fn agent_history_list_lineage(
     lineage_id: String,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<Vec<String>, String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -189,7 +186,7 @@ pub async fn agent_history_list_lineage(
 #[tauri::command]
 pub async fn agent_history_delete(
     task_id: String,
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     store
@@ -200,7 +197,7 @@ pub async fn agent_history_delete(
 /// Clear all agent task history.
 #[tauri::command]
 pub async fn agent_history_clear(
-    store: State<'_, Option<Arc<AgentHistoryStore>>>,
+    store: State<'_, LazyManagedStore<AgentHistoryStore>>,
 ) -> Result<(), String> {
     let store = require_agent_history_store(&store)?;
     store

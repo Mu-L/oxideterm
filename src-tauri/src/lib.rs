@@ -92,9 +92,9 @@ use session::{AutoReconnectService, SessionRegistry};
 use sftp::session::SftpRegistry;
 use sftp::{ProgressStore, RedbProgressStore, TransferManager};
 use ssh::SshConnectionRegistry;
-use state::StateStore;
 use state::agent_history::AgentHistoryStore;
 use state::ai_chat::AiChatStore;
+use state::{LazyManagedStore, StateStore};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::Arc;
@@ -228,29 +228,20 @@ pub fn run() {
         }
     };
 
-    let ai_chat_store = if !ai_chat_db_path.as_os_str().is_empty() {
-        match AiChatStore::new(ai_chat_db_path.clone()) {
-            Ok(store) => {
-                tracing::info!("AI chat store initialized at {:?}", ai_chat_db_path);
-                write_startup_log(&format!(
-                    "AI chat store initialized at {:?}",
-                    ai_chat_db_path
-                ));
-                Some(Arc::new(store))
-            }
-            Err(e) => {
-                let msg = format!(
-                    "Failed to initialize AI chat store at {:?}: {}. AI chat persistence disabled.",
-                    ai_chat_db_path, e
-                );
-                tracing::warn!("{}", msg);
-                write_startup_log(&msg);
-                None
-            }
-        }
-    } else {
+    let ai_chat_db_path = if ai_chat_db_path.as_os_str().is_empty() {
         None
+    } else {
+        Some(ai_chat_db_path)
     };
+    let ai_chat_store = LazyManagedStore::new("AI chat store", move || {
+        let path = ai_chat_db_path.as_ref().ok_or_else(|| {
+            "AI chat persistence is disabled because the config directory is unavailable."
+                .to_string()
+        })?;
+        AiChatStore::new(path.clone())
+            .map_err(|e| format!("Failed to initialize AI chat store at {:?}: {}", path, e))
+    });
+    write_startup_log("AI chat store registered for lazy initialization");
 
     // Initialize agent history store for task persistence
     let agent_history_db_path = match config::storage::config_dir() {
@@ -258,52 +249,34 @@ pub fn run() {
         Err(_) => std::path::PathBuf::from(""),
     };
 
-    let agent_history_store = if !agent_history_db_path.as_os_str().is_empty() {
-        match AgentHistoryStore::new(agent_history_db_path.clone()) {
-            Ok(store) => {
-                tracing::info!(
-                    "Agent history store initialized at {:?}",
-                    agent_history_db_path
-                );
-                write_startup_log(&format!(
-                    "Agent history store initialized at {:?}",
-                    agent_history_db_path
-                ));
-                Some(Arc::new(store))
-            }
-            Err(e) => {
-                let msg = format!(
-                    "Failed to initialize agent history store at {:?}: {}. Agent history persistence disabled.",
-                    agent_history_db_path, e
-                );
-                tracing::warn!("{}", msg);
-                write_startup_log(&msg);
-                None
-            }
-        }
-    } else {
+    let agent_history_db_path = if agent_history_db_path.as_os_str().is_empty() {
         None
+    } else {
+        Some(agent_history_db_path)
     };
+    let agent_history_store = LazyManagedStore::new("Agent history store", move || {
+        let path = agent_history_db_path.as_ref().ok_or_else(|| {
+            "Agent history persistence is disabled because the config directory is unavailable."
+                .to_string()
+        })?;
+        AgentHistoryStore::new(path.clone()).map_err(|e| {
+            format!(
+                "Failed to initialize agent history store at {:?}: {}",
+                path, e
+            )
+        })
+    });
+    write_startup_log("Agent history store registered for lazy initialization");
 
     // Initialize RAG document store
-    let rag_store = match config::storage::config_dir() {
-        Ok(dir) => match rag::store::RagStore::new(&dir) {
-            Ok(store) => {
-                tracing::info!("RAG store initialized");
-                write_startup_log("RAG store initialized");
-                Some(Arc::new(store))
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to initialize RAG store: {}. RAG features disabled.",
-                    e
-                );
-                write_startup_log(&format!("WARNING: RAG store init failed: {}", e));
-                None
-            }
-        },
-        Err(_) => None,
-    };
+    let rag_data_dir = config::storage::config_dir().ok();
+    let rag_store = LazyManagedStore::new("RAG store", move || {
+        let dir = rag_data_dir.as_ref().ok_or_else(|| {
+            "RAG features are disabled because the config directory is unavailable.".to_string()
+        })?;
+        rag::store::RagStore::new(dir).map_err(|e| format!("Failed to initialize RAG store: {}", e))
+    });
+    write_startup_log("RAG store registered for lazy initialization");
 
     // Create shared session registry with state store
     let registry = Arc::new(SessionRegistry::new(state_store.clone()));
@@ -429,13 +402,13 @@ pub fn run() {
         .manage(Arc::new(commands::McpProcessRegistry::new()))
         .manage(commands::AiStreamCancelRegistry::default());
 
-    // Always manage AI chat store (as Option) to avoid "state not managed" errors
+    // Always manage AI chat store wrapper to avoid "state not managed" errors
     let builder = builder.manage(ai_chat_store);
 
-    // Always manage agent history store (as Option) to avoid "state not managed" errors
+    // Always manage agent history store wrapper to avoid "state not managed" errors
     let builder = builder.manage(agent_history_store);
 
-    // Always manage RAG store (as Option) to avoid "state not managed" errors
+    // Always manage RAG store wrapper to avoid "state not managed" errors
     let builder = builder.manage(rag_store);
 
     // Conditionally add local terminal state
@@ -447,7 +420,6 @@ pub fn run() {
     let builder = builder.manage(wsl_graphics_state);
 
     let builder = builder.setup(move |app| {
-
         // Initialize config state synchronously (blocking)
         tracing::info!("Initializing config state...");
         write_startup_log("Initializing config state...");

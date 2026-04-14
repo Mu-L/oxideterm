@@ -13,6 +13,7 @@ use crate::rag::embedding;
 use crate::rag::search::{self, SearchMode};
 use crate::rag::store::RagStore;
 use crate::rag::types::*;
+use crate::state::LazyManagedStore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -213,11 +214,9 @@ pub struct SearchResultResponse {
 
 /// Extract the RAG store from optional state, returning an error if unavailable.
 fn require_rag_store<'a>(
-    state: &'a State<'_, Option<Arc<RagStore>>>,
-) -> Result<&'a Arc<RagStore>, String> {
-    state
-        .as_ref()
-        .ok_or_else(|| "RAG store not available. Knowledge base features are disabled.".to_string())
+    state: &'a State<'_, LazyManagedStore<RagStore>>,
+) -> Result<Arc<RagStore>, String> {
+    state.resolve()
 }
 
 fn queue_hnsw_rebuild(store: Arc<RagStore>) {
@@ -241,7 +240,7 @@ fn queue_hnsw_rebuild(store: Arc<RagStore>) {
 
 #[tauri::command]
 pub async fn rag_create_collection(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     request: CreateCollectionRequest,
 ) -> Result<CollectionResponse, String> {
     let store = require_rag_store(&store)?;
@@ -279,7 +278,7 @@ pub async fn rag_create_collection(
 
 #[tauri::command]
 pub async fn rag_list_collections(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     scope_filter: Option<String>,
 ) -> Result<Vec<CollectionResponse>, String> {
     let store = require_rag_store(&store)?;
@@ -301,7 +300,7 @@ pub async fn rag_list_collections(
 
 #[tauri::command]
 pub async fn rag_delete_collection(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     collection_id: String,
 ) -> Result<(), String> {
     let store = require_rag_store(&store)?;
@@ -316,7 +315,7 @@ pub async fn rag_delete_collection(
 
 #[tauri::command]
 pub async fn rag_get_collection_stats(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     collection_id: String,
 ) -> Result<StatsResponse, String> {
     let store = require_rag_store(&store)?;
@@ -334,7 +333,7 @@ pub async fn rag_get_collection_stats(
 
 #[tauri::command]
 pub async fn rag_add_document(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     request: AddDocumentRequest,
 ) -> Result<DocumentResponse, String> {
     let store = require_rag_store(&store)?;
@@ -432,7 +431,7 @@ pub async fn rag_add_document(
 
 #[tauri::command]
 pub async fn rag_remove_document(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     doc_id: String,
 ) -> Result<(), String> {
     let store = require_rag_store(&store)?;
@@ -452,7 +451,7 @@ pub struct PaginatedDocuments {
 
 #[tauri::command]
 pub async fn rag_list_documents(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     collection_id: String,
     offset: Option<usize>,
     limit: Option<usize>,
@@ -493,7 +492,7 @@ pub async fn rag_list_documents(
 
 #[tauri::command]
 pub async fn rag_get_pending_embeddings(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     collection_id: String,
     limit: Option<usize>,
 ) -> Result<Vec<PendingEmbeddingResponse>, String> {
@@ -509,7 +508,7 @@ pub async fn rag_get_pending_embeddings(
 
 #[tauri::command]
 pub async fn rag_store_embeddings(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     request: StoreEmbeddingsRequest,
 ) -> Result<usize, String> {
     let store = require_rag_store(&store)?;
@@ -543,14 +542,14 @@ pub async fn rag_store_embeddings(
 
     let count = embedding::store_embeddings(&store, records).map_err(|e| e.to_string())?;
 
-    queue_hnsw_rebuild(Arc::clone(store));
+    queue_hnsw_rebuild(store.clone());
 
     Ok(count)
 }
 
 #[tauri::command]
 pub async fn rag_search(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     request: SearchRequest,
 ) -> Result<Vec<SearchResultResponse>, String> {
     let store = require_rag_store(&store)?;
@@ -596,7 +595,7 @@ pub async fn rag_search(
 #[tauri::command]
 pub async fn rag_reindex_collection(
     app: AppHandle,
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     collection_id: String,
 ) -> Result<usize, String> {
     let store = require_rag_store(&store)?;
@@ -644,7 +643,7 @@ pub async fn rag_cancel_reindex() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn rag_get_document_content(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     doc_id: String,
 ) -> Result<String, String> {
     let store = require_rag_store(&store)?;
@@ -656,7 +655,7 @@ pub async fn rag_get_document_content(
 
 #[tauri::command]
 pub async fn rag_update_document(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     doc_id: String,
     content: String,
     expected_version: Option<u64>,
@@ -751,7 +750,7 @@ pub struct CreateBlankDocumentRequest {
 
 #[tauri::command]
 pub async fn rag_create_blank_document(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     request: CreateBlankDocumentRequest,
 ) -> Result<DocumentResponse, String> {
     let store = require_rag_store(&store)?;
@@ -809,7 +808,7 @@ pub async fn rag_create_blank_document(
 #[tauri::command]
 pub async fn rag_open_document_external(
     app: tauri::AppHandle,
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
     doc_id: String,
 ) -> Result<String, String> {
     use tauri_plugin_opener::OpenerExt;
@@ -871,7 +870,7 @@ pub async fn rag_open_document_external(
 
 #[tauri::command]
 pub async fn rag_rebuild_hnsw_index(
-    store: State<'_, Option<Arc<RagStore>>>,
+    store: State<'_, LazyManagedStore<RagStore>>,
 ) -> Result<String, String> {
     let store = require_rag_store(&store)?;
     let store_clone = store.clone();

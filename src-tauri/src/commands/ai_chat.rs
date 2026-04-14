@@ -10,8 +10,8 @@
 //! - Delete/clear conversations
 
 use crate::state::{
-    AiChatError, AiChatStore, ContextSnapshot, ConversationMeta, PersistedMessage,
-    PersistedToolCall,
+    AiChatError, AiChatStore, ContextSnapshot, ConversationMeta, LazyManagedStore,
+    PersistedMessage, PersistedToolCall,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -152,17 +152,15 @@ impl From<AiChatError> for String {
 
 /// Extract the AI chat store from optional state, returning an error if unavailable.
 fn require_ai_chat_store<'a>(
-    state: &'a State<'_, Option<Arc<AiChatStore>>>,
-) -> Result<&'a Arc<AiChatStore>, String> {
-    state
-        .as_ref()
-        .ok_or_else(|| "AI chat store not available. Chat persistence is disabled.".to_string())
+    state: &'a State<'_, LazyManagedStore<AiChatStore>>,
+) -> Result<Arc<AiChatStore>, String> {
+    state.resolve()
 }
 
 /// List all conversations (metadata only, for sidebar display)
 #[tauri::command]
 pub async fn ai_chat_list_conversations(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
 ) -> Result<ConversationListResponse, String> {
     let store = require_ai_chat_store(&store)?;
     let conversations = store.list_conversations().map_err(|e| e.to_string())?;
@@ -188,7 +186,7 @@ pub async fn ai_chat_list_conversations(
 /// Get a full conversation with all messages
 #[tauri::command]
 pub async fn ai_chat_get_conversation(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     conversation_id: String,
 ) -> Result<FullConversationResponse, String> {
     let store = require_ai_chat_store(&store)?;
@@ -224,7 +222,7 @@ pub async fn ai_chat_get_conversation(
 /// Create a new conversation
 #[tauri::command]
 pub async fn ai_chat_create_conversation(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     request: CreateConversationRequest,
 ) -> Result<(), String> {
     let store = require_ai_chat_store(&store)?;
@@ -246,7 +244,7 @@ pub async fn ai_chat_create_conversation(
 /// Update conversation metadata (e.g., title)
 #[tauri::command]
 pub async fn ai_chat_update_conversation(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     conversation_id: String,
     title: String,
 ) -> Result<(), String> {
@@ -274,7 +272,7 @@ pub async fn ai_chat_update_conversation(
 /// Delete a conversation
 #[tauri::command]
 pub async fn ai_chat_delete_conversation(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     conversation_id: String,
 ) -> Result<(), String> {
     let store = require_ai_chat_store(&store)?;
@@ -286,7 +284,7 @@ pub async fn ai_chat_delete_conversation(
 /// Save a message to a conversation
 #[tauri::command]
 pub async fn ai_chat_save_message(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     request: SaveMessageRequest,
 ) -> Result<(), String> {
     let store = require_ai_chat_store(&store)?;
@@ -314,7 +312,7 @@ pub async fn ai_chat_save_message(
 /// Update a message content (for streaming updates)
 #[tauri::command]
 pub async fn ai_chat_update_message(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     message_id: String,
     content: String,
 ) -> Result<(), String> {
@@ -327,7 +325,7 @@ pub async fn ai_chat_update_message(
 /// Delete messages after a certain message (for regeneration)
 #[tauri::command]
 pub async fn ai_chat_delete_messages_after(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     conversation_id: String,
     after_message_id: String,
 ) -> Result<(), String> {
@@ -339,7 +337,9 @@ pub async fn ai_chat_delete_messages_after(
 
 /// Clear all conversations
 #[tauri::command]
-pub async fn ai_chat_clear_all(store: State<'_, Option<Arc<AiChatStore>>>) -> Result<(), String> {
+pub async fn ai_chat_clear_all(
+    store: State<'_, LazyManagedStore<AiChatStore>>,
+) -> Result<(), String> {
     let store = require_ai_chat_store(&store)?;
     store.clear_all().map_err(|e| e.to_string())
 }
@@ -349,7 +349,7 @@ pub async fn ai_chat_clear_all(store: State<'_, Option<Arc<AiChatStore>>>) -> Re
 /// or the original data is preserved.
 #[tauri::command]
 pub async fn ai_chat_replace_conversation_messages(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     request: ReplaceConversationMessagesRequest,
 ) -> Result<(), String> {
     let store = require_ai_chat_store(&store)?;
@@ -384,7 +384,7 @@ pub async fn ai_chat_replace_conversation_messages(
 /// the expected ids sent by the frontend, preventing stale compaction writes.
 #[tauri::command]
 pub async fn ai_chat_replace_conversation_message_list(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
     request: ReplaceConversationMessageListRequest,
 ) -> Result<(), String> {
     let store = require_ai_chat_store(&store)?;
@@ -423,7 +423,7 @@ pub async fn ai_chat_replace_conversation_message_list(
 /// Get database statistics
 #[tauri::command]
 pub async fn ai_chat_get_stats(
-    store: State<'_, Option<Arc<AiChatStore>>>,
+    store: State<'_, LazyManagedStore<AiChatStore>>,
 ) -> Result<AiChatStatsResponse, String> {
     let store = require_ai_chat_store(&store)?;
     let stats = store.get_stats().map_err(|e| e.to_string())?;

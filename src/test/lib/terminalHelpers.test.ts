@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { hexToRgba, getBackgroundFitStyles } from '@/lib/terminalHelpers';
+import {
+  getBackgroundFitStyles,
+  hexToRgba,
+  isTerminalContainerRenderable,
+  resolveTerminalDimensions,
+} from '@/lib/terminalHelpers';
 
 describe('hexToRgba', () => {
   it('converts black', () => {
@@ -46,5 +51,90 @@ describe('getBackgroundFitStyles', () => {
   it('returns empty for tile', () => {
     const styles = getBackgroundFitStyles('tile');
     expect(styles).toEqual({});
+  });
+});
+
+describe('isTerminalContainerRenderable', () => {
+  it('returns false for disconnected elements', () => {
+    const container = document.createElement('div');
+    expect(isTerminalContainerRenderable(container)).toBe(false);
+  });
+
+  it('returns false for zero-sized containers', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ width: 0, height: 0 }),
+    });
+
+    expect(isTerminalContainerRenderable(container)).toBe(false);
+    container.remove();
+  });
+
+  it('returns true for visible containers', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 600 }),
+    });
+
+    expect(isTerminalContainerRenderable(container)).toBe(true);
+    container.remove();
+  });
+});
+
+describe('resolveTerminalDimensions', () => {
+  it('prefers fit dimensions for visible containers', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 600 }),
+    });
+
+    expect(
+      resolveTerminalDimensions(
+        container,
+        { cols: 80, rows: 24 },
+        { proposeDimensions: () => ({ cols: 120, rows: 40 }) },
+      ),
+    ).toEqual({ cols: 120, rows: 40 });
+
+    container.remove();
+  });
+
+  it('falls back to the last stable xterm size for hidden containers', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ width: 0, height: 0 }),
+    });
+
+    expect(
+      resolveTerminalDimensions(
+        container,
+        { cols: 132, rows: 36 },
+        { proposeDimensions: () => ({ cols: 1, rows: 1 }) },
+      ),
+    ).toEqual({ cols: 132, rows: 36 });
+
+    container.remove();
+  });
+
+  it('returns null for invalid dimensions', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 600 }),
+    });
+
+    expect(
+      resolveTerminalDimensions(
+        container,
+        { cols: 0, rows: 0 },
+        { proposeDimensions: () => ({ cols: 0, rows: 0 }) },
+      ),
+    ).toBeNull();
+
+    container.remove();
   });
 });

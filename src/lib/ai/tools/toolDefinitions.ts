@@ -1295,6 +1295,18 @@ export const SESSION_ID_TOOLS = new Set([
   'send_mouse',
 ]);
 
+/**
+ * Tools that require a remote SSH node context. Hide them when the active tab
+ * is a local terminal to reduce local/remote routing mistakes.
+ */
+export const REMOTE_NODE_ONLY_TOOLS = new Set([
+  'read_file',
+  'write_file',
+  'list_directory',
+  'grep_search',
+  'git_status',
+]);
+
 /** Tools that only make sense for SSH connections (remote nodes) */
 export const SSH_ONLY_TOOLS = new Set([
   'list_port_forwards',
@@ -1486,6 +1498,10 @@ export function getToolsForContext(
 
     // Participant override: if a tool was explicitly requested via @participant, always include it
     if (participantOverride?.has(t.name)) return true;
+
+    if (activeTabType === 'local_terminal' && !hasAnySSHSession && REMOTE_NODE_ONLY_TOOLS.has(t.name)) {
+      return false;
+    }
 
     // SSH-only tools: hide when only local terminals and no SSH sessions
     if (SSH_ONLY_TOOLS.has(t.name)) {

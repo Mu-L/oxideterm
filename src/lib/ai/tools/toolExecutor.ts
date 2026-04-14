@@ -72,6 +72,10 @@ export type ToolExecutionContext = {
   activeNodeId: string | null;
   /** Whether the active node has remote agent available */
   activeAgentAvailable: boolean;
+  /** Currently active terminal session ID for implicit session routing */
+  activeSessionId?: string | null;
+  /** Terminal type of the active session, if any */
+  activeTerminalType?: 'terminal' | 'local_terminal' | null;
   /** If true, tabs created by tools won't steal focus (used by Agent mode) */
   skipFocus?: boolean;
 };
@@ -152,6 +156,22 @@ async function resolveNodeForTool(
   }
 
   return null;
+}
+
+function resolveActiveSessionId(
+  args: Record<string, unknown>,
+  context: ToolExecutionContext,
+): string {
+  const explicitSessionId = typeof args.session_id === 'string' ? args.session_id.trim() : '';
+  if (explicitSessionId.length > 0) {
+    return explicitSessionId;
+  }
+
+  if (context.activeTerminalType !== 'local_terminal') {
+    return '';
+  }
+
+  return typeof context.activeSessionId === 'string' ? context.activeSessionId.trim() : '';
 }
 
 /**
@@ -265,23 +285,26 @@ export async function executeTool(
 
     // Session-ID tools — route by session_id parameter
     if (SESSION_ID_TOOLS.has(toolName)) {
+      const sessionId = resolveActiveSessionId(args, context);
+      const routedArgs = sessionId ? { ...args, session_id: sessionId } : args;
+
       switch (toolName) {
         case 'get_terminal_buffer':
-          return await execGetTerminalBuffer(args, startTime, toolCallId);
+          return await execGetTerminalBuffer(routedArgs, startTime, toolCallId);
         case 'search_terminal':
-          return await execSearchTerminal(args, startTime, toolCallId);
+          return await execSearchTerminal(routedArgs, startTime, toolCallId);
         case 'await_terminal_output':
-          return await execAwaitTerminalOutput(args, startTime, toolCallId, options.abortSignal);
+          return await execAwaitTerminalOutput(routedArgs, startTime, toolCallId, options.abortSignal);
         case 'send_control_sequence':
-          return await execSendControlSequence(args, startTime, toolCallId, options.abortSignal);
+          return await execSendControlSequence(routedArgs, startTime, toolCallId, options.abortSignal);
         case 'batch_exec':
-          return await execBatchExec(args, startTime, toolCallId, options.abortSignal);
+          return await execBatchExec(routedArgs, startTime, toolCallId, options.abortSignal);
         case 'read_screen':
-          return execReadScreen(args, startTime, toolCallId);
+          return execReadScreen(routedArgs, startTime, toolCallId);
         case 'send_keys':
-          return await execSendKeys(args, startTime, toolCallId, options.abortSignal);
+          return await execSendKeys(routedArgs, startTime, toolCallId, options.abortSignal);
         case 'send_mouse':
-          return await execSendMouse(args, startTime, toolCallId, options.abortSignal);
+          return await execSendMouse(routedArgs, startTime, toolCallId, options.abortSignal);
         default:
           return { toolCallId, toolName, success: false, output: '', error: `Unknown session tool: ${toolName}`, durationMs: Date.now() - startTime };
       }
@@ -290,9 +313,9 @@ export async function executeTool(
     // terminal_exec with session_id: route to interactive terminal path.
     // Priority: node_id (direct exec) > session_id (terminal send) > active terminal fallback.
     if (toolName === 'terminal_exec' && explicitNodeId.length === 0) {
-      const sessionId = typeof args.session_id === 'string' ? args.session_id.trim() : '';
+      const sessionId = resolveActiveSessionId(args, context);
       if (sessionId) {
-        return await execTerminalCommandToSession(args, sessionId, startTime, toolCallId, options.abortSignal);
+        return await execTerminalCommandToSession({ ...args, session_id: sessionId }, sessionId, startTime, toolCallId, options.abortSignal);
       }
     }
 

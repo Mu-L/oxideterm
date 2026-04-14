@@ -367,6 +367,44 @@ describe('toolExecutor get_settings sanitization', () => {
     expect(getScrollBufferMock).toHaveBeenCalledWith('session-1', 1197, 3);
     expect(getAllBufferLinesMock).not.toHaveBeenCalled();
   });
+
+  it('uses activeSessionId fallback for get_terminal_buffer when session_id is omitted', async () => {
+    getBufferStatsMock.mockResolvedValue({ current_lines: 1000, total_lines: 1000, max_lines: 100000, memory_usage_mb: 2 });
+    getScrollBufferMock.mockResolvedValue([
+      { text: 'active line 1' },
+      { text: 'active line 2' },
+    ]);
+
+    const result = await executeTool(
+      'get_terminal_buffer',
+      { max_lines: 2 },
+      { activeNodeId: null, activeAgentAvailable: false, activeSessionId: 'active-session', activeTerminalType: 'local_terminal' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('active line 1');
+    expect(getBufferStatsMock).toHaveBeenCalledWith('active-session');
+    expect(getScrollBufferMock).toHaveBeenCalledWith('active-session', 998, 2);
+  });
+
+  it('uses activeSessionId fallback for terminal_exec when session_id is omitted', async () => {
+    findPaneBySessionIdMock.mockReturnValue('pane-1');
+    getBufferStatsMock.mockResolvedValue({ current_lines: 0, total_lines: 0, max_lines: 100000, memory_usage_mb: 0 });
+    writeToTerminalMock.mockReturnValue(true);
+
+    const result = await executeTool(
+      'terminal_exec',
+      { command: 'pwd', await_output: false },
+      { activeNodeId: null, activeAgentAvailable: false, activeSessionId: 'active-session', activeTerminalType: 'local_terminal' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(writeToTerminalMock).toHaveBeenCalledWith('pane-1', 'pwd\r');
+    expect(result.output).toContain('active-session');
+
+    writeToTerminalMock.mockClear();
+    findPaneBySessionIdMock.mockClear();
+  });
 });
 
 describe('toolExecutor regressions', () => {

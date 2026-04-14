@@ -738,6 +738,14 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
 - \`ide_replace_string\`: include 3+ lines of surrounding context in \`old_string\` to ensure a unique match. Only replaces the first occurrence.
 - For creating new files: use \`ide_create_file\` (IDE) or \`sftp_write_file\` (no IDE needed).
 - When IDE is not available, use \`write_file\` (requires remote agent) or \`sftp_write_file\` as fallback.`;
+
+  if (sidebarContext?.env.activeTabType === 'local_terminal') {
+    systemPrompt += `\n\n### Local Terminal Focus
+- The active tab is a local terminal on the user's machine.
+- For local files, dotfiles, shell config, and local process inspection, prefer \`local_exec\`.
+- Do not use remote file tools like \`read_file\`, \`list_directory\`, \`grep_search\`, or \`write_file\` unless the user explicitly targets an SSH node with \`node_id\`.
+- If you need to interact with the currently open local shell, \`terminal_exec\` can reuse the active local session when no \`session_id\` is provided.`;
+  }
     }
 
     apiMessages.push({
@@ -894,16 +902,16 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       // Tool use configuration
       const autoApproveTools = aiSettings.toolUse?.autoApproveTools ?? {};
 
-      // Derive tool execution context from sidebar context
-      // activeNodeId can be null — context-free tools (list_sessions, etc.) still work
-      let toolContext: ToolExecutionContext | null = null;
-      if (toolUseEnabled) {
+      const resolveToolContext = async (): Promise<ToolExecutionContext | null> => {
+        if (!toolUseEnabled) return null;
+
+        const currentSidebarContext = gatherSidebarContext();
         let activeNodeId: string | null = null;
         let activeAgentAvailable = false;
 
         // Try terminal session first (for terminal/local_terminal tabs)
-        if (sidebarContext?.env.sessionId) {
-          const node = useSessionTreeStore.getState().getNodeByTerminalId(sidebarContext.env.sessionId);
+        if (currentSidebarContext.env.sessionId) {
+          const node = useSessionTreeStore.getState().getNodeByTerminalId(currentSidebarContext.env.sessionId);
           if (node) {
             try {
               const nodeSnapshot = await nodeGetState(node.id);
@@ -917,13 +925,13 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
             }
           }
         }
-        
+
         // Fallback: use activeNodeId from tab (for SFTP/IDE tabs that have nodeId but no terminal)
-        if (!activeNodeId && sidebarContext?.env.activeNodeId) {
+        if (!activeNodeId && currentSidebarContext.env.activeNodeId) {
           try {
-            const nodeSnapshot = await nodeGetState(sidebarContext.env.activeNodeId);
+            const nodeSnapshot = await nodeGetState(currentSidebarContext.env.activeNodeId);
             if (nodeSnapshot.state.readiness === 'ready') {
-              activeNodeId = sidebarContext.env.activeNodeId;
+              activeNodeId = currentSidebarContext.env.activeNodeId;
               const agentStatus = await nodeAgentStatus(activeNodeId);
               activeAgentAvailable = agentStatus.type === 'ready';
             }
@@ -932,8 +940,16 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           }
         }
 
-        toolContext = { activeNodeId, activeAgentAvailable };
-      }
+        return {
+          activeNodeId,
+          activeAgentAvailable,
+          activeSessionId: currentSidebarContext.env.sessionId ?? null,
+          activeTerminalType: currentSidebarContext.env.terminalType ?? null,
+        };
+      };
+
+      // activeNodeId can be null — context-free tools (list_sessions, etc.) still work
+      let toolContext: ToolExecutionContext | null = await resolveToolContext();
 
       const MAX_TOOL_ROUNDS = 10;
       const MAX_TOOL_CALLS_PER_ROUND = 8;
@@ -973,7 +989,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         }
 
         const sessionId = typeof parsedArgs?.session_id === 'string' ? parsedArgs.session_id.trim() : '';
-        return sessionId.length > 0;
+        return sessionId.length > 0 || (toolContext?.activeTerminalType === 'local_terminal' && !!toolContext.activeSessionId);
       };
 
       // eslint-disable-next-line no-constant-condition
@@ -1016,11 +1032,24 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           break;
         }
 
+        toolContext = await resolveToolContext();
+        if (!toolContext) {
+          fullContent += '\n\n[Tool execution unavailable: tool use is not enabled]';
+          updateContent(accumulatedContent + fullContent, true, false);
+          break;
+        }
+
+        const currentToolContext = toolContext;
+
         // Check if all requested tools are context-free when no node is active
-        if (toolContext.activeNodeId === null) {
+        if (currentToolContext.activeNodeId === null) {
           const needsNode = completedToolCalls.some(tc => !canRunWithoutActiveNode(tc));
           if (needsNode) {
-            fullContent += '\n\n[Some tools require an active terminal session. Please open a terminal tab first, or use list_sessions to discover available sessions and pass node_id or session_id explicitly.]';
+            if (currentToolContext.activeTerminalType === 'local_terminal' && currentToolContext.activeSessionId) {
+              fullContent += '\n\n[The active tab is a local terminal. Remote node tools such as read_file, list_directory, grep_search, and write_file require an SSH node_id. For local machine tasks, use local_exec or terminal_exec against the current local session. To inspect an SSH host, switch to an SSH terminal tab or use list_sessions and pass node_id explicitly.]';
+            } else {
+              fullContent += '\n\n[Some tools require an active terminal session. Please open a terminal tab first, or use list_sessions to discover available sessions and pass node_id or session_id explicitly.]';
+            }
             updateContent(accumulatedContent + fullContent, true, false);
             break;
           }
@@ -1197,7 +1226,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           }
           parsedArgs = maybeParsedArgs;
 
-          const result = await executeTool(tc.name, parsedArgs, toolContext, {
+          const result = await executeTool(tc.name, parsedArgs, currentToolContext, {
             dangerousCommandApproved: explicitlyApprovedDangerousToolIds.has(tc.id),
             abortSignal: abortController.signal,
           });
@@ -1242,6 +1271,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         // (e.g. open_local_terminal, open_tab, open_session_tab may change activeTabType)
         if (toolUseEnabled) {
           toolDefs = resolveToolDefs();
+          toolContext = await resolveToolContext();
         }
 
         // Accumulate content for UI display, reset for next API round

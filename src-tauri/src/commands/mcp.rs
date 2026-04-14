@@ -704,7 +704,10 @@ mod tests {
         assert!(validate_mcp_env(&env).is_err());
 
         env.clear();
-        env.insert("Node_Options".to_string(), "--require ./evil.js".to_string());
+        env.insert(
+            "Node_Options".to_string(),
+            "--require ./evil.js".to_string(),
+        );
         assert!(validate_mcp_env(&env).is_err());
 
         env.clear();

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AiToolDefinition } from '@/lib/ai/providers';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const parseUserInputMock = vi.hoisted(() => vi.fn(() => ({
@@ -11,7 +12,7 @@ const resolveSlashCommandMock = vi.hoisted(() => vi.fn());
 const getProviderMock = vi.hoisted(() => vi.fn());
 const contextFreeToolsMock = vi.hoisted(() => new Set(['local_exec']));
 const sessionIdToolsMock = vi.hoisted(() => new Set<string>());
-const getToolsForContextMock = vi.hoisted(() => vi.fn(() => []));
+const getToolsForContextMock = vi.hoisted(() => vi.fn<() => AiToolDefinition[]>(() => []));
 const executeToolMock = vi.hoisted(() => vi.fn());
 const hasDeniedCommandsMock = vi.hoisted(() => vi.fn(() => false));
 const estimateTokensMock = vi.hoisted(() => vi.fn(() => 100));
@@ -319,7 +320,7 @@ describe('aiChatStore workflows', () => {
     settingsStoreMock.state.settings.ai.toolUse.enabled = true;
     setConversation([]);
     getToolsForContextMock.mockReturnValue([
-      { name: 'local_exec', description: 'Run a local command' },
+      { name: 'local_exec', description: 'Run a local command', parameters: {} },
     ]);
     hasDeniedCommandsMock.mockReturnValue(true);
     executeToolMock.mockResolvedValue({

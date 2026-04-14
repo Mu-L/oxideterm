@@ -28,7 +28,7 @@ const settingsState = vi.hoisted(() => ({
           env: {
             API_TOKEN: 'super-secret',
             DEBUG: '1',
-          },
+          } as Record<string, string>,
           authToken: 'legacy-secret',
           enabled: true,
           retryOnDisconnect: false,
@@ -293,7 +293,7 @@ describe('toolExecutor get_settings sanitization', () => {
   });
 
   it('preserves explicit empty MCP env objects while still redacting values', async () => {
-    settingsState.settings.ai.mcpServers[0].env = {};
+    settingsState.settings.ai.mcpServers[0].env = {} as Record<string, string>;
 
     const result = await executeTool('get_settings', { section: 'ai' }, { activeNodeId: null, activeAgentAvailable: false });
 

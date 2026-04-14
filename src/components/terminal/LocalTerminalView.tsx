@@ -166,6 +166,9 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   const adaptiveRendererRef = useRef(adaptiveRenderer);
   adaptiveRendererRef.current = adaptiveRenderer;
 
+  const { writeTerminal, resizeTerminal, getTerminal, updateTerminalState } = useLocalTerminalStore();
+  const terminalInfo = getTerminal(sessionId);
+
   const syncLocalPtySize = useCallback(() => {
     const dims = resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current);
     if (!dims) return;
@@ -244,9 +247,6 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       }
     }
   }, []);
-
-  const { writeTerminal, resizeTerminal, getTerminal, updateTerminalState } = useLocalTerminalStore();
-  const terminalInfo = getTerminal(sessionId);
 
   // ── Session Recording ──────────────────────────────────────────────────────
   const {

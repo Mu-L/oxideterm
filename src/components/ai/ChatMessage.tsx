@@ -11,6 +11,8 @@ import { renderMarkdown, markdownStyles, renderMathInElement } from '../../lib/m
 import { useMermaid } from '../../hooks/useMermaid';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCallBlock } from './ToolCallBlock';
+import { GuardrailBlock } from './GuardrailBlock';
+import { getTurnTextContent, getTurnThinkingContent } from '../../lib/ai/turnModel/turnProjection';
 
 interface ChatMessageProps {
   message: AiChatMessage;
@@ -57,6 +59,7 @@ function arePropsEqual(prev: ChatMessageProps, next: ChatMessageProps): boolean 
     prev.message.id === next.message.id &&
     prev.message.content === next.message.content &&
     prev.message.isStreaming === next.message.isStreaming &&
+    prev.message.turn === next.message.turn &&
     prev.message.thinkingContent === next.message.thinkingContent &&
     prev.message.isThinkingStreaming === next.message.isThinkingStreaming &&
     prev.message.toolCalls === next.message.toolCalls &&
@@ -85,6 +88,33 @@ export const ChatMessage = memo(function ChatMessage({
   const [editContent, setEditContent] = useState('');
   const [copied, setCopied] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const guardrailParts = useMemo(() => (
+    !isUser
+      ? message.turn?.parts.filter((part) => part.type === 'guardrail') ?? []
+      : []
+  ), [isUser, message.turn]);
+  const visibleContent = useMemo(() => {
+    if (isUser) {
+      return message.content;
+    }
+
+    if (message.turn) {
+      return getTurnTextContent(message.turn);
+    }
+
+    return message.content;
+  }, [isUser, message.content, message.turn]);
+  const visibleThinkingContent = useMemo(() => {
+    if (isUser) {
+      return undefined;
+    }
+
+    if (message.turn) {
+      return getTurnThinkingContent(message.turn) ?? message.thinkingContent;
+    }
+
+    return message.thinkingContent;
+  }, [isUser, message.thinkingContent, message.turn]);
 
   // Inject styles on mount
   useEffect(() => {
@@ -95,16 +125,16 @@ export const ChatMessage = memo(function ChatMessage({
   const renderedHtml = useMemo(() => {
     if (isUser) {
       // For user messages, simple text with line breaks
-      return message.content
+      return visibleContent
         .split('\n')
         .map(line => `<p class="md-paragraph">${escapeHtml(line)}</p>`)
         .join('');
     }
-    return renderMarkdown(message.content);
-  }, [message.content, isUser]);
+    return renderMarkdown(visibleContent);
+  }, [visibleContent, isUser]);
 
   // Handle Mermaid diagram rendering
-  useMermaid(contentRef, message.content);
+  useMermaid(contentRef, visibleContent);
 
   // Handle KaTeX math formula rendering
   useEffect(() => {
@@ -256,11 +286,19 @@ export const ChatMessage = memo(function ChatMessage({
       {/* Content — user messages get prominent bubble with accent color */}
       <div className={`mt-1 ${isUser ? 'bg-theme-accent/10 border border-theme-accent/20 px-3 py-2 rounded-md shadow-sm ring-1 ring-theme-accent/5' : ''}`}>
         {/* Thinking Block */}
-        {!isUser && message.thinkingContent && (
+        {!isUser && visibleThinkingContent && (
           <ThinkingBlock
-            content={message.thinkingContent}
+            content={visibleThinkingContent}
             isStreaming={message.isThinkingStreaming}
           />
+        )}
+
+        {!isUser && guardrailParts.length > 0 && (
+          <div className="mb-2 space-y-2">
+            {guardrailParts.map((part, index) => (
+              <GuardrailBlock key={`${message.id}-guardrail-${index}`} part={part} />
+            ))}
+          </div>
         )}
 
         {/* Tool Calls Block */}
@@ -382,7 +420,7 @@ export const ChatMessage = memo(function ChatMessage({
             {!isUser && (
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(message.content).then(() => {
+                  navigator.clipboard.writeText(visibleContent || message.content).then(() => {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   });

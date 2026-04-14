@@ -184,6 +184,12 @@
         "get_topology": "Topologie"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "Die Tool-Nutzung ist für diesen Chat deaktiviert, und das Modell hat ein Pseudo-Tool-Protokoll ausgegeben. OxideSens hat eine Wiederholung in Klartext angefordert.",
+      "tool_disabled_hard_deny_final": "Die Tool-Nutzung ist für diesen Chat deaktiviert, und das Modell hat erneut ein Pseudo-Tool-Protokoll ausgegeben. Die Rohausgabe ist standardmäßig ausgeblendet.",
+      "synthetic_tool_denial_reason": "Die Tool-Ausführung ist durch die Benutzereinstellungen deaktiviert.",
+      "synthetic_tool_denial_detail": "Erläutere die Einschränkung in natürlicher Sprache, statt Tool-JSON oder Tool-Ergebnisprotokolle auszugeben."
+    },
     "tool_selector": {
       "title": "Werkzeuge",
       "tooltip": "{{count}}/{{total}} Werkzeuge aktiv",

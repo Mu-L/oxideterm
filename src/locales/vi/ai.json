@@ -184,6 +184,12 @@
         "get_topology": "Tô pô"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "Việc dùng công cụ bị tắt cho cuộc trò chuyện này và mô hình đã tạo ra một bản ghi công cụ giả. OxideSens đã yêu cầu thử lại bằng ngôn ngữ tự nhiên.",
+      "tool_disabled_hard_deny_final": "Việc dùng công cụ bị tắt cho cuộc trò chuyện này và mô hình đã lặp lại một bản ghi công cụ giả. Đầu ra thô được ẩn theo mặc định.",
+      "synthetic_tool_denial_reason": "Việc thực thi công cụ bị tắt theo cài đặt của người dùng.",
+      "synthetic_tool_denial_detail": "Hãy giải thích giới hạn này bằng ngôn ngữ tự nhiên thay vì tạo JSON công cụ hoặc bản ghi kết quả công cụ."
+    },
     "tool_selector": {
       "title": "Công cụ",
       "tooltip": "{{count}}/{{total}} công cụ đang hoạt động",

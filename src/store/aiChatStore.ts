@@ -25,6 +25,8 @@ import { DEFAULT_SYSTEM_PROMPT, SUGGESTIONS_INSTRUCTION, COMPACTION_TRIGGER_THRE
 import { computePromptBudget, determineCompressionLevel } from '../lib/ai/promptBudget/policy';
 import { projectTurnToLegacyMessageFields } from '../lib/ai/turnModel/turnProjection';
 import { createTurnAccumulator } from '../lib/ai/turnModel/turnAccumulator';
+import { detectPseudoToolTranscript, shouldTriggerHardDeny, type GuardrailDetectionResult } from '../lib/ai/turnModel/guardrails';
+import { normalizePendingSummaries } from '../lib/ai/turnModel/summaryMetadata';
 import { createSyntheticToolDenyPayload } from '../lib/ai/turnModel/toolFeedback';
 import { getToolUseNegativeConstraint } from '../lib/ai/turnModel/toolUsePolicy';
 import { CONTEXT_FREE_TOOLS, SESSION_ID_TOOLS, getToolsForContext, hasDeniedCommands, executeTool, type ToolExecutionContext } from '../lib/ai/tools';
@@ -52,6 +54,9 @@ import i18n from '../i18n';
 
 /** Max original messages to preserve in a compaction anchor snapshot */
 const MAX_ANCHOR_SNAPSHOT = 50;
+const MAX_HARD_DENY_RETRIES = 1;
+const PSEUDO_TOOL_RETRY_TOOL_NAME = 'tool_use_disabled';
+const JSON_REQUEST_RE = /\b(json|jsonl|json schema|jsonschema|payload|response format|object literal|schema)\b/i;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Backend Types (matching Rust structs)
@@ -158,6 +163,21 @@ interface AiChatStore {
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function userExplicitlyRequestedJson(text: string): boolean {
+  return JSON_REQUEST_RE.test(text);
+}
+
+function shouldContinuePseudoToolBuffering(text: string): boolean {
+  const trimmed = text.trimStart();
+  if (!trimmed) return true;
+
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return true;
+  }
+
+  return /^```(?:json|javascript|js|text)?(?:\s|$)/i.test(trimmed);
 }
 
 function metaToConversation(meta: ConversationMetaDto): AiConversation {
@@ -340,12 +360,18 @@ function upsertConversationTurn(
   nextTurn: AiConversationTurn,
 ): AiConversationTurn[] {
   const nextTurns = turns ? [...turns] : [];
+  const normalized = normalizePendingSummaries(nextTurn.rounds, nextTurn.pendingSummaries ?? []);
+  const nextNormalizedTurn: AiConversationTurn = {
+    ...nextTurn,
+    rounds: normalized.rounds,
+    pendingSummaries: normalized.unresolved,
+  };
   const index = nextTurns.findIndex((turn) => turn.id === nextTurn.id);
 
   if (index === -1) {
-    nextTurns.push(nextTurn);
+    nextTurns.push(nextNormalizedTurn);
   } else {
-    nextTurns[index] = nextTurn;
+    nextTurns[index] = nextNormalizedTurn;
   }
 
   return nextTurns;
@@ -1189,6 +1215,8 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       let fullContent = '';
       let lastUpdateTime = 0;
       const UPDATE_INTERVAL = 50; // ms - throttle updates for smoother streaming
+      let hardDenyRetryCount = 0;
+      const userRequestedJson = userExplicitlyRequestedJson(cleanContent || content);
 
       const updateAssistantSnapshot = (
         force = false,
@@ -1306,10 +1334,9 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       const MAX_TOOL_CALLS_PER_ROUND = 8;
       let round = 0;
       const persistedToolCalls: AiToolCall[] = [];
-      let accumulatedContent = ''; // Preserves text from intermediate rounds for UI display
 
       const appendGuardrail = (
-        code: 'tool-use-disabled' | 'tool-context-missing' | 'tool-budget-limit',
+        code: 'tool-use-disabled' | 'tool-context-missing' | 'tool-budget-limit' | 'tool-disabled-hard-deny',
         message: string,
         rawText?: string,
       ) => {
@@ -1452,6 +1479,29 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       // eslint-disable-next-line no-constant-condition
       while (true) {
         const completedToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+        let sawStructuredToolCall = false;
+        let bufferedAssistantText = '';
+        let bufferedThinkingText = '';
+        let isBufferingForHardDeny = !toolUseEnabled;
+        let hardDenyDetection: GuardrailDetectionResult | null = null;
+
+        const flushBufferedThinkingText = (force = false) => {
+          if (!bufferedThinkingText) return;
+          accumulator.onThinking(bufferedThinkingText);
+          bufferedThinkingText = '';
+          updateAssistantSnapshot(force, true);
+        };
+
+        const flushBufferedAssistantText = (force = false) => {
+          if (bufferedThinkingText) {
+            flushBufferedThinkingText(force);
+          }
+          if (!bufferedAssistantText) return;
+          accumulator.onContent(bufferedAssistantText);
+          bufferedAssistantText = '';
+          isBufferingForHardDeny = false;
+          updateAssistantSnapshot(force, false);
+        };
 
         for await (const event of provider.streamCompletion(
           { baseUrl: providerBaseUrl, model: providerModel, apiKey: apiKey || '', maxResponseTokens, tools: toolDefs },
@@ -1461,15 +1511,67 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           switch (event.type) {
             case 'content':
               fullContent += event.content;
+
+              if (!toolUseEnabled && !sawStructuredToolCall) {
+                if (hardDenyDetection) {
+                  bufferedAssistantText += event.content;
+                  break;
+                }
+
+                if (isBufferingForHardDeny) {
+                  bufferedAssistantText += event.content;
+
+                  const detectionInput = {
+                    toolUseEnabled,
+                    sawStructuredToolCall,
+                    assistantText: bufferedAssistantText,
+                    userExplicitlyRequestedJson: userRequestedJson,
+                  };
+                  const detection = detectPseudoToolTranscript(detectionInput);
+
+                  if (shouldTriggerHardDeny(detectionInput, detection)) {
+                    hardDenyDetection = detection;
+                    appendGuardrail(
+                      'tool-disabled-hard-deny',
+                      i18n.t(
+                        hardDenyRetryCount < MAX_HARD_DENY_RETRIES
+                          ? 'ai.guardrail.tool_disabled_hard_deny_retry'
+                          : 'ai.guardrail.tool_disabled_hard_deny_final',
+                      ),
+                      detection.rawText ?? bufferedAssistantText,
+                    );
+                    updateAssistantSnapshot(true, false);
+                    break;
+                  }
+
+                  if (shouldContinuePseudoToolBuffering(bufferedAssistantText)) {
+                    break;
+                  }
+
+                  flushBufferedAssistantText(false);
+                  break;
+                }
+              }
+
               accumulator.onContent(event.content);
               updateAssistantSnapshot(false, false);
               break;
             case 'thinking':
               thinkingContent += event.content;
+
+              if (!toolUseEnabled && !sawStructuredToolCall && (isBufferingForHardDeny || hardDenyDetection)) {
+                bufferedThinkingText += event.content;
+                break;
+              }
+
               accumulator.onThinking(event.content);
               updateAssistantSnapshot(false, true);
               break;
             case 'tool_call':
+              sawStructuredToolCall = true;
+              if (bufferedAssistantText && !hardDenyDetection) {
+                flushBufferedAssistantText(true);
+              }
               accumulator.onToolCallPartial({
                 id: event.id,
                 name: event.name,
@@ -1478,6 +1580,10 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
               updateAssistantSnapshot(true, false);
               break;
             case 'tool_call_complete':
+              sawStructuredToolCall = true;
+              if (bufferedAssistantText && !hardDenyDetection) {
+                flushBufferedAssistantText(true);
+              }
               accumulator.onToolCallComplete({
                 id: event.id,
                 name: event.name,
@@ -1493,6 +1599,86 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
             case 'done':
               break;
           }
+        }
+
+        if (!hardDenyDetection && bufferedAssistantText) {
+          flushBufferedAssistantText(true);
+        } else if (!hardDenyDetection && bufferedThinkingText) {
+          flushBufferedThinkingText(true);
+        }
+
+        if (hardDenyDetection) {
+          const retryAttempt = hardDenyRetryCount + 1;
+          const syntheticRoundId = `${assistantMessage.id}-hard-deny-${retryAttempt}`;
+          const syntheticToolCallId = `${syntheticRoundId}-tool`;
+          const denialReason = i18n.t('ai.guardrail.synthetic_tool_denial_reason');
+          const denialDetail = i18n.t('ai.guardrail.synthetic_tool_denial_detail');
+
+          round += 1;
+          queueTranscriptEntry('assistant_round', {
+            round,
+            roundId: syntheticRoundId,
+            synthetic: true,
+            retryAttempt,
+            toolCallIds: [syntheticToolCallId],
+          }, {
+            turnId: assistantMessage.id,
+            parentId: assistantMessage.id,
+          });
+          queueTranscriptEntry('tool_call', {
+            id: syntheticToolCallId,
+            name: PSEUDO_TOOL_RETRY_TOOL_NAME,
+            argumentsText: JSON.stringify({ reason: 'tool_use_disabled', retryAttempt }),
+            roundId: syntheticRoundId,
+            syntheticDenied: true,
+          }, {
+            turnId: assistantMessage.id,
+            parentId: syntheticRoundId,
+          });
+          queueTranscriptEntry('tool_result', {
+            toolCallId: syntheticToolCallId,
+            toolName: PSEUDO_TOOL_RETRY_TOOL_NAME,
+            success: false,
+            output: '',
+            error: denialReason,
+            roundId: syntheticRoundId,
+            syntheticDenied: true,
+            rawText: hardDenyDetection.rawText,
+          }, {
+            turnId: assistantMessage.id,
+            parentId: syntheticToolCallId,
+          });
+
+          try {
+            await flushTranscriptEntries();
+          } catch (e) {
+            console.warn('[AiChatStore] Failed to persist hard-deny transcript entries:', e);
+          }
+
+          if (hardDenyRetryCount < MAX_HARD_DENY_RETRIES) {
+            apiMessages.push({
+              role: 'assistant',
+              content: '',
+              tool_calls: [{
+                id: syntheticToolCallId,
+                name: PSEUDO_TOOL_RETRY_TOOL_NAME,
+                arguments: JSON.stringify({ reason: 'tool_use_disabled', retryAttempt }),
+              }],
+            });
+            apiMessages.push({
+              role: 'tool',
+              content: JSON.stringify(createSyntheticToolDenyPayload(denialReason, denialDetail)),
+              tool_call_id: syntheticToolCallId,
+              tool_name: PSEUDO_TOOL_RETRY_TOOL_NAME,
+            });
+            hardDenyRetryCount += 1;
+            fullContent = '';
+            thinkingContent = '';
+            bufferedThinkingText = '';
+            continue;
+          }
+
+          break;
         }
 
         if (completedToolCalls.length === 0) break;
@@ -1874,9 +2060,8 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           toolContext = await resolveToolContext();
         }
 
-        // Accumulate content for UI display, reset for next API round
+        // Preserve text emitted before tool calls so follow-up rounds keep the assistant context.
         if (fullContent) {
-          accumulatedContent += fullContent + '\n\n';
           accumulator.onContent('\n\n');
           updateAssistantSnapshot(true, false);
         }
@@ -2607,14 +2792,42 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           message: buildPersistedMessageRequest(activeConversationId, normalizedSummaryMessage, null),
         },
       });
+      const nextSummaryConversation = hydrateStructuredConversation({
+        ...normalizedSummaryConversation,
+        sessionMetadata: mergeConversationSessionMetadata(normalizedSummaryConversation.sessionMetadata, {
+          conversationId: activeConversationId,
+          lastSummaryAt: normalizedSummaryMessage.timestamp,
+        }),
+      });
 
-      // Persistence succeeded — now update local state
+      // Projection replacement succeeded — update local state immediately to avoid frontend/backend drift.
       set((state) => ({
         conversations: state.conversations.map((c) => {
           if (c.id !== activeConversationId) return c;
-          return normalizedSummaryConversation;
+          return nextSummaryConversation;
         }),
       }));
+
+      try {
+        await persistTranscriptEntries(activeConversationId, [buildTranscriptEntry(activeConversationId, 'summary_created', {
+          messageId: normalizedSummaryMessage.id,
+          summaryText: summaryContent,
+          source: 'foreground',
+          summarizationMode: 'manual',
+          replacedMessageCount: originalCount,
+        }, {
+          parentId: normalizedSummaryMessage.id,
+          timestamp: normalizedSummaryMessage.timestamp,
+        })]);
+      } catch (persistErr) {
+        console.warn('[AiChatStore] Failed to persist summary transcript entry:', persistErr);
+      }
+
+      try {
+        await persistConversationMetadata(nextSummaryConversation);
+      } catch (persistErr) {
+        console.warn('[AiChatStore] Failed to persist summary metadata:', persistErr);
+      }
     } catch (e) {
       if (!(e instanceof Error && e.name === 'AbortError')) {
         const errorMessage = e instanceof Error ? e.message : String(e);
@@ -2844,7 +3057,27 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           })),
         },
       });
-      await persistConversationMetadata(normalizedCompactedConversation);
+      try {
+        await persistTranscriptEntries(convId, [buildTranscriptEntry(convId, 'summary_created', {
+          messageId: anchorMessage.id,
+          summaryText: summaryContent,
+          source: silent ? 'background' : 'foreground',
+          summarizationMode: silent ? 'background' : 'manual',
+          compactedMessageCount: totalCompacted,
+          compactedUntilMessageId: toCompact.at(-1)?.id,
+        }, {
+          parentId: anchorMessage.id,
+          timestamp: anchorMessage.timestamp,
+        })]);
+      } catch (persistErr) {
+        console.warn('[AiChatStore] Failed to persist compaction transcript entry:', persistErr);
+      }
+
+      try {
+        await persistConversationMetadata(normalizedCompactedConversation);
+      } catch (persistErr) {
+        console.warn('[AiChatStore] Failed to persist compaction metadata:', persistErr);
+      }
 
       const postPersistConversation = get().conversations.find((c) => c.id === convId);
       const postPersistMessageIds = postPersistConversation?.messages.map((message) => message.id) ?? [];

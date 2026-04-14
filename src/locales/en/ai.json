@@ -184,6 +184,12 @@
         "get_topology": "Topology"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "Tool use is disabled for this chat, and the model emitted a pseudo-tool transcript. OxideSens requested a plain-language retry.",
+      "tool_disabled_hard_deny_final": "Tool use is disabled for this chat, and the model repeated a pseudo-tool transcript. The raw output is hidden by default.",
+      "synthetic_tool_denial_reason": "Tool execution is disabled by user settings.",
+      "synthetic_tool_denial_detail": "Explain the limitation in natural language instead of emitting tool JSON or tool result transcripts."
+    },
     "tool_selector": {
       "title": "Tools",
       "tooltip": "{{count}}/{{total}} tools active",

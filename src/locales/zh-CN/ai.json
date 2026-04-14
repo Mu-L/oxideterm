@@ -184,6 +184,12 @@
         "get_topology": "网络拓扑"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "此聊天已禁用工具使用，但模型输出了伪工具记录。OxideSens 已请求改用自然语言重试。",
+      "tool_disabled_hard_deny_final": "此聊天已禁用工具使用，但模型再次输出了伪工具记录。原始输出默认隐藏。",
+      "synthetic_tool_denial_reason": "工具执行已被用户设置禁用。",
+      "synthetic_tool_denial_detail": "请用自然语言说明这一限制，而不要输出工具 JSON 或工具结果记录。"
+    },
     "tool_selector": {
       "title": "工具",
       "tooltip": "{{count}}/{{total}} 个工具已启用",

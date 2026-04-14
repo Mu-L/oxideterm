@@ -184,6 +184,12 @@
         "get_topology": "トポロジー"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "このチャットではツール利用が無効で、モデルが疑似ツールの記録を出力しました。OxideSens は自然文での再試行を要求しました。",
+      "tool_disabled_hard_deny_final": "このチャットではツール利用が無効で、モデルが疑似ツールの記録を繰り返し出力しました。生の出力は既定で非表示です。",
+      "synthetic_tool_denial_reason": "ツール実行はユーザー設定により無効化されています。",
+      "synthetic_tool_denial_detail": "ツール JSON やツール結果の記録を出力する代わりに、制約を自然な言葉で説明してください。"
+    },
     "tool_selector": {
       "title": "ツール",
       "tooltip": "{{count}}/{{total}} ツール有効",

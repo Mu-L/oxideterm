@@ -52,13 +52,14 @@ describe('hydrateStructuredConversation', () => {
       expect.objectContaining({
         id: 'turn-existing',
         requestMessageId: 'user-1',
-        rounds: [expect.objectContaining({ id: 'round-1', retryCount: 2, summary: 'existing summary' })],
-        pendingSummaries: [{ roundId: 'round-1', text: 'pending' }],
+        rounds: [expect.objectContaining({ id: 'round-1', retryCount: 2, summary: 'pending', summaryMetadata: undefined })],
+        pendingSummaries: [],
       }),
     ]);
     expect(hydrated.messages[1].turn).toEqual(expect.objectContaining({
       id: 'assistant-1',
       status: 'complete',
+      toolRounds: [expect.objectContaining({ id: 'round-1', summary: 'pending' })],
     }));
     expect(hydrated.messages[1].transcriptRef).toEqual({
       conversationId: 'conv-1',

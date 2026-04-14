@@ -7,6 +7,7 @@ import type {
   AiTranscriptReference,
 } from '../lib/ai/turnModel/types';
 import { projectLegacyMessageToTurn } from '../lib/ai/turnModel/turnProjection';
+import { normalizePendingSummaries } from '../lib/ai/turnModel/summaryMetadata';
 
 export interface FullConversationDto {
   id: string;
@@ -168,20 +169,28 @@ export function hydrateStructuredConversation(conversation: AiConversation): AiC
           };
         })
       : (matchingExistingTurn?.rounds ?? []);
+    const normalizedSummaryState = normalizePendingSummaries(
+      mergedRounds,
+      matchingExistingTurn?.pendingSummaries ?? [],
+    );
+    const normalizedTurn: AiAssistantTurn = {
+      ...turn,
+      toolRounds: normalizedSummaryState.rounds,
+    };
 
     turns.push({
       id: matchingExistingTurn?.id ?? `${lastUserMessage?.id ?? message.id}-${message.id}`,
       requestMessageId: matchingExistingTurn?.requestMessageId ?? lastUserMessage?.id ?? message.id,
       requestText: matchingExistingTurn?.requestText ?? lastUserMessage?.content ?? '',
       startedAt: matchingExistingTurn?.startedAt ?? lastUserMessage?.timestamp ?? message.timestamp,
-      status: turn.status,
-      rounds: mergedRounds,
-      pendingSummaries: matchingExistingTurn?.pendingSummaries ?? [],
+      status: normalizedTurn.status,
+      rounds: normalizedSummaryState.rounds,
+      pendingSummaries: normalizedSummaryState.unresolved,
     });
 
     return {
       ...message,
-      turn,
+      turn: normalizedTurn,
       transcriptRef,
     };
   });

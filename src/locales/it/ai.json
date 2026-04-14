@@ -184,6 +184,12 @@
         "get_topology": "Topologia"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "L'uso degli strumenti è disattivato per questa chat e il modello ha emesso una pseudo-trascrizione di strumento. OxideSens ha richiesto un nuovo tentativo in linguaggio naturale.",
+      "tool_disabled_hard_deny_final": "L'uso degli strumenti è disattivato per questa chat e il modello ha ripetuto una pseudo-trascrizione di strumento. L'output grezzo è nascosto per impostazione predefinita.",
+      "synthetic_tool_denial_reason": "L'esecuzione degli strumenti è disattivata dalle impostazioni utente.",
+      "synthetic_tool_denial_detail": "Spiega il limite in linguaggio naturale invece di emettere JSON di strumenti o trascrizioni dei risultati."
+    },
     "tool_selector": {
       "title": "Strumenti",
       "tooltip": "{{count}}/{{total}} strumenti attivi",

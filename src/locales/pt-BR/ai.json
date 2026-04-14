@@ -184,6 +184,12 @@
         "get_topology": "Topologia"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "O uso de ferramentas está desativado para este chat, e o modelo emitiu uma transcrição pseudo-ferramenta. OxideSens solicitou uma nova tentativa em linguagem natural.",
+      "tool_disabled_hard_deny_final": "O uso de ferramentas está desativado para este chat, e o modelo repetiu uma transcrição pseudo-ferramenta. A saída bruta fica oculta por padrão.",
+      "synthetic_tool_denial_reason": "A execução de ferramentas está desativada pelas configurações do usuário.",
+      "synthetic_tool_denial_detail": "Explique a limitação em linguagem natural em vez de emitir JSON de ferramenta ou transcrições de resultado de ferramenta."
+    },
     "tool_selector": {
       "title": "Ferramentas",
       "tooltip": "{{count}}/{{total}} ferramentas ativas",

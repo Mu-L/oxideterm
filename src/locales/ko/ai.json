@@ -184,6 +184,12 @@
         "get_topology": "토폴로지"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "이 채팅에서는 도구 사용이 비활성화되어 있는데, 모델이 가짜 도구 기록을 출력했습니다. OxideSens가 자연어로 다시 시도해 달라고 요청했습니다.",
+      "tool_disabled_hard_deny_final": "이 채팅에서는 도구 사용이 비활성화되어 있는데, 모델이 가짜 도구 기록을 다시 출력했습니다. 원본 출력은 기본적으로 숨겨집니다.",
+      "synthetic_tool_denial_reason": "도구 실행은 사용자 설정에 의해 비활성화되어 있습니다.",
+      "synthetic_tool_denial_detail": "도구 JSON이나 도구 결과 기록을 출력하지 말고, 제한 사항을 자연어로 설명하세요."
+    },
     "tool_selector": {
       "title": "도구",
       "tooltip": "{{count}}/{{total}} 도구 활성화",

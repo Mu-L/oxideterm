@@ -184,6 +184,12 @@
         "get_topology": "Topologie"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "L'utilisation d'outils est désactivée pour ce chat et le modèle a émis une fausse transcription d'outil. OxideSens a demandé une nouvelle tentative en langage naturel.",
+      "tool_disabled_hard_deny_final": "L'utilisation d'outils est désactivée pour ce chat et le modèle a répété une fausse transcription d'outil. La sortie brute est masquée par défaut.",
+      "synthetic_tool_denial_reason": "L'exécution des outils est désactivée par les paramètres utilisateur.",
+      "synthetic_tool_denial_detail": "Explique la limitation en langage naturel au lieu d'émettre du JSON d'outil ou des transcriptions de résultats d'outil."
+    },
     "tool_selector": {
       "title": "Outils",
       "tooltip": "{{count}}/{{total}} outils actifs",

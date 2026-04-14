@@ -184,6 +184,12 @@
         "get_topology": "網路拓撲"
       }
     },
+    "guardrail": {
+      "tool_disabled_hard_deny_retry": "此聊天已停用工具使用，但模型輸出了偽工具記錄。OxideSens 已要求改用自然語言重試。",
+      "tool_disabled_hard_deny_final": "此聊天已停用工具使用，但模型再次輸出了偽工具記錄。原始輸出預設隱藏。",
+      "synthetic_tool_denial_reason": "工具執行已被使用者設定停用。",
+      "synthetic_tool_denial_detail": "請以自然語言說明這項限制，不要輸出工具 JSON 或工具結果記錄。"
+    },
     "tool_selector": {
       "title": "工具",
       "tooltip": "{{count}}/{{total}} 個工具已啟用",

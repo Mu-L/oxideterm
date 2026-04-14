@@ -207,6 +207,15 @@ function streamText(content: string) {
   });
 }
 
+function streamEvents(events: Array<Record<string, unknown>>) {
+  providerStreamMock.mockImplementation(async function* () {
+    for (const event of events) {
+      yield event;
+    }
+    yield { type: 'done' };
+  });
+}
+
 async function waitFor(predicate: () => boolean, attempts = 40) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (predicate()) return;
@@ -473,6 +482,88 @@ describe('aiChatStore workflows', () => {
     });
   });
 
+  it('hard-denies pseudo tool transcripts, retries once, and keeps raw text out of the visible answer', async () => {
+    setConversation([]);
+    providerStreamMock
+      .mockImplementationOnce(async function* () {
+        yield { type: 'content', content: '{"name":"terminal_exec","arguments":{"command":"pwd"}}' };
+        yield { type: 'done' };
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'content', content: 'I cannot access tools in this chat, but you can run pwd in your shell to inspect the current directory.' };
+        yield { type: 'done' };
+      });
+
+    await useAiChatStore.getState().sendMessage('run pwd');
+
+    const assistantMessage = useAiChatStore.getState().conversations[0].messages.find((message) => message.role === 'assistant');
+    expect(providerStreamMock).toHaveBeenCalledTimes(2);
+    expect(assistantMessage?.content).toBe('I cannot access tools in this chat, but you can run pwd in your shell to inspect the current directory.');
+    expect(assistantMessage?.turn?.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'guardrail',
+        code: 'tool-disabled-hard-deny',
+        rawText: '{"name":"terminal_exec","arguments":{"command":"pwd"}}',
+      }),
+      expect.objectContaining({
+        type: 'text',
+        text: 'I cannot access tools in this chat, but you can run pwd in your shell to inspect the current directory.',
+      }),
+    ]));
+
+    const retryToolMessage = providerStreamMock.mock.calls[1]?.[1]?.find((message: { role: string; tool_name?: string }) => (
+      message.role === 'tool' && message.tool_name === 'tool_use_disabled'
+    ));
+    expect(retryToolMessage?.content).toContain('tool_denied');
+
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_append_transcript_entries', {
+      request: expect.objectContaining({
+        conversationId: 'conv-1',
+        entries: expect.arrayContaining([
+          expect.objectContaining({ kind: 'assistant_round' }),
+          expect.objectContaining({ kind: 'tool_call', payload: expect.objectContaining({ syntheticDenied: true }) }),
+          expect.objectContaining({ kind: 'tool_result', payload: expect.objectContaining({ syntheticDenied: true }) }),
+        ]),
+      }),
+    });
+  });
+
+  it('does not hard-deny pseudo tool shaped JSON when the user explicitly asked for JSON', async () => {
+    setConversation([]);
+    streamEvents([
+      { type: 'content', content: '{"name":"terminal_exec","arguments":{"command":"pwd"}}' },
+    ]);
+
+    await useAiChatStore.getState().sendMessage('return a JSON example for terminal_exec');
+
+    const assistantMessage = useAiChatStore.getState().conversations[0].messages.find((message) => message.role === 'assistant');
+    expect(providerStreamMock).toHaveBeenCalledTimes(1);
+    expect(assistantMessage?.content).toBe('{"name":"terminal_exec","arguments":{"command":"pwd"}}');
+    expect(assistantMessage?.turn?.parts.some((part) => part.type === 'guardrail')).toBe(false);
+  });
+
+  it('drops pre-hard-deny thinking content before retrying', async () => {
+    setConversation([]);
+    providerStreamMock
+      .mockImplementationOnce(async function* () {
+        yield { type: 'thinking', content: 'I should call a tool.' };
+        yield { type: 'content', content: '{"name":"terminal_exec","arguments":{"command":"pwd"}}' };
+        yield { type: 'done' };
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'content', content: 'Tool access is disabled here, so I can only explain what to run.' };
+        yield { type: 'done' };
+      });
+
+    await useAiChatStore.getState().sendMessage('run pwd');
+
+    const assistantMessage = useAiChatStore.getState().conversations[0].messages.find((message) => message.role === 'assistant');
+    expect(providerStreamMock).toHaveBeenCalledTimes(2);
+    expect(assistantMessage?.thinkingContent).toBeUndefined();
+    expect(assistantMessage?.turn?.parts.some((part) => part.type === 'thinking')).toBe(false);
+    expect(assistantMessage?.content).toBe('Tool access is disabled here, so I can only explain what to run.');
+  });
+
   it('reuses the existing user message as the request anchor when skipUserMessage is true', async () => {
     setConversation([
       { id: 'u-existing', role: 'user', content: 'persisted prompt', timestamp: 1 },
@@ -600,6 +691,14 @@ describe('aiChatStore workflows', () => {
     expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_messages', expect.objectContaining({
       request: expect.objectContaining({ conversationId: 'conv-1' }),
     }));
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_append_transcript_entries', {
+      request: expect.objectContaining({
+        conversationId: 'conv-1',
+        entries: expect.arrayContaining([
+          expect.objectContaining({ kind: 'summary_created' }),
+        ]),
+      }),
+    });
     expect(useAiChatStore.getState().conversations[0].messages).toHaveLength(1);
     expect(useAiChatStore.getState().conversations[0].messages[0].content).toContain('Conversation summary');
   });
@@ -642,6 +741,14 @@ describe('aiChatStore workflows', () => {
       sessionMetadata: expect.objectContaining({
         conversationId: 'conv-1',
         lastCompactedUntilEntryId: 'u-2',
+      }),
+    });
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_append_transcript_entries', {
+      request: expect.objectContaining({
+        conversationId: 'conv-1',
+        entries: expect.arrayContaining([
+          expect.objectContaining({ kind: 'summary_created' }),
+        ]),
       }),
     });
     expect(useAiChatStore.getState().conversations[0].sessionMetadata).toMatchObject({

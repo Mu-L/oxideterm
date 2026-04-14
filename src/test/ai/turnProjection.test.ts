@@ -45,7 +45,7 @@ describe('turnProjection', () => {
 
     const projected = projectTurnToLegacyMessageFields(turn);
 
-    expect(projected.content).toBe('final answer\n\nblocked');
+    expect(projected.content).toBe('final answer');
     expect(projected.thinkingContent).toBe('first thought ');
     expect(projected.toolCalls).toEqual([
       expect.objectContaining({

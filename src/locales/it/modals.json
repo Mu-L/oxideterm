@@ -405,6 +405,7 @@
       "ungrouped": "Non raggruppato",
       "create_groups_hint": "Crea gruppi nelle Impostazioni",
       "save_connection": "Salva connessione per uso futuro",
+      "save_connection_hint": "Disattivato per impostazione predefinita al primo utilizzo. La scelta verrà ricordata.",
       "agent_forwarding": "Abilita inoltro agente SSH",
       "agent_forwarding_hint": "Abilitare solo per server affidabili. Un server malevolo potrebbe utilizzare il tuo agente SSH locale per autenticarsi su altri host.",
       "proxy_chain": {

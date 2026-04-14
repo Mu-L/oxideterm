@@ -49,6 +49,8 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 
+const SAVE_CONNECTION_KEY = 'oxideterm.saveConnection';
+
 export const NewConnectionModal = () => {
   const { t } = useTranslation();
   const { 
@@ -75,7 +77,13 @@ export const NewConnectionModal = () => {
   const [keyPath, setKeyPath] = useState('');
   const [certPath, setCertPath] = useState('');  // Certificate path
   const [passphrase, setPassphrase] = useState('');  // Key passphrase for certificate
-  const [saveConnection, setSaveConnection] = useState(false);
+  const [saveConnection, setSaveConnection] = useState(() => {
+    try {
+      return localStorage.getItem(SAVE_CONNECTION_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [savePassword, setSavePassword] = useState(false);
   const [group, setGroup] = useState('Ungrouped');
   const [groups, setGroups] = useState<string[]>([]);
@@ -783,10 +791,15 @@ export const NewConnectionModal = () => {
               <Checkbox 
                 id="save-conn" 
                 checked={saveConnection}
-                onCheckedChange={(c) => setSaveConnection(!!c)}
+                onCheckedChange={(c) => {
+                  const val = !!c;
+                  setSaveConnection(val);
+                  try { localStorage.setItem(SAVE_CONNECTION_KEY, String(val)); } catch { /* noop */ }
+                }}
               />
               <Label htmlFor="save-conn">{t('modals.new_connection.save_connection')}</Label>
             </div>
+            <p className="text-xs text-muted-foreground -mt-1 ml-6">{t('modals.new_connection.save_connection_hint')}</p>
           </div>
 
           <div className="border-t border-theme-border rounded-lg p-4">

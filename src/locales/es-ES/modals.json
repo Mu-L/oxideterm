@@ -405,6 +405,7 @@
       "ungrouped": "Sin grupo",
       "create_groups_hint": "Crea grupos en configuración",
       "save_connection": "Guardar conexión para uso futuro",
+      "save_connection_hint": "Desactivado por defecto en el primer uso. Su elección se recordará.",
       "agent_forwarding": "Habilitar reenvío de agente SSH",
       "agent_forwarding_hint": "Habilitar solo en servidores de confianza. Un servidor malicioso podría usar tu agente SSH local para autenticarse en otros hosts.",
       "proxy_chain": {

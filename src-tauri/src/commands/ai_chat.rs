@@ -68,6 +68,18 @@ pub struct ReplaceConversationMessagesRequest {
     pub message: SaveMessageRequest,
 }
 
+/// Request to atomically replace all messages in a conversation with a single
+/// new projection message and append transcript entries.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceConversationMessagesWithTranscriptRequest {
+    pub conversation_id: String,
+    pub title: String,
+    pub message: SaveMessageRequest,
+    #[serde(default)]
+    pub transcript_entries: Vec<TranscriptEntryRequest>,
+}
+
 /// Request to atomically replace the full ordered message list in a conversation.
 /// Used by compaction to avoid intermediate replace + save races.
 #[derive(Debug, Deserialize)]
@@ -77,6 +89,19 @@ pub struct ReplaceConversationMessageListRequest {
     pub title: String,
     pub expected_message_ids: Vec<String>,
     pub messages: Vec<SaveMessageRequest>,
+}
+
+/// Request to atomically replace the full ordered message list and append
+/// transcript entries.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceConversationMessageListWithTranscriptRequest {
+    pub conversation_id: String,
+    pub title: String,
+    pub expected_message_ids: Vec<String>,
+    pub messages: Vec<SaveMessageRequest>,
+    #[serde(default)]
+    pub transcript_entries: Vec<TranscriptEntryRequest>,
 }
 
 /// Request to append transcript entries for a conversation.
@@ -555,6 +580,59 @@ pub async fn ai_chat_replace_conversation_messages(
         .map_err(|e| e.to_string())
 }
 
+/// Atomically replace all messages in a conversation with a single summary
+/// message and append transcript entries in the same transaction.
+#[tauri::command]
+pub async fn ai_chat_replace_conversation_messages_with_transcript(
+    store: State<'_, LazyManagedStore<AiChatStore>>,
+    request: ReplaceConversationMessagesWithTranscriptRequest,
+) -> Result<(), String> {
+    let store = require_ai_chat_store(&store)?;
+    let message = PersistedMessage {
+        id: request.message.id,
+        conversation_id: request.conversation_id.clone(),
+        role: request.message.role,
+        content: request.message.content,
+        timestamp: request.message.timestamp,
+        tool_calls: request.message.tool_calls,
+        context_snapshot: request.message.context_snapshot.map(|c| ContextSnapshot {
+            cwd: c.cwd,
+            selection: c.selection,
+            buffer_tail: c.buffer_tail,
+            buffer_compressed: false,
+            local_os: c.local_os,
+            connection_info: c.connection_info,
+            terminal_type: c.terminal_type,
+        }),
+        turn: request.message.turn,
+        transcript_ref: request.message.transcript_ref,
+        summary_ref: request.message.summary_ref,
+    };
+
+    let entries = request
+        .transcript_entries
+        .into_iter()
+        .map(|entry| PersistedTranscriptEntry {
+            id: entry.id,
+            conversation_id: request.conversation_id.clone(),
+            turn_id: entry.turn_id,
+            parent_id: entry.parent_id,
+            timestamp: entry.timestamp,
+            kind: entry.kind,
+            payload: entry.payload,
+        })
+        .collect::<Vec<_>>();
+
+    store
+        .replace_conversation_messages_with_transcript_entries(
+            &request.conversation_id,
+            &request.title,
+            message,
+            entries,
+        )
+        .map_err(|e| e.to_string())
+}
+
 /// Atomically replace the entire ordered message list for a conversation.
 /// The operation only commits if the current persisted message ids still match
 /// the expected ids sent by the frontend, preventing stale compaction writes.
@@ -595,6 +673,64 @@ pub async fn ai_chat_replace_conversation_message_list(
             &request.title,
             &request.expected_message_ids,
             messages,
+        )
+        .map_err(|e| e.to_string())
+}
+
+/// Atomically replace the entire ordered message list for a conversation and
+/// append transcript entries in the same transaction.
+#[tauri::command]
+pub async fn ai_chat_replace_conversation_message_list_with_transcript(
+    store: State<'_, LazyManagedStore<AiChatStore>>,
+    request: ReplaceConversationMessageListWithTranscriptRequest,
+) -> Result<(), String> {
+    let store = require_ai_chat_store(&store)?;
+    let messages = request
+        .messages
+        .into_iter()
+        .map(|message| PersistedMessage {
+            id: message.id,
+            conversation_id: request.conversation_id.clone(),
+            role: message.role,
+            content: message.content,
+            timestamp: message.timestamp,
+            tool_calls: message.tool_calls,
+            context_snapshot: message.context_snapshot.map(|c| ContextSnapshot {
+                cwd: c.cwd,
+                selection: c.selection,
+                buffer_tail: c.buffer_tail,
+                buffer_compressed: false,
+                local_os: c.local_os,
+                connection_info: c.connection_info,
+                terminal_type: c.terminal_type,
+            }),
+            turn: message.turn,
+            transcript_ref: message.transcript_ref,
+            summary_ref: message.summary_ref,
+        })
+        .collect::<Vec<_>>();
+
+    let entries = request
+        .transcript_entries
+        .into_iter()
+        .map(|entry| PersistedTranscriptEntry {
+            id: entry.id,
+            conversation_id: request.conversation_id.clone(),
+            turn_id: entry.turn_id,
+            parent_id: entry.parent_id,
+            timestamp: entry.timestamp,
+            kind: entry.kind,
+            payload: entry.payload,
+        })
+        .collect::<Vec<_>>();
+
+    store
+        .replace_conversation_message_list_with_transcript_entries(
+            &request.conversation_id,
+            &request.title,
+            &request.expected_message_ids,
+            messages,
+            entries,
         )
         .map_err(|e| e.to_string())
 }

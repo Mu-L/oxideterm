@@ -926,6 +926,94 @@ impl AiChatStore {
         Ok(())
     }
 
+    /// Atomically replace all messages in a conversation with a single new message
+    /// and append transcript entries in the same write transaction.
+    pub fn replace_conversation_messages_with_transcript_entries(
+        &self,
+        conversation_id: &str,
+        title: &str,
+        new_message: PersistedMessage,
+        transcript_entries: Vec<PersistedTranscriptEntry>,
+    ) -> Result<(), AiChatError> {
+        let write_txn = self.db.begin_write()?;
+
+        {
+            let mut conv_table = write_txn.open_table(CONVERSATIONS_TABLE)?;
+            let mut msg_table = write_txn.open_table(MESSAGES_TABLE)?;
+            let mut msg_index_table = write_txn.open_table(CONV_MESSAGES_TABLE)?;
+            let mut transcript_table = write_txn.open_table(TRANSCRIPT_TABLE)?;
+            let mut transcript_index_table = write_txn.open_table(CONV_TRANSCRIPT_TABLE)?;
+
+            if let Some(list_bytes) = msg_index_table.get(conversation_id)? {
+                let message_ids: Vec<String> = rmp_serde::from_slice(list_bytes.value())?;
+                for msg_id in message_ids {
+                    msg_table.remove(msg_id.as_str())?;
+                }
+            }
+
+            let msg_bytes = rmp_serde::to_vec(&new_message)?;
+            msg_table.insert(new_message.id.as_str(), msg_bytes.as_slice())?;
+
+            let new_ids = vec![new_message.id.clone()];
+            let list_bytes = rmp_serde::to_vec(&new_ids)?;
+            msg_index_table.insert(conversation_id, list_bytes.as_slice())?;
+
+            if !transcript_entries.is_empty() {
+                let existing_transcript_ids: Option<Vec<String>> = transcript_index_table
+                    .get(conversation_id)?
+                    .map(|list_bytes| rmp_serde::from_slice(list_bytes.value()).ok())
+                    .flatten();
+
+                let mut transcript_ids = existing_transcript_ids.unwrap_or_default();
+
+                for entry in transcript_entries {
+                    let entry_bytes = rmp_serde::to_vec(&entry)?;
+                    transcript_table.insert(entry.id.as_str(), entry_bytes.as_slice())?;
+                    if !transcript_ids.contains(&entry.id) {
+                        transcript_ids.push(entry.id);
+                    }
+                }
+
+                let transcript_list_bytes = rmp_serde::to_vec(&transcript_ids)?;
+                transcript_index_table.insert(conversation_id, transcript_list_bytes.as_slice())?;
+            }
+
+            let existing_meta: Option<ConversationMeta> = conv_table
+                .get(conversation_id)?
+                .map(|meta_bytes| rmp_serde::from_slice(meta_bytes.value()).ok())
+                .flatten();
+
+            let now = chrono::Utc::now().timestamp_millis();
+            let meta = if let Some(mut m) = existing_meta {
+                m.title = title.to_string();
+                m.updated_at = now;
+                m.message_count = 1;
+                m
+            } else {
+                ConversationMeta {
+                    id: conversation_id.to_string(),
+                    title: title.to_string(),
+                    created_at: now,
+                    updated_at: now,
+                    message_count: 1,
+                    session_id: None,
+                    origin: default_origin(),
+                    session_metadata: None,
+                }
+            };
+
+            let meta_bytes = rmp_serde::to_vec(&meta)?;
+            conv_table.insert(conversation_id, meta_bytes.as_slice())?;
+        }
+
+        write_txn.commit()?;
+        info!(
+            "Atomically replaced conversation {} messages with summary {} and appended transcript entries",
+            conversation_id, new_message.id
+        );
+        Ok(())
+    }
+
     /// Atomically replace the full ordered message list, but only if the
     /// current persisted ids still match the expected ids captured by the
     /// caller. This prevents stale compaction writes from clobbering newer
@@ -1020,6 +1108,124 @@ impl AiChatStore {
             "Atomically replaced conversation {} with {} ordered messages",
             conversation_id,
             new_messages.len()
+        );
+        Ok(())
+    }
+
+    /// Atomically replace the full ordered message list and append transcript entries
+    /// in the same write transaction.
+    pub fn replace_conversation_message_list_with_transcript_entries(
+        &self,
+        conversation_id: &str,
+        title: &str,
+        expected_message_ids: &[String],
+        new_messages: Vec<PersistedMessage>,
+        transcript_entries: Vec<PersistedTranscriptEntry>,
+    ) -> Result<(), AiChatError> {
+        let write_txn = self.db.begin_write()?;
+
+        {
+            let mut conv_table = write_txn.open_table(CONVERSATIONS_TABLE)?;
+            let mut msg_table = write_txn.open_table(MESSAGES_TABLE)?;
+            let mut msg_index_table = write_txn.open_table(CONV_MESSAGES_TABLE)?;
+            let mut transcript_table = write_txn.open_table(TRANSCRIPT_TABLE)?;
+            let mut transcript_index_table = write_txn.open_table(CONV_TRANSCRIPT_TABLE)?;
+
+            let current_ids: Vec<String> = msg_index_table
+                .get(conversation_id)?
+                .map(|list_bytes| rmp_serde::from_slice(list_bytes.value()).ok())
+                .flatten()
+                .unwrap_or_default();
+
+            if current_ids != expected_message_ids {
+                return Err(AiChatError::Conflict(conversation_id.to_string()));
+            }
+
+            let current_id_set = current_ids.iter().cloned().collect::<HashSet<_>>();
+            let new_ids = new_messages
+                .iter()
+                .map(|message| message.id.clone())
+                .collect::<Vec<_>>();
+            let retained_id_set = new_ids.iter().cloned().collect::<HashSet<_>>();
+
+            for msg_id in &current_ids {
+                if !retained_id_set.contains(msg_id) {
+                    msg_table.remove(msg_id.as_str())?;
+                }
+            }
+
+            for mut message in new_messages.iter().cloned() {
+                if current_id_set.contains(&message.id) {
+                    continue;
+                }
+
+                if let Some(ref mut ctx) = message.context_snapshot {
+                    if let Some(ref buffer) = ctx.buffer_tail {
+                        let (compressed, is_compressed) = compress_buffer(buffer);
+                        ctx.buffer_tail = Some(compressed);
+                        ctx.buffer_compressed = is_compressed;
+                    }
+                }
+
+                let msg_bytes = rmp_serde::to_vec(&message)?;
+                msg_table.insert(message.id.as_str(), msg_bytes.as_slice())?;
+            }
+
+            let list_bytes = rmp_serde::to_vec(&new_ids)?;
+            msg_index_table.insert(conversation_id, list_bytes.as_slice())?;
+
+            if !transcript_entries.is_empty() {
+                let existing_transcript_ids: Option<Vec<String>> = transcript_index_table
+                    .get(conversation_id)?
+                    .map(|list_bytes| rmp_serde::from_slice(list_bytes.value()).ok())
+                    .flatten();
+
+                let mut transcript_ids = existing_transcript_ids.unwrap_or_default();
+
+                for entry in transcript_entries {
+                    let entry_bytes = rmp_serde::to_vec(&entry)?;
+                    transcript_table.insert(entry.id.as_str(), entry_bytes.as_slice())?;
+                    if !transcript_ids.contains(&entry.id) {
+                        transcript_ids.push(entry.id);
+                    }
+                }
+
+                let transcript_list_bytes = rmp_serde::to_vec(&transcript_ids)?;
+                transcript_index_table.insert(conversation_id, transcript_list_bytes.as_slice())?;
+            }
+
+            let existing_meta: Option<ConversationMeta> = conv_table
+                .get(conversation_id)?
+                .map(|meta_bytes| rmp_serde::from_slice(meta_bytes.value()).ok())
+                .flatten();
+
+            let now = chrono::Utc::now().timestamp_millis();
+            let meta = if let Some(mut m) = existing_meta {
+                m.title = title.to_string();
+                m.updated_at = now;
+                m.message_count = new_messages.len();
+                m
+            } else {
+                ConversationMeta {
+                    id: conversation_id.to_string(),
+                    title: title.to_string(),
+                    created_at: now,
+                    updated_at: now,
+                    message_count: new_messages.len(),
+                    session_id: None,
+                    origin: default_origin(),
+                    session_metadata: None,
+                }
+            };
+
+            let meta_bytes = rmp_serde::to_vec(&meta)?;
+            conv_table.insert(conversation_id, meta_bytes.as_slice())?;
+        }
+
+        write_txn.commit()?;
+        debug!(
+            "Atomically replaced conversation {} message list and appended transcript entries",
+            conversation_id
         );
         Ok(())
     }
@@ -1849,6 +2055,139 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].id, "entry-1");
         assert_eq!(entries[1].turn_id.as_deref(), Some("turn-1"));
+    }
+
+    #[test]
+    fn test_replace_conversation_messages_with_transcript_entries_is_atomic() {
+        let (store, _dir) = create_test_store();
+        store
+            .create_conversation(&create_test_meta("conv-summary-atomic"))
+            .unwrap();
+        store
+            .save_message(create_test_message(
+                "conv-summary-atomic",
+                "msg-1",
+                1,
+                "old",
+            ))
+            .unwrap();
+
+        let replacement = PersistedMessage {
+            id: "summary-atomic".to_string(),
+            conversation_id: "conv-summary-atomic".to_string(),
+            role: "assistant".to_string(),
+            content: "summary".to_string(),
+            timestamp: 2,
+            tool_calls: vec![],
+            context_snapshot: None,
+            turn: None,
+            transcript_ref: Some(serde_json::json!({
+                "conversationId": "conv-summary-atomic",
+                "endEntryId": "entry-summary"
+            })),
+            summary_ref: Some(serde_json::json!({
+                "kind": "conversation",
+                "transcriptRef": {
+                    "conversationId": "conv-summary-atomic",
+                    "endEntryId": "entry-summary"
+                }
+            })),
+        };
+
+        store
+            .replace_conversation_messages_with_transcript_entries(
+                "conv-summary-atomic",
+                "Summary",
+                replacement,
+                vec![PersistedTranscriptEntry {
+                    id: "entry-summary".to_string(),
+                    conversation_id: "conv-summary-atomic".to_string(),
+                    turn_id: None,
+                    parent_id: Some("summary-atomic".to_string()),
+                    timestamp: 2,
+                    kind: "summary_created".to_string(),
+                    payload: serde_json::json!({ "messageId": "summary-atomic", "summaryText": "summary" }),
+                }],
+            )
+            .unwrap();
+
+        let full = store.get_conversation("conv-summary-atomic").unwrap();
+        let entries = store.get_transcript_entries("conv-summary-atomic").unwrap();
+
+        assert_eq!(full.messages.len(), 1);
+        assert_eq!(full.messages[0].id, "summary-atomic");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, "entry-summary");
+    }
+
+    #[test]
+    fn test_replace_conversation_message_list_with_transcript_entries_is_atomic() {
+        let (store, _dir) = create_test_store();
+        store
+            .create_conversation(&create_test_meta("conv-compact-atomic"))
+            .unwrap();
+        store
+            .save_message(create_test_message(
+                "conv-compact-atomic",
+                "msg-1",
+                1,
+                "first",
+            ))
+            .unwrap();
+        store
+            .save_message(create_test_message(
+                "conv-compact-atomic",
+                "msg-2",
+                2,
+                "second",
+            ))
+            .unwrap();
+
+        store
+            .replace_conversation_message_list_with_transcript_entries(
+                "conv-compact-atomic",
+                "Compacted",
+                &["msg-1".to_string(), "msg-2".to_string()],
+                vec![PersistedMessage {
+                    id: "anchor-1".to_string(),
+                    conversation_id: "conv-compact-atomic".to_string(),
+                    role: "system".to_string(),
+                    content: "anchor".to_string(),
+                    timestamp: 3,
+                    tool_calls: vec![],
+                    context_snapshot: None,
+                    turn: None,
+                    transcript_ref: Some(serde_json::json!({
+                        "conversationId": "conv-compact-atomic",
+                        "endEntryId": "entry-anchor"
+                    })),
+                    summary_ref: Some(serde_json::json!({
+                        "kind": "compaction",
+                        "transcriptRef": {
+                            "conversationId": "conv-compact-atomic",
+                            "endEntryId": "entry-anchor"
+                        }
+                    })),
+                }],
+                vec![PersistedTranscriptEntry {
+                    id: "entry-anchor".to_string(),
+                    conversation_id: "conv-compact-atomic".to_string(),
+                    turn_id: None,
+                    parent_id: Some("anchor-1".to_string()),
+                    timestamp: 3,
+                    kind: "summary_created".to_string(),
+                    payload: serde_json::json!({ "messageId": "anchor-1", "summaryText": "anchor", "compactedMessageCount": 2 }),
+                }],
+            )
+            .unwrap();
+
+        let full = store.get_conversation("conv-compact-atomic").unwrap();
+        let entries = store.get_transcript_entries("conv-compact-atomic").unwrap();
+
+        assert_eq!(full.messages.len(), 1);
+        assert_eq!(full.messages[0].id, "anchor-1");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, "entry-anchor");
     }
 
     #[test]

@@ -154,6 +154,55 @@ describe('hydrateStructuredConversation', () => {
     });
   });
 
+  it('preserves transcriptRef and summaryRef when decoding persisted compaction anchors', () => {
+    const anchorContent = encodeAnchorContent('compacted summary', {
+      type: 'compaction-anchor',
+      originalCount: 4,
+      compactedAt: 456,
+    });
+
+    const conversation = dtoToConversation({
+      id: 'conv-1',
+      title: 'Conversation',
+      createdAt: 1,
+      updatedAt: 2,
+      sessionId: null,
+      origin: 'sidebar',
+      messages: [
+        {
+          id: 'system-1',
+          role: 'system',
+          content: anchorContent,
+          timestamp: 11,
+          context: null,
+          transcriptRef: {
+            conversationId: 'conv-1',
+            endEntryId: 'entry-summary',
+          },
+          summaryRef: {
+            kind: 'compaction',
+            transcriptRef: {
+              conversationId: 'conv-1',
+              endEntryId: 'entry-summary',
+            },
+          },
+        },
+      ],
+    });
+
+    expect(conversation.messages[0]).toMatchObject({
+      role: 'system',
+      content: 'compacted summary',
+      transcriptRef: {
+        conversationId: 'conv-1',
+        endEntryId: 'entry-summary',
+      },
+      summaryRef: {
+        kind: 'compaction',
+      },
+    });
+  });
+
   it('reconstructs a compacted projection from transcript when persisted messages are missing', () => {
     const rebuilt = rebuildConversationFromTranscript(dtoToConversation({
       id: 'conv-1',
@@ -338,6 +387,75 @@ describe('hydrateStructuredConversation', () => {
     expect(rebuilt.messages[0]).toMatchObject({
       role: 'system',
       content: 'Condensed history',
+    });
+  });
+
+  it('reattaches round summary messages via summaryRef during hydration', () => {
+    const conversation: AiConversation = {
+      id: 'conv-1',
+      title: 'Conversation',
+      createdAt: 1,
+      updatedAt: 1,
+      origin: 'sidebar',
+      sessionMetadata: {
+        conversationId: 'conv-1',
+      },
+      messages: [
+        { id: 'user-1', role: 'user', content: 'hello', timestamp: 1 },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'world',
+          timestamp: 2,
+          turn: {
+            id: 'assistant-1',
+            status: 'complete',
+            parts: [{ type: 'text', text: 'world' }],
+            plainTextSummary: 'world',
+            toolRounds: [
+              {
+                id: 'round-1',
+                round: 1,
+                toolCalls: [],
+              },
+            ],
+          },
+        },
+        {
+          id: 'summary-1',
+          role: 'assistant',
+          content: 'round one summary',
+          timestamp: 3,
+          summaryRef: {
+            kind: 'round',
+            roundId: 'round-1',
+          },
+        },
+      ],
+      turns: [
+        {
+          id: 'turn-existing',
+          requestMessageId: 'user-1',
+          requestText: 'hello',
+          startedAt: 1,
+          status: 'complete',
+          rounds: [
+            {
+              id: 'round-1',
+              round: 1,
+              toolCalls: [],
+            },
+          ],
+          pendingSummaries: [],
+        },
+      ],
+    };
+
+    const hydrated = hydrateStructuredConversation(conversation);
+
+    expect(hydrated.turns?.[0].rounds[0]).toMatchObject({
+      id: 'round-1',
+      summary: 'round one summary',
     });
   });
 });

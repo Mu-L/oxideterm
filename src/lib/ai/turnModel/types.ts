@@ -91,7 +91,8 @@ export interface AiTranscriptReference {
 }
 
 export interface AiSummaryReference {
-  roundId: string;
+  kind?: 'round' | 'conversation' | 'compaction';
+  roundId?: string;
   transcriptRef?: AiTranscriptReference;
 }
 

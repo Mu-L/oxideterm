@@ -688,19 +688,22 @@ describe('aiChatStore workflows', () => {
     await useAiChatStore.getState().summarizeConversation();
 
     expect(providerStreamMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_messages', expect.objectContaining({
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_messages_with_transcript', expect.objectContaining({
       request: expect.objectContaining({ conversationId: 'conv-1' }),
     }));
-    expect(invokeMock).toHaveBeenCalledWith('ai_chat_append_transcript_entries', {
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_messages_with_transcript', expect.objectContaining({
       request: expect.objectContaining({
         conversationId: 'conv-1',
-        entries: expect.arrayContaining([
+        transcriptEntries: expect.arrayContaining([
           expect.objectContaining({ kind: 'summary_created' }),
         ]),
       }),
-    });
+    }));
     expect(useAiChatStore.getState().conversations[0].messages).toHaveLength(1);
-    expect(useAiChatStore.getState().conversations[0].messages[0].content).toContain('Conversation summary');
+    expect(useAiChatStore.getState().conversations[0].messages[0]).toMatchObject({
+      content: expect.stringContaining('Conversation summary'),
+      summaryRef: expect.objectContaining({ kind: 'conversation' }),
+    });
   });
 
   it('compactConversation creates a compaction anchor and preserves recent messages', async () => {
@@ -721,10 +724,11 @@ describe('aiChatStore workflows', () => {
     expect(compacted[0]).toMatchObject({
       role: 'system',
       content: 'Merged summary',
+      summaryRef: expect.objectContaining({ kind: 'compaction' }),
       metadata: expect.objectContaining({ type: 'compaction-anchor', originalCount: 3 }),
     });
     expect(compacted.slice(1).map((message) => message.id)).toEqual(['a-2', 'u-3', 'a-3']);
-    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_message_list', expect.objectContaining({
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_message_list_with_transcript', expect.objectContaining({
       request: expect.objectContaining({
         conversationId: 'conv-1',
         expectedMessageIds: ['u-1', 'a-1', 'u-2', 'a-2', 'u-3', 'a-3'],
@@ -743,14 +747,14 @@ describe('aiChatStore workflows', () => {
         lastCompactedUntilEntryId: 'u-2',
       }),
     });
-    expect(invokeMock).toHaveBeenCalledWith('ai_chat_append_transcript_entries', {
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_message_list_with_transcript', expect.objectContaining({
       request: expect.objectContaining({
         conversationId: 'conv-1',
-        entries: expect.arrayContaining([
+        transcriptEntries: expect.arrayContaining([
           expect.objectContaining({ kind: 'summary_created' }),
         ]),
       }),
-    });
+    }));
     expect(useAiChatStore.getState().conversations[0].sessionMetadata).toMatchObject({
       conversationId: 'conv-1',
       lastCompactedUntilEntryId: 'u-2',
@@ -835,7 +839,7 @@ describe('aiChatStore workflows', () => {
       metadata: expect.objectContaining({ type: 'compaction-anchor' }),
     });
     expect(messages.slice(-2).map((message) => message.id)).toEqual(['u-4', 'a-4']);
-    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_message_list', expect.objectContaining({
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_message_list_with_transcript', expect.objectContaining({
       request: expect.objectContaining({
         conversationId: 'conv-1',
         expectedMessageIds: ['u-1', 'a-1', 'u-2', 'a-2', 'u-3', 'a-3', 'u-4', 'a-4'],

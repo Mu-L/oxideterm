@@ -2801,6 +2801,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       const summaryTranscriptEntry = buildTranscriptEntry(activeConversationId, 'summary_created', {
         messageId: normalizedSummaryMessage.id,
         summaryText: summaryContent,
+        summaryKind: 'conversation',
         source: 'foreground',
         summarizationMode: 'manual',
         replacedMessageCount: originalCount,
@@ -2814,13 +2815,28 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           conversationId: activeConversationId,
           endEntryId: summaryTranscriptEntry.id,
         },
+        summaryRef: {
+          kind: 'conversation',
+          transcriptRef: {
+            conversationId: activeConversationId,
+            endEntryId: summaryTranscriptEntry.id,
+          },
+        },
       };
 
-      await invoke('ai_chat_replace_conversation_messages', {
+      await invoke('ai_chat_replace_conversation_messages_with_transcript', {
         request: {
           conversationId: activeConversationId,
           title: conversation.title,
           message: buildPersistedMessageRequest(activeConversationId, summaryMessageWithTranscriptRef, null),
+          transcriptEntries: [{
+            id: summaryTranscriptEntry.id,
+            turnId: summaryTranscriptEntry.turnId ?? null,
+            parentId: summaryTranscriptEntry.parentId ?? null,
+            timestamp: summaryTranscriptEntry.timestamp,
+            kind: summaryTranscriptEntry.kind,
+            payload: summaryTranscriptEntry.payload,
+          }],
         },
       });
       const nextSummaryConversation = hydrateStructuredConversation({
@@ -2839,12 +2855,6 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           return nextSummaryConversation;
         }),
       }));
-
-      try {
-        await persistTranscriptEntries(activeConversationId, [summaryTranscriptEntry]);
-      } catch (persistErr) {
-        console.warn('[AiChatStore] Failed to persist summary transcript entry:', persistErr);
-      }
 
       try {
         await persistConversationMetadata(nextSummaryConversation);
@@ -3049,6 +3059,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       const compactionTranscriptEntry = buildTranscriptEntry(convId, 'summary_created', {
         messageId: anchorMessageId,
         summaryText: summaryContent,
+        summaryKind: 'compaction',
         source: silent ? 'background' : 'foreground',
         summarizationMode: silent ? 'background' : 'manual',
         compactedMessageCount: totalCompacted,
@@ -3066,6 +3077,13 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         transcriptRef: {
           conversationId: convId,
           endEntryId: compactionTranscriptEntry.id,
+        },
+        summaryRef: {
+          kind: 'compaction',
+          transcriptRef: {
+            conversationId: convId,
+            endEntryId: compactionTranscriptEntry.id,
+          },
         },
         metadata: {
           type: 'compaction-anchor',
@@ -3090,7 +3108,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       });
       const normalizedCompactedMessages = normalizedCompactedConversation.messages;
 
-      await invoke('ai_chat_replace_conversation_message_list', {
+      await invoke('ai_chat_replace_conversation_message_list_with_transcript', {
         request: {
           conversationId: convId,
           title: latestConversation.title,
@@ -3098,13 +3116,16 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           messages: normalizedCompactedMessages.map((msg) => ({
             ...buildPersistedMessageRequest(convId, msg, null),
           })),
+          transcriptEntries: [{
+            id: compactionTranscriptEntry.id,
+            turnId: compactionTranscriptEntry.turnId ?? null,
+            parentId: compactionTranscriptEntry.parentId ?? null,
+            timestamp: compactionTranscriptEntry.timestamp,
+            kind: compactionTranscriptEntry.kind,
+            payload: compactionTranscriptEntry.payload,
+          }],
         },
       });
-      try {
-        await persistTranscriptEntries(convId, [compactionTranscriptEntry]);
-      } catch (persistErr) {
-        console.warn('[AiChatStore] Failed to persist compaction transcript entry:', persistErr);
-      }
 
       try {
         await persistConversationMetadata(normalizedCompactedConversation);

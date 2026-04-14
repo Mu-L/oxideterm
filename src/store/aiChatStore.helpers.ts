@@ -4,9 +4,11 @@ import type { AiConversation, AiChatMessage, AiToolCall } from '../types';
 import type {
   AiAssistantTurn,
   AiConversationSessionMetadata,
+  AiPendingSummary,
   AiSummaryReference,
   AiTranscriptReference,
   AiTurnPart,
+  AiTurnSummaryMetadata,
   AiToolRound,
 } from '../lib/ai/turnModel/types';
 import { projectLegacyMessageToTurn, projectTurnToLegacyMessageFields } from '../lib/ai/turnModel/turnProjection';
@@ -87,6 +89,83 @@ function getBooleanField(payload: Record<string, unknown>, key: string): boolean
   return typeof value === 'boolean' ? value : undefined;
 }
 
+function isSummaryReferenceKind(value: unknown): value is NonNullable<AiSummaryReference['kind']> {
+  return value === 'round' || value === 'conversation' || value === 'compaction';
+}
+
+function getSummaryReferenceKind(
+  payload: Record<string, unknown>,
+  fallback?: AiSummaryReference,
+): AiSummaryReference['kind'] {
+  const explicitKind = payload.summaryKind;
+  if (isSummaryReferenceKind(explicitKind)) {
+    return explicitKind;
+  }
+
+  if (getStringField(payload, 'roundId')) {
+    return 'round';
+  }
+
+  if (getNumberField(payload, 'compactedMessageCount') !== undefined || getStringField(payload, 'compactedUntilMessageId')) {
+    return 'compaction';
+  }
+
+  if (getNumberField(payload, 'replacedMessageCount') !== undefined) {
+    return 'conversation';
+  }
+
+  return fallback?.kind;
+}
+
+function extractSummaryMetadata(payload: Record<string, unknown>): AiTurnSummaryMetadata | undefined {
+  const metadata: AiTurnSummaryMetadata = {};
+  const source = getStringField(payload, 'source');
+  const model = getStringField(payload, 'model');
+  const summarizationMode = getStringField(payload, 'summarizationMode');
+  const durationMs = getNumberField(payload, 'durationMs');
+  const contextLengthBefore = getNumberField(payload, 'contextLengthBefore');
+  const numRounds = getNumberField(payload, 'numRounds');
+  const numRoundsSinceLastSummarization = getNumberField(payload, 'numRoundsSinceLastSummarization');
+
+  if (source === 'foreground' || source === 'background') {
+    metadata.source = source;
+  }
+  if (model) {
+    metadata.model = model;
+  }
+  if (summarizationMode === 'inline' || summarizationMode === 'background' || summarizationMode === 'manual') {
+    metadata.summarizationMode = summarizationMode;
+  }
+  if (durationMs !== undefined) {
+    metadata.durationMs = durationMs;
+  }
+  if (contextLengthBefore !== undefined) {
+    metadata.contextLengthBefore = contextLengthBefore;
+  }
+  if (numRounds !== undefined) {
+    metadata.numRounds = numRounds;
+  }
+  if (numRoundsSinceLastSummarization !== undefined) {
+    metadata.numRoundsSinceLastSummarization = numRoundsSinceLastSummarization;
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function isRoundSummaryReference(summaryRef: AiSummaryReference | undefined): summaryRef is AiSummaryReference & { roundId: string } {
+  return Boolean(summaryRef?.roundId) && (summaryRef?.kind === 'round' || summaryRef?.kind === undefined);
+}
+
+function mergePendingSummaries(...summaryLists: ReadonlyArray<readonly AiPendingSummary[]>): AiPendingSummary[] {
+  const merged = new Map<string, AiPendingSummary>();
+  for (const summaryList of summaryLists) {
+    for (const summary of summaryList) {
+      merged.set(summary.roundId, summary);
+    }
+  }
+  return [...merged.values()];
+}
+
 function getSummaryReference(
   conversationId: string,
   entryId: string,
@@ -94,11 +173,13 @@ function getSummaryReference(
   fallback?: AiSummaryReference,
 ): AiSummaryReference | undefined {
   const roundId = getStringField(payload, 'roundId');
-  if (!roundId) {
+  const kind = getSummaryReferenceKind(payload, fallback);
+  if (!kind && !roundId) {
     return fallback;
   }
 
   return {
+    kind,
     roundId,
     transcriptRef: {
       conversationId,
@@ -320,6 +401,8 @@ export function dtoToConversation(dto: FullConversationDto): AiConversation {
             timestamp: m.timestamp,
             context: m.context || undefined,
             metadata: anchor.metadata,
+            transcriptRef: m.transcriptRef ?? undefined,
+            summaryRef: m.summaryRef ?? undefined,
           };
         }
       }
@@ -354,6 +437,7 @@ export function rebuildConversationFromTranscript(
   const transcriptUsers = new Map<string, AiChatMessage>();
   const transcriptAssistants = new Map<string, TranscriptAssistantState>();
   const transcriptSummaries = new Map<string, AiChatMessage>();
+  const transcriptRoundSummaries = new Map<string, AiPendingSummary>();
   const orderedMessageIds: string[] = [];
   const orderedMessageIdSet = new Set<string>();
   const messageTimestamps = new Map<string, number>();
@@ -521,6 +605,17 @@ export function rebuildConversationFromTranscript(
         break;
       }
       case 'summary_created': {
+        const roundId = getStringField(payload, 'roundId');
+        const summaryText = getStringField(payload, 'summaryText');
+        const summaryKind = getSummaryReferenceKind(payload);
+        if (roundId && summaryText && summaryKind === 'round') {
+          transcriptRoundSummaries.set(roundId, {
+            roundId,
+            text: summaryText,
+            metadata: extractSummaryMetadata(payload),
+          });
+        }
+
         const summaryMessage = buildSummaryMessageFromTranscript(
           entry.conversationId,
           entry,
@@ -601,16 +696,59 @@ export function rebuildConversationFromTranscript(
     return mergedMessages;
   })();
 
+  const mergedTurns = mergeTurnsWithTranscriptSummaries(
+    conversation.turns ?? [],
+    transcriptRoundSummaries,
+  );
+
   return hydrateStructuredConversation({
     ...conversation,
     messages: rebuiltMessages,
+    turns: mergedTurns,
   });
 }
+
+function mergeTurnsWithTranscriptSummaries(
+  turns: NonNullable<AiConversation['turns']>,
+  transcriptRoundSummaries: ReadonlyMap<string, AiPendingSummary>,
+): NonNullable<AiConversation['turns']> {
+  if (transcriptRoundSummaries.size === 0) {
+    return turns;
+  }
+
+  return turns.map((turn) => {
+    const matchingSummaries = turn.rounds
+      .map((round) => transcriptRoundSummaries.get(round.id))
+      .filter((summary): summary is AiPendingSummary => Boolean(summary));
+
+    if (matchingSummaries.length === 0) {
+      return turn;
+    }
+
+    return {
+      ...turn,
+      pendingSummaries: mergePendingSummaries(turn.pendingSummaries ?? [], matchingSummaries),
+    };
+  });
+}
+
 export function hydrateStructuredConversation(conversation: AiConversation): AiConversation {
   const existingTurns = conversation.turns ?? [];
   const usedTurnIds = new Set<string>();
   const turns: NonNullable<AiConversation['turns']> = [];
   let lastUserMessage: AiChatMessage | undefined;
+  const messageBackedRoundSummaries = new Map<string, AiPendingSummary>();
+
+  for (const message of conversation.messages) {
+    if (!isRoundSummaryReference(message.summaryRef)) {
+      continue;
+    }
+
+    messageBackedRoundSummaries.set(message.summaryRef.roundId, {
+      roundId: message.summaryRef.roundId,
+      text: message.content,
+    });
+  }
 
   const messages = conversation.messages.map((message) => {
     if (message.role === 'user') {
@@ -666,9 +804,16 @@ export function hydrateStructuredConversation(conversation: AiConversation): AiC
           };
         })
       : (matchingExistingTurn?.rounds ?? []);
+    const messageBackedPendingSummaries = mergedRounds
+      .filter((round) => !round.summary)
+      .map((round) => messageBackedRoundSummaries.get(round.id))
+      .filter((summary): summary is AiPendingSummary => Boolean(summary));
     const normalizedSummaryState = normalizePendingSummaries(
       mergedRounds,
-      matchingExistingTurn?.pendingSummaries ?? [],
+      mergePendingSummaries(
+        matchingExistingTurn?.pendingSummaries ?? [],
+        messageBackedPendingSummaries,
+      ),
     );
     const normalizedTurn: AiAssistantTurn = {
       ...turn,

@@ -172,6 +172,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 import { useAiChatStore } from '@/store/aiChatStore';
+import { resetAiChatStoreRuntimeState } from '@/store/aiChatStore.runtime';
 import type { SidebarContext } from '@/lib/sidebarContextProvider';
 import type { AiConversation, AiChatMessage } from '@/types';
 
@@ -217,8 +218,9 @@ function streamEvents(events: Array<Record<string, unknown>>) {
   });
 }
 
-async function waitFor(predicate: () => boolean, attempts = 40) {
-  for (let attempt = 0; attempt < attempts; attempt++) {
+async function waitFor(predicate: () => boolean, timeoutMs = 1000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
     if (predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -227,6 +229,7 @@ async function waitFor(predicate: () => boolean, attempts = 40) {
 
 describe('aiChatStore workflows', () => {
   beforeEach(() => {
+    resetAiChatStoreRuntimeState();
     vi.clearAllMocks();
     invokeMock.mockReset();
     providerStreamMock.mockReset();

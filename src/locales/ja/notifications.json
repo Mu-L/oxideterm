@@ -19,7 +19,9 @@
       "copy": "コピー",
       "navigate": "移動",
       "run_command": "実行",
-      "open_url": "URLを開く"
+      "open_url": "URLを開く",
+      "install_update": "インストール",
+      "restart_now": "再起動"
     },
     "kind": {
       "connection": "接続",
@@ -35,6 +37,10 @@
       "minutes_ago": "{{count}}分前",
       "hours_ago": "{{count}}時間前",
       "days_ago": "{{count}}日前"
+    },
+    "time_section": {
+      "today": "今日",
+      "earlier": "以前"
     }
   }
 }

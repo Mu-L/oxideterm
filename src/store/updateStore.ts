@@ -17,7 +17,32 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { retryWithExponentialBackoff } from '@/lib/retry';
 import { useSettingsStore } from '@/store/settingsStore';
 import { pushNotification } from '@/lib/notificationCenter';
+import type { NotificationAction } from '@/store/notificationCenterStore';
 import i18n from '@/i18n';
+
+// ── Action factories for notification inline buttons ─────────
+
+function makeDownloadAction(): NotificationAction {
+  return {
+    id: 'update-download',
+    label: i18n.t('notifications.actions.install_update'),
+    variant: 'primary',
+    handler: () => {
+      void useUpdateStore.getState().startDownload();
+    },
+  };
+}
+
+function makeRestartAction(): NotificationAction {
+  return {
+    id: 'update-restart',
+    label: i18n.t('notifications.actions.restart_now'),
+    variant: 'primary',
+    handler: () => {
+      void relaunch();
+    },
+  };
+}
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -236,6 +261,7 @@ export const useUpdateStore = create<UpdateState>()(
                 body: `v${result.version}`,
                 dedupeKey: `update-available:${result.version}`,
                 preserveReadStatusOnDedupe: true,
+                actions: [makeDownloadAction()],
               });
             } else {
               set({ stage: 'up-to-date', lastCheckedAt: Date.now() });
@@ -268,6 +294,7 @@ export const useUpdateStore = create<UpdateState>()(
                 body: `v${update.version}`,
                 dedupeKey: `update-available:${update.version}`,
                 preserveReadStatusOnDedupe: true,
+                actions: [makeDownloadAction()],
               });
             } else {
               _updateRef = null;
@@ -299,8 +326,16 @@ export const useUpdateStore = create<UpdateState>()(
       // ── Download (resumable backend) ────────────────────
 
       startDownload: async () => {
-        const { newVersion } = get();
+        const { newVersion, stage, resumableTaskId } = get();
         if (!newVersion) return;
+        if (
+          resumableTaskId ||
+          stage === 'downloading' ||
+          stage === 'verifying' ||
+          stage === 'installing'
+        ) {
+          return;
+        }
 
         resetSpeedMetrics();
         set({
@@ -449,6 +484,7 @@ export const useUpdateStore = create<UpdateState>()(
                   body: get().newVersion ? `v${get().newVersion}` : undefined,
                   dedupeKey: `update-ready:${get().newVersion ?? 'unknown'}`,
                   preserveReadStatusOnDedupe: true,
+                  actions: [makeRestartAction()],
                 });
                 break;
 

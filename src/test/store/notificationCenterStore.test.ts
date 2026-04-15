@@ -3,6 +3,7 @@ import {
   useNotificationCenterStore,
   type NotificationPush,
 } from '@/store/notificationCenterStore';
+import { resolveConnectionNotifications } from '@/lib/notificationCenter';
 
 function getStore() {
   return useNotificationCenterStore.getState();
@@ -131,5 +132,121 @@ describe('notificationCenterStore', () => {
       createdAtMs: 400,
     });
     expect(getStore().unreadCount).toBe(0);
+  });
+
+  it('dismisses all notifications scoped to a specific node (auto-resolve)', () => {
+    getStore().push(makeNotification({
+      title: 'Node A failure',
+      scope: { type: 'node', nodeId: 'node-a' },
+    }));
+    getStore().push(makeNotification({
+      title: 'Node B failure',
+      scope: { type: 'node', nodeId: 'node-b' },
+    }));
+    getStore().push(makeNotification({
+      title: 'Global notice',
+      scope: { type: 'global' },
+    }));
+
+    expect(getStore().items).toHaveLength(3);
+
+    getStore().dismissByScope({ type: 'node', nodeId: 'node-a' });
+
+    expect(getStore().items).toHaveLength(2);
+    expect(getStore().items.find((n) => n.title === 'Node A failure')).toBeUndefined();
+    expect(getStore().items.find((n) => n.title === 'Node B failure')).toBeDefined();
+    expect(getStore().items.find((n) => n.title === 'Global notice')).toBeDefined();
+  });
+
+  it('dismisses by dedupeKey prefix', () => {
+    getStore().push(makeNotification({
+      title: 'Chain failed 1',
+      dedupeKey: 'connect-chain-failed:node-1',
+    }));
+    getStore().push(makeNotification({
+      title: 'Chain failed 2',
+      dedupeKey: 'connect-chain-failed:node-2',
+    }));
+    getStore().push(makeNotification({
+      title: 'Update error',
+      dedupeKey: 'update-error:v1.0.0',
+    }));
+
+    getStore().dismissByDedupePrefix('connect-chain-failed:');
+
+    expect(getStore().items).toHaveLength(1);
+    expect(getStore().items[0].title).toBe('Update error');
+  });
+
+  it('dismisses a specific set of notification ids without touching siblings', () => {
+    getStore().push(makeNotification({
+      id: 'n-1',
+      title: 'Keep me',
+      scope: { type: 'node', nodeId: 'node-a' },
+    }));
+    getStore().push(makeNotification({
+      id: 'n-2',
+      title: 'Dismiss me 1',
+      scope: { type: 'node', nodeId: 'node-a' },
+    }));
+    getStore().push(makeNotification({
+      id: 'n-3',
+      title: 'Dismiss me 2',
+      scope: { type: 'global' },
+    }));
+
+    getStore().dismissByIds(['n-2', 'n-3']);
+
+    expect(getStore().items).toHaveLength(1);
+    expect(getStore().items[0].id).toBe('n-1');
+  });
+
+  it('resolves only connection and security notifications for a node', () => {
+    getStore().push(makeNotification({
+      id: 'conn-1',
+      kind: 'connection',
+      title: 'Connection failed',
+      scope: { type: 'node', nodeId: 'node-a' },
+    }));
+    getStore().push(makeNotification({
+      id: 'sec-1',
+      kind: 'security',
+      title: 'Host key changed',
+      scope: { type: 'node', nodeId: 'node-a' },
+    }));
+    getStore().push(makeNotification({
+      id: 'health-1',
+      kind: 'health',
+      title: 'Health warning',
+      scope: { type: 'node', nodeId: 'node-a' },
+    }));
+    getStore().push(makeNotification({
+      id: 'conn-2',
+      kind: 'connection',
+      title: 'Other node failure',
+      scope: { type: 'node', nodeId: 'node-b' },
+    }));
+
+    resolveConnectionNotifications('node-a');
+
+    expect(getStore().items.map((item) => item.id)).toEqual(['health-1', 'conn-2']);
+  });
+
+  it('stores and preserves action handlers on notifications', () => {
+    const handler = () => {};
+    getStore().push(makeNotification({
+      title: 'Retry me',
+      actions: [
+        { id: 'retry', label: 'Retry', variant: 'primary', handler },
+      ],
+    }));
+
+    expect(getStore().items[0].actions).toHaveLength(1);
+    expect(getStore().items[0].actions[0]).toMatchObject({
+      id: 'retry',
+      label: 'Retry',
+      variant: 'primary',
+    });
+    expect(getStore().items[0].actions[0].handler).toBe(handler);
   });
 });

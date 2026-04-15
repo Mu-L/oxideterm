@@ -119,6 +119,8 @@ vi.mock('@/i18n', () => ({
 }));
 
 import { useAiChatStore } from '@/store/aiChatStore';
+import { resetAiChatStoreRuntimeState } from '@/store/aiChatStore.runtime';
+import { updateToolCallStatusInConversations } from '@/store/aiChatStore.runtime';
 import {
   condenseToolMessages,
   decodeAnchorContent,
@@ -130,6 +132,7 @@ import {
 
 describe('aiChatStore helpers', () => {
   beforeEach(() => {
+    resetAiChatStoreRuntimeState();
     vi.clearAllMocks();
     settingsStoreMock.state.settings.ai.toolUse.disabledTools = ['global.read_file'];
     useAiChatStore.setState({ sessionDisabledTools: null });
@@ -148,6 +151,60 @@ describe('aiChatStore helpers', () => {
     expect(parsed).toEqual({
       content: 'Visible answer',
       thinkingContent: 'step one\n\nstep two',
+    });
+  });
+
+  it('updates structured-only tool approval state and keeps conversation turns in sync', () => {
+    const updated = updateToolCallStatusInConversations([
+      {
+        id: 'conv-1',
+        title: 'Conversation',
+        createdAt: 1,
+        updatedAt: 1,
+        origin: 'sidebar',
+        messages: [
+          { id: 'u-1', role: 'user', content: 'run it', timestamp: 1 },
+          {
+            id: 'a-1',
+            role: 'assistant',
+            content: '',
+            timestamp: 2,
+            turn: {
+              id: 'a-1',
+              status: 'streaming',
+              plainTextSummary: '',
+              parts: [],
+              toolRounds: [{
+                id: 'round-1',
+                round: 1,
+                toolCalls: [{
+                  id: 'tool-1',
+                  name: 'local_exec',
+                  argumentsText: '{"command":"pwd"}',
+                  approvalState: 'pending',
+                }],
+              }],
+            },
+          },
+        ],
+      },
+    ], 'conv-1', 'a-1', 'tool-1', 'approved');
+
+    const conversation = updated[0];
+    const assistant = conversation.messages[1];
+
+    expect(assistant.role).toBe('assistant');
+    if (assistant.role !== 'assistant') {
+      throw new Error('assistant message missing');
+    }
+
+    expect(assistant.turn?.toolRounds[0]?.toolCalls[0]).toMatchObject({
+      id: 'tool-1',
+      approvalState: 'approved',
+    });
+    expect(conversation.turns?.[0]?.rounds[0]?.toolCalls[0]).toMatchObject({
+      id: 'tool-1',
+      approvalState: 'approved',
     });
   });
 

@@ -22,6 +22,7 @@ import { useReconnectOrchestratorStore } from '../store/reconnectOrchestratorSto
 import { useProfilerStore } from '../store/profilerStore';
 import { topologyResolver } from '../lib/topologyResolver';
 import { slog } from '../lib/structuredLog';
+import { resolveConnectionNotifications } from '../lib/notificationCenter';
 import i18n from '../i18n';
 import type { SshConnectionState } from '../types';
 
@@ -149,12 +150,14 @@ export function useConnectionEvents(): void {
             }
           }
 
-          // ========== connected 处理：清除 link-down 标记 ==========
+          // ========== connected 处理：清除 link-down 标记 + 自动消解通知 ==========
           if (status === 'connected') {
             const nodeId = topologyResolver.getNodeId(connection_id);
             if (nodeId) {
               getTreeStore().clearLinkDown(nodeId);
               getTreeStore().setReconnectProgress(nodeId, null);
+              // Auto-resolve: dismiss stale connection error notifications for this node
+              resolveConnectionNotifications(nodeId);
             }
           }
           

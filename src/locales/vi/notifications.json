@@ -19,7 +19,9 @@
       "copy": "Sao chép",
       "navigate": "Đi tới",
       "run_command": "Chạy",
-      "open_url": "Mở URL"
+      "open_url": "Mở URL",
+      "install_update": "Cài đặt",
+      "restart_now": "Khởi động lại"
     },
     "kind": {
       "connection": "Kết nối",
@@ -35,6 +37,10 @@
       "minutes_ago": "{{count}} phút trước",
       "hours_ago": "{{count}} giờ trước",
       "days_ago": "{{count}} ngày trước"
+    },
+    "time_section": {
+      "today": "Hôm nay",
+      "earlier": "Trước đó"
     }
   }
 }

@@ -38,22 +38,14 @@ export type NotificationScope =
   | { type: 'node'; nodeId: string }
   | { type: 'connection'; connectionId: string };
 
-export type NotificationActionKind =
-  | 'retryConnection'
-  | 'openSessionManager'
-  | 'openEventLog'
-  | 'openSettings'
-  | 'openSavedConnection'
-  | 'acceptHostKey'
-  | 'dismiss';
-
 export type NotificationActionVariant = 'primary' | 'secondary' | 'danger';
 
 export type NotificationAction = {
   id: string;
   label: string;
-  kind: NotificationActionKind;
-  variant: NotificationActionVariant;
+  /** If provided, the store will call the registered handler. */
+  handler?: () => void;
+  variant?: NotificationActionVariant;
 };
 
 export type NotificationStatus = 'unread' | 'read' | 'dismissed';
@@ -109,7 +101,10 @@ type NotificationCenterState = {
   markRead: (id: string) => void;
   markAllRead: () => void;
   dismiss: (id: string) => void;
+  dismissByIds: (ids: string[]) => void;
   dismissAll: () => void;
+  dismissByScope: (scope: NotificationScope) => void;
+  dismissByDedupePrefix: (prefix: string) => void;
   setFilter: (filter: Partial<NotificationFilter>) => void;
   clear: () => void;
 };
@@ -198,7 +193,35 @@ export const useNotificationCenterStore = create<NotificationCenterState>((set) 
     return { items: newItems, ...recount(newItems) };
   }),
 
+  dismissByIds: (ids) => set((state) => {
+    if (ids.length === 0) {
+      return state;
+    }
+
+    const idSet = new Set(ids);
+    const newItems = state.items.filter((n) => !idSet.has(n.id));
+    return { items: newItems, ...recount(newItems) };
+  }),
+
   dismissAll: () => set({ items: [], unreadCount: 0, unreadCriticalCount: 0 }),
+
+  dismissByScope: (scope) => set((state) => {
+    const newItems = state.items.filter((n) => {
+      if (scope.type === 'node') {
+        return !(n.scope.type === 'node' && n.scope.nodeId === scope.nodeId);
+      }
+      if (scope.type === 'connection') {
+        return !(n.scope.type === 'connection' && n.scope.connectionId === scope.connectionId);
+      }
+      return true;
+    });
+    return { items: newItems, ...recount(newItems) };
+  }),
+
+  dismissByDedupePrefix: (prefix) => set((state) => {
+    const newItems = state.items.filter((n) => !(n.dedupeKey && n.dedupeKey.startsWith(prefix)));
+    return { items: newItems, ...recount(newItems) };
+  }),
 
   setFilter: (partial) => set((state) => ({
     filter: { ...state.filter, ...partial },

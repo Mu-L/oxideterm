@@ -3,6 +3,7 @@
 
 import {
   useNotificationCenterStore,
+  type NotificationAction,
   type NotificationItem,
   type NotificationKind,
   type NotificationSeverity,
@@ -19,6 +20,7 @@ type NotifyOptions = {
   dedupeKey?: string;
   source?: NotificationSource;
   preserveReadStatusOnDedupe?: boolean;
+  actions?: NotificationAction[];
 };
 
 function inferConnectionKind(text?: string): NotificationKind {
@@ -46,6 +48,7 @@ export function pushNotification(options: NotifyOptions) {
     dedupeKey,
     source,
     preserveReadStatusOnDedupe,
+    actions,
   } = options;
 
   const scope: NotificationItem['scope'] = nodeId
@@ -63,6 +66,7 @@ export function pushNotification(options: NotifyOptions) {
     scope,
     dedupeKey,
     preserveReadStatusOnDedupe,
+    actions,
   });
 }
 
@@ -71,4 +75,29 @@ export function notifyConnectionIssue(options: Omit<NotifyOptions, 'kind'> & { k
     ...options,
     kind: options.kind ?? inferConnectionKind(`${options.title}\n${options.body ?? ''}`),
   });
+}
+
+/**
+ * Auto-resolve: when a connection is restored, dismiss all connection/security
+ * notifications scoped to that node.
+ */
+export function resolveConnectionNotifications(nodeId: string) {
+  const items = useNotificationCenterStore.getState().items;
+  const idsToDismiss = items
+    .filter((item) =>
+      item.scope.type === 'node' &&
+      item.scope.nodeId === nodeId &&
+      (item.kind === 'connection' || item.kind === 'security'),
+    )
+    .map((item) => item.id);
+
+  useNotificationCenterStore.getState().dismissByIds(idsToDismiss);
+}
+
+export function makeViewEventLogAction(label: string): NotificationAction {
+  return {
+    id: 'view-event-log',
+    label,
+    variant: 'secondary',
+  };
 }

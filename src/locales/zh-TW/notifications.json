@@ -19,7 +19,9 @@
       "copy": "複製",
       "navigate": "前往",
       "run_command": "執行",
-      "open_url": "開啟連結"
+      "open_url": "開啟連結",
+      "install_update": "安裝",
+      "restart_now": "立即重新啟動"
     },
     "kind": {
       "connection": "連線",
@@ -35,6 +37,10 @@
       "minutes_ago": "{{count}}分鐘前",
       "hours_ago": "{{count}}小時前",
       "days_ago": "{{count}}天前"
+    },
+    "time_section": {
+      "today": "今天",
+      "earlier": "更早"
     }
   }
 }

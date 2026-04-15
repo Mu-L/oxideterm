@@ -19,7 +19,9 @@
       "copy": "Copy",
       "navigate": "Go to",
       "run_command": "Run",
-      "open_url": "Open URL"
+      "open_url": "Open URL",
+      "install_update": "Install",
+      "restart_now": "Restart"
     },
     "kind": {
       "connection": "Connection",
@@ -35,6 +37,10 @@
       "minutes_ago": "{{count}}m ago",
       "hours_ago": "{{count}}h ago",
       "days_ago": "{{count}}d ago"
+    },
+    "time_section": {
+      "today": "Today",
+      "earlier": "Earlier"
     }
   }
 }

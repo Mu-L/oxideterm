@@ -332,6 +332,14 @@ export const Sidebar = () => {
             nodeId: match[1],
             severity: 'error',
             dedupeKey: `connect-chain-failed:${match[1]}`,
+            actions: [{
+              id: `retry-connect:${nodeId}`,
+              label: t('notifications.actions.retry'),
+              variant: 'primary',
+              handler: () => {
+                void handleTreeConnect(nodeId);
+              },
+            }],
           });
         } else {
           const title = t('connection.errors.chain_failed_title', { defaultValue: 'Connection Failed' });
@@ -346,6 +354,14 @@ export const Sidebar = () => {
             nodeId,
             severity: 'error',
             dedupeKey: `connect-chain-failed:${nodeId}`,
+            actions: [{
+              id: `retry-connect:${nodeId}`,
+              label: t('notifications.actions.retry'),
+              variant: 'primary',
+              handler: () => {
+                void handleTreeConnect(nodeId);
+              },
+            }],
           });
         }
       } else {
@@ -361,6 +377,14 @@ export const Sidebar = () => {
           nodeId,
           severity: 'error',
           dedupeKey: `connect-generic-failed:${nodeId}`,
+          actions: [{
+            id: `retry-connect:${nodeId}`,
+            label: t('notifications.actions.retry'),
+            variant: 'primary',
+            handler: () => {
+              void handleTreeConnect(nodeId);
+            },
+          }],
         });
       }
       
@@ -674,6 +698,14 @@ export const Sidebar = () => {
         nodeId,
         severity: 'error',
         dedupeKey: `reconnect-failed-sidebar:${nodeId}`,
+        actions: [{
+          id: `retry-reconnect:${nodeId}`,
+          label: t('notifications.actions.retry'),
+          variant: 'primary',
+          handler: () => {
+            void handleTreeReconnect(nodeId);
+          },
+        }],
       });
     }
   }, [connectNode, createTerminalForNode, createTab, getNode, toast, t, tabs, closeTab]);

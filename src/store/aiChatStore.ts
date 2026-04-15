@@ -51,6 +51,11 @@ import {
   rebuildConversationFromTranscript,
   type TranscriptResponseDto,
 } from './aiChatStore.helpers';
+import {
+  compactingConversations,
+  pendingApprovalResolvers,
+  updateToolCallStatusInConversations,
+} from './aiChatStore.runtime';
 import i18n from '../i18n';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -452,55 +457,6 @@ type ChatCompletionMessage = ProviderChatMessage;
 // ═══════════════════════════════════════════════════════════════════════════
 // Store Implementation (redb Backend)
 // ═══════════════════════════════════════════════════════════════════════════
-
-// Per-conversation compaction in-flight lock — prevents concurrent silent compactions
-// on the same conversation when multiple sendMessage finally blocks fire together.
-const compactingConversations = new Set<string>();
-
-type PendingApprovalEntry = {
-  runId: string;
-  conversationId: string;
-  assistantMessageId: string;
-  resolve: (approved: boolean) => void;
-};
-
-/**
- * Pending tool approval resolvers.
- * Maps toolCallId → resolver function. When user approves/rejects,
- * the resolver is called with boolean, unblocking the sendMessage loop.
- */
-const pendingApprovalResolvers = new Map<string, PendingApprovalEntry>();
-
-function updateToolCallStatusInMessage(
-  conversations: AiConversation[],
-  conversationId: string,
-  assistantMessageId: string,
-  toolCallId: string,
-  status: AiToolCall['status'],
-): AiConversation[] {
-  return conversations.map((conversation) => {
-    if (conversation.id !== conversationId) return conversation;
-
-    let conversationChanged = false;
-    const messages = conversation.messages.map((message) => {
-      if (message.id !== assistantMessageId || !message.toolCalls?.some((toolCall) => toolCall.id === toolCallId)) {
-        return message;
-      }
-
-      conversationChanged = true;
-      return {
-        ...message,
-        toolCalls: message.toolCalls.map((toolCall) =>
-          toolCall.id === toolCallId ? { ...toolCall, status } : toolCall
-        ),
-      };
-    });
-
-    return conversationChanged
-      ? hydrateStructuredConversation({ ...conversation, messages })
-      : conversation;
-  });
-}
 
 function upsertConversationTurn(
   turns: AiConversation['turns'] | undefined,
@@ -3217,7 +3173,11 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
 
       const conversation = get().conversations.find((item) => item.id === entry.conversationId);
       const assistantMessage = conversation?.messages.find((message) => message.id === entry.assistantMessageId);
-      if (!assistantMessage?.toolCalls?.some((toolCall) => toolCall.id === toolCallId)) {
+      const hasToolCall = Boolean(
+        assistantMessage?.toolCalls?.some((toolCall) => toolCall.id === toolCallId)
+        || assistantMessage?.turn?.toolRounds.some((round) => round.toolCalls.some((toolCall) => toolCall.id === toolCallId)),
+      );
+      if (!hasToolCall) {
         console.warn('[AiChatStore] Tool approval target no longer exists:', {
           conversationId: entry.conversationId,
           assistantMessageId: entry.assistantMessageId,
@@ -3227,7 +3187,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       }
 
       set((state) => ({
-        conversations: updateToolCallStatusInMessage(
+        conversations: updateToolCallStatusInConversations(
           state.conversations,
           entry.conversationId,
           entry.assistantMessageId,

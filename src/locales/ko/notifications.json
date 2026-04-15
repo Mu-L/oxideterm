@@ -19,7 +19,9 @@
       "copy": "복사",
       "navigate": "이동",
       "run_command": "실행",
-      "open_url": "URL 열기"
+      "open_url": "URL 열기",
+      "install_update": "설치",
+      "restart_now": "재시작"
     },
     "kind": {
       "connection": "연결",
@@ -35,6 +37,10 @@
       "minutes_ago": "{{count}}분 전",
       "hours_ago": "{{count}}시간 전",
       "days_ago": "{{count}}일 전"
+    },
+    "time_section": {
+      "today": "오늘",
+      "earlier": "이전"
     }
   }
 }

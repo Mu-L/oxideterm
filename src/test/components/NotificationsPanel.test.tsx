@@ -34,25 +34,26 @@ function seedNotifications() {
     title: 'First unread',
     body: 'Connection unstable',
     source: { type: 'system' },
-    scope: { type: 'global' },
+    scope: { type: 'node', nodeId: 'node-a' },
   });
   store.push({
     id: 'n-2',
     createdAtMs: Date.now() - 3_000,
-    kind: 'update',
-    severity: 'info',
+    kind: 'connection',
+    severity: 'error',
     title: 'Second unread',
-    body: 'Update available',
+    body: 'Connection failed',
     source: { type: 'system' },
-    scope: { type: 'global' },
+    scope: { type: 'node', nodeId: 'node-a' },
+    actions: [{ id: 'retry', label: 'Retry', variant: 'primary', handler: vi.fn() }],
   });
   store.push({
     id: 'n-3',
     createdAtMs: Date.now() - 1_000,
-    kind: 'health',
-    severity: 'error',
-    title: 'Already read',
-    body: 'Historical issue',
+    kind: 'update',
+    severity: 'info',
+    title: 'Update available',
+    body: 'v2.0.0',
     source: { type: 'system' },
     scope: { type: 'global' },
   });
@@ -104,5 +105,36 @@ describe('NotificationsPanel', () => {
     await waitFor(() => {
       expect(screen.queryByText('notifications.actions.mark_all_read')).not.toBeInTheDocument();
     });
+  });
+
+  it('renders inline action buttons and calls handler on click', async () => {
+    seedNotifications();
+
+    render(<NotificationsPanel />);
+
+    const retryButton = screen.getByText('Retry');
+    expect(retryButton).toBeInTheDocument();
+
+    fireEvent.click(retryButton);
+
+    // The handler was called (from seeded n-2)
+    const n2 = useNotificationCenterStore.getState().items.find((item) => item.id === 'n-2');
+    expect(n2?.actions[0]?.handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('groups notifications from the same node and shows group header for multi-item groups', async () => {
+    seedNotifications();
+
+    render(<NotificationsPanel />);
+
+    // node-a has 2 notifications — should show group header with nodeId
+    expect(screen.getByText('node-a')).toBeInTheDocument();
+
+    // Both items should be visible (group expanded by default)
+    expect(screen.getByText('First unread')).toBeInTheDocument();
+    expect(screen.getByText('Second unread')).toBeInTheDocument();
+
+    // Single-item group (update) renders inline without group header
+    expect(screen.getByText('Update available')).toBeInTheDocument();
   });
 });

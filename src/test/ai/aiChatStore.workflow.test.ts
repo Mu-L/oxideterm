@@ -24,6 +24,7 @@ const gatherSidebarContextMock = vi.hoisted(() => vi.fn<() => unknown>(() => nul
 const buildContextReminderMock = vi.hoisted(() => vi.fn<(ctx: unknown) => string | null>(() => null));
 const resolveReferenceTypeMock = vi.hoisted(() => vi.fn());
 const resolveAllReferencesMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => unknown>(() => []));
+const appStoreState = vi.hoisted(() => ({ tabs: [] as Array<{ id: string; type?: string }>, activeTabId: null as string | null, sessions: new Map() }));
 const apiMocks = vi.hoisted(() => ({
   getAiProviderApiKey: vi.fn().mockResolvedValue('key-1'),
   ragSearch: vi.fn().mockResolvedValue([]),
@@ -94,7 +95,7 @@ vi.mock('@/store/sessionTreeStore', () => ({
 
 vi.mock('@/store/appStore', () => ({
   useAppStore: {
-    getState: () => ({ tabs: [], activeTabId: null, sessions: new Map() }),
+    getState: () => appStoreState,
   },
 }));
 
@@ -240,6 +241,9 @@ describe('aiChatStore workflows', () => {
     buildContextReminderMock.mockReturnValue(null);
     resolveReferenceTypeMock.mockReturnValue(undefined);
     resolveAllReferencesMock.mockResolvedValue([]);
+    appStoreState.tabs = [];
+    appStoreState.activeTabId = null;
+    appStoreState.sessions = new Map();
     getToolsForContextMock.mockReset();
     getToolsForContextMock.mockReturnValue([]);
     executeToolMock.mockReset();
@@ -385,6 +389,46 @@ describe('aiChatStore workflows', () => {
     expect(useAiChatStore.getState().activeConversationId).toBe('conv-2');
   });
 
+  it('keeps the assistant message visible when the provider errors after a tool round', async () => {
+    settingsStoreMock.state.settings.ai.toolUse.enabled = true;
+    settingsStoreMock.state.settings.ai.toolUse.autoApproveTools = { local_exec: true };
+    setConversation([]);
+    getToolsForContextMock.mockReturnValue([
+      { name: 'local_exec', description: 'Run a local command', parameters: {} },
+    ]);
+    hasDeniedCommandsMock.mockReturnValue(false);
+    executeToolMock.mockResolvedValue({
+      toolCallId: 'tool-keep-1',
+      toolName: 'local_exec',
+      success: true,
+      output: 'ok',
+    });
+
+    providerStreamMock
+      .mockImplementationOnce(async function* () {
+        yield { type: 'thinking', content: 'Let me inspect that first.' };
+        yield { type: 'tool_call_complete', id: 'tool-keep-1', name: 'local_exec', arguments: JSON.stringify({ command: 'uname -a' }) };
+        yield { type: 'done' };
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'error', message: 'The engine is currently overloaded, please try again later' };
+      });
+
+    await useAiChatStore.getState().sendMessage('inspect the system');
+
+    const assistantMessage = useAiChatStore.getState().conversations[0].messages.find((message) => message.role === 'assistant');
+    expect(assistantMessage).toBeDefined();
+    expect(assistantMessage?.turn?.toolRounds[0]?.toolCalls[0]).toMatchObject({
+      id: 'tool-keep-1',
+      executionState: 'completed',
+    });
+    expect(assistantMessage?.turn?.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'thinking', text: 'Let me inspect that first.' }),
+      expect.objectContaining({ type: 'error', message: 'The engine is currently overloaded, please try again later' }),
+    ]));
+    expect(useAiChatStore.getState().error).toBe('The engine is currently overloaded, please try again later');
+  });
+
   it('injects the disabled-tools negative constraint into the system prompt', async () => {
     setConversation([]);
     streamText('plain answer');
@@ -398,6 +442,7 @@ describe('aiChatStore workflows', () => {
 
   it('stores turn snapshots and session metadata for sidebar sends', async () => {
     setConversation([]);
+    appStoreState.activeTabId = 'tab-1';
     streamText('assistant answer');
 
     await useAiChatStore.getState().sendMessage('first question');
@@ -425,6 +470,7 @@ describe('aiChatStore workflows', () => {
       origin: 'sidebar',
       providerId: 'provider-1',
       providerModel: 'mock-model',
+      affectedTabIds: ['tab-1'],
       lastBudgetLevel: 0,
     });
 
@@ -690,9 +736,27 @@ describe('aiChatStore workflows', () => {
     streamText('Conversation summary');
     setConversation([
       { id: 'u-1', role: 'user', content: 'question', timestamp: 1 },
-      { id: 'a-1', role: 'assistant', content: 'answer', timestamp: 2 },
+      {
+        id: 'a-1', role: 'assistant', content: 'answer', timestamp: 2,
+        turn: {
+          id: 'turn-a-1',
+          status: 'complete',
+          parts: [{ type: 'text', text: 'answer' }],
+          toolRounds: [{ id: 'round-1', round: 1, toolCalls: [] }],
+          plainTextSummary: 'answer',
+        },
+      },
       { id: 'u-2', role: 'user', content: 'follow up', timestamp: 3 },
-      { id: 'a-2', role: 'assistant', content: 'more detail', timestamp: 4 },
+      {
+        id: 'a-2', role: 'assistant', content: 'more detail', timestamp: 4,
+        turn: {
+          id: 'turn-a-2',
+          status: 'complete',
+          parts: [{ type: 'text', text: 'more detail' }],
+          toolRounds: [{ id: 'round-2', round: 2, toolCalls: [] }],
+          plainTextSummary: 'more detail',
+        },
+      },
     ]);
 
     await useAiChatStore.getState().summarizeConversation();
@@ -714,6 +778,7 @@ describe('aiChatStore workflows', () => {
       content: expect.stringContaining('Conversation summary'),
       summaryRef: expect.objectContaining({
         kind: 'conversation',
+        roundId: 'round-2',
         transcriptRef: expect.objectContaining({
           startEntryId: 'u-1',
           endEntryId: 'a-2',
@@ -725,6 +790,7 @@ describe('aiChatStore workflows', () => {
         message: expect.objectContaining({
           summaryRef: expect.objectContaining({
             kind: 'conversation',
+            roundId: 'round-2',
             transcriptRef: expect.objectContaining({
               startEntryId: 'u-1',
               endEntryId: 'a-2',
@@ -733,6 +799,14 @@ describe('aiChatStore workflows', () => {
         }),
       }),
     }));
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_update_conversation', {
+      conversationId: 'conv-1',
+      title: 'Conversation',
+      sessionMetadata: expect.objectContaining({
+        conversationId: 'conv-1',
+        lastSummaryRoundId: 'round-2',
+      }),
+    });
   });
 
   it('compactConversation creates a compaction anchor and preserves recent messages', async () => {
@@ -740,11 +814,38 @@ describe('aiChatStore workflows', () => {
     estimateTokensMock.mockImplementation(() => 120);
     setConversation([
       { id: 'u-1', role: 'user', content: 'old question', timestamp: 1 },
-      { id: 'a-1', role: 'assistant', content: 'old answer', timestamp: 2 },
+      {
+        id: 'a-1', role: 'assistant', content: 'old answer', timestamp: 2,
+        turn: {
+          id: 'turn-a-1',
+          status: 'complete',
+          parts: [{ type: 'text', text: 'old answer' }],
+          toolRounds: [{ id: 'round-1', round: 1, toolCalls: [] }],
+          plainTextSummary: 'old answer',
+        },
+      },
       { id: 'u-2', role: 'user', content: 'middle question', timestamp: 3 },
-      { id: 'a-2', role: 'assistant', content: 'middle answer', timestamp: 4 },
+      {
+        id: 'a-2', role: 'assistant', content: 'middle answer', timestamp: 4,
+        turn: {
+          id: 'turn-a-2',
+          status: 'complete',
+          parts: [{ type: 'text', text: 'middle answer' }],
+          toolRounds: [{ id: 'round-2', round: 2, toolCalls: [] }],
+          plainTextSummary: 'middle answer',
+        },
+      },
       { id: 'u-3', role: 'user', content: 'recent question', timestamp: 5 },
-      { id: 'a-3', role: 'assistant', content: 'recent answer', timestamp: 6 },
+      {
+        id: 'a-3', role: 'assistant', content: 'recent answer', timestamp: 6,
+        turn: {
+          id: 'turn-a-3',
+          status: 'complete',
+          parts: [{ type: 'text', text: 'recent answer' }],
+          toolRounds: [{ id: 'round-3', round: 3, toolCalls: [] }],
+          plainTextSummary: 'recent answer',
+        },
+      },
     ]);
 
     await useAiChatStore.getState().compactConversation('conv-1');
@@ -755,6 +856,7 @@ describe('aiChatStore workflows', () => {
       content: 'Merged summary',
       summaryRef: expect.objectContaining({
         kind: 'compaction',
+        roundId: 'round-1',
         transcriptRef: expect.objectContaining({
           startEntryId: 'u-1',
           endEntryId: 'u-2',
@@ -779,6 +881,7 @@ describe('aiChatStore workflows', () => {
       title: 'Conversation',
       sessionMetadata: expect.objectContaining({
         conversationId: 'conv-1',
+        lastSummaryRoundId: 'round-1',
         lastCompactedUntilEntryId: 'u-2',
       }),
     });
@@ -793,6 +896,7 @@ describe('aiChatStore workflows', () => {
             id: compacted[0].id,
             summaryRef: expect.objectContaining({
               kind: 'compaction',
+              roundId: 'round-1',
               transcriptRef: expect.objectContaining({
                 startEntryId: 'u-1',
                 endEntryId: 'u-2',
@@ -804,7 +908,113 @@ describe('aiChatStore workflows', () => {
     }));
     expect(useAiChatStore.getState().conversations[0].sessionMetadata).toMatchObject({
       conversationId: 'conv-1',
+      lastSummaryRoundId: 'round-1',
       lastCompactedUntilEntryId: 'u-2',
+    });
+  });
+
+  it('pre-compacts long history before sending when budget reaches level 2', async () => {
+    estimateTokensMock.mockImplementation((text?: string) => {
+      if (typeof text === 'string' && text.includes('system')) return 40;
+      return 80;
+    });
+    setConversation([
+      { id: 'u-1', role: 'user', content: 'old question', timestamp: 1 },
+      { id: 'a-1', role: 'assistant', content: 'old answer', timestamp: 2 },
+      { id: 'u-2', role: 'user', content: 'middle question', timestamp: 3 },
+      { id: 'a-2', role: 'assistant', content: 'middle answer', timestamp: 4 },
+      { id: 'u-3', role: 'user', content: 'recent question', timestamp: 5 },
+      { id: 'a-3', role: 'assistant', content: 'recent answer', timestamp: 6 },
+    ]);
+    providerStreamMock
+      .mockImplementationOnce(async function* () {
+        yield { type: 'content', content: 'Compacted summary' };
+        yield { type: 'done' };
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'content', content: 'final answer' };
+        yield { type: 'done' };
+      });
+
+    await useAiChatStore.getState().sendMessage('new question');
+
+    expect(providerStreamMock).toHaveBeenCalledTimes(2);
+    expect(invokeMock).toHaveBeenCalledWith('ai_chat_replace_conversation_message_list_with_transcript', expect.objectContaining({
+      request: expect.objectContaining({ conversationId: 'conv-1' }),
+    }));
+
+    const providerMessages = providerStreamMock.mock.calls[1]?.[1];
+    expect(providerMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'system', content: expect.stringContaining('Previous conversation summary:\nCompacted summary') }),
+    ]));
+  });
+
+  it('falls back to trimmed history when pre-send compaction fails', async () => {
+    estimateTokensMock.mockImplementation((text?: string) => {
+      if (typeof text === 'string' && text.includes('system')) return 40;
+      return 80;
+    });
+    setConversation([
+      { id: 'u-1', role: 'user', content: 'old question', timestamp: 1 },
+      { id: 'a-1', role: 'assistant', content: 'old answer', timestamp: 2 },
+      { id: 'u-2', role: 'user', content: 'middle question', timestamp: 3 },
+      { id: 'a-2', role: 'assistant', content: 'middle answer', timestamp: 4 },
+      { id: 'u-3', role: 'user', content: 'recent question', timestamp: 5 },
+      { id: 'a-3', role: 'assistant', content: 'recent answer', timestamp: 6 },
+    ]);
+    providerStreamMock
+      .mockImplementationOnce(async function* () {
+        throw new Error('compact failed');
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'content', content: 'final answer' };
+        yield { type: 'done' };
+      });
+
+    await useAiChatStore.getState().sendMessage('new question');
+
+    expect(providerStreamMock).toHaveBeenCalledTimes(2);
+    const assistantMessage = useAiChatStore.getState().conversations[0].messages.find((message) => message.role === 'assistant' && message.content === 'final answer');
+    expect(assistantMessage?.content).toBe('final answer');
+  });
+
+  it('injects transcript lookup reference when an existing summary anchor keeps the prompt near the upper budget threshold', async () => {
+    estimateTokensMock.mockImplementation((text?: string) => {
+      if (typeof text === 'string' && text.includes('system')) return 40;
+      return 90;
+    });
+    setConversation([
+      {
+        id: 'anchor-1',
+        role: 'system',
+        content: 'Compacted summary',
+        timestamp: 1,
+        summaryRef: {
+          kind: 'compaction',
+          transcriptRef: { conversationId: 'conv-1', startEntryId: 'u-1', endEntryId: 'a-2' },
+        },
+        metadata: { type: 'compaction-anchor', originalCount: 4, compactedAt: 1 },
+      },
+      { id: 'u-3', role: 'user', content: 'recent question', timestamp: 2 },
+      { id: 'a-3', role: 'assistant', content: 'recent answer', timestamp: 3 },
+      { id: 'u-4', role: 'user', content: 'latest question', timestamp: 4 },
+      { id: 'a-4', role: 'assistant', content: 'latest answer', timestamp: 5 },
+    ]);
+    streamText('final answer');
+
+    await useAiChatStore.getState().sendMessage('new question');
+
+    expect(providerStreamMock).toHaveBeenCalledTimes(1);
+
+    const providerMessages = providerStreamMock.mock.calls[0]?.[1];
+    expect(providerMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'system', content: expect.stringContaining('Previous conversation summary:\nCompacted summary') }),
+      expect.objectContaining({ role: 'system', content: expect.stringContaining('Transcript reference: conversation=conv-1') }),
+    ]));
+
+    expect(useAiChatStore.getState().conversations[0].sessionMetadata).toMatchObject({
+      conversationId: 'conv-1',
+      lastBudgetLevel: 3,
     });
   });
 

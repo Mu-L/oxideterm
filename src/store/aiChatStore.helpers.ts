@@ -299,7 +299,10 @@ export function projectAssistantMessage(message: AiChatMessage): AiChatMessage {
     thinkingContent = parsed.thinkingContent;
   }
 
-  const suggestions = parseSuggestions(content);
+  const shouldParseSuggestions = !message.isStreaming && !message.isThinkingStreaming;
+  const suggestions = shouldParseSuggestions
+    ? parseSuggestions(content)
+    : { cleanContent: content, suggestions: [] };
   const nextMessage: AiChatMessage = {
     ...message,
     content: suggestions.cleanContent,

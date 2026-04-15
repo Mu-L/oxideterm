@@ -140,7 +140,7 @@ interface AiChatStore {
   stopGeneration: () => void;
   regenerateLastResponse: () => Promise<void>;
   summarizeConversation: () => Promise<void>;
-  compactConversation: (conversationId?: string, options?: { silent?: boolean }) => Promise<void>;
+  compactConversation: (conversationId?: string, options?: { silent?: boolean; force?: boolean }) => Promise<void>;
   editAndResend: (messageId: string, newContent: string) => Promise<void>;
   switchBranch: (messageId: string, branchIndex: number) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
@@ -255,6 +255,85 @@ function getSummarySourceTranscriptRef(messages: readonly AiChatMessage[], conve
     startEntryId,
     endEntryId,
   };
+}
+
+function estimateSummaryEligibleTokens(messages: readonly AiChatMessage[]): number {
+  if (messages.length < 4) {
+    return 0;
+  }
+
+  return messages
+    .slice(0, -3)
+    .reduce((sum, message) => sum + estimateTokens(message.content), 0);
+}
+
+function findPromptTranscriptLookupReference(messages: readonly AiChatMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const transcriptRef = messages[index].summaryRef?.transcriptRef;
+    if (transcriptRef) {
+      return transcriptRef;
+    }
+  }
+
+  return undefined;
+}
+
+function buildTranscriptLookupPromptReference(
+  transcriptRef: NonNullable<ReturnType<typeof findPromptTranscriptLookupReference>>,
+): string {
+  const rangeParts = [
+    transcriptRef.startEntryId ? `start=${transcriptRef.startEntryId}` : null,
+    transcriptRef.endEntryId ? `end=${transcriptRef.endEntryId}` : null,
+  ].filter(Boolean);
+  const rangeText = rangeParts.length > 0 ? rangeParts.join(', ') : 'range=unknown';
+
+  return [
+    'Earlier history is intentionally compacted out of this prompt.',
+    `Transcript reference: conversation=${transcriptRef.conversationId}, ${rangeText}.`,
+    'Use the visible summary as the authoritative compressed context. Do not infer omitted details unless they are restated here or fetched through transcript lookup tooling.',
+  ].join(' ');
+}
+
+function getLatestSummaryRoundId(
+  messages: readonly AiChatMessage[],
+  turns?: readonly AiConversationTurn[],
+): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const roundId = message.role === 'assistant' ? message.turn?.toolRounds.at(-1)?.id : undefined;
+    if (roundId) {
+      return roundId;
+    }
+  }
+
+  if (!turns) {
+    return undefined;
+  }
+
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const roundId = turns[index].rounds.at(-1)?.id;
+    if (roundId) {
+      return roundId;
+    }
+  }
+
+  return undefined;
+}
+
+function shouldRetainAssistantMessage(message: AiChatMessage | undefined): boolean {
+  if (!message) {
+    return false;
+  }
+
+  if (message.content.trim() || message.thinkingContent?.trim()) {
+    return true;
+  }
+
+  if ((message.toolCalls?.length ?? 0) > 0) {
+    return true;
+  }
+
+  return Boolean(message.turn && (message.turn.parts.length > 0 || message.turn.toolRounds.length > 0));
 }
 
 function buildConversationPersistenceRequest(conversation: Pick<AiConversation, 'id' | 'title' | 'origin' | 'sessionId' | 'sessionMetadata'>) {
@@ -858,200 +937,8 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
       }
     }
 
-    // Create assistant message placeholder (local only — persisted after streaming completes)
-    const assistantMessage: AiChatMessage = {
-      id: generateId(),
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-      isStreaming: true,
-    };
-    const conversationTurnId = generateId();
-    const transcriptRef = {
-      conversationId: convId,
-      startEntryId: requestMessageId,
-      endEntryId: assistantMessage.id,
-    };
-    const accumulator = createTurnAccumulator({ turnId: assistantMessage.id });
-    const buildConversationTurn = (turn: AiAssistantTurn): AiConversationTurn => ({
-      id: conversationTurnId,
-      requestMessageId,
-      requestText: cleanContent,
-      startedAt: requestTimestamp,
-      status: turn.status,
-      rounds: turn.toolRounds,
-      pendingSummaries: [],
-    });
-    const initialAssistantTurn = accumulator.snapshot();
-    const transcriptEntries: AiTranscriptEntry[] = [];
-    let flushedTranscriptCount = 0;
-    let assistantTurnClosed = false;
-    const diagnosticEvents: AiDiagnosticEvent[] = [];
-    let flushedDiagnosticCount = 0;
-    const createDiagnosticBase = (
-      requestKind: string,
-      budgetLevel?: 0 | 1 | 2 | 3 | 4,
-    ): AiDiagnosticTelemetryBase => ({
-      source: 'sidebar',
-      providerId,
-      model: providerModel,
-      runId,
-      requestKind,
-      toolUseEnabled,
-      budgetLevel,
-    });
-
-    const queueTranscriptEntry = (
-      kind: AiTranscriptEntry['kind'],
-      payload: AiTranscriptEntry['payload'],
-      options?: { turnId?: string; parentId?: string | null; timestamp?: number },
-    ) => {
-      transcriptEntries.push(buildTranscriptEntry(convId, kind, payload, options));
-    };
-
-    const queueDiagnosticEvent = (
-      type: AiDiagnosticEvent['type'],
-      data?: Record<string, unknown>,
-      options?: {
-        turnId?: string;
-        roundId?: string;
-        timestamp?: number;
-        requestKind?: string;
-        budgetLevel?: 0 | 1 | 2 | 3 | 4;
-      },
-    ) => {
-      diagnosticEvents.push(buildDiagnosticEvent(
-        convId,
-        type,
-        createDiagnosticBase(options?.requestKind ?? 'chat', options?.budgetLevel),
-        data,
-        {
-          turnId: options?.turnId,
-          roundId: options?.roundId,
-          timestamp: options?.timestamp,
-        },
-      ));
-    };
-
-    const flushTranscriptEntries = async () => {
-      if (transcriptEntries.length === 0 || flushedTranscriptCount >= transcriptEntries.length) return;
-
-      const pendingEntries = transcriptEntries.slice(flushedTranscriptCount);
-      await persistTranscriptEntries(convId, pendingEntries);
-      flushedTranscriptCount += pendingEntries.length;
-    };
-
-    const flushDiagnosticEvents = async () => {
-      if (diagnosticEvents.length === 0 || flushedDiagnosticCount >= diagnosticEvents.length) return;
-
-      const pendingEvents = diagnosticEvents.slice(flushedDiagnosticCount);
-      await persistDiagnosticEvents(convId, pendingEvents);
-      flushedDiagnosticCount += pendingEvents.length;
-    };
-
-    const persistAssistantProjectionWithTranscript = async (message: AiChatMessage) => {
-      const pendingEntries = transcriptEntries.slice(flushedTranscriptCount);
-      await persistMessageWithTranscript(
-        buildPersistedMessageRequest(convId, message, null),
-        pendingEntries,
-      );
-      flushedTranscriptCount = transcriptEntries.length;
-    };
-
-    const queueAssistantTurnCompletion = (turn: AiAssistantTurn, turnStatus: 'complete' | 'error') => {
-      if (assistantTurnClosed) return;
-      assistantTurnClosed = true;
-
-      const transcriptParts = turn.parts.filter((part) => (
-        part.type === 'text'
-        || part.type === 'thinking'
-        || part.type === 'warning'
-        || part.type === 'error'
-      ));
-
-      if (transcriptParts.length > 0) {
-        queueTranscriptEntry('assistant_part', {
-          parts: transcriptParts,
-        }, {
-          turnId: assistantMessage.id,
-          parentId: assistantMessage.id,
-        });
-      }
-
-      queueTranscriptEntry('assistant_turn_end', {
-        status: turnStatus,
-        messageId: assistantMessage.id,
-        plainTextSummary: turn.plainTextSummary,
-        toolRoundCount: turn.toolRounds.length,
-      }, {
-        turnId: assistantMessage.id,
-        parentId: assistantMessage.id,
-      });
-    };
-
-    if (!skipUserMessage) {
-      queueTranscriptEntry('user_message', {
-        messageId: userMessage.id,
-        role: 'user',
-        content: cleanContent,
-        hasContext: Boolean(effectiveContext),
-      }, { timestamp: userMessage.timestamp });
-      queueDiagnosticEvent('user_message', {
-        messageId: userMessage.id,
-        role: 'user',
-        contentLength: cleanContent.length,
-        hasContext: Boolean(effectiveContext),
-      }, {
-        timestamp: userMessage.timestamp,
-      });
-    }
-    queueTranscriptEntry('assistant_turn_start', {
-      messageId: assistantMessage.id,
-      requestMessageId,
-      conversationTurnId,
-    }, { turnId: assistantMessage.id, parentId: requestMessageId, timestamp: assistantMessage.timestamp });
-    try {
-      await flushTranscriptEntries();
-    } catch (e) {
-      console.warn('[AiChatStore] Failed to persist initial transcript entries:', e);
-    }
-
-    // Add to frontend state only — do NOT persist empty placeholder to backend.
-    // Backend persistence happens after streaming completes (success or abort-with-content).
-    set((state) => ({
-      conversations: state.conversations.map((c) => {
-        if (c.id !== convId) return c;
-        const existingSessionMetadata = c.sessionMetadata;
-        return {
-          ...c,
-          messages: [
-            ...c.messages,
-            {
-              ...assistantMessage,
-              turn: initialAssistantTurn,
-              transcriptRef,
-            },
-          ],
-          turns: upsertConversationTurn(c.turns, buildConversationTurn(initialAssistantTurn)),
-          sessionMetadata: mergeConversationSessionMetadata(existingSessionMetadata, {
-            conversationId: convId,
-            firstUserMessage: existingSessionMetadata?.firstUserMessage ?? (!skipUserMessage ? content : undefined),
-            origin: c.origin ?? 'sidebar',
-            providerId,
-            providerModel,
-            activeParticipant: parsed.participants[0]?.name,
-            affectedSessionIds: sidebarContext?.env.sessionId ? [sidebarContext.env.sessionId] : existingSessionMetadata?.affectedSessionIds,
-            affectedNodeIds: sidebarContext?.env.activeNodeId ? [sidebarContext.env.activeNodeId] : existingSessionMetadata?.affectedNodeIds,
-          }),
-          updatedAt: Date.now(),
-        };
-      }),
-    }));
-    try {
-      await persistConversationMetadata(get().conversations.find((c) => c.id === convId));
-    } catch (e) {
-      console.warn('[AiChatStore] Failed to persist session metadata:', e);
-    }
+    // Assistant placeholder and transcript state are initialized after the
+    // send-path budget ladder has had a chance to compact prior history.
 
     // Prepare messages for API
     const apiMessages: ChatCompletionMessage[] = [];
@@ -1259,51 +1146,275 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
     const systemTokens = apiMessages.reduce((sum, m) => m.role === 'system' ? sum + estimateTokens(m.content) : sum, 0)
       + estimateToolDefinitionsTokens(toolDefs);
 
-    const historyMessages = get().conversations.find((c) => c.id === convId)?.messages || [];
+    const readHistoryState = () => {
+      const currentConversation = get().conversations.find((c) => c.id === convId);
+      const historyMessages = currentConversation?.messages ?? [];
+      const anchorMsg = historyMessages.find((message) => message.metadata?.type === 'compaction-anchor');
+      const regularMessages = historyMessages.filter((message) => !message.metadata || message.metadata.type !== 'compaction-anchor');
+      const anchorTokens = anchorMsg ? estimateTokens(anchorMsg.content) : 0;
+      const totalSystemTokens = systemTokens + anchorTokens;
+      const estimatedHistoryTokens = regularMessages.reduce((sum, message) => sum + estimateTokens(message.content), 0);
 
-    // Separate anchor messages from regular messages
-    const anchorMsg = historyMessages.find(m => m.metadata?.type === 'compaction-anchor');
-    const regularMessages = historyMessages.filter(m => !m.metadata || m.metadata.type !== 'compaction-anchor');
+      return {
+        currentConversation,
+        historyMessages,
+        anchorMsg,
+        regularMessages,
+        totalSystemTokens,
+        estimatedHistoryTokens,
+        summaryEligibleTokens: estimateSummaryEligibleTokens(regularMessages),
+        transcriptLookupRef: findPromptTranscriptLookupReference(historyMessages),
+      };
+    };
 
-    // Anchor content counts towards system tokens budget
-    const anchorTokens = anchorMsg ? estimateTokens(anchorMsg.content) : 0;
-    const totalSystemTokens = systemTokens + anchorTokens;
-    const estimatedHistoryTokens = regularMessages.reduce((sum, message) => sum + estimateTokens(message.content), 0);
-    const sendBudgetDecision = determineCompressionLevel({
+    let historyState = readHistoryState();
+    let sendBudgetDecision = determineCompressionLevel({
       contextWindow,
       responseReserve: maxResponseTokens,
-      systemBudget: totalSystemTokens,
-      historyTokens: estimatedHistoryTokens,
-      trimmableHistoryTokens: estimatedHistoryTokens,
-      canSummarize: false,
-      canLookupTranscript: false,
+      systemBudget: historyState.totalSystemTokens,
+      historyTokens: historyState.estimatedHistoryTokens,
+      trimmableHistoryTokens: historyState.estimatedHistoryTokens,
+      summaryEligibleTokens: historyState.summaryEligibleTokens,
+      canSummarize: historyState.summaryEligibleTokens > 0,
+      canLookupTranscript: Boolean(historyState.transcriptLookupRef),
     });
 
-    const trimResult = trimHistoryToTokenBudget(regularMessages, contextWindow, totalSystemTokens, 0);
+    if (sendBudgetDecision.level >= 2 && !historyState.transcriptLookupRef) {
+      try {
+        await get().compactConversation(convId, { silent: true, force: true });
+        historyState = readHistoryState();
+        sendBudgetDecision = determineCompressionLevel({
+          contextWindow,
+          responseReserve: maxResponseTokens,
+          systemBudget: historyState.totalSystemTokens,
+          historyTokens: historyState.estimatedHistoryTokens,
+          trimmableHistoryTokens: historyState.estimatedHistoryTokens,
+          summaryEligibleTokens: historyState.summaryEligibleTokens,
+          canSummarize: historyState.summaryEligibleTokens > 0,
+          canLookupTranscript: Boolean(historyState.transcriptLookupRef),
+        });
+      } catch (compactionError) {
+        console.warn('[AiChatStore] Pre-send compaction failed, falling back to trimmed history:', compactionError);
+      }
+    }
 
+    const transcriptLookupPrompt = sendBudgetDecision.level >= 3 && historyState.transcriptLookupRef
+      ? buildTranscriptLookupPromptReference(historyState.transcriptLookupRef)
+      : null;
+    const effectiveSystemTokens = historyState.totalSystemTokens
+      + (transcriptLookupPrompt ? estimateTokens(transcriptLookupPrompt) : 0);
+    const trimResult = trimHistoryToTokenBudget(historyState.regularMessages, contextWindow, effectiveSystemTokens, 0);
+
+    // Create assistant message placeholder (local only — persisted after streaming completes)
+    const assistantMessage: AiChatMessage = {
+      id: generateId(),
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      isStreaming: true,
+    };
+    const conversationTurnId = generateId();
+    const transcriptRef = {
+      conversationId: convId,
+      startEntryId: requestMessageId,
+      endEntryId: assistantMessage.id,
+    };
+    const accumulator = createTurnAccumulator({ turnId: assistantMessage.id });
+    const buildConversationTurn = (turn: AiAssistantTurn): AiConversationTurn => ({
+      id: conversationTurnId,
+      requestMessageId,
+      requestText: cleanContent,
+      startedAt: requestTimestamp,
+      status: turn.status,
+      rounds: turn.toolRounds,
+      pendingSummaries: [],
+    });
+    const initialAssistantTurn = accumulator.snapshot();
+    const transcriptEntries: AiTranscriptEntry[] = [];
+    let flushedTranscriptCount = 0;
+    let assistantTurnClosed = false;
+    const diagnosticEvents: AiDiagnosticEvent[] = [];
+    let flushedDiagnosticCount = 0;
+    const createDiagnosticBase = (
+      requestKind: string,
+      budgetLevel?: 0 | 1 | 2 | 3 | 4,
+    ): AiDiagnosticTelemetryBase => ({
+      source: 'sidebar',
+      providerId,
+      model: providerModel,
+      runId,
+      requestKind,
+      toolUseEnabled,
+      budgetLevel,
+    });
+
+    const queueTranscriptEntry = (
+      kind: AiTranscriptEntry['kind'],
+      payload: AiTranscriptEntry['payload'],
+      options?: { turnId?: string; parentId?: string | null; timestamp?: number },
+    ) => {
+      transcriptEntries.push(buildTranscriptEntry(convId, kind, payload, options));
+    };
+
+    const queueDiagnosticEvent = (
+      type: AiDiagnosticEvent['type'],
+      data?: Record<string, unknown>,
+      options?: {
+        turnId?: string;
+        roundId?: string;
+        timestamp?: number;
+        requestKind?: string;
+        budgetLevel?: 0 | 1 | 2 | 3 | 4;
+      },
+    ) => {
+      diagnosticEvents.push(buildDiagnosticEvent(
+        convId,
+        type,
+        createDiagnosticBase(options?.requestKind ?? 'chat', options?.budgetLevel),
+        data,
+        {
+          turnId: options?.turnId,
+          roundId: options?.roundId,
+          timestamp: options?.timestamp,
+        },
+      ));
+    };
+
+    const flushTranscriptEntries = async () => {
+      if (transcriptEntries.length === 0 || flushedTranscriptCount >= transcriptEntries.length) return;
+
+      const pendingEntries = transcriptEntries.slice(flushedTranscriptCount);
+      await persistTranscriptEntries(convId, pendingEntries);
+      flushedTranscriptCount += pendingEntries.length;
+    };
+
+    const flushDiagnosticEvents = async () => {
+      if (diagnosticEvents.length === 0 || flushedDiagnosticCount >= diagnosticEvents.length) return;
+
+      const pendingEvents = diagnosticEvents.slice(flushedDiagnosticCount);
+      await persistDiagnosticEvents(convId, pendingEvents);
+      flushedDiagnosticCount += pendingEvents.length;
+    };
+
+    const persistAssistantProjectionWithTranscript = async (message: AiChatMessage) => {
+      const pendingEntries = transcriptEntries.slice(flushedTranscriptCount);
+      await persistMessageWithTranscript(
+        buildPersistedMessageRequest(convId, message, null),
+        pendingEntries,
+      );
+      flushedTranscriptCount = transcriptEntries.length;
+    };
+
+    const queueAssistantTurnCompletion = (turn: AiAssistantTurn, turnStatus: 'complete' | 'error') => {
+      if (assistantTurnClosed) return;
+      assistantTurnClosed = true;
+
+      const transcriptParts = turn.parts.filter((part) => (
+        part.type === 'text'
+        || part.type === 'thinking'
+        || part.type === 'warning'
+        || part.type === 'error'
+      ));
+
+      if (transcriptParts.length > 0) {
+        queueTranscriptEntry('assistant_part', {
+          parts: transcriptParts,
+        }, {
+          turnId: assistantMessage.id,
+          parentId: assistantMessage.id,
+        });
+      }
+
+      queueTranscriptEntry('assistant_turn_end', {
+        status: turnStatus,
+        messageId: assistantMessage.id,
+        plainTextSummary: turn.plainTextSummary,
+        toolRoundCount: turn.toolRounds.length,
+      }, {
+        turnId: assistantMessage.id,
+        parentId: assistantMessage.id,
+      });
+    };
+
+    if (!skipUserMessage) {
+      queueTranscriptEntry('user_message', {
+        messageId: userMessage.id,
+        role: 'user',
+        content: cleanContent,
+        hasContext: Boolean(effectiveContext),
+      }, { timestamp: userMessage.timestamp });
+      queueDiagnosticEvent('user_message', {
+        messageId: userMessage.id,
+        role: 'user',
+        contentLength: cleanContent.length,
+        hasContext: Boolean(effectiveContext),
+      }, {
+        timestamp: userMessage.timestamp,
+      });
+    }
+    queueTranscriptEntry('assistant_turn_start', {
+      messageId: assistantMessage.id,
+      requestMessageId,
+      conversationTurnId,
+    }, { turnId: assistantMessage.id, parentId: requestMessageId, timestamp: assistantMessage.timestamp });
+    try {
+      await flushTranscriptEntries();
+    } catch (e) {
+      console.warn('[AiChatStore] Failed to persist initial transcript entries:', e);
+    }
+
+    // Add to frontend state only — do NOT persist empty placeholder to backend.
+    // Backend persistence happens after streaming completes (success or abort-with-content).
     set((state) => ({
       conversations: state.conversations.map((c) => {
         if (c.id !== convId) return c;
+        const existingSessionMetadata = c.sessionMetadata;
+        const activeTabId = useAppStore.getState().activeTabId;
         return {
           ...c,
-          sessionMetadata: mergeConversationSessionMetadata(c.sessionMetadata, {
+          messages: [
+            ...c.messages,
+            {
+              ...assistantMessage,
+              turn: initialAssistantTurn,
+              transcriptRef,
+            },
+          ],
+          turns: upsertConversationTurn(c.turns, buildConversationTurn(initialAssistantTurn)),
+          sessionMetadata: mergeConversationSessionMetadata(existingSessionMetadata, {
             conversationId: convId,
+            firstUserMessage: existingSessionMetadata?.firstUserMessage ?? (!skipUserMessage ? content : undefined),
+            origin: c.origin ?? 'sidebar',
+            providerId,
+            providerModel,
+            activeParticipant: parsed.participants[0]?.name,
+            affectedSessionIds: sidebarContext?.env.sessionId ? [sidebarContext.env.sessionId] : existingSessionMetadata?.affectedSessionIds,
+            affectedNodeIds: sidebarContext?.env.activeNodeId ? [sidebarContext.env.activeNodeId] : existingSessionMetadata?.affectedNodeIds,
+            affectedTabIds: activeTabId ? [activeTabId] : existingSessionMetadata?.affectedTabIds,
             lastBudgetLevel: sendBudgetDecision.level,
           }),
+          updatedAt: Date.now(),
         };
       }),
     }));
     try {
       await persistConversationMetadata(get().conversations.find((c) => c.id === convId));
     } catch (e) {
-      console.warn('[AiChatStore] Failed to persist budget metadata:', e);
+      console.warn('[AiChatStore] Failed to persist session/budget metadata:', e);
     }
 
     // Inject anchor as system context if present
-    if (anchorMsg) {
+    if (historyState.anchorMsg) {
       apiMessages.push({
         role: 'system',
-        content: `Previous conversation summary:\n${anchorMsg.content}`,
+        content: `Previous conversation summary:\n${historyState.anchorMsg.content}`,
+      });
+    }
+
+    if (transcriptLookupPrompt) {
+      apiMessages.push({
+        role: 'system',
+        content: transcriptLookupPrompt,
       });
     }
 
@@ -1332,12 +1443,12 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
     }
 
     queueDiagnosticEvent('budget_level_changed', {
-      previousLevel: conversation.sessionMetadata?.lastBudgetLevel ?? null,
+      previousLevel: historyState.currentConversation?.sessionMetadata?.lastBudgetLevel ?? null,
       nextLevel: sendBudgetDecision.level,
       contextWindow,
       responseReserve: maxResponseTokens,
-      systemBudget: totalSystemTokens,
-      historyTokens: estimatedHistoryTokens,
+      systemBudget: effectiveSystemTokens,
+      historyTokens: historyState.estimatedHistoryTokens,
       trimmedCount: trimResult.trimmedCount,
     }, {
       turnId: assistantMessage.id,
@@ -1355,6 +1466,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       const UPDATE_INTERVAL = 50; // ms - throttle updates for smoother streaming
       let hardDenyRetryCount = 0;
       const userRequestedJson = userExplicitlyRequestedJson(cleanContent || content);
+      let transcriptLookupPromptInjected = Boolean(transcriptLookupPrompt);
 
       const updateAssistantSnapshot = (
         force = false,
@@ -2410,13 +2522,19 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         const toolLoopBudget = determineCompressionLevel({
           contextWindow,
           responseReserve: maxResponseTokens,
-          systemBudget: totalSystemTokens,
-          historyTokens: Math.max(0, apiTokenEstimate - totalSystemTokens),
-          canSummarize: false,
-          canLookupTranscript: false,
+          systemBudget: effectiveSystemTokens,
+          historyTokens: Math.max(0, apiTokenEstimate - effectiveSystemTokens),
+          summaryEligibleTokens: historyState.summaryEligibleTokens,
+          canSummarize: historyState.summaryEligibleTokens > 0,
+          canLookupTranscript: Boolean(historyState.transcriptLookupRef),
           inToolLoop: true,
-          toolLoopStopThreshold: toUsableBudgetThreshold(0.9, totalSystemTokens, maxResponseTokens),
+          toolLoopStopThreshold: toUsableBudgetThreshold(0.9, effectiveSystemTokens, maxResponseTokens),
         });
+
+        if (toolLoopBudget.level >= 3 && !transcriptLookupPromptInjected && transcriptLookupPrompt) {
+          apiMessages.push({ role: 'system', content: transcriptLookupPrompt });
+          transcriptLookupPromptInjected = true;
+        }
 
         if (toolLoopBudget.level === 4) {
           appendGuardrail(
@@ -2526,7 +2644,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         const currentMsg = get().conversations
           .find((c) => c.id === convId)
           ?.messages.find((m) => m.id === assistantMessage.id);
-        if (!currentMsg?.content) {
+        if (!shouldRetainAssistantMessage(currentMsg)) {
           const abortedTurn = accumulator.snapshot();
           queueAssistantTurnCompletion({ ...abortedTurn, status: 'error' }, 'error');
           try {
@@ -2544,6 +2662,9 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
             ),
           }));
         } else {
+          if (!currentMsg) {
+            return;
+          }
           // Partial content — keep it and persist to backend
           _setStreaming(convId, assistantMessage.id, false);
           set((state) => ({
@@ -2578,28 +2699,45 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         }
       } else {
         const errorMessage = e instanceof Error ? e.message : String(e);
+        accumulator.onError(errorMessage);
+        const erroredTurn = accumulator.snapshot();
+        const erroredProjection = projectTurnToLegacyMessageFields(erroredTurn);
         queueDiagnosticEvent('error', {
           message: errorMessage,
         }, {
           turnId: assistantMessage.id,
           requestKind: 'chat',
         });
-        queueAssistantTurnCompletion({ ...accumulator.snapshot(), status: 'error' }, 'error');
+        queueAssistantTurnCompletion(erroredTurn, 'error');
         try {
-          await flushTranscriptEntries();
+          const erroredMessage = projectAssistantMessage({
+            ...assistantMessage,
+            ...erroredProjection,
+            turn: erroredTurn,
+            transcriptRef,
+            isStreaming: false,
+            isThinkingStreaming: false,
+          });
+          set((state) => ({
+            error: errorMessage,
+            conversations: state.conversations.map((c) => {
+              if (c.id !== convId) return c;
+              return {
+                ...c,
+                messages: c.messages.map((m) => (
+                  m.id === assistantMessage.id ? erroredMessage : m
+                )),
+                turns: upsertConversationTurn(c.turns, buildConversationTurn(erroredTurn)),
+                updatedAt: Date.now(),
+              };
+            }),
+          }));
+          await persistAssistantProjectionWithTranscript(erroredMessage);
+          await persistConversationMetadata(get().conversations.find((c) => c.id === convId));
           await flushDiagnosticEvents();
         } catch (persistErr) {
           console.warn('[AiChatStore] Failed to persist error transcript:', persistErr);
         }
-        set({ error: errorMessage });
-        // Remove failed placeholder from frontend (never persisted to backend)
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === convId
-              ? hydrateStructuredConversation({ ...c, messages: c.messages.filter((m) => m.id !== assistantMessage.id) })
-              : c
-          ),
-        }));
       }
     } finally {
       // Clean up only this run's pending approval resolvers.
@@ -3130,6 +3268,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       });
       const [normalizedSummaryMessage] = normalizedSummaryConversation.messages;
       const summarySourceTranscriptRef = getSummarySourceTranscriptRef(conversation.messages, activeConversationId);
+      const summaryRoundId = getLatestSummaryRoundId(conversation.messages, conversation.turns);
 
       // Atomically replace all messages in a single backend transaction.
       // If the command fails, local state is untouched and the error bubbles
@@ -3138,6 +3277,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         messageId: normalizedSummaryMessage.id,
         summaryText: summaryContent,
         summaryKind: 'conversation',
+        roundId: summaryRoundId,
         sourceStartEntryId: summarySourceTranscriptRef?.startEntryId,
         sourceEndEntryId: summarySourceTranscriptRef?.endEntryId,
         source: 'foreground',
@@ -3155,6 +3295,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         },
         summaryRef: {
           kind: 'conversation',
+          roundId: summaryRoundId,
           transcriptRef: summarySourceTranscriptRef,
         },
       };
@@ -3179,6 +3320,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         messages: [summaryMessageWithTranscriptRef],
         sessionMetadata: mergeConversationSessionMetadata(normalizedSummaryConversation.sessionMetadata, {
           conversationId: activeConversationId,
+          lastSummaryRoundId: summaryRoundId,
           lastSummaryAt: normalizedSummaryMessage.timestamp,
         }),
       });
@@ -3212,8 +3354,9 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
   // Incremental Compaction — sliding window with summary anchor
   // ════════════════════════════════════════════════════════════════════════
 
-  compactConversation: async (conversationId?: string, options?: { silent?: boolean }) => {
+  compactConversation: async (conversationId?: string, options?: { silent?: boolean; force?: boolean }) => {
     const silent = options?.silent ?? false;
+    const force = options?.force ?? false;
     const compactionMode = silent ? 'silent' : 'manual';
     const convId = conversationId ?? get().activeConversationId;
     if (!convId) return;
@@ -3258,7 +3401,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
     // Only enforce threshold for auto-compaction (silent mode).
     // Manual compaction (user clicked button) always proceeds.
     const usageRatio = totalTokens / contextWindow;
-    if (silent && usageRatio < COMPACTION_TRIGGER_THRESHOLD) return;
+    if (!force && silent && usageRatio < COMPACTION_TRIGGER_THRESHOLD) return;
 
     // Get API key
     let apiKey: string | null = null;
@@ -3414,11 +3557,13 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
       const anchorTimestamp = Date.now();
       const compactedUntilEntryId = toCompact.at(-1)?.transcriptRef?.endEntryId ?? toCompact.at(-1)?.id;
       const compactionSourceTranscriptRef = getSummarySourceTranscriptRef(toCompact, convId);
+      const compactionSummaryRoundId = getLatestSummaryRoundId(toCompact, latestConversation.turns);
 
       const compactionTranscriptEntry = buildTranscriptEntry(convId, 'summary_created', {
         messageId: anchorMessageId,
         summaryText: summaryContent,
         summaryKind: 'compaction',
+        roundId: compactionSummaryRoundId,
         sourceStartEntryId: compactionSourceTranscriptRef?.startEntryId,
         sourceEndEntryId: compactionSourceTranscriptRef?.endEntryId,
         source: silent ? 'background' : 'foreground',
@@ -3441,6 +3586,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         },
         summaryRef: {
           kind: 'compaction',
+          roundId: compactionSummaryRoundId,
           transcriptRef: compactionSourceTranscriptRef,
         },
         metadata: {
@@ -3460,6 +3606,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
         updatedAt: Date.now(),
         sessionMetadata: mergeConversationSessionMetadata(latestConversation.sessionMetadata, {
           conversationId: convId,
+          lastSummaryRoundId: compactionSummaryRoundId,
           lastCompactedUntilEntryId: compactedUntilEntryId,
           lastSummaryAt: anchorMessage.timestamp,
         }),

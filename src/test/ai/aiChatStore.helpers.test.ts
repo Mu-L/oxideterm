@@ -1,9 +1,31 @@
 import { describe, expect, it } from 'vitest';
 
-import { dtoToConversation, encodeAnchorContent, hydrateStructuredConversation, rebuildConversationFromTranscript } from '@/store/aiChatStore.helpers';
+import { dtoToConversation, encodeAnchorContent, hydrateStructuredConversation, projectAssistantMessage, rebuildConversationFromTranscript } from '@/store/aiChatStore.helpers';
 import type { AiConversation } from '@/types';
 
 describe('hydrateStructuredConversation', () => {
+  it('does not strip suggestions from assistant content while streaming', () => {
+    const projected = projectAssistantMessage({
+      id: 'assistant-streaming',
+      role: 'assistant',
+      content: 'stale',
+      timestamp: 1,
+      isStreaming: true,
+      turn: {
+        id: 'assistant-streaming',
+        status: 'streaming',
+        plainTextSummary: 'Answer\n<suggestions>\n<s icon="Zap">Retry</s>\n</suggestions>',
+        parts: [
+          { type: 'text', text: 'Answer\n<suggestions>\n<s icon="Zap">Retry</s>\n</suggestions>' },
+        ],
+        toolRounds: [],
+      },
+    });
+
+    expect(projected.content).toContain('<suggestions>');
+    expect(projected.suggestions).toBeUndefined();
+  });
+
   it('prefers turn-derived projection over stale persisted legacy assistant fields', () => {
     const conversation = dtoToConversation({
       id: 'conv-1',

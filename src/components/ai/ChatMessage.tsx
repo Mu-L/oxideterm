@@ -14,6 +14,7 @@ import { ToolCallBlock } from './ToolCallBlock';
 import { GuardrailBlock } from './GuardrailBlock';
 import { WarningBlock } from './WarningBlock';
 import { getTurnTextContent, getTurnThinkingContent } from '../../lib/ai/turnModel/turnProjection';
+import { hasPartialSuggestionsBlock, parseSuggestions } from '../../lib/ai/suggestionParser';
 
 interface ChatMessageProps {
   message: AiChatMessage;
@@ -110,21 +111,39 @@ export const ChatMessage = memo(function ChatMessage({
       return message.content;
     }
 
+    const stripStreamingSuggestions = (value: string) => {
+      if (!message.isStreaming) {
+        return value;
+      }
+
+      const parsed = parseSuggestions(value);
+      if (parsed.suggestions.length > 0) {
+        return parsed.cleanContent;
+      }
+
+      if (hasPartialSuggestionsBlock(value)) {
+        const startIndex = value.indexOf('<suggestions>');
+        return startIndex >= 0 ? value.slice(0, startIndex).trimEnd() : value;
+      }
+
+      return value;
+    };
+
     if (message.turn) {
       const turnTextContent = getTurnTextContent(message.turn);
       if (turnTextContent) {
-        return turnTextContent;
+        return stripStreamingSuggestions(turnTextContent);
       }
 
       const hasStructuredFeedback = message.turn.parts.some((part) => (
         part.type === 'guardrail' || part.type === 'warning' || part.type === 'error'
       ));
 
-      return hasStructuredFeedback ? '' : message.content;
+      return hasStructuredFeedback ? '' : stripStreamingSuggestions(message.content);
     }
 
-    return message.content;
-  }, [isUser, message.content, message.turn]);
+    return stripStreamingSuggestions(message.content);
+  }, [isUser, message.content, message.isStreaming, message.turn]);
   const visibleThinkingContent = useMemo(() => {
     if (isUser) {
       return undefined;

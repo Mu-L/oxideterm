@@ -393,4 +393,169 @@ describe('aiChatStore helpers', () => {
       },
     });
   });
+
+  it('replays tool and thinking order from transcript during initialization', async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({
+        conversations: [
+          {
+            id: 'conv-1',
+            title: 'Loaded conversation',
+            createdAt: 1,
+            updatedAt: 2,
+            messageCount: 2,
+            origin: 'sidebar',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        id: 'conv-1',
+        title: 'Loaded conversation',
+        createdAt: 1,
+        updatedAt: 2,
+        sessionId: null,
+        origin: 'sidebar',
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            content: 'Question',
+            timestamp: 3,
+            context: null,
+          },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: 'stale projection',
+            timestamp: 4,
+            context: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        entries: [
+          {
+            id: 'entry-user',
+            conversationId: 'conv-1',
+            timestamp: 3,
+            kind: 'user_message',
+            payload: {
+              messageId: 'user-1',
+              content: 'Question',
+            },
+          },
+          {
+            id: 'entry-start',
+            conversationId: 'conv-1',
+            turnId: 'assistant-1',
+            timestamp: 4,
+            kind: 'assistant_turn_start',
+            payload: {
+              messageId: 'assistant-1',
+            },
+          },
+          {
+            id: 'entry-round-1',
+            conversationId: 'conv-1',
+            turnId: 'assistant-1',
+            timestamp: 5,
+            kind: 'assistant_round',
+            payload: {
+              round: 1,
+              roundId: 'round-1',
+              toolCallIds: ['tool-1'],
+            },
+          },
+          {
+            id: 'entry-tool-call',
+            conversationId: 'conv-1',
+            turnId: 'assistant-1',
+            timestamp: 6,
+            kind: 'tool_call',
+            payload: {
+              id: 'tool-1',
+              name: 'local_exec',
+              argumentsText: '{"command":"pwd"}',
+              roundId: 'round-1',
+            },
+          },
+          {
+            id: 'entry-tool-result',
+            conversationId: 'conv-1',
+            turnId: 'assistant-1',
+            timestamp: 7,
+            kind: 'tool_result',
+            payload: {
+              toolCallId: 'tool-1',
+              toolName: 'local_exec',
+              success: true,
+              output: '/tmp',
+              roundId: 'round-1',
+            },
+          },
+          {
+            id: 'entry-part',
+            conversationId: 'conv-1',
+            turnId: 'assistant-1',
+            timestamp: 8,
+            kind: 'assistant_part',
+            payload: {
+              parts: [
+                { type: 'thinking', text: 'Use the tool result.' },
+                { type: 'text', text: 'Current directory is /tmp.' },
+              ],
+            },
+          },
+          {
+            id: 'entry-end',
+            conversationId: 'conv-1',
+            turnId: 'assistant-1',
+            timestamp: 9,
+            kind: 'assistant_turn_end',
+            payload: {
+              messageId: 'assistant-1',
+              status: 'complete',
+              plainTextSummary: 'Current directory is /tmp.',
+            },
+          },
+        ],
+      });
+
+    useAiChatStore.setState({
+      conversations: [],
+      activeConversationId: null,
+      isInitialized: false,
+    });
+
+    await useAiChatStore.getState().init();
+
+    const assistantMessage = useAiChatStore.getState().conversations[0].messages[1];
+    expect(assistantMessage).toMatchObject({
+      id: 'assistant-1',
+      content: 'Current directory is /tmp.',
+      transcriptRef: {
+        conversationId: 'conv-1',
+        startEntryId: 'entry-start',
+        endEntryId: 'entry-end',
+      },
+    });
+    expect(assistantMessage.turn?.parts.map((part) => part.type)).toEqual([
+      'tool_call',
+      'tool_result',
+      'thinking',
+      'text',
+    ]);
+    expect(assistantMessage.turn?.parts[2]).toMatchObject({
+      type: 'thinking',
+      text: 'Use the tool result.',
+    });
+    expect(assistantMessage.turn?.parts[3]).toMatchObject({
+      type: 'text',
+      text: 'Current directory is /tmp.',
+    });
+    expect(assistantMessage.turn?.toolRounds[0]).toMatchObject({
+      id: 'round-1',
+      toolCalls: [expect.objectContaining({ id: 'tool-1', executionState: 'completed' })],
+    });
+  });
 });

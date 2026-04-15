@@ -66,7 +66,18 @@
       "reconnecting_title": "Reconectando",
       "reconnecting_wait": "A conexão está sendo restaurada. Por favor aguarde e tente novamente.",
       "reconnect_unstable": "Conexão instável",
-      "try_again_later": "A conexão ainda não se estabilizou. Por favor tente novamente mais tarde."
+      "try_again_later": "A conexão ainda não se estabilizou. Por favor tente novamente mais tarde.",
+      "connection_failed": "Falha na conexão",
+      "no_connection_id": "Nenhum ID de conexão foi atribuído após a reconexão."
+    },
+    "errors": {
+      "chain_busy_title": "Operação em andamento",
+      "chain_busy_desc": "Outra cadeia de conexão está em andamento. Aguarde.",
+      "node_connecting_title": "Já conectando",
+      "node_connecting_desc": "Este nó já está sendo conectado.",
+      "chain_failed_title": "Falha na conexão",
+      "chain_failed_desc": "Falha no nó {{position}}/{{total}}: {{error}}",
+      "generic_title": "Erro de conexão"
     },
     "reconnect": {
       "starting": "{{name}} está reconectando...",

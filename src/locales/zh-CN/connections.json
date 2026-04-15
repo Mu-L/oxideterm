@@ -66,7 +66,18 @@
       "reconnecting_title": "连接重连中",
       "reconnecting_wait": "连接正在恢复中，请稍后重试。",
       "reconnect_unstable": "连接不稳定",
-      "try_again_later": "连接尚未稳定，请稍后再试。"
+      "try_again_later": "连接尚未稳定，请稍后再试。",
+      "connection_failed": "连接失败",
+      "no_connection_id": "重连后未分配连接 ID。"
+    },
+    "errors": {
+      "chain_busy_title": "操作进行中",
+      "chain_busy_desc": "另一个连接链路正在进行中，请稍候。",
+      "node_connecting_title": "正在连接",
+      "node_connecting_desc": "该节点已经在连接中。",
+      "chain_failed_title": "连接失败",
+      "chain_failed_desc": "在节点 {{position}}/{{total}} 处失败：{{error}}",
+      "generic_title": "连接错误"
     },
     "reconnect": {
       "starting": "{{name}} 正在恢复连接...",

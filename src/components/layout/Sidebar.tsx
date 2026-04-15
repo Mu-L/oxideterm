@@ -50,6 +50,7 @@ import { DrillDownDialog } from '../modals/DrillDownDialog';
 import { SavePathAsPresetDialog } from '../modals/SavePathAsPresetDialog';
 import { AddRootNodeDialog } from '../modals/AddRootNodeDialog';
 import { connectToSaved } from '../../lib/connectToSaved';
+import { notifyConnectionIssue } from '../../lib/notificationCenter';
 
 import { PluginSidebarRenderer } from '../plugin/PluginSidebarRenderer';
 import { PluginTargetContextMenu } from '../plugin/PluginTargetContextMenu';
@@ -313,28 +314,53 @@ export const Sidebar = () => {
         // 解析失败节点信息
         const match = errorMsg.match(/Node ([\w-]+) \(position (\d+)\/(\d+)\) failed: (.+)/);
         if (match) {
+          const title = t('connection.errors.chain_failed_title', { defaultValue: 'Connection Failed' });
+          const description = t('connection.errors.chain_failed_desc', {
+            defaultValue: 'Failed at node {{position}}/{{total}}: {{error}}',
+            position: match[2],
+            total: match[3],
+            error: match[4],
+          });
           toast({
-            title: t('connection.errors.chain_failed_title', { defaultValue: 'Connection Failed' }),
-            description: t('connection.errors.chain_failed_desc', { 
-              defaultValue: 'Failed at node {{position}}/{{total}}: {{error}}',
-              position: match[2],
-              total: match[3],
-              error: match[4],
-            }),
+            title,
+            description,
             variant: 'error',
           });
+          notifyConnectionIssue({
+            title,
+            body: description,
+            nodeId: match[1],
+            severity: 'error',
+            dedupeKey: `connect-chain-failed:${match[1]}`,
+          });
         } else {
+          const title = t('connection.errors.chain_failed_title', { defaultValue: 'Connection Failed' });
           toast({
-            title: t('connection.errors.chain_failed_title', { defaultValue: 'Connection Failed' }),
+            title,
             description: errorMsg,
             variant: 'error',
           });
+          notifyConnectionIssue({
+            title,
+            body: errorMsg,
+            nodeId,
+            severity: 'error',
+            dedupeKey: `connect-chain-failed:${nodeId}`,
+          });
         }
       } else {
+        const title = t('connection.errors.generic_title', { defaultValue: 'Connection Error' });
         toast({
-          title: t('connection.errors.generic_title', { defaultValue: 'Connection Error' }),
+          title,
           description: errorMsg,
           variant: 'error',
+        });
+        notifyConnectionIssue({
+          title,
+          body: errorMsg,
+          nodeId,
+          severity: 'error',
+          dedupeKey: `connect-generic-failed:${nodeId}`,
         });
       }
       
@@ -551,20 +577,38 @@ export const Sidebar = () => {
           const freshNode = getNode(nodeId);
           if (freshNode?.runtime?.status !== 'connected') {
             console.error('Connection not stable after wait');
+            const title = t('connections.status.reconnect_unstable');
+            const description = t('connections.status.try_again_later');
             toast({
-              title: t('connections.status.reconnect_unstable'),
-              description: t('connections.status.try_again_later'),
+              title,
+              description,
               variant: 'warning',
+            });
+            notifyConnectionIssue({
+              title,
+              body: description,
+              nodeId,
+              severity: 'warning',
+              dedupeKey: `reconnect-unstable:${nodeId}`,
             });
             return;
           }
         }
       } else {
         console.error('[Reconnect] No connectionId found for node after connectNode');
+        const title = t('connection.errors.generic_title', { defaultValue: 'Connection Error' });
+        const description = t('connections.status.no_connection_id', { defaultValue: 'No connection ID was assigned after reconnect.' });
         toast({
-          title: t('connections.status.connection_failed'),
-          description: t('connections.status.no_connection_id'),
+          title,
+          description,
           variant: 'error',
+        });
+        notifyConnectionIssue({
+          title,
+          body: description,
+          nodeId,
+          severity: 'error',
+          dedupeKey: `reconnect-no-connection-id:${nodeId}`,
         });
         return;
       }
@@ -619,9 +663,17 @@ export const Sidebar = () => {
       });
     } catch (err) {
       console.error('Failed to reconnect:', err);
+      const title = t('connections.reconnect.failed', { error: String(err) });
       toast({
-        title: t('connections.reconnect.failed', { error: String(err) }),
+        title,
         variant: 'error',
+      });
+      notifyConnectionIssue({
+        title,
+        body: String(err),
+        nodeId,
+        severity: 'error',
+        dedupeKey: `reconnect-failed-sidebar:${nodeId}`,
       });
     }
   }, [connectNode, createTerminalForNode, createTab, getNode, toast, t, tabs, closeTab]);

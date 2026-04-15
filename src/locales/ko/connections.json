@@ -4,7 +4,7 @@
       "connecting": "연결 중...",
       "active": "활성",
       "idle": "유휴",
-      "disconnecting": "연결 해제 중...",
+      "disconnecting": "연결 종료 중...",
       "disconnected": "연결 해제됨",
       "error": "오류: {{error}}"
     },
@@ -66,7 +66,18 @@
       "reconnecting_title": "연결 재설정 중",
       "reconnecting_wait": "연결을 복원하고 있습니다. 잠시 후 다시 시도해 주세요.",
       "reconnect_unstable": "연결 불안정",
-      "try_again_later": "연결이 아직 안정되지 않았습니다. 나중에 다시 시도해 주세요."
+      "try_again_later": "연결이 아직 안정되지 않았습니다. 나중에 다시 시도해 주세요.",
+      "connection_failed": "연결에 실패했습니다",
+      "no_connection_id": "재연결 후 연결 ID가 할당되지 않았습니다."
+    },
+    "errors": {
+      "chain_busy_title": "작업 진행 중",
+      "chain_busy_desc": "다른 연결 체인이 진행 중입니다. 잠시만 기다려 주세요.",
+      "node_connecting_title": "이미 연결 중",
+      "node_connecting_desc": "이 노드는 이미 연결 중입니다.",
+      "chain_failed_title": "연결 실패",
+      "chain_failed_desc": "노드 {{position}}/{{total}} 에서 실패했습니다: {{error}}",
+      "generic_title": "연결 오류"
     },
     "reconnect": {
       "starting": "{{name}} 재연결 중...",

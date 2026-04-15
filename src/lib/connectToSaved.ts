@@ -3,6 +3,7 @@
 
 import { api } from './api';
 import { findUnsupportedProxyHopAuth } from './proxyHopSupport';
+import { notifyConnectionIssue } from './notificationCenter';
 import { useSessionTreeStore } from '../store/sessionTreeStore';
 import { useAppStore } from '../store/appStore';
 import type { UnifiedFlatNode } from '../types';
@@ -58,16 +59,26 @@ export async function connectToSaved(
     if (savedConn.proxy_chain && savedConn.proxy_chain.length > 0) {
       const unsupportedProxyHop = findUnsupportedProxyHopAuth(savedConn.proxy_chain);
       if (unsupportedProxyHop) {
+        const description = unsupportedProxyHop.reason === 'keyboard_interactive'
+          ? t('connections.toast.proxy_hop_kbi_unsupported', { hop: unsupportedProxyHop.hopIndex })
+          : t('connections.toast.proxy_hop_auth_unsupported', {
+            hop: unsupportedProxyHop.hopIndex,
+            authType: unsupportedProxyHop.authType,
+          });
+
         toast({
           title: t('connections.toast.proxy_chain_invalid'),
-          description: unsupportedProxyHop.reason === 'keyboard_interactive'
-            ? t('connections.toast.proxy_hop_kbi_unsupported', { hop: unsupportedProxyHop.hopIndex })
-            : t('connections.toast.proxy_hop_auth_unsupported', {
-              hop: unsupportedProxyHop.hopIndex,
-              authType: unsupportedProxyHop.authType,
-            }),
+          description,
           variant: 'error',
         });
+
+        notifyConnectionIssue({
+          title: t('connections.toast.proxy_chain_invalid'),
+          body: description,
+          severity: 'error',
+          dedupeKey: `saved-connection-proxy-invalid:${connectionId}`,
+        });
+
         onError?.(connectionId, 'connect-failed');
         return null;
       }
@@ -196,6 +207,18 @@ export async function connectToSaved(
   } catch (error) {
     console.error('Failed to connect to saved connection:', error);
     const errorMsg = String(error);
+    if (!errorMsg.includes('already connecting') &&
+      !errorMsg.includes('already connected') &&
+      !errorMsg.includes('CHAIN_LOCK_BUSY') &&
+      !errorMsg.includes('NODE_LOCK_BUSY')) {
+      notifyConnectionIssue({
+        title: t('connection.errors.generic_title', { defaultValue: 'Connection Error' }),
+        body: errorMsg,
+        severity: 'error',
+        dedupeKey: `saved-connection-failed:${connectionId}`,
+      });
+    }
+
     if (!errorMsg.includes('already connecting') &&
       !errorMsg.includes('already connected') &&
       !errorMsg.includes('CHAIN_LOCK_BUSY') &&

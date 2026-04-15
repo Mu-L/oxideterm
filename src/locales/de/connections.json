@@ -66,7 +66,18 @@
       "reconnecting_title": "Verbindung wird wiederhergestellt",
       "reconnecting_wait": "Die Verbindung wird wiederhergestellt. Bitte warten Sie und versuchen Sie es erneut.",
       "reconnect_unstable": "Verbindung instabil",
-      "try_again_later": "Die Verbindung ist noch nicht stabil. Bitte versuchen Sie es später erneut."
+      "try_again_later": "Die Verbindung ist noch nicht stabil. Bitte versuchen Sie es später erneut.",
+      "connection_failed": "Verbindung fehlgeschlagen",
+      "no_connection_id": "Nach der Wiederverbindung wurde keine Verbindungs-ID zugewiesen."
+    },
+    "errors": {
+      "chain_busy_title": "Vorgang läuft",
+      "chain_busy_desc": "Eine andere Verbindungskette wird gerade aufgebaut. Bitte warten Sie.",
+      "node_connecting_title": "Bereits am Verbinden",
+      "node_connecting_desc": "Dieser Knoten wird bereits verbunden.",
+      "chain_failed_title": "Verbindung fehlgeschlagen",
+      "chain_failed_desc": "Fehler bei Knoten {{position}}/{{total}}: {{error}}",
+      "generic_title": "Verbindungsfehler"
     },
     "reconnect": {
       "starting": "{{name}} wird neu verbunden...",

@@ -213,6 +213,18 @@ function recount(items: NotificationItem[]) {
   return { unreadCount, unreadCriticalCount };
 }
 
+function isTauriEventApiAvailable(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const candidate = window as typeof window & {
+    __TAURI_INTERNALS__?: { transformCallback?: unknown };
+  };
+
+  return typeof candidate.__TAURI_INTERNALS__?.transformCallback === 'function';
+}
+
 // ============================================================================
 // Tauri event listener (call once at app startup)
 // ============================================================================
@@ -221,6 +233,10 @@ let _unlisten: (() => void) | null = null;
 let _initPromise: Promise<void> | null = null;
 
 export function initNotificationListener(): Promise<void> {
+  if (!isTauriEventApiAvailable()) {
+    return Promise.resolve();
+  }
+
   if (!_initPromise) {
     _initPromise = (async () => {
       _unlisten = await listen<NotificationPush>('notification:push', (event) => {

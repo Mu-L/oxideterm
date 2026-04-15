@@ -398,12 +398,29 @@ impl SftpSession {
         // Explicitly drop the file handle before rename (close the file on the server)
         drop(file);
 
-        // 2. Remove the original file first — SFTP v3 rename does NOT
-        //    overwrite an existing target (unlike POSIX rename).
-        //    Ignore errors: the file might not exist yet (new file creation).
-        let _ = self.sftp.remove_file(canonical_path).await;
+        // 2. Replace target atomically: remove existing file first, then rename swap → target.
+        self.replace_remote_file_from_swap(swap_path, canonical_path)
+            .await
+    }
 
-        // 3. Atomic rename: swap → target
+    async fn replace_remote_file_from_swap(
+        &self,
+        swap_path: &str,
+        canonical_path: &str,
+    ) -> Result<(), SftpError> {
+        // SFTP v3 rename does NOT overwrite an existing target (unlike POSIX rename),
+        // so any flow that stages data into a temp file must explicitly remove the
+        // old target before the final rename.
+        if let Err(err) = self.sftp.remove_file(canonical_path).await {
+            let err_msg = err.to_string();
+            if !is_missing_file_error_message(&err_msg) {
+                warn!(
+                    "Failed to remove existing target {} before rename: {}",
+                    canonical_path, err_msg
+                );
+            }
+        }
+
         match self.sftp.rename(swap_path, canonical_path).await {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -412,7 +429,6 @@ impl SftpSession {
                     "Rename failed ({}), cleaning up swap file {}",
                     err_msg, swap_path
                 );
-                // Best-effort cleanup of the swap file
                 let _ = self.sftp.remove_file(swap_path).await;
                 Err(SftpError::WriteError(format!(
                     "Atomic rename failed: {}",
@@ -2057,8 +2073,9 @@ impl SftpSession {
                             remote_size
                         );
 
-                        // Rename temp file to final
-                        self.rename(&temp_path, &canonical_path).await?;
+                        // Replace the target with the completed temp file.
+                        self.replace_remote_file_from_swap(&temp_path, &canonical_path)
+                            .await?;
 
                         // Guard handles unregister on return
                         return Ok(total_bytes);
@@ -2135,13 +2152,14 @@ impl SftpSession {
                     }
                 }
 
-                // Transfer complete, rename temp file to final
+                // Transfer complete, replace the target with the fully uploaded temp file.
                 info!(
                     "Upload complete, renaming {} to {}",
                     temp_path, canonical_path
                 );
 
-                self.rename(&temp_path, &canonical_path).await?;
+                self.replace_remote_file_from_swap(&temp_path, &canonical_path)
+                    .await?;
 
                 info!(
                     "Upload complete: {} -> {} ({} bytes)",
@@ -2480,7 +2498,7 @@ impl SftpSession {
     /// Map SFTP errors to our error type
     fn map_sftp_error(&self, err: SftpErrorInner, path: &str) -> SftpError {
         let err_str = err.to_string();
-        if err_str.contains("No such file") || err_str.contains("not found") {
+        if is_missing_file_error_message(&err_str) {
             SftpError::FileNotFound(path.to_string())
         } else if err_str.contains("Permission denied") {
             SftpError::PermissionDenied(path.to_string())
@@ -2488,6 +2506,10 @@ impl SftpSession {
             SftpError::ProtocolError(err_str)
         }
     }
+}
+
+fn is_missing_file_error_message(err: &str) -> bool {
+    err.contains("No such file") || err.contains("not found")
 }
 
 fn recursion_depth_error(direction: &str, path: &str, max_depth: u32) -> SftpError {
@@ -2559,8 +2581,15 @@ impl Default for SftpRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::recursion_depth_error;
+    use super::{is_missing_file_error_message, recursion_depth_error};
     use crate::sftp::error::SftpError;
+
+    #[test]
+    fn missing_file_error_classifier_matches_known_messages() {
+        assert!(is_missing_file_error_message("No such file"));
+        assert!(is_missing_file_error_message("remote path not found"));
+        assert!(!is_missing_file_error_message("Permission denied"));
+    }
 
     #[test]
     fn recursion_depth_error_is_not_silent_success() {

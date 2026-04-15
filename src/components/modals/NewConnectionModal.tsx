@@ -91,6 +91,7 @@ export const NewConnectionModal = () => {
   const [testHostKeyStatus, setTestHostKeyStatus] = useState<HostKeyStatus | null>(null);
   const [pendingTestRequest, setPendingTestRequest] = useState<TestConnectionRequest | null>(null);
   const isComposingRef = useRef(false);
+  const kbiDisabledForProxyChain = proxyServers.length > 0;
 
   const formatTestFailure = useCallback((result: TestConnectionResponse) => {
     const { summary, detail } = result.diagnostic;
@@ -147,6 +148,12 @@ export const NewConnectionModal = () => {
       }
     }
   }, [modals.newConnection, quickConnectData]);
+
+  useEffect(() => {
+    if (kbiDisabledForProxyChain && authType === 'keyboard_interactive') {
+      setAuthType('password');
+    }
+  }, [authType, kbiDisabledForProxyChain]);
 
   // 移除了连接复用检查逻辑，现在由 SessionTree 后端统一处理
   /* 旧逻辑已删除 */
@@ -231,7 +238,7 @@ export const NewConnectionModal = () => {
 
     setLoading(true);
     try {
-      if (authType === 'keyboard_interactive' && proxyServers.length > 0) {
+      if (authType === 'keyboard_interactive' && kbiDisabledForProxyChain) {
         throw new Error(t('sessionManager.toast.proxy_hop_kbi_unsupported'));
       }
 
@@ -524,8 +531,13 @@ export const NewConnectionModal = () => {
                   <TabsTrigger value="key">{t('modals.new_connection.auth_key')}</TabsTrigger>
                   <TabsTrigger value="certificate">{t('modals.new_connection.auth_certificate')}</TabsTrigger>
                   <TabsTrigger value="agent">{t('modals.new_connection.auth_agent')}</TabsTrigger>
-                  <TabsTrigger value="keyboard_interactive">{t('modals.new_connection.auth_2fa')}</TabsTrigger>
+                  <TabsTrigger value="keyboard_interactive" disabled={kbiDisabledForProxyChain}>{t('modals.new_connection.auth_2fa')}</TabsTrigger>
                 </TabsList>
+                {kbiDisabledForProxyChain && (
+                  <p className="pt-2 text-xs text-yellow-600">
+                    {t('sessionManager.toast.proxy_hop_kbi_unsupported')}
+                  </p>
+                )}
                 
                 <TabsContent value="password">
                   <div className="grid gap-2 pt-2">

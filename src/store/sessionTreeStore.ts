@@ -1503,6 +1503,8 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
         console.debug(`[SessionTree] KBI root node created: ${nodeId}`);
         
         // 2. The session is already connected via KBI, so we need to update the node state
+        await api.updateTreeNodeState(nodeId, 'connected');
+
         // Set the terminal session (which was created during KBI flow)
         await api.setTreeNodeTerminal(nodeId, sessionId);
         

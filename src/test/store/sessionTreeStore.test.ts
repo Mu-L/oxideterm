@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiMocks = vi.hoisted(() => ({
+  addRootNode: vi.fn(),
   getSessionTree: vi.fn(),
   getTreeNodePath: vi.fn(),
   updateTreeNodeState: vi.fn(),
@@ -50,8 +51,11 @@ const settingsStoreMock = vi.hoisted(() => {
 
 const appStoreMock = vi.hoisted(() => {
   const state = {
-    sessions: new Map<string, { id: string; connectionId: string }>(),
+    sessions: new Map<string, { id: string; connectionId?: string; [key: string]: unknown }>(),
     connections: new Map<string, Record<string, unknown>>(),
+    tabs: [] as Array<Record<string, unknown>>,
+    createTab: vi.fn(),
+    closeTab: vi.fn(),
     refreshConnections: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -230,6 +234,9 @@ describe('sessionTreeStore', () => {
     settingsStoreMock.state.settings.treeUI.focusedNodeId = null;
     appStoreMock.state.sessions = new Map();
     appStoreMock.state.connections = new Map();
+    appStoreMock.state.tabs = [];
+    appStoreMock.state.createTab = vi.fn();
+    appStoreMock.state.closeTab = vi.fn();
     appStoreMock.state.refreshConnections = vi.fn().mockResolvedValue(undefined);
   });
 
@@ -403,6 +410,53 @@ describe('sessionTreeStore', () => {
       }),
     );
     expect(apiMocks.setTreeNodeTerminal).toHaveBeenCalledWith('node-1', 'term-1');
+  });
+
+  it('addKbiSession creates a root node, marks it connected, and binds the existing terminal', async () => {
+    const backendNode = makeNode({
+      id: 'node-kbi',
+      state: { status: 'connected' },
+      terminalSessionId: 'term-kbi',
+    });
+
+    apiMocks.addRootNode.mockResolvedValue('node-kbi');
+    apiMocks.updateTreeNodeState.mockResolvedValue(undefined);
+    apiMocks.setTreeNodeTerminal.mockResolvedValue(undefined);
+    apiMocks.getSessionTree.mockResolvedValue([backendNode]);
+
+    await useSessionTreeStore.getState().addKbiSession({
+      sessionId: 'term-kbi',
+      wsPort: 7681,
+      wsToken: 'token-kbi',
+      host: 'kbi.example.com',
+      port: 22,
+      username: 'alice',
+      displayName: 'alice@kbi.example.com',
+    });
+
+    expect(apiMocks.addRootNode).toHaveBeenCalledWith({
+      displayName: 'alice@kbi.example.com',
+      host: 'kbi.example.com',
+      port: 22,
+      username: 'alice',
+      authType: 'keyboard_interactive',
+    });
+    expect(apiMocks.updateTreeNodeState).toHaveBeenCalledWith('node-kbi', 'connected');
+    expect(apiMocks.setTreeNodeTerminal).toHaveBeenCalledWith('node-kbi', 'term-kbi');
+    expect(appStoreMock.state.sessions.get('term-kbi')).toEqual(
+      expect.objectContaining({
+        id: 'term-kbi',
+        host: 'kbi.example.com',
+        username: 'alice',
+        ws_url: 'ws://127.0.0.1:7681',
+        ws_token: 'token-kbi',
+        auth_type: 'keyboard_interactive',
+      }),
+    );
+    expect(appStoreMock.state.createTab).toHaveBeenCalledWith('terminal', 'term-kbi');
+    expect(useSessionTreeStore.getState().nodeTerminalMap.get('node-kbi')).toEqual(['term-kbi']);
+    expect(useSessionTreeStore.getState().terminalNodeMap.get('term-kbi')).toBe('node-kbi');
+    expect(useSessionTreeStore.getState().getRawNode('node-kbi')?.state.status).toBe('connected');
   });
 
   it('releases all locks when connectNodeWithAncestors fails mid-chain', async () => {

@@ -158,6 +158,22 @@ fn build_auth(
     }
 }
 
+fn build_root_auth(request: &ConnectServerRequest) -> Result<AuthMethod, String> {
+    if request.auth_type == "keyboard_interactive" {
+        // Standalone KBI sessions are already authenticated through ssh_connect_kbi.
+        // The tree only needs metadata to represent the existing direct session.
+        return Ok(AuthMethod::KeyboardInteractive);
+    }
+
+    build_auth(
+        &request.auth_type,
+        request.password.clone(),
+        request.key_path.clone(),
+        request.cert_path.clone(),
+        request.passphrase.clone(),
+    )
+}
+
 fn build_connection(
     host: String,
     port: u16,
@@ -218,13 +234,7 @@ pub async fn add_root_node(
     state: State<'_, Arc<SessionTreeState>>,
     request: ConnectServerRequest,
 ) -> Result<String, String> {
-    let auth = build_auth(
-        &request.auth_type,
-        request.password,
-        request.key_path,
-        request.cert_path,
-        request.passphrase,
-    )?;
+    let auth = build_root_auth(&request)?;
 
     let connection = build_connection(
         request.host,
@@ -745,6 +755,26 @@ mod tests {
         let error = build_auth("keyboard_interactive", None, None, None, None).unwrap_err();
 
         assert_eq!(error, "Unknown auth type: keyboard_interactive");
+    }
+
+    #[test]
+    fn test_build_root_auth_supports_keyboard_interactive_for_direct_sessions() {
+        let request = ConnectServerRequest {
+            host: "example.com".to_string(),
+            port: 22,
+            username: "alice".to_string(),
+            auth_type: "keyboard_interactive".to_string(),
+            password: None,
+            key_path: None,
+            cert_path: None,
+            passphrase: None,
+            display_name: Some("Example".to_string()),
+            agent_forwarding: false,
+        };
+
+        let auth = build_root_auth(&request).unwrap();
+
+        assert!(matches!(auth, AuthMethod::KeyboardInteractive));
     }
 }
 

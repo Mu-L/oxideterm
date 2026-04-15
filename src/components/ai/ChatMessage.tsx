@@ -366,7 +366,7 @@ export const ChatMessage = memo(function ChatMessage({
         ) : (
           <>
             {!isUser && turnDisplaySegments.length > 0 ? (
-              <div ref={contentRef} onClick={handleClick}>
+              <div ref={contentRef} className="ai-chat-markdown" onClick={handleClick}>
                 {turnDisplaySegments.map((segment, index) => {
                   if (segment.kind === 'thinking') {
                     return (
@@ -418,7 +418,7 @@ export const ChatMessage = memo(function ChatMessage({
             ) : (
               <div
                 ref={contentRef}
-                className="md-content selection:bg-theme-accent/20"
+                className="ai-chat-markdown md-content selection:bg-theme-accent/20"
                 onClick={handleClick}
                 dangerouslySetInnerHTML={{ __html: renderedHtml }}
               />

@@ -90,6 +90,11 @@ type ResolvedNode = {
   agentAvailable: boolean;
 };
 
+type TerminalOutputSubscription = {
+  getCount: () => number;
+  unsubscribe: () => void;
+};
+
 function makeAbortError(): DOMException {
   return new DOMException('Generation was stopped.', 'AbortError');
 }
@@ -98,6 +103,23 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw makeAbortError();
   }
+}
+
+function createTerminalOutputSubscription(sessionId: string): TerminalOutputSubscription {
+  let outputCounter = 0;
+  let unsubscribed = false;
+  const rawUnsubscribe = subscribeTerminalOutput(sessionId, () => {
+    outputCounter += 1;
+  });
+
+  return {
+    getCount: () => outputCounter,
+    unsubscribe: () => {
+      if (unsubscribed) return;
+      unsubscribed = true;
+      rawUnsubscribe();
+    },
+  };
 }
 
 async function waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
@@ -472,60 +494,66 @@ async function execTerminalCommandToSession(
     console.debug(`[AI:ToolExec] pre-command snapshot: ${preSnapshotLineCount} lines`);
   }
 
-  const sent = writeToTerminal(paneId, `${command}\r`);
-  if (!sent) {
+  const outputSubscription = createTerminalOutputSubscription(sessionId);
+  try {
+    const sent = writeToTerminal(paneId, `${command}\r`);
+    if (!sent) {
+      return {
+        toolCallId,
+        toolName: 'terminal_exec',
+        success: false,
+        output: '',
+        error: `Terminal session is not writable: ${sessionId}`,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+    // Auto-await output (default: true)
+    const awaitOutput = args.await_output !== false;
+    if (!awaitOutput) {
+      return {
+        toolCallId,
+        toolName: 'terminal_exec',
+        success: true,
+        output: `Command sent to terminal session ${sessionId}: ${command}`,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+    const waitResult = await waitForTerminalOutput(
+      sessionId,
+      AUTO_AWAIT_TIMEOUT_SECS,
+      AUTO_AWAIT_STABLE_SECS,
+      null,
+      startTime,
+      preSnapshotLineCount,
+      abortSignal,
+      outputSubscription,
+    );
+
+    if (waitResult.error === 'Generation was stopped.') {
+      return {
+        toolCallId,
+        toolName: 'terminal_exec',
+        success: false,
+        output: `Command was sent to terminal session ${sessionId} before generation stopped: ${command}`,
+        error: waitResult.error,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
     return {
       toolCallId,
       toolName: 'terminal_exec',
-      success: false,
-      output: '',
-      error: `Terminal session is not writable: ${sessionId}`,
-      durationMs: Date.now() - startTime,
-    };
-  }
-
-  // Auto-await output (default: true)
-  const awaitOutput = args.await_output !== false;
-  if (!awaitOutput) {
-    return {
-      toolCallId,
-      toolName: 'terminal_exec',
-      success: true,
-      output: `Command sent to terminal session ${sessionId}: ${command}`,
-      durationMs: Date.now() - startTime,
-    };
-  }
-
-  const waitResult = await waitForTerminalOutput(
-    sessionId,
-    AUTO_AWAIT_TIMEOUT_SECS,
-    AUTO_AWAIT_STABLE_SECS,
-    null,
-    startTime,
-    preSnapshotLineCount,
-    abortSignal,
-  );
-
-  if (waitResult.error === 'Generation was stopped.') {
-    return {
-      toolCallId,
-      toolName: 'terminal_exec',
-      success: false,
-      output: `Command was sent to terminal session ${sessionId} before generation stopped: ${command}`,
+      success: waitResult.success,
+      output: waitResult.output,
       error: waitResult.error,
+      truncated: waitResult.truncated,
       durationMs: Date.now() - startTime,
     };
+  } finally {
+    outputSubscription.unsubscribe();
   }
-
-  return {
-    toolCallId,
-    toolName: 'terminal_exec',
-    success: waitResult.success,
-    output: waitResult.output,
-    error: waitResult.error,
-    truncated: waitResult.truncated,
-    durationMs: Date.now() - startTime,
-  };
 }
 
 async function execReadFile(
@@ -1036,6 +1064,7 @@ async function waitForTerminalOutput(
   startTime: number,
   preSnapshotLineCount?: number | null,
   abortSignal?: AbortSignal,
+  existingSubscription?: TerminalOutputSubscription,
 ): Promise<WaitResult> {
   // Use pre-command snapshot if provided (avoids race condition),
   // otherwise take a fresh snapshot now.
@@ -1057,13 +1086,13 @@ async function waitForTerminalOutput(
 
   console.debug(`[AI:ToolExec] waitForTerminalOutput: initial=${initialLineCount}, timeout=${timeoutSecs}s, stable=${stableSecs}s`);
 
+  const outputSubscription = existingSubscription ?? createTerminalOutputSubscription(sessionId);
+
   const result = await new Promise<'pattern' | 'prompt' | 'stable' | 'timeout' | 'lost' | 'aborted'>((resolve) => {
     let stableTimer: ReturnType<typeof setTimeout> | null = null;
     let promptGraceTimer: ReturnType<typeof setTimeout> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
-    let unsubscribe = () => {};
     let settled = false;
-    let outputCounter = 0;       // Bumped synchronously by notification listener
     let lastCheckedCounter = 0;  // Tracks which notifications have been processed
     let checking = false;        // Prevents overlapping async checks
     let outputBursts = 0;        // Count of new-output detections for adaptive stability
@@ -1076,18 +1105,13 @@ async function waitForTerminalOutput(
       if (promptGraceTimer) clearTimeout(promptGraceTimer);
       if (pollTimer) clearInterval(pollTimer);
       if (abortSignal && abortHandler) abortSignal.removeEventListener('abort', abortHandler);
-      unsubscribe();
+      outputSubscription.unsubscribe();
       console.debug(`[AI:ToolExec] done: reason=${reason}`);
       resolve(reason);
     };
 
     // Timeout guard
     const timeoutTimer = setTimeout(() => done('timeout'), Math.max(0, timeoutMs - (Date.now() - startTime)));
-
-    // Synchronous listener — just bump counter, no async work
-    const onOutput = () => {
-      outputCounter++;
-    };
 
     const abortHandler = abortSignal ? () => done('aborted') : null;
     if (abortSignal) {
@@ -1098,11 +1122,10 @@ async function waitForTerminalOutput(
       abortSignal.addEventListener('abort', abortHandler!, { once: true });
     }
 
-    unsubscribe = subscribeTerminalOutput(sessionId, onOutput);
-
     // Periodic poller — checks counter and performs async buffer reads safely
     pollTimer = setInterval(async () => {
       if (settled || checking) return;
+      const outputCounter = outputSubscription.getCount();
       if (outputCounter === lastCheckedCounter) return; // No new notifications
 
       checking = true;
@@ -1384,13 +1407,20 @@ async function execSendControlSequence(
     return { toolCallId, toolName, success: false, output: '', error: `Open terminal session not found: ${sessionId}`, durationMs: Date.now() - startTime };
   }
 
-  const sent = writeToTerminal(paneId, CONTROL_SEQUENCES[rawSequence]);
-  if (!sent) {
-    return { toolCallId, toolName, success: false, output: '', error: `Terminal session is not writable: ${sessionId}`, durationMs: Date.now() - startTime };
-  }
+  const preSnapshotLineCount = await readBufferLineCount(sessionId);
+  const outputSubscription = createTerminalOutputSubscription(sessionId);
+  let waitResult: WaitResult;
+  try {
+    const sent = writeToTerminal(paneId, CONTROL_SEQUENCES[rawSequence]);
+    if (!sent) {
+      return { toolCallId, toolName, success: false, output: '', error: `Terminal session is not writable: ${sessionId}`, durationMs: Date.now() - startTime };
+    }
 
-  // Wait briefly for terminal response
-  const waitResult = await waitForTerminalOutput(sessionId, 3, 1, null, startTime, undefined, abortSignal);
+    // Wait briefly for terminal response
+    waitResult = await waitForTerminalOutput(sessionId, 3, 1, null, startTime, preSnapshotLineCount, abortSignal, outputSubscription);
+  } finally {
+    outputSubscription.unsubscribe();
+  }
 
   const label = CONTROL_LABELS[rawSequence] || rawSequence;
   if (waitResult.error === 'Generation was stopped.') {
@@ -1460,29 +1490,35 @@ async function execBatchExec(
       // Pre-command snapshot: capture buffer line count BEFORE sending the command
       const preSnapshotLineCount = await readBufferLineCount(sessionId);
 
-      const sent = writeToTerminal(paneId, `${cmd}\r`);
-      if (!sent) {
-        results.push(`[${i + 1}] $ ${cmd}\n❌ Terminal is not writable.`);
-        break;
-      }
-
-      const waitResult = await waitForTerminalOutput(
-        sessionId,
-        AUTO_AWAIT_TIMEOUT_SECS,
-        AUTO_AWAIT_STABLE_SECS,
-        null,
-        startTime,
-        preSnapshotLineCount,
-        abortSignal,
-      );
-
-      if (!waitResult.success) {
-        results.push(`[${i + 1}] $ ${cmd}\n❌ ${waitResult.error || 'Failed to read output.'}`);
-        if (waitResult.error === 'Generation was stopped.') {
+      const outputSubscription = createTerminalOutputSubscription(sessionId);
+      try {
+        const sent = writeToTerminal(paneId, `${cmd}\r`);
+        if (!sent) {
+          results.push(`[${i + 1}] $ ${cmd}\n❌ Terminal is not writable.`);
           break;
         }
-      } else {
-        results.push(`[${i + 1}] $ ${cmd}\n${waitResult.output}`);
+
+        const waitResult = await waitForTerminalOutput(
+          sessionId,
+          AUTO_AWAIT_TIMEOUT_SECS,
+          AUTO_AWAIT_STABLE_SECS,
+          null,
+          startTime,
+          preSnapshotLineCount,
+          abortSignal,
+          outputSubscription,
+        );
+
+        if (!waitResult.success) {
+          results.push(`[${i + 1}] $ ${cmd}\n❌ ${waitResult.error || 'Failed to read output.'}`);
+          if (waitResult.error === 'Generation was stopped.') {
+            break;
+          }
+        } else {
+          results.push(`[${i + 1}] $ ${cmd}\n${waitResult.output}`);
+        }
+      } finally {
+        outputSubscription.unsubscribe();
       }
     }
   } catch (e) {
@@ -1539,6 +1575,245 @@ const KEY_SEQUENCES: Record<string, string> = {
   'f11': '\x1b[23~',
   'f12': '\x1b[24~',
 };
+
+const KEY_ALIASES: Record<string, string> = {
+  'esc': 'escape',
+  'return': 'enter',
+  'spacebar': 'space',
+  'pgup': 'pageup',
+  'page-up': 'pageup',
+  'pgdn': 'pagedown',
+  'page-down': 'pagedown',
+  'del': 'delete',
+  'ins': 'insert',
+  'arrowup': 'up',
+  'arrowdown': 'down',
+  'arrowleft': 'left',
+  'arrowright': 'right',
+  'cmd': 'meta',
+  'command': 'meta',
+  'super': 'meta',
+  'option': 'alt',
+  'opt': 'alt',
+  'control': 'ctrl',
+  'ctl': 'ctrl',
+};
+
+const MODIFIER_NAMES = new Set(['ctrl', 'alt', 'shift', 'meta']);
+
+const MODIFIER_CURSOR_FINALS: Record<string, string> = {
+  'up': 'A',
+  'down': 'B',
+  'right': 'C',
+  'left': 'D',
+  'home': 'H',
+  'end': 'F',
+  'f1': 'P',
+  'f2': 'Q',
+  'f3': 'R',
+  'f4': 'S',
+};
+
+const MODIFIER_TILDE_CODES: Record<string, number> = {
+  'insert': 2,
+  'delete': 3,
+  'pageup': 5,
+  'pagedown': 6,
+  'f5': 15,
+  'f6': 17,
+  'f7': 18,
+  'f8': 19,
+  'f9': 20,
+  'f10': 21,
+  'f11': 23,
+  'f12': 24,
+};
+
+const PRINTABLE_KEY_RE = /^[\x20-\x7E\u0080-\uFFFF]+$/;
+
+type TerminalKeyModifiers = {
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  meta: boolean;
+};
+
+type EncodedTerminalKey = {
+  sequence: string;
+  summary: string;
+};
+
+function normalizeKeyToken(token: string): string {
+  const normalized = token.trim().toLowerCase().replace(/\s+/g, '');
+  return KEY_ALIASES[normalized] ?? normalized;
+}
+
+function controlCharForKey(key: string): string | null {
+  if (key.length === 1) {
+    const lower = key.toLowerCase();
+    if (lower >= 'a' && lower <= 'z') {
+      return String.fromCharCode(lower.charCodeAt(0) - 96);
+    }
+    switch (lower) {
+      case '@':
+      case '2':
+        return '\x00';
+      case '[':
+      case '3':
+        return '\x1b';
+      case '\\':
+      case '4':
+        return '\x1c';
+      case ']':
+      case '5':
+        return '\x1d';
+      case '^':
+      case '6':
+        return '\x1e';
+      case '_':
+      case '7':
+      case '/':
+        return '\x1f';
+      case '?':
+      case '8':
+        return '\x7f';
+      default:
+        return null;
+    }
+  }
+
+  if (key === 'space') {
+    return '\x00';
+  }
+
+  return null;
+}
+
+function getModifierParam(modifiers: TerminalKeyModifiers): number {
+  const metaAsAlt = modifiers.alt || modifiers.meta;
+  return 1 + (modifiers.shift ? 1 : 0) + (metaAsAlt ? 2 : 0) + (modifiers.ctrl ? 4 : 0);
+}
+
+function encodeModifiedSpecialKey(keyName: string, modifiers: TerminalKeyModifiers): string | null {
+  const modifierParam = getModifierParam(modifiers);
+  if (modifierParam <= 1) {
+    return KEY_SEQUENCES[keyName] ?? null;
+  }
+
+  if (keyName === 'tab') {
+    return modifierParam === 2 ? '\x1b[Z' : null;
+  }
+
+  if (MODIFIER_CURSOR_FINALS[keyName]) {
+    return `\x1b[1;${modifierParam}${MODIFIER_CURSOR_FINALS[keyName]}`;
+  }
+
+  if (MODIFIER_TILDE_CODES[keyName] !== undefined) {
+    return `\x1b[${MODIFIER_TILDE_CODES[keyName]};${modifierParam}~`;
+  }
+
+  if (keyName === 'enter' || keyName === 'escape' || keyName === 'backspace' || keyName === 'space') {
+    let sequence = keyName === 'space' ? ' ' : KEY_SEQUENCES[keyName];
+    if (modifiers.ctrl) {
+      sequence = controlCharForKey(keyName) ?? sequence;
+    }
+    if (modifiers.alt || modifiers.meta) {
+      sequence = `\x1b${sequence}`;
+    }
+    return sequence;
+  }
+
+  return null;
+}
+
+function encodeModifiedPrintableKey(rawKey: string, normalizedKey: string, modifiers: TerminalKeyModifiers): string | null {
+  let key = normalizedKey === 'space'
+    ? ' '
+    : (/^[a-z]$/i.test(normalizedKey) ? normalizedKey.toLowerCase() : rawKey);
+
+  if (key.length !== 1 && normalizedKey !== 'space') {
+    return null;
+  }
+
+  if (modifiers.shift && /^[a-z]$/i.test(key)) {
+    key = key.toUpperCase();
+  }
+
+  let sequence = key;
+  if (modifiers.ctrl) {
+    sequence = controlCharForKey(normalizedKey === 'space' ? 'space' : key) ?? '';
+    if (!sequence) {
+      return null;
+    }
+  }
+
+  if (modifiers.alt || modifiers.meta) {
+    sequence = `\x1b${sequence}`;
+  }
+
+  return sequence;
+}
+
+function encodeTerminalKey(raw: string): EncodedTerminalKey | { error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { error: 'Key entries must be non-empty strings.' };
+  }
+
+  const parts = trimmed === '+' ? [trimmed] : trimmed.split(/\s*\+\s*/);
+  if (parts.length === 1) {
+    const normalized = normalizeKeyToken(trimmed);
+    const sequence = KEY_SEQUENCES[normalized];
+    if (sequence !== undefined) {
+      return { sequence, summary: `[${trimmed}]` };
+    }
+    if (!PRINTABLE_KEY_RE.test(trimmed)) {
+      return { error: 'contains control characters. Use named keys (e.g. "Escape", "Enter") instead.' };
+    }
+    return {
+      sequence: trimmed,
+      summary: trimmed.length <= 10 ? `"${trimmed}"` : `"${trimmed.slice(0, 10)}…"`,
+    };
+  }
+
+  const modifiers: TerminalKeyModifiers = { ctrl: false, alt: false, shift: false, meta: false };
+  let baseRaw: string | null = null;
+  let baseNormalized: string | null = null;
+
+  for (const part of parts) {
+    const normalized = normalizeKeyToken(part);
+    if (!normalized) {
+      return { error: 'contains an empty chord segment.' };
+    }
+    if (MODIFIER_NAMES.has(normalized)) {
+      modifiers[normalized as keyof TerminalKeyModifiers] = true;
+      continue;
+    }
+    if (baseRaw !== null) {
+      return { error: 'must contain exactly one non-modifier key.' };
+    }
+    baseRaw = part.trim();
+    baseNormalized = normalized;
+  }
+
+  if (!baseRaw || !baseNormalized) {
+    return { error: 'must include a non-modifier key (for example "Ctrl+C").' };
+  }
+
+  const specialSequence = encodeModifiedSpecialKey(baseNormalized, modifiers);
+  if (specialSequence !== null) {
+    return { sequence: specialSequence, summary: `[${trimmed}]` };
+  }
+
+  const printableSequence = encodeModifiedPrintableKey(baseRaw, baseNormalized, modifiers);
+  if (printableSequence !== null) {
+    return { sequence: printableSequence, summary: `[${trimmed}]` };
+  }
+
+  return {
+    error: `combo "${trimmed}" is not supported. Use terminal-style shortcuts like Ctrl+C, Alt+X, Shift+Tab, or Ctrl+Shift+Arrow.`,
+  };
+}
 
 /** SGR mouse button codes */
 const MOUSE_BUTTONS: Record<string, number> = {
@@ -1640,85 +1915,89 @@ async function execSendKeys(
   }
 
   const sentSummary: string[] = [];
-
-  /** Printable-only regex: ASCII 0x20-0x7E plus extended Unicode (no control chars) */
-  const PRINTABLE_RE = /^[\x20-\x7E\u0080-\uFFFF]+$/;
+  const preSnapshotLineCount = await readBufferLineCount(sessionId);
+  const outputSubscription = createTerminalOutputSubscription(sessionId);
 
   try {
-    for (let i = 0; i < keys.length; i++) {
-      throwIfAborted(abortSignal);
+    try {
+      for (let i = 0; i < keys.length; i++) {
+        throwIfAborted(abortSignal);
 
-      const raw = keys[i];
-      const lower = raw.toLowerCase();
-      const sequence = KEY_SEQUENCES[lower];
+        const raw = keys[i];
+        const encoded = encodeTerminalKey(raw);
+        if ('error' in encoded) {
+          const detail = encoded.error.startsWith('combo ') ? encoded.error : `keys[${i}] ${encoded.error}`;
+          return { toolCallId, toolName, success: false, output: sentSummary.join(', '), error: detail, durationMs: Date.now() - startTime };
+        }
 
-      if (sequence !== undefined) {
-        const sent = writeToTerminal(paneId, sequence);
+        const sent = writeToTerminal(paneId, encoded.sequence);
         if (!sent) {
           return { toolCallId, toolName, success: false, output: sentSummary.join(', '), error: `Terminal not writable at key ${i + 1}.`, durationMs: Date.now() - startTime };
         }
-        sentSummary.push(`[${raw}]`);
-      } else {
-        if (!PRINTABLE_RE.test(raw)) {
-          return { toolCallId, toolName, success: false, output: sentSummary.join(', '), error: `keys[${i}] contains control characters. Use named keys (e.g. "Escape", "Enter") instead.`, durationMs: Date.now() - startTime };
-        }
-        const sent = writeToTerminal(paneId, raw);
-        if (!sent) {
-          return { toolCallId, toolName, success: false, output: sentSummary.join(', '), error: `Terminal not writable at key ${i + 1}.`, durationMs: Date.now() - startTime };
-        }
-        sentSummary.push(raw.length <= 10 ? `"${raw}"` : `"${raw.slice(0, 10)}…"`);
-      }
+        sentSummary.push(encoded.summary);
 
-      if (i < keys.length - 1) {
-        await waitWithAbort(delayMs, abortSignal);
+        if (i < keys.length - 1) {
+          await waitWithAbort(delayMs, abortSignal);
+        }
+      }
+    } catch (e) {
+      if (!(e instanceof Error && e.name === 'AbortError')) {
+        throw e;
       }
     }
-  } catch (e) {
-    if (!(e instanceof Error && e.name === 'AbortError')) {
-      throw e;
-    }
-  }
 
-  // Wait briefly for terminal to process keystrokes
-  if (abortSignal?.aborted) {
+    // Wait briefly for terminal to process keystrokes
+    if (abortSignal?.aborted) {
+      return {
+        toolCallId,
+        toolName,
+        success: false,
+        output: `Sent ${sentSummary.length} key(s) before generation stopped: ${sentSummary.join(', ')}`,
+        error: 'Generation was stopped.',
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+    const waitResult = await waitForTerminalOutput(
+      sessionId,
+      SEND_KEYS_TIMEOUT_SECS,
+      SEND_KEYS_STABLE_SECS,
+      null,
+      startTime,
+      preSnapshotLineCount,
+      abortSignal,
+      outputSubscription,
+    );
+
+    if (waitResult.error === 'Generation was stopped.') {
+      return {
+        toolCallId,
+        toolName,
+        success: false,
+        output: `Sent ${keys.length} key(s) before generation stopped: ${sentSummary.join(', ')}`,
+        error: waitResult.error,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+    const summary = `Sent ${keys.length} key(s): ${sentSummary.join(', ')}`;
+    const output = waitResult.output
+      ? `${summary}\n\nTerminal response:\n${waitResult.output}`
+      : `${summary}\n\nNo immediate terminal response.`;
+
+    const { text, truncated } = truncateOutput(output);
+
     return {
       toolCallId,
       toolName,
-      success: false,
-      output: `Sent ${sentSummary.length} key(s) before generation stopped: ${sentSummary.join(', ')}`,
-      error: 'Generation was stopped.',
+      success: true,
+      output: text,
+      truncated: truncated || waitResult.truncated,
       durationMs: Date.now() - startTime,
     };
+  } finally {
+    outputSubscription.unsubscribe();
   }
-
-  const waitResult = await waitForTerminalOutput(sessionId, SEND_KEYS_TIMEOUT_SECS, SEND_KEYS_STABLE_SECS, null, startTime, undefined, abortSignal);
-
-  if (waitResult.error === 'Generation was stopped.') {
-    return {
-      toolCallId,
-      toolName,
-      success: false,
-      output: `Sent ${keys.length} key(s) before generation stopped: ${sentSummary.join(', ')}`,
-      error: waitResult.error,
-      durationMs: Date.now() - startTime,
-    };
-  }
-
-  const summary = `Sent ${keys.length} key(s): ${sentSummary.join(', ')}`;
-  const output = waitResult.output
-    ? `${summary}\n\nTerminal response:\n${waitResult.output}`
-    : `${summary}\n\nNo immediate terminal response.`;
-
-  const { text, truncated } = truncateOutput(output);
-
-  return {
-    toolCallId,
-    toolName,
-    success: true,
-    output: text,
-    truncated: truncated || waitResult.truncated,
-    durationMs: Date.now() - startTime,
-  };
 }
 
 async function execSendMouse(
@@ -1757,70 +2036,76 @@ async function execSendMouse(
     return { toolCallId, toolName, success: false, output: '', error: `Coordinates out of bounds. Terminal is ${snapshot.cols}×${snapshot.rows}, got (${x},${y}).`, durationMs: Date.now() - startTime };
   }
 
+  const preSnapshotLineCount = await readBufferLineCount(sessionId);
+  const outputSubscription = createTerminalOutputSubscription(sessionId);
   let summary: string;
 
-  if (action === 'click') {
-    const btnCode = MOUSE_BUTTONS[button];
-    if (btnCode === undefined) {
-      return { toolCallId, toolName, success: false, output: '', error: `Invalid button: "${button}". Must be "left", "right", or "middle".`, durationMs: Date.now() - startTime };
+  try {
+    if (action === 'click') {
+      const btnCode = MOUSE_BUTTONS[button];
+      if (btnCode === undefined) {
+        return { toolCallId, toolName, success: false, output: '', error: `Invalid button: "${button}". Must be "left", "right", or "middle".`, durationMs: Date.now() - startTime };
+      }
+
+      // SGR mouse protocol: press = \x1b[<btn;x;yM, release = \x1b[<btn;x;ym
+      const press = `\x1b[<${btnCode};${x};${y}M`;
+      const release = `\x1b[<${btnCode};${x};${y}m`;
+
+      const sent = writeToTerminal(paneId, press + release);
+      if (!sent) {
+        return { toolCallId, toolName, success: false, output: '', error: `Terminal not writable: ${sessionId}`, durationMs: Date.now() - startTime };
+      }
+      summary = `Clicked ${button} button at (${x},${y})`;
+    } else {
+      // scroll — button param is not used
+      if (direction !== 'up' && direction !== 'down') {
+        return { toolCallId, toolName, success: false, output: '', error: 'Invalid direction. Must be "up" or "down".', durationMs: Date.now() - startTime };
+      }
+      const scrollCode = direction === 'up' ? MOUSE_SCROLL_UP : MOUSE_SCROLL_DOWN;
+      let scrollData = '';
+      for (let i = 0; i < count; i++) {
+        // SGR scroll: press event only (no release for scroll)
+        scrollData += `\x1b[<${scrollCode};${x};${y}M`;
+      }
+
+      const sent = writeToTerminal(paneId, scrollData);
+      if (!sent) {
+        return { toolCallId, toolName, success: false, output: '', error: `Terminal not writable: ${sessionId}`, durationMs: Date.now() - startTime };
+      }
+      summary = `Scrolled ${direction} ${count} step(s) at (${x},${y})`;
     }
 
-    // SGR mouse protocol: press = \x1b[<btn;x;yM, release = \x1b[<btn;x;ym
-    const press = `\x1b[<${btnCode};${x};${y}M`;
-    const release = `\x1b[<${btnCode};${x};${y}m`;
+    // Brief wait for TUI to react
+    const waitResult = await waitForTerminalOutput(sessionId, 2, 0.5, null, startTime, preSnapshotLineCount, abortSignal, outputSubscription);
 
-    const sent = writeToTerminal(paneId, press + release);
-    if (!sent) {
-      return { toolCallId, toolName, success: false, output: '', error: `Terminal not writable: ${sessionId}`, durationMs: Date.now() - startTime };
-    }
-    summary = `Clicked ${button} button at (${x},${y})`;
-  } else {
-    // scroll — button param is not used
-    if (direction !== 'up' && direction !== 'down') {
-      return { toolCallId, toolName, success: false, output: '', error: 'Invalid direction. Must be "up" or "down".', durationMs: Date.now() - startTime };
-    }
-    const scrollCode = direction === 'up' ? MOUSE_SCROLL_UP : MOUSE_SCROLL_DOWN;
-    let scrollData = '';
-    for (let i = 0; i < count; i++) {
-      // SGR scroll: press event only (no release for scroll)
-      scrollData += `\x1b[<${scrollCode};${x};${y}M`;
+    if (waitResult.error === 'Generation was stopped.') {
+      return {
+        toolCallId,
+        toolName,
+        success: false,
+        output: `${summary} before generation stopped.`,
+        error: waitResult.error,
+        durationMs: Date.now() - startTime,
+      };
     }
 
-    const sent = writeToTerminal(paneId, scrollData);
-    if (!sent) {
-      return { toolCallId, toolName, success: false, output: '', error: `Terminal not writable: ${sessionId}`, durationMs: Date.now() - startTime };
-    }
-    summary = `Scrolled ${direction} ${count} step(s) at (${x},${y})`;
-  }
+    const output = waitResult.output
+      ? `${summary}\n\nTerminal response:\n${waitResult.output}`
+      : `${summary}\n\nNo immediate terminal response.`;
 
-  // Brief wait for TUI to react
-  const waitResult = await waitForTerminalOutput(sessionId, 2, 0.5, null, startTime, undefined, abortSignal);
+    const { text, truncated } = truncateOutput(output);
 
-  if (waitResult.error === 'Generation was stopped.') {
     return {
       toolCallId,
       toolName,
-      success: false,
-      output: `${summary} before generation stopped.`,
-      error: waitResult.error,
+      success: true,
+      output: text,
+      truncated: truncated || waitResult.truncated,
       durationMs: Date.now() - startTime,
     };
+  } finally {
+    outputSubscription.unsubscribe();
   }
-
-  const output = waitResult.output
-    ? `${summary}\n\nTerminal response:\n${waitResult.output}`
-    : `${summary}\n\nNo immediate terminal response.`;
-
-  const { text, truncated } = truncateOutput(output);
-
-  return {
-    toolCallId,
-    toolName,
-    success: true,
-    output: text,
-    truncated: truncated || waitResult.truncated,
-    durationMs: Date.now() - startTime,
-  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

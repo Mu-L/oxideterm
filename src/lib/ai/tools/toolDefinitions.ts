@@ -462,7 +462,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
   {
     name: 'send_keys',
     description:
-      '[Experimental] Send a sequence of keystrokes to a terminal session. Supports plain text and special keys (Enter, Escape, Tab, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, F1-F12, Space, Insert). Use read_screen first to see current state, then send_keys to interact with TUI apps like vim, nano, htop, less.',
+      '[Experimental] Send a sequence of keystrokes to a terminal session. Supports plain text, special keys (Enter, Escape, Tab, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, F1-F12, Space, Insert), and terminal-style key combos such as Ctrl+C, Alt+X, Cmd+K, Shift+Tab, or Ctrl+Shift+Left. Cmd/Command is treated as Meta for terminal input. Use read_screen first to see current state, then send_keys to interact with TUI apps like vim, nano, htop, less.',
     parameters: {
       type: 'object',
       properties: {
@@ -473,7 +473,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
         keys: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Array of keys to send. Each element is either plain text (sent as-is) or a special key name (case-insensitive): Enter, Escape, Tab, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, Insert, Space, F1-F12. Max 50 elements.',
+          description: 'Array of keys to send. Each element is either plain text (sent as-is), a special key name (case-insensitive): Enter, Escape, Tab, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, Insert, Space, F1-F12, or a terminal-style combo like Ctrl+C, Alt+X, Cmd+K, Shift+Tab, or Ctrl+Shift+Left. Max 50 elements.',
         },
         delay_ms: {
           type: 'number',

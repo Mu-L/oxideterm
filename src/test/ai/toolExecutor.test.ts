@@ -408,6 +408,223 @@ describe('toolExecutor get_settings sanitization', () => {
 });
 
 describe('toolExecutor regressions', () => {
+  beforeEach(() => {
+    findPaneBySessionIdMock.mockReset();
+    getTerminalBufferMock.mockReset();
+    writeToTerminalMock.mockReset();
+    subscribeTerminalOutputMock.mockReset();
+    subscribeTerminalOutputMock.mockImplementation(() => () => {});
+    getBufferStatsMock.mockReset();
+    getBufferStatsMock.mockRejectedValue(new Error('no backend buffer stats'));
+    getScrollBufferMock.mockReset();
+    getScrollBufferMock.mockRejectedValue(new Error('no backend scroll buffer'));
+  });
+
+  it('captures fast terminal_exec session output when data arrives immediately after write', async () => {
+    findPaneBySessionIdMock.mockReturnValue('pane-1');
+
+    let currentLines = 0;
+    const renderedLines = [
+      { text: '=== 终端已就绪 ===' },
+      { text: '/Users/dominical' },
+      { text: 'Shell: /bin/zsh' },
+      { text: 'dominical@macbook %' },
+    ];
+
+    let outputListener: (() => void) | undefined;
+    subscribeTerminalOutputMock.mockImplementation((_sessionId: string, listener: () => void) => {
+      outputListener = listener;
+      return () => {
+        outputListener = undefined;
+      };
+    });
+
+    getBufferStatsMock.mockImplementation(async () => ({
+      current_lines: currentLines,
+      total_lines: currentLines,
+      max_lines: 100000,
+      memory_usage_mb: 1,
+    }));
+    getScrollBufferMock.mockImplementation(async (_sessionId: string, startLine: number, count: number) => (
+      renderedLines.slice(startLine, startLine + count)
+    ));
+
+    writeToTerminalMock.mockImplementation(() => {
+      currentLines = renderedLines.length;
+      outputListener?.();
+      return true;
+    });
+
+    const result = await executeTool(
+      'terminal_exec',
+      { session_id: 'session-1', command: 'echo ready && pwd && echo "Shell: $SHELL"' },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('=== 终端已就绪 ===');
+    expect(result.output).toContain('/Users/dominical');
+    expect(result.output).toContain('Shell: /bin/zsh');
+    expect(subscribeTerminalOutputMock.mock.invocationCallOrder[0]).toBeLessThan(writeToTerminalMock.mock.invocationCallOrder[0]);
+  });
+
+  it('encodes terminal shortcut combos in send_keys instead of sending literal text', async () => {
+    findPaneBySessionIdMock.mockReturnValue('pane-1');
+
+    let currentLines = 0;
+    const renderedLines = [
+      { text: 'combo handled' },
+      { text: 'dominical@macbook %' },
+    ];
+
+    let outputListener: (() => void) | undefined;
+    subscribeTerminalOutputMock.mockImplementation((_sessionId: string, listener: () => void) => {
+      outputListener = listener;
+      return () => {
+        outputListener = undefined;
+      };
+    });
+
+    getBufferStatsMock.mockImplementation(async () => ({
+      current_lines: currentLines,
+      total_lines: currentLines,
+      max_lines: 100000,
+      memory_usage_mb: 1,
+    }));
+    getScrollBufferMock.mockImplementation(async (_sessionId: string, startLine: number, count: number) => (
+      renderedLines.slice(startLine, startLine + count)
+    ));
+
+    const writes: string[] = [];
+    writeToTerminalMock.mockImplementation((_paneId: string, data: string) => {
+      writes.push(data);
+      currentLines = renderedLines.length;
+      outputListener?.();
+      return true;
+    });
+
+    const result = await executeTool(
+      'send_keys',
+      {
+        session_id: 'session-1',
+        keys: ['Ctrl+C', 'Cmd+K', 'Shift+Tab', 'Ctrl+Shift+Left'],
+        delay_ms: 10,
+      },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(writes).toEqual(['\x03', '\x1bk', '\x1b[Z', '\x1b[1;6D']);
+    expect(result.output).toContain('[Ctrl+C]');
+    expect(result.output).toContain('[Cmd+K]');
+    expect(subscribeTerminalOutputMock.mock.invocationCallOrder[0]).toBeLessThan(writeToTerminalMock.mock.invocationCallOrder[0]);
+  });
+
+  it('keeps send_keys subscribed until delayed terminal output arrives', async () => {
+    findPaneBySessionIdMock.mockReturnValue('pane-1');
+
+    let currentLines = 0;
+    const renderedLines = [
+      { text: 'delayed key response' },
+      { text: 'dominical@macbook %' },
+    ];
+
+    let outputListener: (() => void) | undefined;
+    subscribeTerminalOutputMock.mockImplementation((_sessionId: string, listener: () => void) => {
+      outputListener = listener;
+      return () => {
+        outputListener = undefined;
+      };
+    });
+
+    getBufferStatsMock.mockImplementation(async () => ({
+      current_lines: currentLines,
+      total_lines: currentLines,
+      max_lines: 100000,
+      memory_usage_mb: 1,
+    }));
+    getScrollBufferMock.mockImplementation(async (_sessionId: string, startLine: number, count: number) => (
+      renderedLines.slice(startLine, startLine + count)
+    ));
+
+    writeToTerminalMock.mockImplementation(() => {
+      setTimeout(() => {
+        currentLines = renderedLines.length;
+        outputListener?.();
+      }, 20);
+      return true;
+    });
+
+    const result = await executeTool(
+      'send_keys',
+      {
+        session_id: 'session-1',
+        keys: ['Enter'],
+        delay_ms: 10,
+      },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('delayed key response');
+  });
+
+  it('captures delayed terminal output after send_mouse input', async () => {
+    findPaneBySessionIdMock.mockReturnValue('pane-1');
+    readScreenMock.mockReturnValue({ cols: 80, rows: 24 });
+
+    let currentLines = 0;
+    const renderedLines = [
+      { text: 'mouse click handled' },
+      { text: 'dominical@macbook %' },
+    ];
+
+    let outputListener: (() => void) | undefined;
+    subscribeTerminalOutputMock.mockImplementation((_sessionId: string, listener: () => void) => {
+      outputListener = listener;
+      return () => {
+        outputListener = undefined;
+      };
+    });
+
+    getBufferStatsMock.mockImplementation(async () => ({
+      current_lines: currentLines,
+      total_lines: currentLines,
+      max_lines: 100000,
+      memory_usage_mb: 1,
+    }));
+    getScrollBufferMock.mockImplementation(async (_sessionId: string, startLine: number, count: number) => (
+      renderedLines.slice(startLine, startLine + count)
+    ));
+
+    const writes: string[] = [];
+    writeToTerminalMock.mockImplementation((_paneId: string, data: string) => {
+      writes.push(data);
+      setTimeout(() => {
+        currentLines = renderedLines.length;
+        outputListener?.();
+      }, 20);
+      return true;
+    });
+
+    const result = await executeTool(
+      'send_mouse',
+      {
+        session_id: 'session-1',
+        action: 'click',
+        x: 5,
+        y: 3,
+        button: 'left',
+      },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('mouse click handled');
+    expect(writes).toEqual(['\x1b[<0;5;3M\x1b[<0;5;3m']);
+    expect(subscribeTerminalOutputMock.mock.invocationCallOrder[0]).toBeLessThan(writeToTerminalMock.mock.invocationCallOrder[0]);
+  });
+
   it('cancels await_terminal_output when abort signal fires', async () => {
     findPaneBySessionIdMock.mockReturnValue('pane-1');
     getTerminalBufferMock.mockReturnValue('existing line');

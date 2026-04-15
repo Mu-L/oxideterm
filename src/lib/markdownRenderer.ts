@@ -681,7 +681,7 @@ export const markdownStyles = `
   font-family: var(--terminal-font-family, 'JetBrains Mono', monospace) !important;
   background: var(--theme-bg-panel, rgba(128, 128, 128, 0.1));
   border: 1px solid var(--theme-border, rgba(128, 128, 128, 0.2));
-  border-radius: 3px;
+  border-radius: var(--radius-sm, 2px);
   color: var(--theme-text, inherit);
 }
 
@@ -689,10 +689,16 @@ export const markdownStyles = `
 .md-code-block {
   margin: 0.75em -12px;  /* Negative margin to break out of container padding */
   width: calc(100% + 24px);
-  border-radius: 2px;
+  border-radius: var(--radius-md, 6px);
   overflow: hidden;
   background: var(--theme-bg-panel, rgba(0, 0, 0, 0.03));
   border: 1px solid var(--theme-border, rgba(128, 128, 128, 0.2));
+}
+
+.ai-chat-markdown .md-code-block {
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
 }
 
 .md-code-header {
@@ -817,7 +823,7 @@ export const markdownStyles = `
 .md-image {
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
+  border-radius: var(--radius-md, 6px);
   margin: 0.5em 0;
 }
 
@@ -1010,7 +1016,7 @@ del {
 /* Mermaid Diagram Styles */
 .md-mermaid-container {
   margin: 1em 0;
-  border-radius: 4px;
+  border-radius: var(--radius-md, 6px);
   overflow: hidden;
   background: var(--theme-bg-darker, #09090b);
   border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.08));
@@ -1043,7 +1049,7 @@ del {
   padding: 0;
   background: none;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-sm, 3px);
   cursor: pointer;
   color: var(--theme-text-muted, rgba(255, 255, 255, 0.5));
   transition: all 0.15s ease;
@@ -1091,7 +1097,7 @@ del {
   padding: 0.75em 1em;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 4px;
+  border-radius: var(--radius-md, 4px);
   color: #f87171;
   font-size: 12px;
   font-family: var(--terminal-font-family, 'JetBrains Mono', monospace);
@@ -1116,7 +1122,7 @@ del {
   padding: 2em;
   background: var(--theme-bg-panel, #1a1a1a);
   border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.1));
-  border-radius: 8px;
+  border-radius: var(--radius-lg, 8px);
   overflow: auto;
 }
 
@@ -1131,7 +1137,7 @@ del {
   justify-content: center;
   background: var(--theme-bg-darker, #09090b);
   border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.1));
-  border-radius: 4px;
+  border-radius: var(--radius-md, 6px);
   cursor: pointer;
   color: var(--theme-text-muted, rgba(255, 255, 255, 0.5));
   transition: all 0.15s ease;
@@ -1197,7 +1203,7 @@ del {
   font-size: 0.9em;
   background: rgba(255, 107, 107, 0.1);
   padding: 0.1em 0.3em;
-  border-radius: 3px;
+  border-radius: var(--radius-sm, 2px);
 }
 
 /* Unrendered math placeholder */

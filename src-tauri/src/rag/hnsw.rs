@@ -249,7 +249,8 @@ impl PersistedHnswIndex {
                 );
                 return HnswLoadOutcome::Failed(format!(
                     "file too large: {} bytes exceeds {}",
-                    metadata.len(), MAX_INDEX_FILE_SIZE
+                    metadata.len(),
+                    MAX_INDEX_FILE_SIZE
                 ));
             }
         }
@@ -276,7 +277,8 @@ impl PersistedHnswIndex {
             );
             return HnswLoadOutcome::Failed(format!(
                 "decompressed data too large: {} bytes exceeds {}",
-                data.len(), MAX_DECOMPRESSED_SIZE
+                data.len(),
+                MAX_DECOMPRESSED_SIZE
             ));
         }
 

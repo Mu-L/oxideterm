@@ -36,7 +36,10 @@ const COMPRESSION_THRESHOLD: usize = 4096;
 pub enum HnswIndexStatus {
     Unloaded,
     Loading,
-    Ready { point_count: usize, dimensions: usize },
+    Ready {
+        point_count: usize,
+        dimensions: usize,
+    },
     Stale,
     Missing,
     Failed(String),
@@ -561,7 +564,10 @@ impl RagStore {
 
         // Invalidate HNSW index since embeddings changed
         if let Err(e) = self.invalidate_hnsw_index() {
-            warn!("Document {} removed but HNSW invalidation failed: {}", doc_id, e);
+            warn!(
+                "Document {} removed but HNSW invalidation failed: {}",
+                doc_id, e
+            );
         }
 
         Ok(())
@@ -1135,7 +1141,10 @@ impl RagStore {
 
         // Invalidate HNSW index since embeddings changed
         if let Err(e) = self.invalidate_hnsw_index() {
-            warn!("Document {} updated but HNSW invalidation failed: {}", doc_id, e);
+            warn!(
+                "Document {} updated but HNSW invalidation failed: {}",
+                doc_id, e
+            );
         }
 
         Ok(updated_meta)

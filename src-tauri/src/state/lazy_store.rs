@@ -71,7 +71,8 @@ where
         drop(state);
 
         tracing::info!("Initializing {} on first use", self.label);
-        let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (self.init)())) {
+        let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (self.init)()))
+        {
             Ok(result) => result,
             Err(payload) => Err(format!(
                 "{} initializer panicked: {}",

@@ -14,9 +14,8 @@ use tracing::{debug, info, warn};
 use super::auth::{
     DEFAULT_AUTH_TIMEOUT_SECS, authenticate_certificate_best_algo,
     authenticate_keyboard_interactive, authenticate_password, authenticate_publickey_best_algo,
-    build_client_config, ensure_auth_success,
-    load_certificate_auth_material, load_private_key_material, try_kbi_auth_chain,
-    try_password_as_kbi_fallback,
+    build_client_config, ensure_auth_success, load_certificate_auth_material,
+    load_private_key_material, try_kbi_auth_chain, try_password_as_kbi_fallback,
 };
 use super::config::{AuthMethod, SshConfig};
 use super::error::SshError;

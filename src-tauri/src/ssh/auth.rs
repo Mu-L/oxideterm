@@ -341,20 +341,15 @@ pub(crate) async fn authenticate_keyboard_interactive(
     )
     .await
     .map_err(|_| SshError::Timeout("Keyboard-interactive authentication timed out".to_string()))?
-    .map_err(|e| SshError::AuthenticationFailed(format!(
-        "Keyboard-interactive authentication start failed: {}",
-        e
-    )))?;
+    .map_err(|e| {
+        SshError::AuthenticationFailed(format!(
+            "Keyboard-interactive authentication start failed: {}",
+            e
+        ))
+    })?;
 
-    continue_interactive_kbi_flow(
-        kbi_result,
-        handle,
-        app,
-        &auth_flow_id,
-        false,
-        "KBI auth",
-    )
-    .await?;
+    continue_interactive_kbi_flow(kbi_result, handle, app, &auth_flow_id, false, "KBI auth")
+        .await?;
 
     Ok(())
 }
@@ -490,12 +485,7 @@ pub(crate) async fn try_password_as_kbi_fallback(
     Ok(false)
 }
 
-fn emit_kbi_result(
-    app: &AppHandle,
-    auth_flow_id: &str,
-    success: bool,
-    error: Option<String>,
-) {
+fn emit_kbi_result(app: &AppHandle, auth_flow_id: &str, success: bool, error: Option<String>) {
     use tauri::Emitter;
 
     if let Err(emit_error) = app.emit(
@@ -508,9 +498,7 @@ fn emit_kbi_result(
     ) {
         warn!(
             "Failed to emit {} for auth flow {}: {}",
-            EVENT_KBI_RESULT,
-            auth_flow_id,
-            emit_error
+            EVENT_KBI_RESULT, auth_flow_id, emit_error
         );
     }
 }

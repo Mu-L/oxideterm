@@ -72,7 +72,8 @@ const CONV_TRANSCRIPT_TABLE: TableDefinition<&str, &[u8]> =
 const METADATA_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("ai_chat_metadata");
 
 /// Table: diagnostic events (key: event_id, value: MessagePack bytes)
-const DIAGNOSTIC_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("ai_chat_diagnostic_events");
+const DIAGNOSTIC_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("ai_chat_diagnostic_events");
 
 /// Table: conversation diagnostic index (key: conv_id, value: Vec<event_id> as MessagePack)
 const CONV_DIAGNOSTIC_TABLE: TableDefinition<&str, &[u8]> =
@@ -766,7 +767,8 @@ impl AiChatStore {
                 }
 
                 let list_bytes = rmp_serde::to_vec(&transcript_ids)?;
-                transcript_index_table.insert(message.conversation_id.as_str(), list_bytes.as_slice())?;
+                transcript_index_table
+                    .insert(message.conversation_id.as_str(), list_bytes.as_slice())?;
             }
 
             meta.updated_at = message.timestamp;
@@ -828,8 +830,7 @@ impl AiChatStore {
         write_txn.commit()?;
         debug!(
             "Appended {} transcript entries to conversation {}",
-            entry_count,
-            conversation_id
+            entry_count, conversation_id
         );
         Ok(())
     }
@@ -909,8 +910,7 @@ impl AiChatStore {
         write_txn.commit()?;
         debug!(
             "Appended {} diagnostic events to conversation {}",
-            event_count,
-            conversation_id
+            event_count, conversation_id
         );
         Ok(())
     }
@@ -939,7 +939,7 @@ impl AiChatStore {
         let mut events = Vec::new();
 
         for event_id in event_ids.into_iter().skip(tail_start) {
-          if let Some(event_bytes) = diagnostic_table.get(event_id.as_str())? {
+            if let Some(event_bytes) = diagnostic_table.get(event_id.as_str())? {
                 let event: PersistedDiagnosticEvent = rmp_serde::from_slice(event_bytes.value())?;
                 events.push(event);
             }
@@ -2163,7 +2163,9 @@ mod tests {
     #[test]
     fn test_append_and_load_transcript_entries() {
         let (store, _dir) = create_test_store();
-        store.create_conversation(&create_test_meta("conv-transcript")).unwrap();
+        store
+            .create_conversation(&create_test_meta("conv-transcript"))
+            .unwrap();
 
         store
             .append_transcript_entries(
@@ -2200,7 +2202,9 @@ mod tests {
     #[test]
     fn test_append_and_tail_diagnostic_events() {
         let (store, _dir) = create_test_store();
-        store.create_conversation(&create_test_meta("conv-diagnostics")).unwrap();
+        store
+            .create_conversation(&create_test_meta("conv-diagnostics"))
+            .unwrap();
 
         store
             .append_diagnostic_events(
@@ -2383,7 +2387,9 @@ mod tests {
     #[test]
     fn test_delete_conversation_clears_transcript_entries() {
         let (store, _dir) = create_test_store();
-        store.create_conversation(&create_test_meta("conv-cleanup")).unwrap();
+        store
+            .create_conversation(&create_test_meta("conv-cleanup"))
+            .unwrap();
         store
             .append_transcript_entries(
                 "conv-cleanup",
@@ -2408,7 +2414,9 @@ mod tests {
     #[test]
     fn test_delete_conversation_clears_diagnostic_events() {
         let (store, _dir) = create_test_store();
-        store.create_conversation(&create_test_meta("conv-diagnostic-cleanup")).unwrap();
+        store
+            .create_conversation(&create_test_meta("conv-diagnostic-cleanup"))
+            .unwrap();
         store
             .append_diagnostic_events(
                 "conv-diagnostic-cleanup",
@@ -2424,7 +2432,9 @@ mod tests {
             )
             .unwrap();
 
-        store.delete_conversation("conv-diagnostic-cleanup").unwrap();
+        store
+            .delete_conversation("conv-diagnostic-cleanup")
+            .unwrap();
 
         let error = store
             .get_diagnostic_events_tail("conv-diagnostic-cleanup", 10)

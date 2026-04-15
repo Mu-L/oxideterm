@@ -17,16 +17,18 @@ impl LazyStateStore {
 
         Self {
             store: LazyManagedStore::new("state store", move || {
-                StateStore::new(init_path.clone())
-                    .map_err(|error| format!("Failed to initialize state store at {:?}: {}", init_path, error))
+                StateStore::new(init_path.clone()).map_err(|error| {
+                    format!(
+                        "Failed to initialize state store at {:?}: {}",
+                        init_path, error
+                    )
+                })
             }),
         }
     }
 
     fn resolve_store(&self) -> Result<Arc<StateStore>, StateError> {
-        self.store
-            .resolve()
-            .map_err(StateError::Initialization)
+        self.store.resolve().map_err(StateError::Initialization)
     }
 
     pub fn save_session(&self, id: &str, data: &[u8]) -> Result<(), StateError> {
@@ -94,7 +96,9 @@ impl LazyStateStore {
         id: String,
         data: Vec<u8>,
     ) -> Result<(), StateError> {
-        self.resolve_store()?.save_forward_tombstone_async(id, data).await
+        self.resolve_store()?
+            .save_forward_tombstone_async(id, data)
+            .await
     }
 
     pub fn load_all_forward_tombstones(&self) -> Result<Vec<(String, Vec<u8>)>, StateError> {
@@ -104,7 +108,9 @@ impl LazyStateStore {
     pub async fn load_all_forward_tombstones_async(
         &self,
     ) -> Result<Vec<(String, Vec<u8>)>, StateError> {
-        self.resolve_store()?.load_all_forward_tombstones_async().await
+        self.resolve_store()?
+            .load_all_forward_tombstones_async()
+            .await
     }
 
     pub fn delete_forward_tombstone(&self, id: &str) -> Result<(), StateError> {
@@ -112,13 +118,17 @@ impl LazyStateStore {
     }
 
     pub async fn delete_forward_tombstone_async(&self, id: String) -> Result<(), StateError> {
-        self.resolve_store()?.delete_forward_tombstone_async(id).await
+        self.resolve_store()?
+            .delete_forward_tombstone_async(id)
+            .await
     }
 
     pub async fn load_all_forward_sync_state_async(
         &self,
     ) -> Result<(Vec<(String, Vec<u8>)>, Vec<(String, Vec<u8>)>), StateError> {
-        self.resolve_store()?.load_all_forward_sync_state_async().await
+        self.resolve_store()?
+            .load_all_forward_sync_state_async()
+            .await
     }
 
     pub async fn replace_forward_with_tombstone_async(

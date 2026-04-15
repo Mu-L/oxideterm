@@ -284,9 +284,6 @@ export interface KbiResultEvent {
   authFlowId: string;
   success: boolean;
   error?: string;
-  sessionId?: string;
-  wsPort?: number;
-  wsToken?: string;
 }
 
 /**

@@ -498,17 +498,21 @@ fn emit_kbi_result(
 ) {
     use tauri::Emitter;
 
-    let _ = app.emit(
+    if let Err(emit_error) = app.emit(
         EVENT_KBI_RESULT,
         KbiResultEvent {
             auth_flow_id: auth_flow_id.to_string(),
             success,
             error,
-            session_id: None,
-            ws_port: None,
-            ws_token: None,
         },
-    );
+    ) {
+        warn!(
+            "Failed to emit {} for auth flow {}: {}",
+            EVENT_KBI_RESULT,
+            auth_flow_id,
+            emit_error
+        );
+    }
 }
 
 /// Check if an auth result indicates partial success with keyboard-interactive

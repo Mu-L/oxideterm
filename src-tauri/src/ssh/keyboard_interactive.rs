@@ -3,8 +3,8 @@
 
 //! Keyboard-Interactive Authentication (2FA) Support
 //!
-//! This module provides a completely isolated 2FA authentication flow that:
-//! - Does NOT affect existing password/key authentication
+//! Shared keyboard-interactive (2FA) primitives for SSH authentication flows.
+//! - Used by direct root-node authentication and multi-step auth chaining
 //! - Uses event-driven IPC for frontend prompts
 //! - Has strict timeout protection (60s) to prevent deadlocks
 //! - Cleans up resources immediately on failure/cancel
@@ -13,8 +13,6 @@
 //!
 //! ```text
 //! Frontend                              Backend
-//!    │                                     │
-//!    │──── ssh_connect_kbi ───────────────▶│ Start KBI flow
 //!    │                                     │
 //!    │◀─── ssh_kbi_prompt event ───────────│ InfoRequest from server
 //!    │                                     │
@@ -69,12 +67,6 @@ pub struct KbiResultEvent {
     pub success: bool,
     /// Error message if failed
     pub error: Option<String>,
-    /// Session ID if successful (for subsequent terminal creation)
-    pub session_id: Option<String>,
-    /// WebSocket port for terminal connection
-    pub ws_port: Option<u16>,
-    /// WebSocket token for authentication
-    pub ws_token: Option<String>,
 }
 
 /// Command payload: Frontend → Backend

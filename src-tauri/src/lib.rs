@@ -671,8 +671,7 @@ pub fn run() {
         commands::probe_single_connection,
         commands::cancel_reconnect,
         commands::is_reconnecting,
-        // Keyboard-Interactive (2FA) commands - completely isolated from connect_v2
-        commands::ssh_connect_kbi,
+        // Keyboard-Interactive (2FA) response commands
         commands::ssh_kbi_respond,
         commands::ssh_kbi_cancel,
         // Archive commands (compression/extraction)
@@ -1023,8 +1022,7 @@ pub fn run() {
         commands::probe_single_connection,
         commands::cancel_reconnect,
         commands::is_reconnecting,
-        // Keyboard-Interactive (2FA) commands - completely isolated from connect_v2
-        commands::ssh_connect_kbi,
+        // Keyboard-Interactive (2FA) response commands
         commands::ssh_kbi_respond,
         commands::ssh_kbi_cancel,
         // Archive commands (compression/extraction)

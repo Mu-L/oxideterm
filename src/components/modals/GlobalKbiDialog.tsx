@@ -7,8 +7,9 @@
  * Always mounted in App.tsx. Handles all SSH keyboard-interactive prompts,
  * including standalone direct auth and multi-step auth chaining.
  *
- * Session creation is handled by the surrounding connect flow. This dialog
- * only collects user responses and forwards them to the backend.
+ * Session creation is handled by the surrounding connect flow after SSH auth
+ * succeeds. This dialog only collects user responses and forwards them to the
+ * backend during auth negotiation.
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -111,6 +112,9 @@ export const GlobalKbiDialog = () => {
         currentAuthFlowIdRef.current = null;
         setCurrentPrompt(null);
       } else {
+        // The auth flow is finished even on failure. Clear the active flow id so
+        // a subsequent retry is not treated as an overlapping request.
+        currentAuthFlowIdRef.current = null;
         setError(event.payload.error || 'Authentication failed');
         setLoading(false);
       }
@@ -260,7 +264,7 @@ export const GlobalKbiDialog = () => {
             </Button>
             <Button
               type="submit"
-              disabled={loading || !allResponsesFilled || timeLeft === 0}
+              disabled={loading || !allResponsesFilled || timeLeft === 0 || !!error || !currentAuthFlowIdRef.current}
             >
               {loading ? (
                 <>

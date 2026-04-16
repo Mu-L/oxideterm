@@ -5,7 +5,7 @@
     "refresh": "Aktualisieren",
     "open_plugins_dir": "Verzeichnis öffnen",
     "empty_title": "Installierte Plugins",
-    "empty_description": "Legen Sie Plugin-Ordner in ~/.oxideterm/plugins/ ab oder installieren Sie aus der Registry.",
+    "empty_description": "Legen Sie Plugin-Ordner in ~/.oxideterm/plugins/ ab, um loszulegen.",
     "footer": "{{count}} Plugin(s) installiert",
     "active_count": "{{count}} aktiv",
     "by_author": "von {{author}}",

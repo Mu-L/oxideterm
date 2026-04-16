@@ -5,7 +5,7 @@
     "refresh": "刷新",
     "open_plugins_dir": "打开目录",
     "empty_title": "已安装插件",
-    "empty_description": "将插件文件夹放入 ~/.oxideterm/plugins/ 或从仓库安装。",
+    "empty_description": "将插件文件夹放入 ~/.oxideterm/plugins/ 即可开始使用。",
     "footer": "已安装 {{count}} 个插件",
     "active_count": "{{count}} 个活跃",
     "by_author": "作者：{{author}}",

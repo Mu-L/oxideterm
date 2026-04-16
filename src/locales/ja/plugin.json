@@ -5,7 +5,7 @@
     "refresh": "更新",
     "open_plugins_dir": "ディレクトリを開く",
     "empty_title": "インストール済みプラグイン",
-    "empty_description": "~/.oxideterm/plugins/ にプラグインフォルダを配置するか、レジストリからインストールしてください。",
+    "empty_description": "~/.oxideterm/plugins/ にプラグインフォルダを配置して始めましょう。",
     "footer": "{{count}} 個のプラグインがインストール済み",
     "active_count": "{{count}} 個がアクティブ",
     "by_author": "作者：{{author}}",

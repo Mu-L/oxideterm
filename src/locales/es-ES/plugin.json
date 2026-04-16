@@ -5,7 +5,7 @@
     "refresh": "Actualizar",
     "open_plugins_dir": "Abrir directorio",
     "empty_title": "Complementos instalados",
-    "empty_description": "Coloque carpetas de complementos en ~/.oxideterm/plugins/ o instale desde el registro.",
+    "empty_description": "Coloque carpetas de complementos en ~/.oxideterm/plugins/ para comenzar.",
     "footer": "{{count}} complemento(s) instalado(s)",
     "active_count": "{{count}} activo(s)",
     "by_author": "por {{author}}",

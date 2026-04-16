@@ -5,7 +5,7 @@
     "refresh": "重新整理",
     "open_plugins_dir": "開啟目錄",
     "empty_title": "已安裝外掛",
-    "empty_description": "將外掛資料夾放入 ~/.oxideterm/plugins/ 或從倉庫安裝。",
+    "empty_description": "將外掛資料夾放入 ~/.oxideterm/plugins/ 即可開始使用。",
     "footer": "已安裝 {{count}} 個外掛",
     "active_count": "{{count}} 個活躍",
     "by_author": "作者：{{author}}",

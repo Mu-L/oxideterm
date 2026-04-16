@@ -5,7 +5,7 @@
     "refresh": "Làm mới",
     "open_plugins_dir": "Mở thư mục",
     "empty_title": "Plugin đã cài đặt",
-    "empty_description": "Đặt thư mục plugin vào ~/.oxideterm/plugins/ hoặc cài đặt từ kho.",
+    "empty_description": "Đặt thư mục plugin vào ~/.oxideterm/plugins/ để bắt đầu.",
     "footer": "Đã cài đặt {{count}} plugin",
     "active_count": "{{count}} đang hoạt động",
     "by_author": "bởi {{author}}",

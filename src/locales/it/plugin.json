@@ -5,7 +5,7 @@
     "refresh": "Aggiorna",
     "open_plugins_dir": "Apri cartella",
     "empty_title": "Plugin installati",
-    "empty_description": "Posiziona le cartelle dei plugin in ~/.oxideterm/plugins/ o installa dal registro.",
+    "empty_description": "Posiziona le cartelle dei plugin in ~/.oxideterm/plugins/ per iniziare.",
     "footer": "{{count}} plugin installato/i",
     "active_count": "{{count}} attivo/i",
     "by_author": "di {{author}}",

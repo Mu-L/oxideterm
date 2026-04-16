@@ -307,20 +307,6 @@ export function deactivate() {
 4. 插件将自动加载并显示在列表中
 5. 在侧边栏中可以看到插件的 Tab 图标，点击打开 Tab
 
-**方式二：从注册表安装（推荐）**
-
-1. 在 Plugin Manager 中切换到 **浏览** 标签页
-2. 搜索或浏览可用插件
-3. 点击 **安装** 按钮
-4. 插件将自动下载、验证并安装
-5. 安装完成后插件自动激活
-
-**方式三：更新已安装插件**
-
-1. 在 **浏览** 标签页中，已安装插件如有更新会显示 **更新** 按钮
-2. 点击 **更新** 按钮
-3. 旧版本将被卸载，新版本自动安装并激活
-
 **卸载插件**
 
 1. 在 **已安装** 标签页中找到要卸载的插件
@@ -4596,63 +4582,6 @@ npx esbuild src/index.ts \
 | `~/.oxideterm/plugin-config.json` | 全局插件启用/禁用配置 |
 | `localStorage: oxide-plugin-{id}-*` | 插件存储数据 |
 | `localStorage: oxide-plugin-{id}-setting-*` | 插件设置 |
-
-### Q: 如何发布插件到官方注册表？
-
-1. **打包插件**：将插件目录打包为 ZIP 文件
-   ```bash
-   cd ~/.oxideterm/plugins/my-plugin
-   zip -r my-plugin-1.0.0.zip .
-   ```
-
-2. **计算校验和**：
-   ```bash
-   shasum -a 256 my-plugin-1.0.0.zip
-   # 输出: abc123... my-plugin-1.0.0.zip
-   ```
-
-3. **托管 ZIP 文件**：上传到可公开访问的 URL（GitHub Releases、CDN 等）
-
-4. **提交到注册表**：
-   - 官方注册表：向 OxideTerm 仓库提交 PR，添加你的插件条目
-   - 自建注册表：在你的 `registry.json` 中添加条目
-
-**注册表条目格式**：
-```json
-{
-  "id": "my-plugin",
-  "name": "My Plugin",
-  "version": "1.0.0",
-  "description": "Plugin description",
-  "author": "Your Name",
-  "downloadUrl": "https://example.com/my-plugin-1.0.0.zip",
-  "checksum": "sha256:abc123...",
-  "size": 12345,
-  "tags": ["utility"],
-  "homepage": "https://github.com/you/my-plugin"
-}
-```
-
-### Q: 如何使用自定义插件注册表？
-
-编辑 `~/.oxideterm/plugin-config.json`：
-
-```json
-{
-  "registryUrl": "https://your-server.com/registry.json",
-  "plugins": {}
-}
-```
-
-注册表 JSON 格式：
-```json
-{
-  "version": 1,
-  "plugins": [
-    { "id": "...", "name": "...", ... }
-  ]
-}
-```
 
 ---
 

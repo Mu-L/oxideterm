@@ -487,10 +487,10 @@ function protectMathFormulas(content: string): { processed: string; mathBlocks: 
   });
 
   // Protect inline code (`...`) - but not escaped backticks
-  processed = processed.replace(/(?<!\\)`[^`\n]+`/g, (match) => {
+  processed = processed.replace(/(^|[^\\])(`[^`\n]+`)/g, (_match, prefix, code) => {
     const placeholder = `%%CODE_INLINE_${++codeBlockCounter}%%`;
-    codeBlockPlaceholders.push({ placeholder, content: match });
-    return placeholder;
+    codeBlockPlaceholders.push({ placeholder, content: code });
+    return `${prefix}${placeholder}`;
   });
 
   // Step 2: Now handle math formulas (code is protected)
@@ -507,14 +507,14 @@ function protectMathFormulas(content: string): { processed: string; mathBlocks: 
   // Then, handle inline math ($...$)
   // Must not match $$ (already replaced) and must have non-space after opening $ and before closing $
   // Also avoid matching things like $10 or prices
-  const inlineMathRegex = /(?<!\$)\$(?!\$)([^\s$](?:[^$]*?[^\s$])?)\$(?!\$)/g;
-  processed = processed.replace(inlineMathRegex, (_match, formula) => {
+  const inlineMathRegex = /(^|[^$])\$(?!\$)([^\s$](?:[^$]*?[^\s$])?)\$(?!\$)/g;
+  processed = processed.replace(inlineMathRegex, (match, prefix, formula) => {
     // Skip if it looks like a price (e.g., $10, $5.99)
-    if (/^\d/.test(formula)) return _match;
+    if (/^\d/.test(formula)) return match;
 
     const placeholder = `%%MATH_INLINE_${++mathBlockCounter}%%`;
     mathBlocks.push({ placeholder, formula: formula.trim(), isDisplay: false });
-    return placeholder;
+    return `${prefix}${placeholder}`;
   });
 
   // Step 3: Restore code block placeholders

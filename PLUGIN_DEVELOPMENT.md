@@ -57,6 +57,8 @@
   - [6.17 ctx.ide (v3)](#617-ctxide-v3)
   - [6.18 ctx.ai (v3)](#618-ctxai-v3)
   - [6.19 ctx.app (v3)](#619-ctxapp-v3)
+  - [6.20 ctx.sync](#620-ctxsync)
+  - [6.21 ctx.secrets](#621-ctxsecrets)
 - [7. 共享模块 (window.\_\_OXIDE\_\_)](#7-共享模块-window__oxide__)
   - [7.1 可用模块](#71-可用模块)
   - [7.2 使用 React](#72-使用-react)
@@ -166,8 +168,8 @@ OxideTerm 插件系统遵循以下设计原则：
 │              │  activate(ctx) ←── PluginContext (frozen)      │   │
 │              │    ctx.connections  ctx.events  ctx.ui         │   │
 │              │    ctx.terminal    ctx.settings  ctx.i18n      │   │
-│              │    ctx.storage     ctx.api      ctx.assets     │   │
-│              │    ctx.sftp  ctx.forward                       │   │
+│              │    ctx.storage  ctx.sync  ctx.secrets          │   │
+│              │    ctx.api  ctx.assets  ctx.sftp  ctx.forward  │   │
 │              │    ctx.sessions  ctx.transfers  ctx.profiler   │   │
 │              │    ctx.eventLog  ctx.ide  ctx.ai  ctx.app      │   │
 │              │                                                │   │
@@ -910,7 +912,7 @@ unloadPlugin(pluginId)
 
 ## 6. PluginContext API 完全参考
 
-`PluginContext` 是传递给 `activate(ctx)` 的唯一参数。它是一个深度冻结的对象，包含 19 个命名空间（`pluginId` + 18 个子 API）。v3 新增了 7 个只读命名空间。
+`PluginContext` 是传递给 `activate(ctx)` 的唯一参数。它是一个深度冻结的对象，包含 21 个命名空间（`pluginId` + 20 个子 API）。v3 新增了 7 个只读命名空间。
 
 ```typescript
 type PluginContext = Readonly<{
@@ -922,6 +924,8 @@ type PluginContext = Readonly<{
   settings: PluginSettingsAPI;
   i18n: PluginI18nAPI;
   storage: PluginStorageAPI;
+  sync: PluginSyncAPI;           // 加密导入/导出与同步元数据
+  secrets: PluginSecretsAPI;     // OS keychain 安全存储
   api: PluginBackendAPI;
   assets: PluginAssetsAPI;
   sftp: PluginSftpAPI;
@@ -2556,6 +2560,331 @@ type PoolStatsSnapshot = Readonly<{
 const stats = await ctx.app.getPoolStats();
 console.log(`Pool: ${stats.activeConnections} connections, ${stats.totalSessions} sessions`);
 ```
+
+---
+
+### 6.20 ctx.sync
+
+基于 `.oxide` 导入导出的加密保存连接同步 API。这个命名空间面向需要宿主管理冲突策略、revision 踪迹和安全导入导出流程的同步插件。
+
+#### `listSavedConnections()` / `refreshSavedConnections()`
+
+```typescript
+sync.listSavedConnections(): ReadonlyArray<SavedConnectionSnapshot>
+sync.refreshSavedConnections(): Promise<ReadonlyArray<SavedConnectionSnapshot>>
+```
+
+返回当前保存连接快照列表。`refreshSavedConnections()` 会先强制从宿主重新读取，再返回最新快照。
+
+```typescript
+type SavedConnectionSnapshot = Readonly<{
+  id: string;
+  name: string;
+  group: string | null;
+  host: string;
+  port: number;
+  username: string;
+  auth_type: 'password' | 'key' | 'agent' | 'certificate';
+  key_path: string | null;
+  cert_path: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  color: string | null;
+  tags: readonly string[];
+  agent_forwarding: boolean;
+}>;
+```
+
+#### `onSavedConnectionsChange(handler)`
+
+```typescript
+sync.onSavedConnectionsChange(handler: (connections: ReadonlyArray<SavedConnectionSnapshot>) => void): Disposable
+```
+
+订阅保存连接快照变化。
+
+```javascript
+ctx.sync.onSavedConnectionsChange((connections) => {
+  console.log(`Saved connections updated: ${connections.length}`);
+});
+```
+
+#### `exportSavedConnectionsSnapshot()` / `applySavedConnectionsSnapshot()`
+
+```typescript
+sync.exportSavedConnectionsSnapshot(): Promise<SavedConnectionsSyncSnapshot>
+sync.applySavedConnectionsSnapshot(
+  snapshot: SavedConnectionsSyncSnapshot,
+  options?: { conflictStrategy?: 'skip' | 'replace' | 'merge' },
+): Promise<ApplySavedConnectionsSyncSnapshotResult>
+```
+
+导出或应用轻量级的保存连接同步快照，而不是打包完整 `.oxide` 压缩包。
+
+```typescript
+type SavedConnectionsSyncSnapshot = Readonly<{
+  revision: string;
+  exportedAt: string;
+  records: readonly SavedConnectionSyncRecord[];
+}>;
+
+type ApplySavedConnectionsSyncSnapshotResult = Readonly<{
+  applied: number;
+  skipped: number;
+  conflicts: number;
+}>;
+```
+
+#### `getLocalSyncMetadata()`
+
+```typescript
+sync.getLocalSyncMetadata(): Promise<LocalSyncMetadata>
+```
+
+返回由宿主维护的 revision 元数据，供同步插件做脏检查与增量上传。
+
+```typescript
+type LocalSyncMetadata = Readonly<{
+  savedConnectionsRevision: string;
+  savedConnectionsUpdatedAt: string;
+  savedForwardsRevision?: string;
+  settingsRevision?: string;
+  appSettingsSectionRevisions?: Readonly<Partial<Record<OxideAppSettingsSectionId, string>>>;
+  pluginSettingsRevisions?: Readonly<Record<string, string>>;
+}>;
+```
+
+#### `preflightExport(connectionIds?, options?)`
+
+```typescript
+sync.preflightExport(
+  connectionIds?: string[],
+  options?: { embedKeys?: boolean },
+): Promise<ExportPreflightResult>
+```
+
+在提示用户输入密码之前，先检查 `.oxide` 导出是否可以执行。
+
+```typescript
+type ExportPreflightResult = Readonly<{
+  totalConnections: number;
+  missingKeys: readonly [string, string][];
+  connectionsWithKeys: number;
+  connectionsWithPasswords: number;
+  connectionsWithAgent: number;
+  totalKeyBytes: number;
+  canExport: boolean;
+}>;
+```
+
+#### `exportOxide(request)`
+
+```typescript
+sync.exportOxide(request: {
+  connectionIds?: string[];
+  password: string;
+  description?: string;
+  embedKeys?: boolean;
+  includeAppSettings?: boolean;
+  selectedAppSettingsSections?: readonly OxideAppSettingsSectionId[];
+  includeLocalTerminalEnvVars?: boolean;
+  includePluginSettings?: boolean;
+  selectedPluginIds?: string[];
+  selectedForwardIds?: string[];
+  onProgress?: (progress: { stage: string; current: number; total: number }) => void;
+}): Promise<Uint8Array>
+```
+
+构建一个加密 `.oxide` 压缩包。除保存连接外，还可选择打包应用设置快照、插件设置快照和保存转发。
+
+当前支持的 `selectedAppSettingsSections` 值包括：
+`'general'`、`'terminalAppearance'`、`'terminalBehavior'`、`'appearance'`、`'connections'`、`'fileAndEditor'`、`'localTerminal'`。
+
+```javascript
+const archive = await ctx.sync.exportOxide({
+  password,
+  description: 'Nightly sync backup',
+  includeAppSettings: true,
+  selectedAppSettingsSections: ['general', 'appearance'],
+  includePluginSettings: true,
+  onProgress: (progress) => {
+    console.log(`Export ${progress.stage}: ${progress.current}/${progress.total}`);
+  },
+});
+```
+
+#### `validateOxide(fileData)`
+
+```typescript
+sync.validateOxide(fileData: Uint8Array): Promise<OxideMetadata>
+```
+
+在不实际导入的情况下读取压缩包元数据。
+
+```typescript
+type OxideMetadata = Readonly<{
+  exported_at: string;
+  exported_by: string;
+  description?: string;
+  num_connections: number;
+  connection_names: readonly string[];
+  has_app_settings?: boolean;
+  plugin_settings_count?: number;
+}>;
+```
+
+#### `previewImport(fileData, password, options?)`
+
+```typescript
+sync.previewImport(
+  fileData: Uint8Array,
+  password: string,
+  options?: {
+    conflictStrategy?: 'rename' | 'skip' | 'replace' | 'merge';
+    onProgress?: (progress: { stage: string; current: number; total: number }) => void;
+  },
+): Promise<ImportPreview>
+```
+
+生成导入预览，让插件在真正导入前先向用户解释 rename、skip、replace、merge 的决策。
+
+```typescript
+type ImportPreview = Readonly<{
+  totalConnections: number;
+  unchanged: readonly string[];
+  willRename: readonly [string, string][];
+  willSkip: readonly string[];
+  willReplace: readonly string[];
+  willMerge: readonly string[];
+  hasEmbeddedKeys: boolean;
+  totalForwards: number;
+  hasAppSettings: boolean;
+  appSettingsFormat?: 'legacy' | 'sectioned';
+  appSettingsKeys?: readonly string[];
+  appSettingsPreview?: Readonly<Record<string, string>>;
+  appSettingsSections?: ReadonlyArray<Readonly<{
+    id: string;
+    fieldKeys: readonly string[];
+    fieldValues?: Readonly<Record<string, string>>;
+    containsEnvVars?: boolean;
+  }>>;
+  pluginSettingsCount: number;
+  pluginSettingsByPlugin: Readonly<Record<string, number>>;
+  forwardDetails: ReadonlyArray<Readonly<{
+    ownerConnectionName: string;
+    direction: 'local' | 'remote' | 'dynamic';
+    description: string;
+  }>>;
+  records: ReadonlyArray<Readonly<{
+    resource: 'connection';
+    name: string;
+    action: 'import' | 'rename' | 'skip' | 'replace' | 'merge';
+    reasonCode: 'new-connection' | 'name-conflict' | 'name-conflict-skipped' | 'replace-existing' | 'merge-existing';
+    targetName?: string;
+    targetConnectionId?: string;
+    forwardCount: number;
+    hasEmbeddedKeys: boolean;
+  }>>;
+}>;
+```
+
+#### `importOxide(fileData, password, options?)`
+
+```typescript
+sync.importOxide(
+  fileData: Uint8Array,
+  password: string,
+  options?: {
+    selectedNames?: string[];
+    conflictStrategy?: 'rename' | 'skip' | 'replace' | 'merge';
+    importAppSettings?: boolean;
+    selectedAppSettingsSections?: readonly string[];
+    importPluginSettings?: boolean;
+    selectedPluginIds?: string[];
+    importForwards?: boolean;
+    onProgress?: (progress: { stage: string; current: number; total: number }) => void;
+  },
+): Promise<ImportResult>
+```
+
+以宿主管理的冲突策略导入 `.oxide` 压缩包。`merge` 策略面向多端同步，尽量保留本地连接 ID 与本地独有的 secret。
+
+```typescript
+type ImportResult = Readonly<{
+  imported: number;
+  skipped: number;
+  merged: number;
+  replaced: number;
+  renamed: number;
+  errors: readonly string[];
+  renames: readonly [string, string][];
+  importedAppSettings: boolean;
+  skippedAppSettings: boolean;
+  importedPluginSettings: number;
+  skippedPluginSettings: boolean;
+  importedForwards: number;
+  skippedForwards: number;
+}>;
+```
+
+---
+
+### 6.21 ctx.secrets
+
+基于 OS keychain 的插件作用域安全存储。API token、凭据、refresh token 等不应放入 `ctx.storage` 的值，应使用这个命名空间。
+
+#### `get(key)`
+
+```typescript
+secrets.get(key: string): Promise<string | null>
+```
+
+读取指定 key 的 secret。不存在时返回 `null`。
+
+#### `getMany(keys)`
+
+```typescript
+secrets.getMany(keys: readonly string[]): Promise<Readonly<Record<string, string | null>>>
+```
+
+一次读取多个 secret。若同一用户操作需要多项凭据，优先使用这个方法，因为宿主通常可以把 keychain 解锁流程合并成一次提示。
+
+```javascript
+const secrets = await ctx.secrets.getMany(['endpoint', 'username', 'token']);
+console.log(secrets.endpoint, secrets.username);
+```
+
+#### `set(key, value)`
+
+```typescript
+secrets.set(key: string, value: string): Promise<void>
+```
+
+写入或覆盖 secret 值。
+
+#### `has(key)`
+
+```typescript
+secrets.has(key: string): Promise<boolean>
+```
+
+在不读取具体值的前提下检查 secret 是否存在。
+
+#### `delete(key)`
+
+```typescript
+secrets.delete(key: string): Promise<void>
+```
+
+从 keychain 中删除指定 secret。
+
+```javascript
+if (!(await ctx.secrets.has('accessToken'))) {
+  await ctx.secrets.set('accessToken', token);
+}
+```
+
+> Secrets 按插件隔离。一个插件不能通过 `ctx.secrets` 读取另一个插件的 keychain 条目。
 
 ---
 

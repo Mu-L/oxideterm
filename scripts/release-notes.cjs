@@ -104,9 +104,9 @@ function generateReleaseNotes(version, changelogEntry) {
   notes.push('');
   notes.push('```bash');
   notes.push('# AppImage');
-  notes.push('chmod +x OxideTerm_*.AppImage && ./OxideTerm_*.AppImage');
+  notes.push('chmod +x OxideTerm_*_linux_*.AppImage && ./OxideTerm_*_linux_*.AppImage');
   notes.push('# Debian/Ubuntu');
-  notes.push('sudo dpkg -i oxideterm_*.deb && sudo apt-get install -f');
+  notes.push('sudo dpkg -i OxideTerm_*_linux_*.deb && sudo apt-get install -f');
   notes.push('```');
   notes.push('');
   notes.push('</details>');

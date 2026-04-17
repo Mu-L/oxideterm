@@ -277,8 +277,6 @@ export async function connectToSaved(
 
     let nodeId: string;
 
-    let sessionId: string;
-
     if (existingNode) {
       nodeId = existingNode.id;
       useSessionTreeStore.setState({ selectedNodeId: nodeId });

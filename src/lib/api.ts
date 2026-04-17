@@ -41,6 +41,7 @@ import {
   SshPreflightRequest,
   SshPreflightResponse,
   AcceptHostKeyRequest,
+  RemoveHostKeyRequest,
   // Resource profiler types
   ResourceMetrics,
   // Smart port detection types
@@ -353,6 +354,11 @@ export const api = {
   sshAcceptHostKey: async (request: AcceptHostKeyRequest): Promise<void> => {
     if (USE_MOCK) return;
     return invoke('ssh_accept_host_key', { request });
+  },
+
+  sshRemoveHostKey: async (request: RemoveHostKeyRequest): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('ssh_remove_host_key', { request });
   },
 
   /**

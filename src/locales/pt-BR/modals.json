@@ -286,10 +286,12 @@
       "expected_fingerprint": "Impressão digital salva",
       "actual_fingerprint": "Impressão digital atual",
       "confirm_prompt": "Se você confirmar que a mudança de chave é legítima, digite \"{{host}}\" para continuar:",
+      "remove_prompt": "Digite \"{{host}}\" para remover a chave de host salva e verificar novamente a chave atual:",
       "actions": {
         "cancel": "Cancelar",
         "trust_once": "Confiar uma vez",
         "trust_save": "Confiar e salvar",
+        "remove_saved": "Remover chave salva",
         "ok": "OK"
       }
     },

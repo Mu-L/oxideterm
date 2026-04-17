@@ -286,10 +286,12 @@
       "expected_fingerprint": "已保存的指纹",
       "actual_fingerprint": "当前指纹",
       "confirm_prompt": "如确认密钥变更是合法的，请输入主机名 \"{{host}}\" 以继续：",
+      "remove_prompt": "请输入主机名 \"{{host}}\" 以删除已保存的主机密钥，并重新检查当前密钥：",
       "actions": {
         "cancel": "取消",
         "trust_once": "仅本次信任",
         "trust_save": "信任并保存",
+        "remove_saved": "删除已保存密钥",
         "ok": "确定"
       }
     },

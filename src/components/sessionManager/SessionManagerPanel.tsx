@@ -67,6 +67,7 @@ export const SessionManagerPanel = () => {
     label: string;
     request: Parameters<typeof api.testConnection>[0];
   } | null>(null);
+  const [hostKeyActionLoading, setHostKeyActionLoading] = useState(false);
 
   const notifySavedConnectionsChanged = useCallback(() => {
     window.dispatchEvent(new CustomEvent('saved-connections-changed', {
@@ -189,14 +190,8 @@ export const SessionManagerPanel = () => {
     }
 
     if (preflight.status === 'changed') {
-      toast({
-        title: t('sessionManager.toast.test_failed'),
-        description: t('sessionManager.toast.test_host_key_changed', {
-          expected: preflight.expectedFingerprint,
-          actual: preflight.actualFingerprint,
-        }),
-        variant: 'error',
-      });
+      setPendingTestConnection({ label, request });
+      setTestHostKeyStatus(preflight);
       return;
     }
 
@@ -280,6 +275,37 @@ export const SessionManagerPanel = () => {
     setPendingTestConnection(null);
     setTestHostKeyStatus(null);
   }, [pendingTestConnection, runTestConnection, testHostKeyStatus]);
+
+  const handleRemoveChangedHostKey = useCallback(async () => {
+    if (!pendingTestConnection || !testHostKeyStatus || testHostKeyStatus.status !== 'changed') {
+      return;
+    }
+
+    setHostKeyActionLoading(true);
+    try {
+      await api.sshRemoveHostKey({
+        host: pendingTestConnection.request.host,
+        port: pendingTestConnection.request.port,
+        keyType: testHostKeyStatus.keyType,
+        expectedFingerprint: testHostKeyStatus.expectedFingerprint,
+      });
+
+      const preflight = await api.sshPreflight({
+        host: pendingTestConnection.request.host,
+        port: pendingTestConnection.request.port,
+      });
+
+      setTestHostKeyStatus(preflight);
+    } catch (err) {
+      toast({
+        title: t('sessionManager.toast.test_failed'),
+        description: String(err),
+        variant: 'error',
+      });
+    } finally {
+      setHostKeyActionLoading(false);
+    }
+  }, [pendingTestConnection, testHostKeyStatus, toast, t]);
 
   // Handle import/export close with refresh
   const handleImportClose = useCallback(async () => {
@@ -369,7 +395,7 @@ export const SessionManagerPanel = () => {
       />
 
       <HostKeyConfirmDialog
-        open={!!testHostKeyStatus && testHostKeyStatus.status === 'unknown'}
+        open={!!testHostKeyStatus && testHostKeyStatus.status !== 'verified'}
         onClose={() => {
           setTestHostKeyStatus(null);
           setPendingTestConnection(null);
@@ -378,10 +404,12 @@ export const SessionManagerPanel = () => {
         host={pendingTestConnection?.request.host ?? ''}
         port={pendingTestConnection?.request.port ?? 22}
         onAccept={handleAcceptTestHostKey}
+        onRemoveSavedKey={handleRemoveChangedHostKey}
         onCancel={() => {
           setTestHostKeyStatus(null);
           setPendingTestConnection(null);
         }}
+        loading={hostKeyActionLoading}
       />
 
       <OxideExportModal

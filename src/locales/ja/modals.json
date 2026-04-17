@@ -286,10 +286,12 @@
       "expected_fingerprint": "保存されたフィンガープリント",
       "actual_fingerprint": "現在のフィンガープリント",
       "confirm_prompt": "鍵の変更が正当であることを確認した場合は、\"{{host}}\" と入力して続行してください：",
+      "remove_prompt": "保存済みホストキーを削除して現在のキーを再確認するには、\"{{host}}\" と入力してください：",
       "actions": {
         "cancel": "キャンセル",
         "trust_once": "今回のみ信頼",
         "trust_save": "信頼して保存",
+        "remove_saved": "保存済みキーを削除",
         "ok": "OK"
       }
     },

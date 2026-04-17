@@ -286,10 +286,12 @@
       "expected_fingerprint": "Gespeicherter Fingerabdruck",
       "actual_fingerprint": "Aktueller Fingerabdruck",
       "confirm_prompt": "Wenn Sie bestätigen, dass die Schlüsseländerung legitim ist, geben Sie \"{{host}}\" ein:",
+      "remove_prompt": "Geben Sie \"{{host}}\" ein, um den gespeicherten Host-Schlüssel zu entfernen und den aktuellen erneut zu prüfen:",
       "actions": {
         "cancel": "Abbrechen",
         "trust_once": "Einmal vertrauen",
         "trust_save": "Vertrauen und speichern",
+        "remove_saved": "Gespeicherten Schlüssel entfernen",
         "ok": "OK"
       }
     },

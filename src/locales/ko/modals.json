@@ -286,10 +286,12 @@
       "expected_fingerprint": "저장된 지문",
       "actual_fingerprint": "현재 지문",
       "confirm_prompt": "키 변경이 정당하다고 확인되면 \"{{host}}\"를 입력하여 계속하세요:",
+      "remove_prompt": "저장된 호스트 키를 제거하고 현재 키를 다시 확인하려면 \"{{host}}\"를 입력하세요:",
       "actions": {
         "cancel": "취소",
         "trust_once": "이번만 신뢰",
         "trust_save": "신뢰하고 저장",
+        "remove_saved": "저장된 키 제거",
         "ok": "확인"
       }
     },

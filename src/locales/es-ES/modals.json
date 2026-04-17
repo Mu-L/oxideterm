@@ -286,10 +286,12 @@
       "expected_fingerprint": "Huella digital guardada",
       "actual_fingerprint": "Huella digital actual",
       "confirm_prompt": "Si confirma que el cambio de clave es legítimo, escriba \"{{host}}\" para continuar:",
+      "remove_prompt": "Escriba \"{{host}}\" para eliminar la clave de host guardada y volver a comprobar la actual:",
       "actions": {
         "cancel": "Cancelar",
         "trust_once": "Confiar una vez",
         "trust_save": "Confiar y guardar",
+        "remove_saved": "Eliminar clave guardada",
         "ok": "Aceptar"
       }
     },

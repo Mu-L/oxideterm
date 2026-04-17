@@ -543,6 +543,7 @@ pub fn run() {
         // SSH host key preflight (TOFU)
         commands::ssh_preflight,
         commands::ssh_accept_host_key,
+        commands::ssh_remove_host_key,
         commands::ssh_clear_host_key_cache,
         // Remote environment detection
         commands::get_remote_env,
@@ -895,6 +896,7 @@ pub fn run() {
         // SSH host key preflight (TOFU)
         commands::ssh_preflight,
         commands::ssh_accept_host_key,
+        commands::ssh_remove_host_key,
         commands::ssh_clear_host_key_cache,
         // Remote environment detection
         commands::get_remote_env,

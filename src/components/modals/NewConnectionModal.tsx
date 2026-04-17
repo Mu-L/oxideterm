@@ -360,13 +360,8 @@ export const NewConnectionModal = () => {
       }
 
       if (preflight.status === 'changed') {
-        toastError(
-          t('modals.new_connection.test_failed'),
-          t('modals.new_connection.test_host_key_changed', {
-            expected: preflight.expectedFingerprint,
-            actual: preflight.actualFingerprint,
-          }),
-        );
+        setPendingTestRequest(request);
+        setTestHostKeyStatus(preflight);
         return;
       }
 
@@ -400,10 +395,33 @@ export const NewConnectionModal = () => {
     }
   };
 
+  const handleRemoveChangedHostKey = async () => {
+    if (!testHostKeyStatus || testHostKeyStatus.status !== 'changed') {
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const currentPort = parseInt(port) || 22;
+      await api.sshRemoveHostKey({
+        host,
+        port: currentPort,
+        keyType: testHostKeyStatus.keyType,
+        expectedFingerprint: testHostKeyStatus.expectedFingerprint,
+      });
+      const preflight = await api.sshPreflight({ host, port: currentPort });
+      setTestHostKeyStatus(preflight);
+    } catch (e) {
+      toastError(t('modals.new_connection.test_failed'), String(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <>
       <HostKeyConfirmDialog
-        open={!!testHostKeyStatus && testHostKeyStatus.status === 'unknown'}
+        open={!!testHostKeyStatus && testHostKeyStatus.status !== 'verified'}
         onClose={() => {
           if (!testing) {
             setTestHostKeyStatus(null);
@@ -414,6 +432,7 @@ export const NewConnectionModal = () => {
         host={host}
         port={parseInt(port) || 22}
         onAccept={handleAcceptTestHostKey}
+        onRemoveSavedKey={handleRemoveChangedHostKey}
         onCancel={() => {
           setTestHostKeyStatus(null);
           setPendingTestRequest(null);

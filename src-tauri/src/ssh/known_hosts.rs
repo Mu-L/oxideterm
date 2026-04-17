@@ -344,49 +344,123 @@ impl KnownHostsStore {
         Ok(())
     }
 
-    /// Remove a host from known_hosts (for key rotation)
-    pub fn remove_host(&self, host: &str, port: u16) -> Result<(), SshError> {
+    /// Remove a specific saved host key from known_hosts.
+    pub fn remove_host_key(
+        &self,
+        host: &str,
+        port: u16,
+        key_type: &str,
+        expected_fingerprint: &str,
+    ) -> Result<(), SshError> {
         let lookup_key = Self::make_key(host, port);
-
-        // Update in-memory cache
-        {
-            let mut hosts = self.hosts.write();
-            hosts.remove(&lookup_key);
+        let host_only_key = Self::normalize_hostname(host);
+        let mut lookup_keys = vec![lookup_key.clone()];
+        if host_only_key != lookup_key {
+            lookup_keys.push(host_only_key);
         }
 
-        // Rewrite file without this host
-        self.rewrite_without_host(&lookup_key)?;
+        let mut removed_any = false;
 
-        info!("Removed host key for {} from known_hosts", lookup_key);
+        removed_any |= self.rewrite_without_host_key(&lookup_keys, key_type, expected_fingerprint)?;
+
+        {
+            let mut hosts = self.hosts.write();
+            for candidate_key in &lookup_keys {
+                if let Some(entries) = hosts.get_mut(candidate_key) {
+                    let before_len = entries.len();
+                    entries.retain(|entry| {
+                        !(entry.key_type == key_type
+                            && Self::compute_fingerprint_from_b64(&entry.key_data)
+                                == expected_fingerprint)
+                    });
+                    let is_empty = entries.is_empty();
+                    removed_any |= before_len != entries.len();
+                    if is_empty {
+                        hosts.remove(candidate_key);
+                    }
+                }
+            }
+        }
+
+        if !removed_any {
+            return Err(SshError::ConnectionFailed(format!(
+                "No saved host key matched {} (type: {}, fingerprint: {})",
+                lookup_key, key_type, expected_fingerprint
+            )));
+        }
+
+        info!(
+            "Removed saved host key roots for {} (type: {}, fingerprint: {}) from known_hosts",
+            lookup_key, key_type, expected_fingerprint
+        );
         Ok(())
     }
 
-    /// Rewrite known_hosts file without specified host
-    fn rewrite_without_host(&self, remove_host: &str) -> Result<(), SshError> {
+    /// Rewrite known_hosts file without the specified host/key match.
+    fn rewrite_without_host_key(
+        &self,
+        remove_hosts: &[String],
+        remove_key_type: &str,
+        remove_fingerprint: &str,
+    ) -> Result<bool, SshError> {
         if !self.path.exists() {
-            return Ok(());
+            return Ok(false);
         }
 
         let content = fs::read_to_string(&self.path).map_err(SshError::IoError)?;
-        let remove_host = remove_host.to_lowercase();
+        let remove_hosts: Vec<String> = remove_hosts.iter().map(|host| host.to_lowercase()).collect();
+        let mut removed_any = false;
 
-        let filtered: Vec<&str> = content
+        let filtered: Vec<String> = content
             .lines()
-            .filter(|line| {
+            .filter_map(|line| {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.is_empty() {
-                    return true; // Keep empty lines
+                    return Some(line.to_string());
                 }
+                if parts.len() < 3 {
+                    return Some(line.to_string());
+                }
+
                 let hostnames = parts[0];
-                !hostnames
+                let key_type = parts[1];
+                let key_data = parts[2];
+                let fingerprint = Self::compute_fingerprint_from_b64(key_data);
+
+                if key_type != remove_key_type || fingerprint != remove_fingerprint {
+                    return Some(line.to_string());
+                }
+
+                let kept_hostnames: Vec<&str> = hostnames
                     .split(',')
-                    .any(|h| Self::canonical_host_entry(h) == remove_host)
+                    .filter(|h| {
+                        let canonical = Self::canonical_host_entry(h);
+                        !remove_hosts.iter().any(|remove_host| canonical == *remove_host)
+                    })
+                    .collect();
+
+                if kept_hostnames.len() == hostnames.split(',').count() {
+                    return Some(line.to_string());
+                }
+
+                removed_any = true;
+
+                if kept_hostnames.is_empty() {
+                    return None;
+                }
+
+                let mut rebuilt = vec![kept_hostnames.join(","), key_type.to_string(), key_data.to_string()];
+                if parts.len() > 3 {
+                    rebuilt.extend(parts[3..].iter().map(|part| (*part).to_string()));
+                }
+
+                Some(rebuilt.join(" "))
             })
             .collect();
 
         fs::write(&self.path, filtered.join("\n") + "\n").map_err(SshError::IoError)?;
 
-        Ok(())
+        Ok(removed_any)
     }
 }
 
@@ -566,18 +640,157 @@ mod tests {
     fn test_remove_host_non_standard_port_rewrites_file() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("known_hosts");
+        let key_data = BASE64.encode(sample_public_key().public_key_bytes());
+        let fingerprint = KnownHostsStore::compute_fingerprint_from_b64(&key_data);
         fs::write(
             &path,
-            "[example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILM+rvN+ot98qgEN796jTiQfZfG1KaT0PtFDJ/XFSqti\nother.example.com ssh-rsa AAAA\n",
+            format!(
+                "[example.com]:2222 ssh-ed25519 {}\nother.example.com ssh-rsa AAAA\n",
+                key_data
+            ),
         )
         .unwrap();
 
         let store = KnownHostsStore::with_path(path.clone());
-        store.remove_host("example.com", 2222).unwrap();
+        store
+            .remove_host_key("example.com", 2222, "ssh-ed25519", &fingerprint)
+            .unwrap();
 
         let content = fs::read_to_string(path).unwrap();
         assert!(!content.contains("[example.com]:2222"));
         assert!(content.contains("other.example.com"));
+    }
+
+    #[test]
+    fn test_remove_host_only_deletes_exact_host_port_entry() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("known_hosts");
+        let exact_key_data = BASE64.encode(sample_public_key().public_key_bytes());
+        let fallback_key_data = BASE64.encode(alternate_public_key().public_key_bytes());
+        let fingerprint = KnownHostsStore::compute_fingerprint_from_b64(&exact_key_data);
+        fs::write(
+            &path,
+            format!(
+                "example.com ssh-ed25519 {}\n[example.com]:2222 ssh-ed25519 {}\n",
+                fallback_key_data, exact_key_data
+            ),
+        )
+        .unwrap();
+
+        let store = KnownHostsStore::with_path(path.clone());
+        store
+            .remove_host_key("example.com", 2222, "ssh-ed25519", &fingerprint)
+            .unwrap();
+
+        let content = fs::read_to_string(path).unwrap();
+        assert!(content.contains(&format!("example.com ssh-ed25519 {}", fallback_key_data)));
+        assert!(!content.contains(&format!("[example.com]:2222 ssh-ed25519 {}", exact_key_data)));
+    }
+
+    #[test]
+    fn test_remove_host_key_preserves_aliases_on_same_line() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("known_hosts");
+        let key_data = BASE64.encode(sample_public_key().public_key_bytes());
+        let fingerprint = KnownHostsStore::compute_fingerprint_from_b64(&key_data);
+        fs::write(
+            &path,
+            format!(
+                "example.com,alias.example.com ssh-ed25519 {} keep-me\n",
+                key_data
+            ),
+        )
+        .unwrap();
+
+        let store = KnownHostsStore::with_path(path.clone());
+        store
+            .remove_host_key("example.com", 22, "ssh-ed25519", &fingerprint)
+            .unwrap();
+
+        let content = fs::read_to_string(path).unwrap();
+        assert!(!content.contains("example.com,"));
+        assert!(content.contains(&format!("alias.example.com ssh-ed25519 {} keep-me", key_data)));
+    }
+
+    #[test]
+    fn test_remove_host_key_preserves_other_saved_keys_for_same_host() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("known_hosts");
+        let first = BASE64.encode(sample_public_key().public_key_bytes());
+        let second = BASE64.encode(alternate_public_key().public_key_bytes());
+        let first_fingerprint = KnownHostsStore::compute_fingerprint_from_b64(&first);
+        fs::write(
+            &path,
+            format!(
+                "example.com ssh-ed25519 {}\nexample.com ssh-ed25519 {}\n",
+                first, second
+            ),
+        )
+        .unwrap();
+
+        let store = KnownHostsStore::with_path(path.clone());
+        store
+            .remove_host_key("example.com", 22, "ssh-ed25519", &first_fingerprint)
+            .unwrap();
+
+        let content = fs::read_to_string(path).unwrap();
+        assert!(!content.contains(&first));
+        assert!(content.contains(&second));
+    }
+
+    #[test]
+    fn test_remove_host_key_can_remove_host_only_fallback_for_non_standard_port() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("known_hosts");
+        let key_data = BASE64.encode(sample_public_key().public_key_bytes());
+        let fingerprint = KnownHostsStore::compute_fingerprint_from_b64(&key_data);
+        fs::write(&path, format!("example.com ssh-ed25519 {}\n", key_data)).unwrap();
+
+        let store = KnownHostsStore::with_path(path.clone());
+        store
+            .remove_host_key("example.com", 2222, "ssh-ed25519", &fingerprint)
+            .unwrap();
+
+        let content = fs::read_to_string(path).unwrap();
+        assert!(!content.contains("example.com ssh-ed25519"));
+    }
+
+    #[test]
+    fn test_remove_host_key_clears_exact_and_fallback_entries_for_same_saved_key() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("known_hosts");
+        let key_data = BASE64.encode(sample_public_key().public_key_bytes());
+        let fingerprint = KnownHostsStore::compute_fingerprint_from_b64(&key_data);
+        fs::write(
+            &path,
+            format!(
+                "example.com ssh-ed25519 {}\n[example.com]:2222 ssh-ed25519 {}\n",
+                key_data, key_data
+            ),
+        )
+        .unwrap();
+
+        let store = KnownHostsStore::with_path(path.clone());
+        store
+            .remove_host_key("example.com", 2222, "ssh-ed25519", &fingerprint)
+            .unwrap();
+
+        let content = fs::read_to_string(path).unwrap();
+        assert!(!content.contains(&key_data));
+    }
+
+    #[test]
+    fn test_remove_host_key_errors_when_no_match_exists() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("known_hosts");
+        fs::write(&path, "other.example.com ssh-ed25519 AAAA\n").unwrap();
+
+        let store = KnownHostsStore::with_path(path);
+        let error = store
+            .remove_host_key("example.com", 22, "ssh-ed25519", "SHA256:missing")
+            .unwrap_err();
+
+        assert!(matches!(error, SshError::ConnectionFailed(_)));
     }
 
     #[test]

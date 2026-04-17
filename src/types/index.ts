@@ -245,6 +245,13 @@ export interface AcceptHostKeyRequest {
   persist: boolean;
 }
 
+export interface RemoveHostKeyRequest {
+  host: string;
+  port: number;
+  keyType: string;
+  expectedFingerprint: string;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Keyboard-Interactive (2FA) Authentication Types
 // ═══════════════════════════════════════════════════════════════════════════

@@ -286,10 +286,12 @@
       "expected_fingerprint": "Saved Fingerprint",
       "actual_fingerprint": "Current Fingerprint",
       "confirm_prompt": "If you confirm the key change is legitimate, type \"{{host}}\" to continue:",
+      "remove_prompt": "Type \"{{host}}\" to remove the saved host key and re-check the current one:",
       "actions": {
         "cancel": "Cancel",
         "trust_once": "Trust Once",
         "trust_save": "Trust and Save",
+        "remove_saved": "Remove Saved Key",
         "ok": "OK"
       }
     },

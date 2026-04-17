@@ -129,8 +129,26 @@ vi.mock('@/components/modals/EditConnectionModal', () => ({
 }));
 
 vi.mock('@/components/modals/HostKeyConfirmDialog', () => ({
-  HostKeyConfirmDialog: ({ open, host, port }: { open: boolean; host: string; port: number }) => (
-    open ? <div data-testid="host-key-dialog">{host}:{port}</div> : null
+  HostKeyConfirmDialog: ({
+    open,
+    host,
+    port,
+    status,
+    onAccept,
+    onRemoveSavedKey,
+  }: {
+    open: boolean;
+    host: string;
+    port: number;
+    status?: { status: string } | null;
+    onAccept?: (persist: boolean) => void;
+    onRemoveSavedKey?: () => void;
+  }) => (
+    open ? <div data-testid="host-key-dialog">
+      {host}:{port}
+      {status?.status === 'changed' ? <button onClick={onRemoveSavedKey}>remove-saved-key</button> : null}
+      {status?.status === 'unknown' ? <button onClick={() => onAccept?.(true)}>accept-host-key</button> : null}
+    </div> : null
   ),
 }));
 
@@ -154,6 +172,7 @@ vi.mock('@/lib/api', () => ({
     deleteConnection: vi.fn(),
     getSavedConnectionForConnect: vi.fn(),
     sshPreflight: vi.fn(),
+    sshRemoveHostKey: vi.fn(),
     testConnection: vi.fn(),
   },
 }));
@@ -274,6 +293,127 @@ describe('SessionManagerPanel', () => {
       expect(screen.getByTestId('host-key-dialog')).toHaveTextContent('example.com:22');
     });
     expect(api.testConnection).not.toHaveBeenCalled();
+  });
+
+  it('shows host key confirmation before running a test on a changed host key', async () => {
+    vi.mocked(api.getSavedConnectionForConnect).mockResolvedValue({
+      name: 'Test Conn',
+      host: 'example.com',
+      port: 22,
+      username: 'tester',
+      auth_type: 'agent',
+      agent_forwarding: false,
+      proxy_chain: [],
+    });
+    vi.mocked(api.sshPreflight).mockResolvedValue({
+      status: 'changed',
+      expectedFingerprint: 'SHA256:old',
+      actualFingerprint: 'SHA256:new',
+      keyType: 'ssh-ed25519',
+    });
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('test-row'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('host-key-dialog')).toHaveTextContent('example.com:22');
+    });
+    expect(api.testConnection).not.toHaveBeenCalled();
+  });
+
+  it('removes the saved host key and re-runs preflight from the changed-key dialog', async () => {
+    vi.mocked(api.getSavedConnectionForConnect).mockResolvedValue({
+      name: 'Test Conn',
+      host: 'example.com',
+      port: 22,
+      username: 'tester',
+      auth_type: 'agent',
+      agent_forwarding: false,
+      proxy_chain: [],
+    });
+    vi.mocked(api.sshPreflight)
+      .mockResolvedValueOnce({
+        status: 'changed',
+        expectedFingerprint: 'SHA256:old',
+        actualFingerprint: 'SHA256:new',
+        keyType: 'ssh-ed25519',
+      })
+      .mockResolvedValueOnce({
+        status: 'unknown',
+        fingerprint: 'SHA256:new',
+        keyType: 'ssh-ed25519',
+      });
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('test-row'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('host-key-dialog')).toHaveTextContent('example.com:22');
+    });
+
+    fireEvent.click(screen.getByText('remove-saved-key'));
+
+    await waitFor(() => {
+      expect(api.sshRemoveHostKey).toHaveBeenCalledWith({
+        host: 'example.com',
+        port: 22,
+        keyType: 'ssh-ed25519',
+        expectedFingerprint: 'SHA256:old',
+      });
+    });
+
+    expect(api.sshPreflight).toHaveBeenNthCalledWith(2, {
+      host: 'example.com',
+      port: 22,
+    });
+  });
+
+  it('can continue from changed to unknown and then run the test with the new fingerprint', async () => {
+    vi.mocked(api.getSavedConnectionForConnect).mockResolvedValue({
+      name: 'Test Conn',
+      host: 'example.com',
+      port: 22,
+      username: 'tester',
+      auth_type: 'agent',
+      agent_forwarding: false,
+      proxy_chain: [],
+    });
+    vi.mocked(api.sshPreflight)
+      .mockResolvedValueOnce({
+        status: 'changed',
+        expectedFingerprint: 'SHA256:old',
+        actualFingerprint: 'SHA256:new',
+        keyType: 'ssh-ed25519',
+      })
+      .mockResolvedValueOnce({
+        status: 'unknown',
+        fingerprint: 'SHA256:new',
+        keyType: 'ssh-ed25519',
+      });
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('test-row'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('host-key-dialog')).toHaveTextContent('example.com:22');
+    });
+
+    fireEvent.click(screen.getByText('remove-saved-key'));
+
+    await waitFor(() => {
+      expect(screen.getByText('accept-host-key')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('accept-host-key'));
+
+    await waitFor(() => {
+      expect(api.testConnection).toHaveBeenCalledWith(expect.objectContaining({
+        host: 'example.com',
+        port: 22,
+        trust_host_key: true,
+        expected_host_key_fingerprint: 'SHA256:new',
+      }));
+    });
   });
 
   it('bypasses direct preflight and sends proxy hops for jump-host tests', async () => {

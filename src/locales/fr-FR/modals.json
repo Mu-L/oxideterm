@@ -286,10 +286,12 @@
       "expected_fingerprint": "Empreinte enregistrée",
       "actual_fingerprint": "Empreinte actuelle",
       "confirm_prompt": "Si vous confirmez que le changement de clé est légitime, tapez \"{{host}}\" pour continuer :",
+      "remove_prompt": "Saisissez \"{{host}}\" pour supprimer la clé d'hôte enregistrée et revérifier la clé actuelle :",
       "actions": {
         "cancel": "Annuler",
         "trust_once": "Faire confiance une fois",
         "trust_save": "Faire confiance et enregistrer",
+        "remove_saved": "Supprimer la clé enregistrée",
         "ok": "OK"
       }
     },

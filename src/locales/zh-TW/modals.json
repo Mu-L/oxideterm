@@ -286,10 +286,12 @@
       "expected_fingerprint": "已儲存的指紋",
       "actual_fingerprint": "目前指紋",
       "confirm_prompt": "如確認金鑰變更是合法的，請輸入主機名稱 \"{{host}}\" 以繼續：",
+      "remove_prompt": "請輸入主機名稱 \"{{host}}\" 以刪除已儲存的主機金鑰，並重新檢查目前金鑰：",
       "actions": {
         "cancel": "取消",
         "trust_once": "僅本次信任",
         "trust_save": "信任並儲存",
+        "remove_saved": "刪除已儲存金鑰",
         "ok": "確定"
       }
     },

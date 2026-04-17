@@ -30,6 +30,8 @@ export interface HostKeyConfirmDialogProps {
   port: number;
   /** Called when user accepts the key */
   onAccept: (persist: boolean) => void;
+  /** Called when user removes the saved key for a changed host */
+  onRemoveSavedKey?: () => void;
   /** Called when user cancels */
   onCancel: () => void;
   /** Loading state */
@@ -43,6 +45,7 @@ export const HostKeyConfirmDialog = ({
   host,
   port,
   onAccept,
+  onRemoveSavedKey,
   onCancel,
   loading = false,
 }: HostKeyConfirmDialogProps) => {
@@ -76,6 +79,11 @@ export const HostKeyConfirmDialog = ({
   const handleTrustAndSave = () => {
     if (!confirmMatches) return;
     onAccept(true);
+  };
+
+  const handleRemoveSavedKey = () => {
+    if (!confirmMatches || !onRemoveSavedKey) return;
+    onRemoveSavedKey();
   };
 
   const renderUnknownContent = () => {
@@ -153,7 +161,7 @@ export const HostKeyConfirmDialog = ({
 
           <div className="space-y-2 pt-2">
             <Label className="text-red-400 text-xs font-medium">
-              {t('modals.host_key.confirm_prompt', { host })}
+              {t('modals.host_key.remove_prompt', { host })}
             </Label>
             <Input
               value={confirmInput}
@@ -221,7 +229,7 @@ export const HostKeyConfirmDialog = ({
             {t('modals.host_key.actions.cancel')}
           </Button>
 
-          {(isUnknown || isChanged) && (
+          {isUnknown && (
             <>
               <Button
                 variant="secondary"
@@ -247,6 +255,20 @@ export const HostKeyConfirmDialog = ({
                 {t('modals.host_key.actions.trust_save')}
               </Button>
             </>
+          )}
+
+          {isChanged && (
+            <Button
+              variant="destructive"
+              onClick={handleRemoveSavedKey}
+              disabled={loading || !confirmMatches}
+              className="w-full sm:w-auto"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              {t('modals.host_key.actions.remove_saved')}
+            </Button>
           )}
 
           {isError && (

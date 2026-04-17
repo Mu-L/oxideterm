@@ -286,10 +286,12 @@
       "expected_fingerprint": "Impronta salvata",
       "actual_fingerprint": "Impronta attuale",
       "confirm_prompt": "Se confermi che il cambio di chiave è legittimo, digita \"{{host}}\" per continuare:",
+      "remove_prompt": "Digita \"{{host}}\" per rimuovere la chiave host salvata e ricontrollare quella attuale:",
       "actions": {
         "cancel": "Annulla",
         "trust_once": "Fidati una volta",
         "trust_save": "Fidati e salva",
+        "remove_saved": "Rimuovi chiave salvata",
         "ok": "OK"
       }
     },

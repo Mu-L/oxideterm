@@ -29,7 +29,7 @@ use crate::session::{
 use crate::sftp::session::SftpRegistry;
 use crate::ssh::{
     ConnectionInfo, ConnectionPoolConfig, HostKeyStatus, SshConnectionRegistry, accept_host_key,
-    check_host_key, get_host_key_cache,
+    check_host_key, get_host_key_cache, get_known_hosts,
 };
 use crate::state::BufferConfig;
 
@@ -1211,6 +1211,36 @@ pub async fn ssh_accept_host_key(request: AcceptHostKeyRequest) -> Result<(), St
         // The ssh_connect flow will check this and save to known_hosts.
         info!("Host key will be saved to known_hosts on next connection");
     }
+
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveHostKeyRequest {
+    pub host: String,
+    pub port: u16,
+    pub key_type: String,
+    pub expected_fingerprint: String,
+}
+
+#[tauri::command]
+pub async fn ssh_remove_host_key(request: RemoveHostKeyRequest) -> Result<(), String> {
+    info!(
+        "Removing saved host key for {}:{}",
+        request.host, request.port
+    );
+
+    get_known_hosts()
+        .remove_host_key(
+            &request.host,
+            request.port,
+            &request.key_type,
+            &request.expected_fingerprint,
+        )
+        .map_err(|e| format!("Failed to remove host key: {}", e))?;
+
+    get_host_key_cache().invalidate(&request.host, request.port);
 
     Ok(())
 }

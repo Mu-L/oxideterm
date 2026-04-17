@@ -286,10 +286,12 @@
       "expected_fingerprint": "Dấu vân tay đã lưu",
       "actual_fingerprint": "Dấu vân tay hiện tại",
       "confirm_prompt": "Nếu bạn xác nhận việc thay đổi khóa là hợp lệ, hãy nhập \"{{host}}\" để tiếp tục:",
+      "remove_prompt": "Nhập \"{{host}}\" để xóa khóa máy chủ đã lưu và kiểm tra lại khóa hiện tại:",
       "actions": {
         "cancel": "Hủy",
         "trust_once": "Tin tưởng lần này",
         "trust_save": "Tin tưởng và lưu",
+        "remove_saved": "Xóa khóa đã lưu",
         "ok": "OK"
       }
     },

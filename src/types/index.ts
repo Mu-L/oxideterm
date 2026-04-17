@@ -1230,6 +1230,8 @@ export interface ConnectTreeNodeRequest {
   nodeId: string;
   cols?: number;
   rows?: number;
+  trustHostKey?: boolean;
+  expectedHostKeyFingerprint?: string;
 }
 
 /**

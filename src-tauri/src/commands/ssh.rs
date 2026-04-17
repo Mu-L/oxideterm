@@ -248,6 +248,8 @@ pub async fn create_terminal(
         cols: request.cols,
         rows: request.rows,
         agent_forwarding,
+        trust_host_key: None,
+        expected_host_key_fingerprint: None,
     };
 
     // 在 SessionRegistry 创建 session

@@ -360,6 +360,8 @@ pub async fn establish_connection(
         cols: request.cols,
         rows: request.rows,
         agent_forwarding: false,
+        trust_host_key: request.trust_host_key,
+        expected_host_key_fingerprint: request.expected_host_key_fingerprint.clone(),
     };
 
     // 检查是否有可复用的连接

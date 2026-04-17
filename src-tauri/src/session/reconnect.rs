@@ -398,6 +398,8 @@ mod tests {
             cols: 80,
             rows: 24,
             agent_forwarding: false,
+            trust_host_key: None,
+            expected_host_key_fingerprint: None,
         };
 
         let reconnector = SessionReconnector::new(
@@ -428,6 +430,8 @@ mod tests {
             cols: 80,
             rows: 24,
             agent_forwarding: false,
+            trust_host_key: None,
+            expected_host_key_fingerprint: None,
         };
 
         let reconnector = SessionReconnector::new(
@@ -453,6 +457,8 @@ mod tests {
             cols: 80,
             rows: 24,
             agent_forwarding: true,
+            trust_host_key: None,
+            expected_host_key_fingerprint: None,
         };
 
         let reconnector = SessionReconnector::new(

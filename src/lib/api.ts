@@ -1321,7 +1321,7 @@ export const api = {
   /**
    * 连接树节点（建立 SSH 连接）
    */
-  connectTreeNode: async (request: { nodeId: string; cols?: number; rows?: number }): Promise<{ nodeId: string; sshConnectionId: string; parentConnectionId?: string }> => {
+  connectTreeNode: async (request: import('../types').ConnectTreeNodeRequest): Promise<{ nodeId: string; sshConnectionId: string; parentConnectionId?: string }> => {
     if (USE_MOCK) {
       return { nodeId: request.nodeId, sshConnectionId: crypto.randomUUID() };
     }

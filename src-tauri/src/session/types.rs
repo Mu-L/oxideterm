@@ -43,6 +43,12 @@ pub struct SessionConfig {
     /// Enable SSH agent forwarding
     #[serde(default)]
     pub agent_forwarding: bool,
+    /// Trust the current host key after an explicit preflight confirmation
+    #[serde(default)]
+    pub trust_host_key: Option<bool>,
+    /// Expected fingerprint captured during preflight confirmation
+    #[serde(default)]
+    pub expected_host_key_fingerprint: Option<String>,
 }
 
 fn default_cols() -> u32 {
@@ -71,6 +77,8 @@ impl SessionConfig {
             cols: 80,
             rows: 24,
             agent_forwarding: false,
+            trust_host_key: None,
+            expected_host_key_fingerprint: None,
         }
     }
 
@@ -92,6 +100,8 @@ impl SessionConfig {
             cols: 80,
             rows: 24,
             agent_forwarding: false,
+            trust_host_key: None,
+            expected_host_key_fingerprint: None,
         }
     }
 

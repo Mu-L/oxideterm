@@ -917,8 +917,8 @@ impl SshConnectionRegistry {
             rows: config.rows,
             proxy_chain: None,
             strict_host_key_checking: false,
-            trust_host_key: None, // Connection pool uses known_hosts, no TOFU here
-            expected_host_key_fingerprint: None,
+            trust_host_key: config.trust_host_key,
+            expected_host_key_fingerprint: config.expected_host_key_fingerprint.clone(),
             agent_forwarding: config.agent_forwarding,
         };
 
@@ -2891,6 +2891,8 @@ mod tests {
                 cols: 80,
                 rows: 24,
                 agent_forwarding: false,
+                trust_host_key: None,
+                expected_host_key_fingerprint: None,
             },
             handle_controller: {
                 // 创建一个 mock controller
@@ -2942,6 +2944,8 @@ mod tests {
                 cols: 80,
                 rows: 24,
                 agent_forwarding: false,
+                trust_host_key: None,
+                expected_host_key_fingerprint: None,
             },
             handle_controller: HandleController::new(tx),
             state: RwLock::new(ConnectionState::Active),

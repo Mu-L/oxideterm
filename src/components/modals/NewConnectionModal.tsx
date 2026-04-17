@@ -88,6 +88,8 @@ export const NewConnectionModal = () => {
   const [proxyChainExpanded, setProxyChainExpanded] = useState(false);
   const [agentAvailable, setAgentAvailable] = useState<boolean | null>(null);
   const [agentForwarding, setAgentForwarding] = useState(false);
+  const [connectHostKeyStatus, setConnectHostKeyStatus] = useState<HostKeyStatus | null>(null);
+  const [pendingConnectRequest, setPendingConnectRequest] = useState<Parameters<typeof addRootNode>[0] | null>(null);
   const [testHostKeyStatus, setTestHostKeyStatus] = useState<HostKeyStatus | null>(null);
   const [pendingTestRequest, setPendingTestRequest] = useState<TestConnectionRequest | null>(null);
   const isComposingRef = useRef(false);
@@ -113,6 +115,69 @@ export const NewConnectionModal = () => {
       formatTestFailure(result),
     );
   }, [formatTestFailure, t, toastError, toastSuccess]);
+
+  const executeConnect = useCallback(async (
+    request: Parameters<typeof addRootNode>[0],
+    options?: { trustHostKey?: boolean; expectedHostKeyFingerprint?: string },
+  ) => {
+    const nodeId = await addRootNode(request);
+    console.log(`Root node created: ${nodeId}`);
+
+    await connectNode(nodeId, options);
+
+    const terminalId = await createTerminalForNode(nodeId, 120, 40);
+    createTab('terminal', terminalId);
+
+    setConnectHostKeyStatus(null);
+    setPendingConnectRequest(null);
+    toggleModal('newConnection', false);
+
+    if (saveConnection) {
+      try {
+        await api.saveConnection({
+          name: name || `${request.username}@${request.host}`,
+          group: group === 'Ungrouped' ? null : (group || null),
+          host: request.host,
+          port: request.port,
+          username: request.username,
+          auth_type: request.authType as 'password' | 'key' | 'agent' | 'certificate',
+          password: (authType === 'password' && savePassword) ? password : undefined,
+          key_path: (authType === 'key' || authType === 'default_key' || authType === 'certificate') ? keyPath : undefined,
+          cert_path: authType === 'certificate' ? certPath : undefined,
+          tags: [],
+          agent_forwarding: request.agentForwarding,
+          proxy_chain: proxyServers.length > 0 ? proxyServers : undefined,
+        });
+        window.dispatchEvent(new CustomEvent('saved-connections-changed'));
+      } catch (saveErr) {
+        console.error('Failed to save connection:', saveErr);
+        toastError(
+          t('modals.new_connection.save_failed'),
+          String(saveErr),
+        );
+      }
+    }
+
+    setPassword('');
+    setPassphrase('');
+  }, [
+    addRootNode,
+    authType,
+    connectNode,
+    createTab,
+    createTerminalForNode,
+    group,
+    keyPath,
+    name,
+    password,
+    proxyServers,
+    saveConnection,
+    savePassword,
+    t,
+    toastError,
+    toggleModal,
+    certPath,
+  ]);
 
   // Enter key submit (with IME guard)
   const handleFormKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -253,54 +318,28 @@ export const NewConnectionModal = () => {
         keyPath: (authType === 'key' || authType === 'default_key' || authType === 'certificate') ? keyPath : undefined,
         certPath: authType === 'certificate' ? certPath : undefined,
         passphrase: (authType === 'key' || authType === 'default_key' || authType === 'certificate') && passphrase ? passphrase : undefined,
-        proxy_chain: proxyServers.length > 0 ? proxyServers : undefined,
         agentForwarding,
       };
 
-      // 添加根节点到 SessionTree
-      const nodeId = await addRootNode(request);
-      console.log(`Root node created: ${nodeId}`);
-      
-      // 自动连接新创建的节点（与 Saved Connection 流程一致）
-      await connectNode(nodeId);
-
-      const terminalId = await createTerminalForNode(nodeId, 120, 40);
-      createTab('terminal', terminalId);
-      
-      toggleModal('newConnection', false);
-
-      // 保存连接配置（独立 try-catch，连接已成功不应影响用户）
-      if (saveConnection) {
-        try {
-          const saveAuthType = authType === 'default_key' ? 'key' : authType;
-          await api.saveConnection({
-            name: name || `${username}@${host}`,
-            group: group === 'Ungrouped' ? null : (group || null),
-            host,
-            port: parseInt(port) || 22,
-            username,
-            auth_type: saveAuthType as 'password' | 'key' | 'agent' | 'certificate',
-            password: (authType === 'password' && savePassword) ? password : undefined,
-            key_path: (authType === 'key' || authType === 'default_key' || authType === 'certificate') ? keyPath : undefined,
-            cert_path: authType === 'certificate' ? certPath : undefined,
-            tags: [],
-            agent_forwarding: agentForwarding,
-            proxy_chain: proxyServers.length > 0 ? proxyServers : undefined,
-          });
-          // Notify session manager to refresh
-          window.dispatchEvent(new CustomEvent('saved-connections-changed'));
-        } catch (saveErr) {
-          console.error('Failed to save connection:', saveErr);
-          toastError(
-            t('modals.new_connection.save_failed'),
-            String(saveErr),
-          );
-        }
+      if (proxyServers.length > 0) {
+        await executeConnect(request);
+        return;
       }
 
-      // Reset sensitive fields if not saved
-      setPassword('');
-      setPassphrase('');
+      const preflight = await api.sshPreflight({ host: request.host, port: request.port });
+
+      if (preflight.status === 'verified') {
+        await executeConnect(request);
+        return;
+      }
+
+      if (preflight.status === 'unknown' || preflight.status === 'changed') {
+        setPendingConnectRequest(request);
+        setConnectHostKeyStatus(preflight);
+        return;
+      }
+
+      toastError(t('modals.new_connection.connect_failed'), preflight.message);
     } catch (e) {
       console.error(e);
       toastError(
@@ -395,6 +434,27 @@ export const NewConnectionModal = () => {
     }
   };
 
+  const handleAcceptConnectHostKey = async (persist: boolean) => {
+    if (!pendingConnectRequest || !connectHostKeyStatus || connectHostKeyStatus.status !== 'unknown') {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await executeConnect(pendingConnectRequest, {
+        trustHostKey: persist,
+        expectedHostKeyFingerprint: connectHostKeyStatus.fingerprint,
+      });
+    } catch (e) {
+      console.error(e);
+      setConnectHostKeyStatus(null);
+      setPendingConnectRequest(null);
+      toastError(t('modals.new_connection.connect_failed'), String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRemoveChangedHostKey = async () => {
     if (!testHostKeyStatus || testHostKeyStatus.status !== 'changed') {
       return;
@@ -418,8 +478,60 @@ export const NewConnectionModal = () => {
     }
   };
 
+  const handleRemoveChangedConnectKey = async () => {
+    if (!pendingConnectRequest || !connectHostKeyStatus || connectHostKeyStatus.status !== 'changed') {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.sshRemoveHostKey({
+        host: pendingConnectRequest.host,
+        port: pendingConnectRequest.port,
+        keyType: connectHostKeyStatus.keyType,
+        expectedFingerprint: connectHostKeyStatus.expectedFingerprint,
+      });
+
+      const preflight = await api.sshPreflight({
+        host: pendingConnectRequest.host,
+        port: pendingConnectRequest.port,
+      });
+
+      if (preflight.status === 'verified') {
+        await executeConnect(pendingConnectRequest);
+        return;
+      }
+
+      setConnectHostKeyStatus(preflight);
+    } catch (e) {
+      toastError(t('modals.new_connection.connect_failed'), String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
+      <HostKeyConfirmDialog
+        open={!!connectHostKeyStatus && connectHostKeyStatus.status !== 'verified'}
+        onClose={() => {
+          if (!loading) {
+            setConnectHostKeyStatus(null);
+            setPendingConnectRequest(null);
+          }
+        }}
+        status={connectHostKeyStatus}
+        host={pendingConnectRequest?.host || host}
+        port={pendingConnectRequest?.port || parseInt(port) || 22}
+        onAccept={handleAcceptConnectHostKey}
+        onRemoveSavedKey={handleRemoveChangedConnectKey}
+        onCancel={() => {
+          setConnectHostKeyStatus(null);
+          setPendingConnectRequest(null);
+        }}
+        loading={loading}
+      />
+
       <HostKeyConfirmDialog
         open={!!testHostKeyStatus && testHostKeyStatus.status !== 'verified'}
         onClose={() => {
@@ -446,6 +558,8 @@ export const NewConnectionModal = () => {
           setPassword('');
           setPassphrase('');
           setAgentForwarding(false);
+          setConnectHostKeyStatus(null);
+          setPendingConnectRequest(null);
           setTestHostKeyStatus(null);
           setPendingTestRequest(null);
           // 清除代理链中的密码

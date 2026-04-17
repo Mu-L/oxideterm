@@ -90,6 +90,9 @@ describe('NewConnectionModal host key flows', () => {
     appStoreState.quickConnectData = null;
     apiMocks.getGroups.mockResolvedValue([]);
     apiMocks.isAgentAvailable.mockResolvedValue(true);
+    sessionTreeState.addRootNode.mockResolvedValue('node-1');
+    sessionTreeState.connectNode.mockResolvedValue(undefined);
+    sessionTreeState.createTerminalForNode.mockResolvedValue('terminal-1');
   });
 
   it('keeps the dialog visible if removing a changed key is followed by a preflight error', async () => {
@@ -239,5 +242,104 @@ describe('NewConnectionModal host key flows', () => {
         expected_host_key_fingerprint: 'SHA256:new',
       }));
     });
+  });
+
+  it('preflights direct connect and forwards the accepted fingerprint into connectNode', async () => {
+    apiMocks.sshPreflight
+      .mockResolvedValueOnce({
+        status: 'changed',
+        expectedFingerprint: 'SHA256:old',
+        actualFingerprint: 'SHA256:new',
+        keyType: 'ssh-ed25519',
+      })
+      .mockResolvedValueOnce({
+        status: 'unknown',
+        fingerprint: 'SHA256:new',
+        keyType: 'ssh-ed25519',
+      });
+
+    await act(async () => {
+      render(<NewConnectionModal />);
+    });
+
+    fireEvent.change(screen.getByLabelText('modals.new_connection.target_host *'), {
+      target: { value: 'server.example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('modals.new_connection.target_username *'), {
+      target: { value: 'alice' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'modals.new_connection.connect' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('host-key-dialog-state')).toHaveTextContent('changed');
+    });
+
+    fireEvent.click(screen.getByText('remove-saved-key'));
+
+    await waitFor(() => {
+      expect(screen.getByText('accept-host-key')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('accept-host-key'));
+
+    await waitFor(() => {
+      expect(sessionTreeState.addRootNode).toHaveBeenCalledWith(expect.objectContaining({
+        host: 'server.example.com',
+        port: 22,
+        username: 'alice',
+        authType: 'password',
+        password: '',
+      }));
+      expect(sessionTreeState.connectNode).toHaveBeenCalledWith('node-1', {
+        trustHostKey: true,
+        expectedHostKeyFingerprint: 'SHA256:new',
+      });
+    });
+
+    expect(apiMocks.sshRemoveHostKey).toHaveBeenCalledWith({
+      host: 'server.example.com',
+      port: 22,
+      keyType: 'ssh-ed25519',
+      expectedFingerprint: 'SHA256:old',
+    });
+    expect(toastState.error).not.toHaveBeenCalled();
+  });
+
+  it('shows a connect error if the real connect fails after accepting an unknown host key', async () => {
+    apiMocks.sshPreflight.mockResolvedValueOnce({
+      status: 'unknown',
+      fingerprint: 'SHA256:new',
+      keyType: 'ssh-ed25519',
+    });
+    sessionTreeState.connectNode.mockRejectedValueOnce(new Error('connect boom'));
+
+    await act(async () => {
+      render(<NewConnectionModal />);
+    });
+
+    fireEvent.change(screen.getByLabelText('modals.new_connection.target_host *'), {
+      target: { value: 'server.example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('modals.new_connection.target_username *'), {
+      target: { value: 'alice' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'modals.new_connection.connect' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('accept-host-key')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('accept-host-key'));
+
+    await waitFor(() => {
+      expect(toastState.error).toHaveBeenCalledWith(
+        'modals.new_connection.connect_failed',
+        'Error: connect boom',
+      );
+    });
+
+    expect(screen.queryByText('accept-host-key')).not.toBeInTheDocument();
   });
 });

@@ -168,7 +168,7 @@ interface SessionTreeStore {
   
   // ========== Connection Management ==========
   /** 连接节点 (建立 SSH 连接) */
-  connectNode: (nodeId: string) => Promise<void>;
+  connectNode: (nodeId: string, options?: { trustHostKey?: boolean; expectedHostKeyFingerprint?: string }) => Promise<void>;
   /** 断开节点 (级联断开所有子节点) */
   disconnectNode: (nodeId: string) => Promise<void>;
   /**
@@ -624,7 +624,7 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
      * - 锁获取失败：静默返回，不抛异常
      * - 连接失败：回滚状态，释放锁，抛出异常
      */
-    connectNode: async (nodeId: string) => {
+    connectNode: async (nodeId: string, options?: { trustHostKey?: boolean; expectedHostKeyFingerprint?: string }) => {
       const node = get().getRawNode(nodeId);
       if (!node) throw new Error(`Node ${nodeId} not found`);
       
@@ -675,7 +675,11 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
         }));
         get().rebuildUnifiedNodes();
         
-        const response = await api.connectTreeNode({ nodeId });
+        const response = await api.connectTreeNode({
+          nodeId,
+          trustHostKey: options?.trustHostKey,
+          expectedHostKeyFingerprint: options?.expectedHostKeyFingerprint,
+        });
         
         // 更新连接 ID
         await api.setTreeNodeConnection(nodeId, response.sshConnectionId);

@@ -789,6 +789,10 @@ pub struct ConnectTreeNodeRequest {
     /// 终端高度
     #[serde(default = "default_rows")]
     pub rows: u32,
+    #[serde(default)]
+    pub trust_host_key: Option<bool>,
+    #[serde(default)]
+    pub expected_host_key_fingerprint: Option<String>,
 }
 
 fn default_cols() -> u32 {
@@ -850,6 +854,8 @@ pub async fn connect_tree_node(
             cols: request.cols,
             rows: request.rows,
             agent_forwarding: node.connection.agent_forwarding,
+            trust_host_key: request.trust_host_key,
+            expected_host_key_fingerprint: request.expected_host_key_fingerprint.clone(),
         };
 
         (config, node.parent_id.clone())
@@ -1124,6 +1130,8 @@ pub async fn connect_manual_preset(
                 cols,
                 rows,
                 agent_forwarding: node.connection.agent_forwarding,
+                trust_host_key: None,
+                expected_host_key_fingerprint: None,
             };
 
             // 获取父节点的 SSH 连接 ID（如果有）

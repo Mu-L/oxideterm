@@ -8,8 +8,8 @@
 use crate::config::{
     AiProviderVault, CONFIG_ENCRYPTION_KEY_LEN, ConfigFile, ConfigStorage, ConfigStorageFormat,
     Keychain, KeychainError, ProxyHopConfig, ResolvedProxyJumpHost, ResolvedSshConfigHost,
-    SavedAuth, SavedConnection, SshConfigHost, default_ssh_config_path,
-    load_ssh_config_content, parse_ssh_config, resolve_ssh_config_host,
+    SavedAuth, SavedConnection, SshConfigHost, default_ssh_config_path, load_ssh_config_content,
+    parse_ssh_config, portable_aware_app_data_dir, resolve_ssh_config_host,
     resolve_ssh_config_host_content,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tauri::{Emitter, Manager, State};
+use tauri::{Emitter, State};
 use zeroize::Zeroizing;
 
 use super::forwarding::ForwardingRegistry;
@@ -498,7 +498,10 @@ fn build_saved_auth_from_paths(
             has_passphrase: false,
             passphrase_keychain_id: None,
         }),
-        _ => match crate::session::auth::list_available_keys().into_iter().next() {
+        _ => match crate::session::auth::list_available_keys()
+            .into_iter()
+            .next()
+        {
             Some(key_path) => Ok(SavedAuth::Key {
                 key_path: key_path.to_string_lossy().into_owned(),
                 has_passphrase: false,
@@ -571,8 +574,10 @@ fn ensure_resolved_host_can_connect(resolved: &ResolvedSshConfigHost) -> Result<
 }
 
 fn resolved_host_to_frontend(resolved: &ResolvedSshConfigHost) -> ResolvedSshConfigHostInfo {
-    let (auth_type, key_path, cert_path) =
-        auth_type_and_paths(resolved.identity_file.as_ref(), resolved.certificate_file.as_ref());
+    let (auth_type, key_path, cert_path) = auth_type_and_paths(
+        resolved.identity_file.as_ref(),
+        resolved.certificate_file.as_ref(),
+    );
 
     ResolvedSshConfigHostInfo {
         alias: resolved.alias.clone(),
@@ -985,10 +990,10 @@ pub struct SaveConnectionRequest {
     pub host: String,
     pub port: u16,
     pub username: String,
-    pub auth_type: String,                   // "password", "key", "agent"
-    pub password: Option<Zeroizing<String>>, // Only for password auth
-    pub key_path: Option<String>,            // Only for key auth
-    pub cert_path: Option<String>,           // Only for certificate auth
+    pub auth_type: String,                     // "password", "key", "agent"
+    pub password: Option<Zeroizing<String>>,   // Only for password auth
+    pub key_path: Option<String>,              // Only for key auth
+    pub cert_path: Option<String>,             // Only for certificate auth
     pub passphrase: Option<Zeroizing<String>>, // Only for key/certificate auth
     pub color: Option<String>,
     #[serde(default)]
@@ -1275,7 +1280,14 @@ fn build_saved_auth_for_update(
                         keychain_id: Some(existing_keychain_id.clone()),
                     })
                 } else {
-                    build_saved_auth(auth_type, Some(pwd), key_path, cert_path, passphrase, keychain)
+                    build_saved_auth(
+                        auth_type,
+                        Some(pwd),
+                        key_path,
+                        cert_path,
+                        passphrase,
+                        keychain,
+                    )
                 }
             } else if let SavedAuth::Password { keychain_id } = existing_auth {
                 Ok(SavedAuth::Password {
@@ -1325,9 +1337,9 @@ fn build_saved_auth_for_update(
                         cert_path: cp.to_string(),
                         has_passphrase: passphrase.map(|_| true).unwrap_or(*has_passphrase),
                         passphrase_keychain_id: if let Some(passphrase) = passphrase {
-                            let keychain_id = passphrase_keychain_id
-                                .clone()
-                                .unwrap_or_else(|| format!("oxide_conn_key_{}", uuid::Uuid::new_v4()));
+                            let keychain_id = passphrase_keychain_id.clone().unwrap_or_else(|| {
+                                format!("oxide_conn_key_{}", uuid::Uuid::new_v4())
+                            });
                             keychain
                                 .store(&keychain_id, passphrase)
                                 .map_err(|e| e.to_string())?;
@@ -1538,10 +1550,12 @@ pub async fn save_connection(
             conn.updated_at = Some(now);
 
             let updated = conn.clone();
-            let existing_keychain_ids: HashSet<String> =
-                collect_connection_keychain_ids(&existing).into_iter().collect();
-            let next_keychain_ids: HashSet<String> =
-                collect_connection_keychain_ids(&updated).into_iter().collect();
+            let existing_keychain_ids: HashSet<String> = collect_connection_keychain_ids(&existing)
+                .into_iter()
+                .collect();
+            let next_keychain_ids: HashSet<String> = collect_connection_keychain_ids(&updated)
+                .into_iter()
+                .collect();
 
             (
                 updated,
@@ -2850,16 +2864,20 @@ pub async fn delete_ai_api_key(state: State<'_, Arc<ConfigState>>) -> Result<(),
 
 /// Attempt to migrate a provider key from legacy XOR vault to OS keychain.
 /// Called lazily on first access. Returns the key if migration succeeded.
+fn ai_provider_vault_for_app(app_handle: &tauri::AppHandle) -> Result<AiProviderVault, String> {
+    let data_dir = portable_aware_app_data_dir(app_handle).map_err(|e| e.to_string())?;
+    Ok(AiProviderVault::new(data_dir))
+}
+
 fn try_migrate_vault_to_keychain(
     app_handle: &tauri::AppHandle,
     ai_keychain: &Keychain,
     provider_id: &str,
 ) -> Option<String> {
-    let app_data_dir = match app_handle.path().app_data_dir() {
-        Ok(d) => d,
+    let vault = match ai_provider_vault_for_app(app_handle) {
+        Ok(vault) => vault,
         Err(_) => return None,
     };
-    let vault = AiProviderVault::new(app_data_dir);
 
     if !vault.exists(provider_id) {
         return None;
@@ -3028,11 +3046,7 @@ pub async fn has_ai_provider_api_key(
     }
 
     // Check if vault file exists (pending migration)
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    let vault = AiProviderVault::new(app_data_dir);
+    let vault = ai_provider_vault_for_app(&app_handle)?;
     Ok(vault.exists(&provider_id))
 }
 
@@ -3053,11 +3067,7 @@ pub async fn delete_ai_provider_api_key(
     }
 
     // Also clean up any remaining vault file
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    let vault = AiProviderVault::new(app_data_dir);
+    let vault = ai_provider_vault_for_app(&app_handle)?;
     if let Err(e) = vault.delete(&provider_id) {
         tracing::debug!(
             "Vault delete for provider {} (may not exist): {}",
@@ -3083,11 +3093,7 @@ pub async fn list_ai_provider_keys(
     let mut providers = std::collections::HashSet::new();
 
     // Check legacy vault files (will be migrated on next access)
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    let vault = AiProviderVault::new(app_data_dir);
+    let vault = ai_provider_vault_for_app(&app_handle)?;
     if let Ok(vault_providers) = vault.list_providers() {
         for p in vault_providers {
             providers.insert(p);
@@ -3118,19 +3124,21 @@ pub struct DataDirInfo {
     pub path: String,
     pub is_custom: bool,
     pub default_path: String,
+    pub is_portable: bool,
+    pub can_change: bool,
 }
 
 /// Get current data directory information
 #[tauri::command]
 pub async fn get_data_directory() -> Result<DataDirInfo, String> {
-    let (effective, is_custom) =
-        crate::config::storage::get_data_dir_info().map_err(|e| e.to_string())?;
-    let default = crate::config::storage::default_dir().map_err(|e| e.to_string())?;
+    let info = crate::config::storage::get_data_dir_info().map_err(|e| e.to_string())?;
 
     Ok(DataDirInfo {
-        path: effective.to_string_lossy().to_string(),
-        is_custom,
-        default_path: default.to_string_lossy().to_string(),
+        path: info.effective.to_string_lossy().to_string(),
+        is_custom: info.is_custom,
+        default_path: info.default.to_string_lossy().to_string(),
+        is_portable: info.is_portable,
+        can_change: info.can_change,
     })
 }
 
@@ -3138,6 +3146,10 @@ pub async fn get_data_directory() -> Result<DataDirInfo, String> {
 /// Returns true if the path was changed (app restart required).
 #[tauri::command]
 pub async fn set_data_directory(new_path: String) -> Result<bool, String> {
+    if crate::config::is_portable_mode().map_err(|e| e.to_string())? {
+        return Err("Data directory cannot be changed in portable mode".to_string());
+    }
+
     let path = std::path::PathBuf::from(&new_path);
 
     if !path.is_absolute() {
@@ -3181,6 +3193,10 @@ pub async fn set_data_directory(new_path: String) -> Result<bool, String> {
 /// Reset data directory to default. Removes data_dir from bootstrap.json.
 #[tauri::command]
 pub async fn reset_data_directory() -> Result<bool, String> {
+    if crate::config::is_portable_mode().map_err(|e| e.to_string())? {
+        return Err("Data directory cannot be reset in portable mode".to_string());
+    }
+
     let bootstrap = crate::config::storage::BootstrapConfig::default();
     tokio::task::spawn_blocking(move || crate::config::storage::save_bootstrap_config(&bootstrap))
         .await

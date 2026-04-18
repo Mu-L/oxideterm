@@ -911,6 +911,8 @@ export type DataDirInfo = {
   path: string;
   is_custom: boolean;
   default_path: string;
+  is_portable: boolean;
+  can_change: boolean;
 }
 
 export type DataDirCheck = {

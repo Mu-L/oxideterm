@@ -9,11 +9,11 @@
 //! - ProxyJump: Multi-hop jump hosts
 //! - Port Forwarding: LocalForward, RemoteForward, DynamicForward
 
+use glob::{MatchOptions, glob};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use glob::{MatchOptions, glob};
 use tracing::warn;
 
 /// Port forwarding rule
@@ -367,7 +367,10 @@ fn read_ssh_config_with_includes_internal(
                     for include_path in expand_include_token(base_dir, &token)? {
                         let include_content = match std::fs::metadata(&include_path) {
                             Ok(metadata) if metadata.is_file() => {
-                                read_ssh_config_with_includes_internal(&include_path, include_stack)?
+                                read_ssh_config_with_includes_internal(
+                                    &include_path,
+                                    include_stack,
+                                )?
                             }
                             Ok(_) => continue,
                             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -473,7 +476,12 @@ fn resolve_ssh_config_alias_content_internal(
         };
 
         if key.eq_ignore_ascii_case("host") {
-            current_patterns = Some(value.split_whitespace().map(|part| part.to_string()).collect());
+            current_patterns = Some(
+                value
+                    .split_whitespace()
+                    .map(|part| part.to_string())
+                    .collect(),
+            );
             continue;
         }
 
@@ -523,7 +531,8 @@ fn resolve_ssh_config_alias_content_internal(
         }
     }
 
-    if (require_explicit_match && matched_specific_host) || (!require_explicit_match && matched_any_block)
+    if (require_explicit_match && matched_specific_host)
+        || (!require_explicit_match && matched_any_block)
     {
         Ok(Some(accumulator))
     } else {
@@ -553,10 +562,16 @@ fn resolve_proxy_chain(
     let mut resolved_chain = Vec::new();
 
     for hop in proxy_jump {
-        if stack.iter().any(|entry| entry.eq_ignore_ascii_case(&hop.host)) {
+        if stack
+            .iter()
+            .any(|entry| entry.eq_ignore_ascii_case(&hop.host))
+        {
             return Err(SshConfigError::Parse {
                 line: 0,
-                message: format!("Detected cyclic SSH alias reference involving '{}'", hop.host),
+                message: format!(
+                    "Detected cyclic SSH alias reference involving '{}'",
+                    hop.host
+                ),
             });
         }
 
@@ -603,7 +618,9 @@ fn resolve_proxy_chain(
                         .and_then(|entry| entry.port)
                         .unwrap_or(hop.port)
                 },
-                identity_file: defaults.as_ref().and_then(|entry| entry.identity_file.clone()),
+                identity_file: defaults
+                    .as_ref()
+                    .and_then(|entry| entry.identity_file.clone()),
                 certificate_file: defaults
                     .as_ref()
                     .and_then(|entry| entry.certificate_file.clone()),
@@ -1099,7 +1116,9 @@ Host app
     HostName app.example.com
 "#;
 
-        let resolved = resolve_ssh_config_host_content(content, "app").unwrap().unwrap();
+        let resolved = resolve_ssh_config_host_content(content, "app")
+            .unwrap()
+            .unwrap();
         assert_eq!(resolved.host, "app.example.com");
         assert_eq!(resolved.user, Some("shared-user".to_string()));
         assert!(resolved.identity_file.unwrap().ends_with("/.ssh/id_shared"));
@@ -1121,17 +1140,24 @@ Host target
     ProxyJump bastion
 "#;
 
-        let resolved = resolve_ssh_config_host_content(content, "target").unwrap().unwrap();
+        let resolved = resolve_ssh_config_host_content(content, "target")
+            .unwrap()
+            .unwrap();
         assert_eq!(resolved.host, "target.internal");
         assert_eq!(resolved.proxy_chain.len(), 1);
         assert_eq!(resolved.proxy_chain[0].alias, Some("bastion".to_string()));
         assert_eq!(resolved.proxy_chain[0].host, "jump.example.com");
         assert_eq!(resolved.proxy_chain[0].port, 2222);
-        assert_eq!(resolved.proxy_chain[0].user, Some("shared-user".to_string()));
-        assert!(resolved.proxy_chain[0]
-            .identity_file
-            .as_ref()
-            .is_some_and(|path| path.ends_with("/.ssh/id_jump")));
+        assert_eq!(
+            resolved.proxy_chain[0].user,
+            Some("shared-user".to_string())
+        );
+        assert!(
+            resolved.proxy_chain[0]
+                .identity_file
+                .as_ref()
+                .is_some_and(|path| path.ends_with("/.ssh/id_jump"))
+        );
     }
 
     #[test]
@@ -1172,14 +1198,21 @@ Host target
     ProxyJump bastion.example.com
 "#;
 
-        let resolved = resolve_ssh_config_host_content(content, "target").unwrap().unwrap();
+        let resolved = resolve_ssh_config_host_content(content, "target")
+            .unwrap()
+            .unwrap();
         assert_eq!(resolved.proxy_chain.len(), 1);
         assert_eq!(resolved.proxy_chain[0].host, "bastion.example.com");
-        assert_eq!(resolved.proxy_chain[0].user, Some("shared-user".to_string()));
-        assert!(resolved.proxy_chain[0]
-            .identity_file
-            .as_ref()
-            .is_some_and(|path| path.ends_with("/.ssh/id_shared")));
+        assert_eq!(
+            resolved.proxy_chain[0].user,
+            Some("shared-user".to_string())
+        );
+        assert!(
+            resolved.proxy_chain[0]
+                .identity_file
+                .as_ref()
+                .is_some_and(|path| path.ends_with("/.ssh/id_shared"))
+        );
     }
 
     #[test]
@@ -1196,13 +1229,16 @@ Host *
     ProxyJump bastion
 "#;
 
-        let resolved = resolve_ssh_config_host_content(content, "target").unwrap().unwrap();
+        let resolved = resolve_ssh_config_host_content(content, "target")
+            .unwrap()
+            .unwrap();
         assert!(resolved.proxy_chain.is_empty());
     }
 
     #[test]
     fn test_parse_include_tokens_keeps_quoted_paths_with_spaces() {
-        let tokens = parse_include_tokens(r#""dir with spaces/config" plain.conf 'other dir/*.conf'"#);
+        let tokens =
+            parse_include_tokens(r#""dir with spaces/config" plain.conf 'other dir/*.conf'"#);
 
         assert_eq!(
             tokens,

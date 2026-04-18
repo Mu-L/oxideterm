@@ -9,10 +9,10 @@
 //!   with both `.icns` files and Asset Catalogs (`.car`).
 
 use super::AppEntry;
+use crate::config::portable_aware_app_data_dir;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use tauri::Manager;
 
 /// Directories to scan for `.app` bundles.
 const APP_DIRS: &[&str] = &[
@@ -265,9 +265,7 @@ fn batch_extract_icons(entries: &mut [AppEntry], icon_cache_dir: &Path) {
 pub fn get_icon_cache_dir(
     app: &tauri::AppHandle,
 ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
+    let data_dir = portable_aware_app_data_dir(app)
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     Ok(data_dir.join("launcher_icons"))
 }

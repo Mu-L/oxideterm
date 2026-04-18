@@ -117,42 +117,52 @@ export const GeneralTab = ({ general, setLanguage }: GeneralTabProps) => {
                             <code className="flex-1 px-3 py-2 bg-theme-bg-subtle rounded text-sm text-theme-text font-mono truncate">
                                 {dataDirInfo.path}
                             </code>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={dataDirLoading}
-                                onClick={async () => {
-                                    const selected = await openFileDialog({
-                                        directory: true,
-                                        title: t('settings_view.general.select_data_directory'),
-                                    });
-                                    if (!selected || typeof selected !== 'string') return;
+                            {dataDirInfo.can_change && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={dataDirLoading}
+                                    onClick={async () => {
+                                        const selected = await openFileDialog({
+                                            directory: true,
+                                            title: t('settings_view.general.select_data_directory'),
+                                        });
+                                        if (!selected || typeof selected !== 'string') return;
 
-                                    setDataDirLoading(true);
-                                    try {
-                                        const check = await api.checkDataDirectory(selected);
-                                        if (check.has_existing_data) {
-                                            const proceed = await confirm({
-                                                title: t('settings_view.general.data_directory_conflict'),
-                                                description: t('settings_view.general.data_directory_conflict_detail', {
-                                                    files: check.files_found.join(', '),
-                                                }),
-                                            });
-                                            if (!proceed) return;
+                                        setDataDirLoading(true);
+                                        try {
+                                            const check = await api.checkDataDirectory(selected);
+                                            if (check.has_existing_data) {
+                                                const proceed = await confirm({
+                                                    title: t('settings_view.general.data_directory_conflict'),
+                                                    description: t('settings_view.general.data_directory_conflict_detail', {
+                                                        files: check.files_found.join(', '),
+                                                    }),
+                                                });
+                                                if (!proceed) return;
+                                            }
+                                            await api.setDataDirectory(selected);
+                                            toastSuccess(t('settings_view.general.data_directory_changed'));
+                                            setDataDirInfo((current) => current
+                                                ? {
+                                                    ...current,
+                                                    path: selected,
+                                                    is_custom: true,
+                                                    is_portable: false,
+                                                    can_change: true,
+                                                }
+                                                : current);
+                                        } catch (error) {
+                                            toastError(String(error));
+                                        } finally {
+                                            setDataDirLoading(false);
                                         }
-                                        await api.setDataDirectory(selected);
-                                        toastSuccess(t('settings_view.general.data_directory_changed'));
-                                        setDataDirInfo((current) => current ? { ...current, path: selected, is_custom: true } : current);
-                                    } catch (error) {
-                                        toastError(String(error));
-                                    } finally {
-                                        setDataDirLoading(false);
-                                    }
-                                }}
-                            >
-                                {t('settings_view.general.change')}
-                            </Button>
-                            {dataDirInfo.is_custom && (
+                                    }}
+                                >
+                                    {t('settings_view.general.change')}
+                                </Button>
+                            )}
+                            {dataDirInfo.can_change && dataDirInfo.is_custom && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -169,7 +179,13 @@ export const GeneralTab = ({ general, setLanguage }: GeneralTabProps) => {
                                             await api.resetDataDirectory();
                                             toastSuccess(t('settings_view.general.data_directory_reset'));
                                             setDataDirInfo((current) => current
-                                                ? { ...current, path: current.default_path, is_custom: false }
+                                                ? {
+                                                    ...current,
+                                                    path: current.default_path,
+                                                    is_custom: false,
+                                                    is_portable: false,
+                                                    can_change: true,
+                                                }
                                                 : current);
                                         } catch (error) {
                                             toastError(String(error));

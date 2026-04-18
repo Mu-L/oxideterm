@@ -12,6 +12,7 @@
 //! - Legacy XOR vault files (`ai_keys/*.vault`) are auto-migrated on first access
 
 pub mod keychain;
+pub mod portable;
 pub mod ssh_config;
 pub mod storage;
 pub mod types;
@@ -21,10 +22,14 @@ pub mod vault;
 pub mod touch_id;
 
 pub use keychain::{Keychain, KeychainError};
+pub use portable::{
+    PortableError, PortableInfo, is_portable_mode, portable_aware_app_data_dir, portable_data_dir,
+    portable_info,
+};
 pub use ssh_config::{
     ResolvedProxyJumpHost, ResolvedSshConfigHost, SshConfigError, SshConfigHost,
-    default_ssh_config_path, load_ssh_config_content, parse_ssh_config,
-    resolve_ssh_config_host, resolve_ssh_config_host_content,
+    default_ssh_config_path, load_ssh_config_content, parse_ssh_config, resolve_ssh_config_host,
+    resolve_ssh_config_host_content,
 };
 pub use storage::{
     BootstrapConfig, CONFIG_ENCRYPTION_KEY_LEN, ConfigStorage, ConfigStorageFormat, LoadedConfig,

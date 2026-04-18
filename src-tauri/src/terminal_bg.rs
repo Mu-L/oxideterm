@@ -7,9 +7,10 @@
 //! - Validates image format (PNG, JPEG, WebP, GIF/APNG)
 //! - Resizes oversized images (max 1920px on longest edge)
 //! - Converts to WebP for storage efficiency
-//! - Stores in `app_data_dir/backgrounds/` (supports multiple images)
+//! - Stores in the portable-aware app data directory under `backgrounds/`
 //! - Grants asset protocol scope for frontend `asset://` URL access
 
+use crate::config::portable_aware_app_data_dir;
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -22,10 +23,7 @@ const MAX_INPUT_SIZE: u64 = 20 * 1024 * 1024;
 
 /// Get the backgrounds directory path.
 fn get_backgrounds_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let data_dir = portable_aware_app_data_dir(app).map_err(|e| e.to_string())?;
     Ok(data_dir.join("backgrounds"))
 }
 

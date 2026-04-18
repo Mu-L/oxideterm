@@ -19,6 +19,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use zeroize::Zeroizing;
 
+use super::portable::{is_portable_mode, portable_data_dir};
 use super::types::{CONFIG_VERSION, ConfigFile};
 
 const ENCRYPTED_CONFIG_FORMAT: &str = "oxideterm.config.encrypted";
@@ -41,6 +42,15 @@ pub struct LoadedConfig {
     pub format: ConfigStorageFormat,
 }
 
+#[derive(Debug, Clone)]
+pub struct ResolvedDataDirInfo {
+    pub effective: PathBuf,
+    pub default: PathBuf,
+    pub is_custom: bool,
+    pub is_portable: bool,
+    pub can_change: bool,
+}
+
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct EncryptedConfigEnvelope {
     format: String,
@@ -55,6 +65,9 @@ struct EncryptedConfigEnvelope {
 pub enum StorageError {
     #[error("Failed to determine config directory")]
     NoConfigDir,
+
+    #[error("Portable mode error: {0}")]
+    Portable(String),
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -182,6 +195,13 @@ pub fn config_dir() -> Result<PathBuf, StorageError> {
 
 /// Resolve the data directory by checking bootstrap config
 fn resolve_data_dir() -> Result<PathBuf, StorageError> {
+    if let Some(data_dir) =
+        portable_data_dir().map_err(|e| StorageError::Portable(e.to_string()))?
+    {
+        tracing::info!("Using portable data directory: {:?}", data_dir);
+        return Ok(data_dir);
+    }
+
     if let Some(bootstrap) = read_bootstrap_config() {
         if let Some(custom_dir) = bootstrap.data_dir {
             let path = PathBuf::from(&custom_dir);
@@ -199,11 +219,18 @@ fn resolve_data_dir() -> Result<PathBuf, StorageError> {
 }
 
 /// Get the current effective data directory path and whether it's custom
-pub fn get_data_dir_info() -> Result<(PathBuf, bool), StorageError> {
+pub fn get_data_dir_info() -> Result<ResolvedDataDirInfo, StorageError> {
     let effective = config_dir()?;
     let default = default_dir()?;
-    let is_custom = effective != default;
-    Ok((effective, is_custom))
+    let is_portable = is_portable_mode().map_err(|e| StorageError::Portable(e.to_string()))?;
+    let is_custom = !is_portable && effective != default;
+    Ok(ResolvedDataDirInfo {
+        effective,
+        default,
+        is_custom,
+        is_portable,
+        can_change: !is_portable,
+    })
 }
 
 /// Get the log directory for storing application logs
@@ -515,5 +542,26 @@ mod tests {
 
         let err = storage.load_with_key(None).await.unwrap_err();
         assert!(matches!(err, StorageError::MissingEncryptionKey));
+    }
+
+    #[test]
+    fn portable_storage_error_has_explicit_variant() {
+        let err = StorageError::Portable("marker lookup failed".to_string());
+        assert_eq!(err.to_string(), "Portable mode error: marker lookup failed");
+    }
+
+    #[test]
+    fn resolved_data_dir_info_can_represent_portable_mode() {
+        let info = ResolvedDataDirInfo {
+            effective: PathBuf::from("/portable/data"),
+            default: PathBuf::from("/home/user/.oxideterm"),
+            is_custom: false,
+            is_portable: true,
+            can_change: false,
+        };
+
+        assert!(info.is_portable);
+        assert!(!info.is_custom);
+        assert!(!info.can_change);
     }
 }

@@ -6,6 +6,7 @@
 //! Supports断点续传 download, signature verification, and cross-restart recovery.
 //! Adapted from lumina-note's update_manager.
 
+use crate::config::portable_aware_app_data_dir;
 use base64::Engine as _;
 use futures_util::StreamExt;
 use minisign_verify::{PublicKey, Signature};
@@ -19,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
@@ -961,10 +962,8 @@ fn new_persisted_state(update: &Update, task_id: Option<String>) -> PersistedUpd
 // ── File system helpers ─────────────────────────────────────
 
 fn updates_root(app: &AppHandle) -> Result<PathBuf, UpdateError> {
-    let app_data = app
-        .path()
-        .app_data_dir()
-        .map_err(|err| UpdateError::State(format!("get app_data_dir failed: {err}")))?;
+    let app_data = portable_aware_app_data_dir(app)
+        .map_err(|err| UpdateError::State(format!("get app data dir failed: {err}")))?;
     Ok(app_data.join("updates"))
 }
 

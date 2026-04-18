@@ -603,7 +603,13 @@ export const api = {
   },
 
   getDataDirectory: async (): Promise<DataDirInfo> => {
-    if (USE_MOCK) return { path: '~/.oxideterm', is_custom: false, default_path: '~/.oxideterm' };
+    if (USE_MOCK) return {
+      path: '~/.oxideterm',
+      is_custom: false,
+      default_path: '~/.oxideterm',
+      is_portable: false,
+      can_change: true,
+    };
     return invoke('get_data_directory');
   },
 

@@ -57,7 +57,10 @@ pub struct SftpSession {
     cwd: String,
 }
 
-fn classify_list_entry_file_type(entry_file_type: FileType, target_file_type: Option<FileType>) -> FileType {
+fn classify_list_entry_file_type(
+    entry_file_type: FileType,
+    target_file_type: Option<FileType>,
+) -> FileType {
     match entry_file_type {
         FileType::Symlink => match target_file_type {
             Some(FileType::Directory) => FileType::Directory,
@@ -2599,7 +2602,9 @@ impl Default for SftpRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_list_entry_file_type, is_missing_file_error_message, recursion_depth_error};
+    use super::{
+        classify_list_entry_file_type, is_missing_file_error_message, recursion_depth_error,
+    };
     use crate::sftp::error::SftpError;
     use crate::sftp::types::FileType;
 

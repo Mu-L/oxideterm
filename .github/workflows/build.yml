@@ -89,6 +89,11 @@ jobs:
             file \
             xdg-utils
 
+          if [ "${{ matrix.platform }}" = "ubuntu-24.04-arm" ]; then
+            # AppImage tools still need FUSE 2 runtime on Ubuntu 24.04; the package was renamed from libfuse2.
+            sudo apt-get install -y libfuse2t64
+          fi
+
       - name: Cleanup Old Caches
         uses: actions/github-script@v8
         with:
@@ -173,6 +178,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPIMAGE_EXTRACT_AND_RUN: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '1' || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'OxideTerm ${{ github.ref_name }}'

@@ -141,14 +141,15 @@ describe('NotificationsPanel', () => {
 
   it('toggles do not disturb from the toolbar', async () => {
     seedNotifications();
+    useNotificationCenterStore.getState().setDndEnabled(true);
 
     render(<NotificationsPanel />);
 
-    fireEvent.click(screen.getByLabelText('notifications.dnd.enable'));
+    fireEvent.click(screen.getByLabelText('notifications.dnd.disable'));
 
     await waitFor(() => {
-      expect(useNotificationCenterStore.getState().dndEnabled).toBe(true);
-      expect(screen.getByText('notifications.dnd.on')).toBeInTheDocument();
+      expect(useNotificationCenterStore.getState().dndEnabled).toBe(false);
+      expect(screen.queryByText('notifications.dnd.on')).not.toBeInTheDocument();
     });
   });
 });

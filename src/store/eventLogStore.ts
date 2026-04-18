@@ -94,7 +94,7 @@ export const useEventLogStore = create<EventLogState>((set) => ({
   isOpen: false,
   panelSize: 25,
   filter: { severity: 'all', category: 'all', search: '' },
-  dndEnabled: false,
+  dndEnabled: true,
   _nextId: 1,
   unreadCount: 0,
   unreadErrors: 0,

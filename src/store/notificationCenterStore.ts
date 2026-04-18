@@ -115,7 +115,7 @@ type NotificationCenterState = {
 export const useNotificationCenterStore = create<NotificationCenterState>((set) => ({
   items: [],
   filter: { status: 'all', severity: 'all', kind: 'all' },
-  dndEnabled: false,
+  dndEnabled: true,
   unreadCount: 0,
   unreadCriticalCount: 0,
 

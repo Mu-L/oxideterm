@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="Versión">
+  <img src="https://img.shields.io/badge/version-1.2.5-blue" alt="Versión">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Plataforma">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Licencia">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **IA (OxideSens)** | Panel inline (`⌘I`) + chat lateral, captura de buffer del terminal (panel único/todos), contexto multi-fuente (IDE/SFTP/Git), 40+ herramientas autónomas, integración de servidores MCP, base de conocimiento RAG (búsqueda híbrida BM25 + vectores), streaming SSE |
 | **Plugins** | Carga ESM en tiempo de ejecución, 18 espacios de nombres API, 24 componentes UI Kit, API congelada + ACL Proxy, disyuntor, desactivación automática en caso de errores |
 | **CLI** | Companion `oxt`: JSON-RPC 2.0 vía Unix Socket / Named Pipe, `status`/`list`/`ping`, salida legible + JSON |
-| **Seguridad** | Exportación .oxide cifrada (ChaCha20-Poly1305 + Argon2id 256 MB), configuración local cifrada en reposo, llavero del SO, Touch ID (macOS), TOFU de clave de host, limpieza de memoria `zeroize` |
+| **Seguridad** | Exportación .oxide cifrada (ChaCha20-Poly1305 + Argon2id 256 MB), configuración local cifrada en reposo, llavero del SO, Touch ID (macOS), almacén de claves cifrado portátil, TOFU de clave de host, limpieza de memoria `zeroize` |
 | **i18n** | 11 idiomas: EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
 
 ---
@@ -341,6 +341,52 @@ Descargue la última versión desde [GitHub Releases](https://github.com/Analyse
 
 ---
 
+## Modo portátil
+
+OxideTerm admite un modo portátil totalmente autónomo: todos los datos (conexiones, secretos, configuración) se almacenan junto al binario de la aplicación, ideal para memorias USB o entornos sin conexión.
+
+### Activación
+
+**Opción A — Archivo marcador** (lo más sencillo): cree un archivo vacío llamado `portable` (sin extensión) junto a la aplicación.
+
+| Plataforma | Dónde colocar el archivo `portable` |
+|---|---|
+| **macOS** | Junto a `OxideTerm.app` (mismo directorio) |
+| **Windows** | Junto a `OxideTerm.exe` |
+| **Linux (AppImage)** | Junto al archivo `.AppImage` |
+
+```
+/my-usb/
+├── OxideTerm.app   (or .exe / .AppImage)
+├── portable        ← archivo vacío creado por usted
+└── data/           ← creado automáticamente en el primer inicio
+```
+
+**Opción B — `portable.json`** (directorio de datos personalizado): coloque un archivo `portable.json` en la misma ubicación:
+
+```json
+{
+  "enabled": true,
+  "dataDir": "my-data"
+}
+```
+
+- `enabled` es `true` por defecto si se omite
+- `dataDir` debe ser una **ruta relativa** (no se permite `..`); por defecto es `data`
+
+### Cómo funciona
+
+1. **Primer inicio** — La pantalla de arranque le pedirá que cree una contraseña portátil. Esta contraseña cifra el almacén de claves local (ChaCha20-Poly1305 + Argon2id) y protege todos los secretos guardados.
+2. **Inicios posteriores** — Introduzca la contraseña para desbloquear. En macOS con Touch ID, puede activar el desbloqueo biométrico en **Settings → General → Portable Runtime**.
+3. **Bloqueo de instancia** — Solo una instancia de OxideTerm puede usar el directorio portátil a la vez (`data/.portable.lock`).
+4. **Gestión** — Cambie la contraseña portátil o active el desbloqueo biométrico en **Settings → General → Portable Runtime**.
+5. **Portabilidad** — Copie toda la carpeta (aplicación + marcador `portable` + `data/`) a otra máquina. La contraseña viaja con el almacén de claves.
+
+> [!TIP]
+> Las actualizaciones automáticas están desactivadas en modo portátil. Para actualizar, sustituya el binario de la aplicación y conserve el directorio `data/`.
+
+---
+
 ## Inicio rápido
 
 ### Requisitos previos
@@ -398,6 +444,7 @@ pnpm run tauri build
 | Aspecto | Implementación |
 |---|---|
 | **Contraseñas** | Llavero del SO (macOS Keychain / Windows Credential Manager / libsecret) |
+| **Almacén de claves portátil** | Bóveda cifrada con ChaCha20-Poly1305 junto a la aplicación, vinculación biométrica opcional a través del llavero del SO |
 | **Claves API IA** | Llavero del SO + autenticación biométrica Touch ID en macOS |
 | **Exportación** | .oxide: ChaCha20-Poly1305 + Argon2id (256 MB de memoria, 4 iteraciones) |
 | **Memoria** | Seguridad de memoria de Rust + `zeroize` para limpieza de datos sensibles |

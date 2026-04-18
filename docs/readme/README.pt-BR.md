@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="Versão">
+  <img src="https://img.shields.io/badge/version-1.2.5-blue" alt="Versão">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Plataforma">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Licença">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **IA (OxideSens)** | Painel inline (`⌘I`) + chat lateral, captura de buffer do terminal (painel único/todos), contexto multi-fonte (IDE/SFTP/Git), 40+ ferramentas autônomas, integração com servidores MCP, base de conhecimento RAG (busca híbrida BM25 + vetores), streaming SSE |
 | **Plugins** | Carregamento ESM em runtime, 18 namespaces de API, 24 componentes UI Kit, API congelada + ACL Proxy, circuit breaker, desativação automática em caso de erros |
 | **CLI** | Companion `oxt`: JSON-RPC 2.0 via Unix Socket / Named Pipe, `status`/`list`/`ping`, saída legível + JSON |
-| **Segurança** | Exportação .oxide criptografada (ChaCha20-Poly1305 + Argon2id 256 MB), configuração local criptografada em repouso, chaveiro do SO, Touch ID (macOS), TOFU de chave do host, limpeza de memória `zeroize` |
+| **Segurança** | Exportação .oxide criptografada (ChaCha20-Poly1305 + Argon2id 256 MB), configuração local criptografada em repouso, chaveiro do SO, Touch ID (macOS), cofre de chaves criptografado portátil, TOFU de chave do host, limpeza de memória `zeroize` |
 | **i18n** | 11 idiomas: EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
 
 ---
@@ -341,6 +341,52 @@ Baixe a versão mais recente em [GitHub Releases](https://github.com/AnalyseDeCi
 
 ---
 
+## Modo portátil
+
+O OxideTerm suporta um modo portátil totalmente autônomo — todos os dados (conexões, segredos, configurações) são armazenados ao lado do binário do aplicativo, ideal para pen drives USB ou ambientes offline.
+
+### Ativação
+
+**Opção A — Arquivo marcador** (mais simples): crie um arquivo vazio chamado `portable` (sem extensão) ao lado do aplicativo.
+
+| Plataforma | Onde colocar o arquivo `portable` |
+|---|---|
+| **macOS** | Ao lado de `OxideTerm.app` (mesmo diretório) |
+| **Windows** | Ao lado de `OxideTerm.exe` |
+| **Linux (AppImage)** | Ao lado do arquivo `.AppImage` |
+
+```
+/my-usb/
+├── OxideTerm.app   (or .exe / .AppImage)
+├── portable        ← arquivo vazio criado por você
+└── data/           ← criado automaticamente na primeira execução
+```
+
+**Opção B — `portable.json`** (diretório de dados personalizado): coloque um arquivo `portable.json` no mesmo local:
+
+```json
+{
+  "enabled": true,
+  "dataDir": "my-data"
+}
+```
+
+- `enabled` é `true` por padrão quando omitido
+- `dataDir` deve ser um **caminho relativo** (`..` não permitido); padrão é `data`
+
+### Como funciona
+
+1. **Primeira execução** — A tela de bootstrap solicita que você crie uma senha portátil. Essa senha criptografa o cofre de chaves local (ChaCha20-Poly1305 + Argon2id) e protege todos os segredos salvos.
+2. **Execuções posteriores** — Digite a senha para desbloquear. No macOS com Touch ID, você pode ativar o desbloqueio biométrico em **Settings → General → Portable Runtime**.
+3. **Bloqueio de instância** — Apenas uma instância do OxideTerm pode usar o diretório portátil por vez (`data/.portable.lock`).
+4. **Gerenciamento** — Altere a senha portátil ou ative o desbloqueio biométrico em **Settings → General → Portable Runtime**.
+5. **Portabilidade** — Copie a pasta inteira (aplicativo + marcador `portable` + `data/`) para outra máquina. A senha acompanha o cofre de chaves.
+
+> [!TIP]
+> As atualizações automáticas são desativadas no modo portátil. Para atualizar, substitua o binário do aplicativo mantendo o diretório `data/`.
+
+---
+
 ## Início rápido
 
 ### Pré-requisitos
@@ -398,6 +444,7 @@ pnpm run tauri build
 | Aspecto | Implementação |
 |---|---|
 | **Senhas** | Chaveiro do SO (macOS Keychain / Windows Credential Manager / libsecret) |
+| **Cofre de chaves portátil** | Cofre criptografado com ChaCha20-Poly1305 ao lado do aplicativo, vinculação biométrica opcional via chaveiro do SO |
 | **Chaves API IA** | Chaveiro do SO + autenticação biométrica Touch ID no macOS |
 | **Exportação** | .oxide: ChaCha20-Poly1305 + Argon2id (256 MB de memória, 4 iterações) |
 | **Memória** | Segurança de memória do Rust + `zeroize` para limpeza de dados sensíveis |

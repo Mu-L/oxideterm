@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.2.5-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Plateforme">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Licence">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **IA (OxideSens)** | Panneau inline (`⌘I`) + chat latéral, capture du buffer terminal (panneau unique/tous), contexte multi-sources (IDE/SFTP/Git), 40+ outils autonomes, intégration serveur MCP, base de connaissances RAG (recherche hybride BM25 + vecteurs), streaming SSE |
 | **Plugins** | Chargement ESM en runtime, 18 espaces de noms API, 24 composants UI Kit, API gelée + ACL Proxy, disjoncteur, désactivation automatique en cas d'erreurs |
 | **CLI** | Companion `oxt` : JSON-RPC 2.0 via Unix Socket / Named Pipe, `status`/`list`/`ping`, sortie humaine + JSON |
-| **Sécurité** | Export .oxide chiffré (ChaCha20-Poly1305 + Argon2id 256 Mo), configuration locale chiffrée au repos, trousseau OS, Touch ID (macOS), TOFU clé hôte, nettoyage mémoire `zeroize` |
+| **Sécurité** | Export .oxide chiffré (ChaCha20-Poly1305 + Argon2id 256 Mo), configuration locale chiffrée au repos, trousseau OS, Touch ID (macOS), trousseau chiffré portable, TOFU clé hôte, nettoyage mémoire `zeroize` |
 | **i18n** | 11 langues : EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
 
 ---
@@ -341,6 +341,52 @@ Téléchargez la dernière version depuis [GitHub Releases](https://github.com/A
 
 ---
 
+## Mode portable
+
+OxideTerm prend en charge un mode portable entièrement autonome — toutes les données (connexions, secrets, paramètres) sont stockées à côté du binaire de l’application, idéal pour les clés USB ou les environnements hors ligne.
+
+### Activation
+
+**Option A — Fichier marqueur** (le plus simple) : créez un fichier vide nommé `portable` (sans extension) à côté de l’application.
+
+| Plateforme | Où placer le fichier `portable` |
+|---|---|
+| **macOS** | À côté de `OxideTerm.app` (même répertoire) |
+| **Windows** | À côté de `OxideTerm.exe` |
+| **Linux (AppImage)** | À côté du fichier `.AppImage` |
+
+```
+/my-usb/
+├── OxideTerm.app   (or .exe / .AppImage)
+├── portable        ← fichier vide créé par vos soins
+└── data/           ← créé automatiquement au premier lancement
+```
+
+**Option B — `portable.json`** (répertoire de données personnalisé) : placez un fichier `portable.json` au même emplacement :
+
+```json
+{
+  "enabled": true,
+  "dataDir": "my-data"
+}
+```
+
+- `enabled` vaut `true` par défaut s’il est omis
+- `dataDir` doit être un **chemin relatif** (`..` interdit) ; vaut `data` par défaut
+
+### Fonctionnement
+
+1. **Premier lancement** — L’écran de démarrage vous invite à créer un mot de passe portable. Ce mot de passe chiffre le trousseau local (ChaCha20-Poly1305 + Argon2id) et protège tous les secrets enregistrés.
+2. **Lancements suivants** — Saisissez le mot de passe pour déverrouiller. Sur macOS avec Touch ID, vous pouvez activer le déverrouillage biométrique dans **Settings → General → Portable Runtime**.
+3. **Verrou d’instance** — Une seule instance d’OxideTerm peut utiliser le répertoire portable à la fois (`data/.portable.lock`).
+4. **Gestion** — Modifiez le mot de passe portable ou activez le déverrouillage biométrique dans **Settings → General → Portable Runtime**.
+5. **Portabilité** — Copiez le dossier entier (application + marqueur `portable` + `data/`) sur une autre machine. Le mot de passe accompagne le trousseau.
+
+> [!TIP]
+> Les mises à jour automatiques sont désactivées en mode portable. Pour mettre à jour, remplacez le binaire de l’application tout en conservant le répertoire `data/`.
+
+---
+
 ## Démarrage rapide
 
 ### Prérequis
@@ -398,6 +444,7 @@ pnpm run tauri build
 | Préoccupation | Implémentation |
 |---|---|
 | **Mots de passe** | Trousseau OS (macOS Keychain / Windows Credential Manager / libsecret) |
+| **Trousseau portable** | Coffre-fort chiffré ChaCha20-Poly1305 à côté de l’application, liaison biométrique optionnelle via le trousseau OS |
 | **Clés API IA** | Trousseau OS + authentification biométrique Touch ID sous macOS |
 | **Export** | .oxide : ChaCha20-Poly1305 + Argon2id (256 Mo de mémoire, 4 itérations) |
 | **Mémoire** | Sécurité mémoire Rust + `zeroize` pour le nettoyage des données sensibles |

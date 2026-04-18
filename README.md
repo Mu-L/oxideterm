@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.2.5-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **AI (OxideSens)** | Inline panel (`⌘I`) + sidebar chat, terminal buffer capture (single/all panes), multi-source context (IDE/SFTP/Git), 40+ autonomous tools, MCP server integration, RAG knowledge base (BM25 + vector hybrid search), streaming SSE |
 | **Plugins** | Runtime ESM loading, 18 API namespaces, 24 UI Kit components, frozen API + Proxy ACL, circuit breaker, auto-disable on errors |
 | **CLI** | `oxt` companion: JSON-RPC 2.0 over Unix Socket / Named Pipe, `status`/`list`/`ping`, human + JSON output |
-| **Security** | .oxide encrypted export (ChaCha20-Poly1305 + Argon2id 256 MB), encrypted local config at rest, OS keychain, Touch ID (macOS), host key TOFU, `zeroize` memory clearing |
+| **Security** | .oxide encrypted export (ChaCha20-Poly1305 + Argon2id 256 MB), encrypted local config at rest, OS keychain, Touch ID (macOS), portable encrypted keystore, host key TOFU, `zeroize` memory clearing |
 | **i18n** | 11 languages: EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
 
 ---
@@ -341,6 +341,52 @@ Download the latest release from [GitHub Releases](https://github.com/AnalyseDeC
 
 ---
 
+## Portable Mode
+
+OxideTerm supports a fully self-contained portable mode — all data (connections, secrets, settings) is stored beside the application binary, making it suitable for USB drives or air-gapped environments.
+
+### Activation
+
+**Option A — Marker file** (simplest): create an empty file named `portable` (no extension) next to the app.
+
+| Platform | Where to place the `portable` file |
+|---|---|
+| **macOS** | Next to `OxideTerm.app` (its sibling directory) |
+| **Windows** | Next to `OxideTerm.exe` |
+| **Linux (AppImage)** | Next to the `.AppImage` file |
+
+```
+/my-usb/
+├── OxideTerm.app   (or .exe / .AppImage)
+├── portable        ← empty file you create
+└── data/           ← created automatically on first launch
+```
+
+**Option B — `portable.json`** (custom data directory): place a `portable.json` in the same location:
+
+```json
+{
+  "enabled": true,
+  "dataDir": "my-data"
+}
+```
+
+- `enabled` defaults to `true` if omitted
+- `dataDir` must be a **relative path** (no `..`); defaults to `data` if omitted
+
+### How It Works
+
+1. **First launch** — a bootstrap screen prompts you to create a portable password. This password encrypts a local keystore (ChaCha20-Poly1305 + Argon2id) that protects all saved secrets.
+2. **Subsequent launches** — enter the password to unlock. On macOS with Touch ID, you can optionally bind biometric unlock in **Settings → General → Portable Runtime**.
+3. **Instance lock** — only one OxideTerm instance can use a portable data directory at a time (`data/.portable.lock`).
+4. **Management** — change the portable password or toggle biometric unlock in **Settings → General → Portable Runtime**.
+5. **Portability** — copy the entire folder (app + `portable` marker + `data/`) to another machine. The password travels with the keystore.
+
+> [!TIP]
+> Automatic updates are disabled in portable mode. To update, replace the application binary while keeping the `data/` directory.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -398,6 +444,7 @@ pnpm run tauri build
 | Concern | Implementation |
 |---|---|
 | **Passwords** | OS keychain (macOS Keychain / Windows Credential Manager / libsecret) |
+| **Portable Keystore** | ChaCha20-Poly1305 encrypted vault beside the app, optional biometric binding via OS keychain |
 | **AI API Keys** | OS keychain + Touch ID biometric gate on macOS |
 | **Export** | .oxide: ChaCha20-Poly1305 + Argon2id (256 MB memory, 4 iterations) |
 | **Memory** | Rust memory safety + `zeroize` for sensitive data clearing |

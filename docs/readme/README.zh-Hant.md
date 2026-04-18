@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="版本">
+  <img src="https://img.shields.io/badge/version-1.2.5-blue" alt="版本">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="平台">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="授權條款">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **AI（OxideSens）** | 內嵌面板（`⌘I`）+ 側邊欄聊天、終端緩衝區擷取（單窗格/所有窗格）、多來源上下文（IDE/SFTP/Git）、40+ 自主工具、MCP 伺服器整合、RAG 知識庫（BM25 + 向量混合搜尋）、SSE 串流輸出 |
 | **外掛** | 執行階段 ESM 載入、18 個 API 命名空間、24 個 UI Kit 元件、凍結 API + Proxy ACL、斷路器、錯誤時自動停用 |
 | **CLI** | `oxt` 伴隨工具：JSON-RPC 2.0 基於 Unix Socket / Named Pipe、`status`/`list`/`ping`、人類可讀 + JSON 輸出 |
-| **安全** | .oxide 加密匯出（ChaCha20-Poly1305 + Argon2id 256 MB）、本機設定靜態加密、OS 鑰匙圈、Touch ID（macOS）、主機金鑰 TOFU、`zeroize` 記憶體清除 |
+| **安全** | .oxide 加密匯出（ChaCha20-Poly1305 + Argon2id 256 MB）、本機設定靜態加密、OS 鑰匙圈、Touch ID（macOS）、攼攜式加密金鑰庫、主機金鑰 TOFU、`zeroize` 記憶體清除 |
 | **國際化** | 11 種語言：EN、简体中文、繁體中文、日本語、한국어、FR、DE、ES、IT、PT-BR、VI |
 
 ---
@@ -341,6 +341,52 @@ CodeMirror 6 編輯器基於 SFTP 運作——預設無需伺服端安裝：
 
 ---
 
+## 攼攜模式
+
+OxideTerm 支援完全自包含的攼攜模式——所有資料（連線、金鑰、設定）儲存在應用程式二進位檔旁邊，適用於 USB 隨身碟或離線環境。
+
+### 啟用方式
+
+**方式 A — 標記檔案**（最簡單）：在應用程式旁建立一個名為 `portable` 的空檔案（無副檔名）。
+
+| 平台 | `portable` 檔案放置位置 |
+|---|---|
+| **macOS** | `OxideTerm.app` 旁邊（同層目錄） |
+| **Windows** | `OxideTerm.exe` 旁邊 |
+| **Linux (AppImage)** | `.AppImage` 檔案旁邊 |
+
+```
+/my-usb/
+├── OxideTerm.app   (or .exe / .AppImage)
+├── portable        ← 你建立的空檔案
+└── data/           ← 首次啟動時自動建立
+```
+
+**方式 B — `portable.json`**（自訂資料目錄）：在相同位置放置一個 `portable.json`：
+
+```json
+{
+  "enabled": true,
+  "dataDir": "my-data"
+}
+```
+
+- `enabled` 省略時預設為 `true`
+- `dataDir` 必須是**相對路徑**（不能包含 `..`）；省略時預設為 `data`
+
+### 運作原理
+
+1. **首次啟動** — 引導畫面會提示你建立攼攜密碼。此密碼用於加密本機金鑰庫（ChaCha20-Poly1305 + Argon2id），保護所有已儲存的金鑰。
+2. **後續啟動** — 輸入密碼解鎖。在支援 Touch ID 的 macOS 上，你可以在 **Settings → General → Portable Runtime** 中啟用生物辨識解鎖。
+3. **實例鎖** — 同一時間只有一個 OxideTerm 實例可以使用攼攜資料目錄（`data/.portable.lock`）。
+4. **管理** — 在 **Settings → General → Portable Runtime** 中變更攼攜密碼或切換生物辨識解鎖。
+5. **可攼性** — 將整個資料夾（應用 + `portable` 標記 + `data/`）複製到另一台機器即可使用。密碼隨金鑰庫一起攜帶。
+
+> [!TIP]
+> 攼攜模式下自動更新已停用。如需更新，替換應用程式二進位檔，保留 `data/` 目錄即可。
+
+---
+
 ## 快速開始
 
 ### 先決條件
@@ -398,6 +444,7 @@ pnpm run tauri build
 | 關注點 | 實作方式 |
 |---|---|
 | **密碼** | OS 鑰匙圈（macOS Keychain / Windows Credential Manager / libsecret） |
+| **攼攜式金鑰庫** | ChaCha20-Poly1305 加密保險庫，位於應用程式旁邊，可選透過 OS 鑰匙圈綁定生物辨識 |
 | **AI API 金鑰** | OS 鑰匙圈 + macOS 上的 Touch ID 生物辨識保護 |
 | **匯出** | .oxide：ChaCha20-Poly1305 + Argon2id（256 MB 記憶體，4 次迭代） |
 | **記憶體** | Rust 記憶體安全 + `zeroize` 敏感資料清除 |

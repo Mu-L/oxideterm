@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="Phiên bản">
+  <img src="https://img.shields.io/badge/version-1.2.5-blue" alt="Phiên bản">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Nền tảng">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Giấy phép">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **AI (OxideSens)** | Bảng inline (`⌘I`) + trò chuyện thanh bên, thu thập bộ đệm terminal (bảng đơn/tất cả), ngữ cảnh đa nguồn (IDE/SFTP/Git), 40+ công cụ tự động, tích hợp máy chủ MCP, cơ sở kiến thức RAG (tìm kiếm lai BM25 + vector), streaming SSE |
 | **Plugin** | Tải ESM runtime, 18 không gian tên API, 24 thành phần UI Kit, API đóng băng + ACL Proxy, ngắt mạch, tự động vô hiệu hóa khi có lỗi |
 | **CLI** | Công cụ đồng hành `oxt`: JSON-RPC 2.0 qua Unix Socket / Named Pipe, `status`/`list`/`ping`, đầu ra dạng người đọc + JSON |
-| **Bảo mật** | Xuất .oxide được mã hóa (ChaCha20-Poly1305 + Argon2id 256 MB), cấu hình cục bộ được mã hóa khi lưu trữ, chuỗi khóa hệ điều hành, Touch ID (macOS), TOFU khóa máy chủ, xóa bộ nhớ `zeroize` |
+| **Bảo mật** | Xuất .oxide được mã hóa (ChaCha20-Poly1305 + Argon2id 256 MB), cấu hình cục bộ được mã hóa khi lưu trữ, chuỗi khóa hệ điều hành, Touch ID (macOS), kho khóa mã hóa di động, TOFU khóa máy chủ, xóa bộ nhớ `zeroize` |
 | **i18n** | 11 ngôn ngữ: EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
 
 ---
@@ -341,6 +341,52 @@ Tải phiên bản mới nhất từ [GitHub Releases](https://github.com/Analys
 
 ---
 
+## Chế độ di động
+
+OxideTerm hỗ trợ chế độ di động hoàn toàn độc lập — tất cả dữ liệu (kết nối, bí mật, cài đặt) được lưu trữ bên cạnh tệp nhị phân của ứng dụng, lý tưởng cho USB hoặc môi trường ngoại tuyến.
+
+### Kích hoạt
+
+**Cách A — Tệp đánh dấu** (đơn giản nhất): tạo một tệp trống tên `portable` (không có phần mở rộng) bên cạnh ứng dụng.
+
+| Nền tảng | Vị trí đặt tệp `portable` |
+|---|---|
+| **macOS** | Bên cạnh `OxideTerm.app` (cùng thư mục) |
+| **Windows** | Bên cạnh `OxideTerm.exe` |
+| **Linux (AppImage)** | Bên cạnh tệp `.AppImage` |
+
+```
+/my-usb/
+├── OxideTerm.app   (or .exe / .AppImage)
+├── portable        ← tệp trống bạn tạo
+└── data/           ← tự động tạo khi khởi chạy lần đầu
+```
+
+**Cách B — `portable.json`** (thư mục dữ liệu tùy chỉnh): đặt một tệp `portable.json` ở cùng vị trí:
+
+```json
+{
+  "enabled": true,
+  "dataDir": "my-data"
+}
+```
+
+- `enabled` mặc định là `true` khi bỏ qua
+- `dataDir` phải là **đường dẫn tương đối** (không được dùng `..`); mặc định là `data`
+
+### Cách hoạt động
+
+1. **Lần chạy đầu tiên** — Màn hình khởi động yêu cầu bạn tạo mật khẩu di động. Mật khẩu này mã hóa kho khóa cục bộ (ChaCha20-Poly1305 + Argon2id) và bảo vệ tất cả bí mật đã lưu.
+2. **Lần chạy tiếp theo** — Nhập mật khẩu để mở khóa. Trên macOS có Touch ID, bạn có thể bật mở khóa sinh trắc học trong **Settings → General → Portable Runtime**.
+3. **Khóa phiên bản** — Chỉ một phiên bản OxideTerm có thể sử dụng thư mục dữ liệu di động tại một thời điểm (`data/.portable.lock`).
+4. **Quản lý** — Thay đổi mật khẩu di động hoặc bật mở khóa sinh trắc học trong **Settings → General → Portable Runtime**.
+5. **Tính di động** — Sao chép toàn bộ thư mục (ứng dụng + tệp đánh dấu `portable` + `data/`) sang máy khác. Mật khẩu đi cùng kho khóa.
+
+> [!TIP]
+> Cập nhật tự động được tắt trong chế độ di động. Để cập nhật, thay thế tệp nhị phân ứng dụng và giữ lại thư mục `data/`.
+
+---
+
 ## Bắt đầu nhanh
 
 ### Yêu cầu
@@ -398,6 +444,7 @@ pnpm run tauri build
 | Mối quan tâm | Triển khai |
 |---|---|
 | **Mật khẩu** | Chuỗi khóa hệ điều hành (macOS Keychain / Windows Credential Manager / libsecret) |
+| **Kho khóa di động** | Kho lưu trữ mã hóa ChaCha20-Poly1305 bên cạnh ứng dụng, tùy chọn liên kết sinh trắc học qua chuỗi khóa hệ điều hành |
 | **Khóa API AI** | Chuỗi khóa hệ điều hành + xác thực sinh trắc học Touch ID trên macOS |
 | **Xuất** | .oxide: ChaCha20-Poly1305 + Argon2id (256 MB bộ nhớ, 4 vòng lặp) |
 | **Bộ nhớ** | An toàn bộ nhớ Rust + `zeroize` để xóa dữ liệu nhạy cảm |

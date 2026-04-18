@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="版本">
+  <img src="https://img.shields.io/badge/version-1.2.5-blue" alt="版本">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="平台">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="许可证">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **AI（OxideSens）** | 内联面板（`⌘I`）+ 侧边栏聊天、终端缓冲区捕获（单窗格/所有窗格）、多源上下文（IDE/SFTP/Git）、40+ 自主工具、MCP 服务器集成、RAG 知识库（BM25 + 向量混合搜索）、SSE 流式输出 |
 | **插件** | 运行时 ESM 加载、18 个 API 命名空间、24 个 UI Kit 组件、冻结 API + Proxy ACL、熔断器、错误时自动禁用 |
 | **CLI** | `oxt` 伴侣工具：JSON-RPC 2.0 基于 Unix Socket / Named Pipe、`status`/`list`/`ping`、人类可读 + JSON 输出 |
-| **安全** | .oxide 加密导出（ChaCha20-Poly1305 + Argon2id 256 MB）、本地配置静态加密、OS 密钥链、Touch ID（macOS）、主机密钥 TOFU、`zeroize` 内存清除 |
+| **安全** | .oxide 加密导出（ChaCha20-Poly1305 + Argon2id 256 MB）、本地配置静态加密、OS 密钥链、Touch ID（macOS）、便携式加密密钥库、主机密钥 TOFU、`zeroize` 内存清除 |
 | **国际化** | 11 种语言：EN、简体中文、繁體中文、日本語、한국어、FR、DE、ES、IT、PT-BR、VI |
 
 ---
@@ -341,6 +341,52 @@ CodeMirror 6 编辑器基于 SFTP 运行——默认无需服务端安装：
 
 ---
 
+## 便携模式
+
+OxideTerm 支持完全自包含的便携模式——所有数据（连接、密钥、设置）存储在应用程序二进制文件旁边，适用于 USB 驱动器或离线环境。
+
+### 激活方式
+
+**方式 A — 标记文件**（最简单）：在应用程序旁创建一个名为 `portable` 的空文件（无扩展名）。
+
+| 平台 | `portable` 文件放置位置 |
+|---|---|
+| **macOS** | `OxideTerm.app` 旁边（同级目录） |
+| **Windows** | `OxideTerm.exe` 旁边 |
+| **Linux (AppImage)** | `.AppImage` 文件旁边 |
+
+```
+/my-usb/
+├── OxideTerm.app   (or .exe / .AppImage)
+├── portable        ← 你创建的空文件
+└── data/           ← 首次启动时自动创建
+```
+
+**方式 B — `portable.json`**（自定义数据目录）：在相同位置放置一个 `portable.json`：
+
+```json
+{
+  "enabled": true,
+  "dataDir": "my-data"
+}
+```
+
+- `enabled` 省略时默认为 `true`
+- `dataDir` 必须是**相对路径**（不能包含 `..`）；省略时默认为 `data`
+
+### 工作原理
+
+1. **首次启动** — 引导界面会提示你创建便携密码。此密码用于加密本地密钥库（ChaCha20-Poly1305 + Argon2id），保护所有已保存的密钥。
+2. **后续启动** — 输入密码解锁。在支持 Touch ID 的 macOS 上，你可以在 **Settings → General → Portable Runtime** 中启用生物识别解锁。
+3. **实例锁** — 同一时间只有一个 OxideTerm 实例可以使用便携数据目录（`data/.portable.lock`）。
+4. **管理** — 在 **Settings → General → Portable Runtime** 中更改便携密码或切换生物识别解锁。
+5. **可移植性** — 将整个文件夹（应用 + `portable` 标记 + `data/`）复制到另一台机器即可使用。密码随密钥库一起携带。
+
+> [!TIP]
+> 便携模式下自动更新已禁用。如需更新，替换应用程序二进制文件，保留 `data/` 目录即可。
+
+---
+
 ## 快速开始
 
 ### 前置要求
@@ -398,6 +444,7 @@ pnpm run tauri build
 | 关注点 | 实现方式 |
 |---|---|
 | **密码** | OS 密钥链（macOS Keychain / Windows Credential Manager / libsecret） |
+| **便携式密钥库** | ChaCha20-Poly1305 加密保险库，位于应用程序旁边，可选通过 OS 密钥链绑定生物识别 |
 | **AI API 密钥** | OS 密钥链 + macOS 上的 Touch ID 生物识别保护 |
 | **导出** | .oxide：ChaCha20-Poly1305 + Argon2id（256 MB 内存，4 次迭代） |
 | **内存** | Rust 内存安全 + `zeroize` 敏感数据清除 |

@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.2.5-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Plattform">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Lizenz">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **KI (OxideSens)** | Inline-Panel (`⌘I`) + Seitenleisten-Chat, Terminal-Buffer-Erfassung (einzelnes/alle Fenster), Multi-Quellen-Kontext (IDE/SFTP/Git), 40+ autonome Werkzeuge, MCP-Server-Integration, RAG-Wissensdatenbank (BM25 + Vektor-Hybridsuche), SSE-Streaming |
 | **Plugins** | Laufzeit-ESM-Laden, 18 API-Namensräume, 24 UI-Kit-Komponenten, eingefrorene API + Proxy-ACL, Circuit Breaker, automatische Deaktivierung bei Fehlern |
 | **CLI** | `oxt`-Companion: JSON-RPC 2.0 über Unix Socket / Named Pipe, `status`/`list`/`ping`, menschenlesbare + JSON-Ausgabe |
-| **Sicherheit** | .oxide-verschlüsselter Export (ChaCha20-Poly1305 + Argon2id 256 MB), lokal verschlüsselte Konfiguration im Ruhezustand, Betriebssystem-Schlüsselbund, Touch ID (macOS), Host-Key-TOFU, `zeroize`-Speicherbereinigung |
+| **Sicherheit** | .oxide-verschlüsselter Export (ChaCha20-Poly1305 + Argon2id 256 MB), lokal verschlüsselte Konfiguration im Ruhezustand, Betriebssystem-Schlüsselbund, Touch ID (macOS), portabler verschlüsselter Schlüsselspeicher, Host-Key-TOFU, `zeroize`-Speicherbereinigung |
 | **i18n** | 11 Sprachen: EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
 
 ---
@@ -341,6 +341,52 @@ Laden Sie die neueste Version von [GitHub Releases](https://github.com/AnalyseDe
 
 ---
 
+## Portabler Modus
+
+OxideTerm unterstützt einen vollständig eigenständigen portablen Modus — alle Daten (Verbindungen, Geheimnisse, Einstellungen) werden neben der Anwendungsdatei gespeichert, ideal für USB-Sticks oder Offline-Umgebungen.
+
+### Aktivierung
+
+**Option A — Markierungsdatei** (am einfachsten): Erstellen Sie eine leere Datei namens `portable` (ohne Erweiterung) neben der Anwendung.
+
+| Plattform | Wo die `portable`-Datei platziert wird |
+|---|---|
+| **macOS** | Neben `OxideTerm.app` (gleiches Verzeichnis) |
+| **Windows** | Neben `OxideTerm.exe` |
+| **Linux (AppImage)** | Neben der `.AppImage`-Datei |
+
+```
+/my-usb/
+├── OxideTerm.app   (or .exe / .AppImage)
+├── portable        ← von Ihnen erstellte leere Datei
+└── data/           ← wird beim ersten Start automatisch erstellt
+```
+
+**Option B — `portable.json`** (benutzerdefiniertes Datenverzeichnis): Platzieren Sie eine `portable.json` am selben Ort:
+
+```json
+{
+  "enabled": true,
+  "dataDir": "my-data"
+}
+```
+
+- `enabled` ist standardmäßig `true`, wenn weggelassen
+- `dataDir` muss ein **relativer Pfad** sein (`..` nicht erlaubt); Standard ist `data`
+
+### Funktionsweise
+
+1. **Erster Start** — Der Bootstrap-Bildschirm fordert Sie auf, ein portables Passwort zu erstellen. Dieses Passwort verschlüsselt den lokalen Schlüsselspeicher (ChaCha20-Poly1305 + Argon2id) und schützt alle gespeicherten Geheimnisse.
+2. **Weitere Starts** — Geben Sie das Passwort zum Entsperren ein. Auf macOS mit Touch ID können Sie die biometrische Entsperrung unter **Settings → General → Portable Runtime** optional aktivieren.
+3. **Instanzsperre** — Es kann jeweils nur eine OxideTerm-Instanz das portable Datenverzeichnis verwenden (`data/.portable.lock`).
+4. **Verwaltung** — Ändern Sie das portable Passwort oder wechseln Sie die biometrische Entsperrung unter **Settings → General → Portable Runtime**.
+5. **Portabilität** — Kopieren Sie den gesamten Ordner (Anwendung + `portable`-Markierung + `data/`) auf einen anderen Computer. Das Passwort reist mit dem Schlüsselspeicher.
+
+> [!TIP]
+> Im portablen Modus sind automatische Updates deaktiviert. Zum Aktualisieren ersetzen Sie die Anwendungsdatei und behalten das `data/`-Verzeichnis bei.
+
+---
+
 ## Schnellstart
 
 ### Voraussetzungen
@@ -398,6 +444,7 @@ pnpm run tauri build
 | Bereich | Implementierung |
 |---|---|
 | **Passwörter** | Betriebssystem-Schlüsselbund (macOS Keychain / Windows Credential Manager / libsecret) |
+| **Portabler Schlüsselspeicher** | ChaCha20-Poly1305-verschlüsselter Tresor neben der Anwendung, optionale biometrische Bindung über den OS-Schlüsselbund |
 | **KI-API-Schlüssel** | Betriebssystem-Schlüsselbund + biometrische Touch ID-Authentifizierung unter macOS |
 | **Export** | .oxide: ChaCha20-Poly1305 + Argon2id (256 MB Speicher, 4 Iterationen) |
 | **Speicher** | Rust-Speichersicherheit + `zeroize` zur Bereinigung sensibler Daten |

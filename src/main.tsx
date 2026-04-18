@@ -1,13 +1,12 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import App from './App'
 import './styles.css'
-import { i18nReady } from './i18n'
+import i18n, { i18nReady } from './i18n'
 import './bootstrap/initKeybindings'
 import { initializeSettings } from './store/settingsStore'
 import { Button } from '@/components/ui/button'
@@ -27,76 +26,38 @@ type PortableBootstrapSnapshot = {
   status: PortableStatusResponse;
 }
 
-function BootstrapGateApp() {
-  const { t } = useTranslation();
-  const [snapshot, setSnapshot] = useState<PortableBootstrapSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+type BootstrapErrorCopy = {
+  title: string;
+  description: string;
+  retryLabel: string;
+}
 
-  const loadPortableBootstrap = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
+function fetchPortableBootstrapSnapshot(): Promise<PortableBootstrapSnapshot> {
+  return Promise.all([
+    api.getPortableStatus(),
+    api.getPortableInfo(),
+  ]).then(([status, info]) => ({ info, status }) satisfies PortableBootstrapSnapshot);
+}
 
-    try {
-      const [status, info] = await Promise.all([
-        api.getPortableStatus(),
-        api.getPortableInfo(),
-      ]);
-      setSnapshot({ info, status });
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+function getBootstrapErrorCopy(): BootstrapErrorCopy {
+  return {
+    title: i18n.t('portable_bootstrap.load_failed_title', {
+      defaultValue: 'Portable startup failed',
+    }),
+    description: i18n.t('portable_bootstrap.load_failed_description', {
+      defaultValue: 'OxideTerm could not load portable startup state. Retry to continue.',
+    }),
+    retryLabel: i18n.t('common.retry', {
+      defaultValue: 'Retry',
+    }),
+  };
+}
 
-  useEffect(() => {
-    void loadPortableBootstrap();
-  }, [loadPortableBootstrap]);
+// Prefetch portable status at module level (runs in parallel with i18n loading)
+const portableReady = fetchPortableBootstrapSnapshot();
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-theme-bg px-6 text-theme-text">
-        <div className="w-full max-w-lg rounded-3xl border border-theme-border bg-theme-bg-card p-8 text-center shadow-2xl">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-theme-accent" />
-          <h1 className="mt-5 text-2xl font-semibold text-theme-text-heading">
-            {t('portable_bootstrap.loading_title')}
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-theme-text-muted">
-            {t('portable_bootstrap.loading_description')}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loadError || !snapshot) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-theme-bg px-6 text-theme-text">
-        <div className="w-full max-w-xl rounded-3xl border border-theme-border bg-theme-bg-card p-8 shadow-2xl">
-          <div className="flex items-center gap-3 text-red-300">
-            <AlertTriangle className="h-6 w-6" />
-            <h1 className="text-2xl font-semibold text-theme-text-heading">
-              {t('portable_bootstrap.load_failed_title')}
-            </h1>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-theme-text-muted">
-            {t('portable_bootstrap.load_failed_description')}
-          </p>
-          {loadError && (
-            <pre className="mt-4 overflow-x-auto rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
-              {loadError}
-            </pre>
-          )}
-          <div className="mt-6 flex justify-end">
-            <Button onClick={() => void loadPortableBootstrap()}>
-              {t('common.retry')}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+function BootstrapGateApp({ initialSnapshot }: { initialSnapshot: PortableBootstrapSnapshot }) {
+  const [snapshot, setSnapshot] = useState<PortableBootstrapSnapshot>(initialSnapshot);
 
   if (snapshot.status.isPortable && !snapshot.status.canLaunchApp) {
     return (
@@ -104,7 +65,7 @@ function BootstrapGateApp() {
         info={snapshot.info}
         status={snapshot.status}
         onReady={(status) => {
-          setSnapshot((current) => current ? { ...current, status } : current);
+          setSnapshot((current) => ({ ...current, status }));
         }}
       />
     );
@@ -113,25 +74,92 @@ function BootstrapGateApp() {
   return <App portableStatus={snapshot.status} />;
 }
 
-function mountApp() {
-  const root = ReactDOM.createRoot(document.getElementById('root')!);
+function BootstrapErrorApp({ error, onRetry, copy }: { error: string; onRetry: () => void; copy: BootstrapErrorCopy }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-theme-bg px-6 text-theme-text">
+      <div className="w-full max-w-xl rounded-3xl border border-theme-border bg-theme-bg-card p-8 shadow-2xl">
+        <div className="flex items-center gap-3 text-red-300">
+          <AlertTriangle className="h-6 w-6" />
+          <h1 className="text-2xl font-semibold text-theme-text-heading">
+            {copy.title}
+          </h1>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-theme-text-muted">
+          {copy.description}
+        </p>
+        <pre className="mt-4 overflow-x-auto rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+          {error}
+        </pre>
+        <div className="mt-6 flex justify-end">
+          <Button onClick={onRetry}>
+            {copy.retryLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Single root instance to prevent listener leaks on retry
+let activeRoot: ReactDOM.Root | null = null;
+
+function ensureRoot(): ReactDOM.Root {
+  if (activeRoot) {
+    activeRoot.unmount();
+  }
+  activeRoot = ReactDOM.createRoot(document.getElementById('root')!);
+  return activeRoot;
+}
+
+window.addEventListener('beforeunload', () => {
+  activeRoot?.unmount();
+});
+
+function mountApp(snapshot: PortableBootstrapSnapshot) {
+  const root = ensureRoot();
 
   root.render(
     <React.StrictMode>
-      <BootstrapGateApp />
+      <BootstrapGateApp initialSnapshot={snapshot} />
     </React.StrictMode>,
   );
-
-  window.addEventListener('beforeunload', () => {
-    root.unmount();
-  });
 }
 
-// Wait for i18n resources to load before rendering
-i18nReady.then(() => {
-  mountApp()
-}).catch((err) => {
-  console.error('Failed to initialize i18n:', err)
-  // 降级渲染：即使 i18n 加载失败也要呈现界面（翻译字符串会显示 key）
-  mountApp()
-})
+function mountError(error: string) {
+  const root = ensureRoot();
+  const copy = getBootstrapErrorCopy();
+
+  const retry = async () => {
+    try {
+      const snapshot = await fetchPortableBootstrapSnapshot();
+      mountApp(snapshot);
+    } catch (err) {
+      mountError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  root.render(
+    <React.StrictMode>
+      <BootstrapErrorApp error={error} onRetry={() => void retry()} copy={copy} />
+    </React.StrictMode>,
+  );
+}
+
+// Preserve the old startup invariant: i18n failure degrades to key rendering,
+// but portable bootstrap failure blocks startup and shows an explicit error.
+const i18nStartupReady = i18nReady.catch((err) => {
+  console.error('Failed to initialize i18n:', err);
+});
+
+// Wait for both i18n and portable status before rendering.
+// portableReady starts at module load (parallel with i18n), so the
+// combined wait is max(i18n, portable) rather than i18n + portable.
+Promise.all([i18nStartupReady, portableReady])
+  .then(([, snapshot]) => {
+    mountApp(snapshot);
+  })
+  .catch((err) => {
+    console.error('Failed to initialize portable bootstrap:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    mountError(message);
+  })

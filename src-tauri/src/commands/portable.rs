@@ -119,7 +119,7 @@ pub async fn get_portable_migration_summary(
         is_portable: portable_info.is_portable,
         current_data_dir: data_dir_info.effective.to_string_lossy().to_string(),
         portable_data_dir: portable_info.data_dir.to_string_lossy().to_string(),
-        exportable_portable_secret_count: state.count_exportable_ai_provider_keys(&app_handle)?,
+        exportable_portable_secret_count: state.count_exportable_ai_provider_key_ids(&app_handle)?,
     })
 }
 

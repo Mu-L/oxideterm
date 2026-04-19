@@ -257,6 +257,13 @@ impl ConfigState {
         Ok(self.resolve_exportable_ai_provider_key_secrets(app_handle)?.len())
     }
 
+    pub(crate) fn count_exportable_ai_provider_key_ids(
+        &self,
+        app_handle: &tauri::AppHandle,
+    ) -> Result<usize, String> {
+        Ok(collect_ai_provider_key_ids(app_handle, self)?.len())
+    }
+
     pub(crate) fn export_ai_provider_key_secrets(
         &self,
         app_handle: &tauri::AppHandle,

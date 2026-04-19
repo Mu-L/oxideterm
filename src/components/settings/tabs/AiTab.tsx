@@ -1,9 +1,9 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
-import type { ElementType } from 'react';
+import { useState, type ElementType } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, CirclePlus, CircleStop, Code2, FileCode, FileText, FlaskConical, FolderInput, FolderOpen, FolderSearch, GitBranch, HardDrive, Info, Keyboard, ListTree, Monitor, MousePointer2, Network, Pen, Puzzle, Radio, RefreshCw, Search, Settings, Terminal as TerminalIcon, Wrench, X } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, CirclePlus, CircleStop, Code2, FileCode, FileText, FlaskConical, FolderInput, FolderOpen, FolderSearch, GitBranch, HardDrive, Info, Keyboard, ListTree, Monitor, MousePointer2, Network, Pen, Puzzle, Radio, RefreshCw, Search, Settings, Terminal as TerminalIcon, Wrench, X } from 'lucide-react';
 import { McpServersPanel } from '@/components/settings/McpServersPanel';
 import { ProviderKeyInput } from '@/components/settings/ProviderKeyInput';
 import { Button } from '@/components/ui/button';
@@ -109,6 +109,7 @@ export const AiTab = ({
     const { t } = useTranslation();
     const { error: toastError } = useToast();
     const { confirm, ConfirmDialog } = useConfirm();
+    const [contextWindowsExpanded, setContextWindowsExpanded] = useState(true);
 
     return (
         <>
@@ -453,10 +454,22 @@ export const AiTab = ({
                         <Separator className="my-6 opacity-50" />
 
                         <div className={ai.enabled ? '' : 'opacity-50 pointer-events-none'}>
-                            <h4 className="text-sm font-medium text-theme-text mb-2 uppercase tracking-wider">{t('settings_view.ai.model_context_windows')}</h4>
-                            <p className="text-xs text-theme-text-muted mb-4">{t('settings_view.ai.model_context_windows_hint')}</p>
+                            <button
+                                type="button"
+                                className="mb-4 flex w-full max-w-3xl items-start justify-between gap-3 text-left"
+                                onClick={() => setContextWindowsExpanded((current) => !current)}
+                                aria-expanded={contextWindowsExpanded}
+                            >
+                                <div>
+                                    <h4 className="text-sm font-medium text-theme-text mb-2 uppercase tracking-wider">{t('settings_view.ai.model_context_windows')}</h4>
+                                    <p className="text-xs text-theme-text-muted">{t('settings_view.ai.model_context_windows_hint')}</p>
+                                </div>
+                                {contextWindowsExpanded
+                                    ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-theme-text-muted" />
+                                    : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-theme-text-muted" />}
+                            </button>
 
-                            {ai.providers.every((provider) => provider.models.length === 0) ? (
+                            {contextWindowsExpanded && (ai.providers.every((provider) => provider.models.length === 0) ? (
                                 <p className="text-xs text-theme-text-muted italic">{t('settings_view.ai.model_context_windows_empty')}</p>
                             ) : (
                                 <div className="space-y-4 max-w-3xl">
@@ -510,7 +523,7 @@ export const AiTab = ({
                                         </div>
                                     ))}
                                 </div>
-                            )}
+                            ))}
                         </div>
                     </div>
 

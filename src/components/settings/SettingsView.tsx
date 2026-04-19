@@ -31,6 +31,7 @@ import { ReconnectTab } from '@/components/settings/tabs/ReconnectTab';
 import { SftpTab } from '@/components/settings/tabs/SftpTab';
 import { IdeTab } from '@/components/settings/tabs/IdeTab';
 import { AiTab } from '@/components/settings/tabs/AiTab';
+import { PortableTab } from '@/components/settings/tabs/PortableTab';
 import { api } from '@/lib/api';
 import type { PortableStatusResponse } from '@/types';
 
@@ -48,6 +49,10 @@ export const SettingsView = () => {
     const [refreshingModels, setRefreshingModels] = useState<string | null>(null);
 
     useEffect(() => {
+        if (activeTab !== 'help') {
+            return;
+        }
+
         let cancelled = false;
 
         api.getPortableStatus()
@@ -63,7 +68,7 @@ export const SettingsView = () => {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [activeTab]);
 
     return (
         <div className={`flex h-full w-full text-theme-text ${bgActive ? '' : 'bg-theme-bg'}`} data-bg-active={bgActive || undefined}>
@@ -71,12 +76,6 @@ export const SettingsView = () => {
             <div className="w-56 bg-theme-bg-panel border-r border-theme-border flex flex-col pt-6 pb-4 min-h-0">
                 <div className="px-5 mb-6">
                     <h2 className="text-xl font-semibold text-theme-text-heading">{t('settings_view.title')}</h2>
-                    {portableStatus?.isPortable && (
-                        <div className="mt-3 rounded-lg border border-theme-border bg-theme-bg-elevated/80 px-3 py-2">
-                            <div className="text-sm font-medium text-theme-text">{t('settings_view.portable_badge')}</div>
-                            <div className="mt-1 text-xs leading-5 text-theme-text-muted">{t('settings_view.portable_description')}</div>
-                        </div>
-                    )}
                 </div>
                 <div className="space-y-1 px-3 flex-1 overflow-y-auto min-h-0">
                     {/* ── 基础 ── */}
@@ -86,6 +85,13 @@ export const SettingsView = () => {
                         onClick={() => setActiveTab('general')}
                     >
                         <Monitor className="h-4 w-4" /> {t('settings.general.title')}
+                    </Button>
+                    <Button
+                        variant={activeTab === 'portable' ? 'secondary' : 'ghost'}
+                        className="w-full justify-start gap-3 h-10 font-normal rounded-md"
+                        onClick={() => setActiveTab('portable')}
+                    >
+                        <HardDrive className="h-4 w-4" /> {t('settings_view.general.portable_runtime')}
                     </Button>
 
                     <Separator className="!my-2" />
@@ -193,7 +199,9 @@ export const SettingsView = () => {
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
                 <div className="max-w-4xl mx-auto p-10">
-                    {activeTab === 'general' && <GeneralTab general={general} setLanguage={setLanguage} portableStatus={portableStatus ?? null} />}
+                    {activeTab === 'general' && <GeneralTab general={general} setLanguage={setLanguage} />}
+
+                    {activeTab === 'portable' && <PortableTab />}
 
                     {activeTab === 'terminal' && <TerminalTab terminal={terminal} updateTerminal={updateTerminal} />}
 

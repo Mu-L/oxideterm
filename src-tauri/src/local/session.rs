@@ -84,6 +84,8 @@ pub struct LocalTerminalSession {
     pub scroll_buffer: Arc<ScrollBuffer>,
     /// Broadcast channel — all output bytes go here for any subscriber
     pub output_tx: broadcast::Sender<Vec<u8>>,
+    /// Creation timestamp for CLI/GUI ordering hints
+    pub created_at: chrono::DateTime<chrono::Utc>,
     /// Whether this session is detached (running in background)
     pub detached: AtomicBool,
     /// When the session was detached (for TTL enforcement)
@@ -111,6 +113,7 @@ impl LocalTerminalSession {
             _data_pump_handle: None,
             scroll_buffer: Arc::new(ScrollBuffer::with_capacity(BACKGROUND_BUFFER_MAX_LINES)),
             output_tx,
+            created_at: chrono::Utc::now(),
             detached: AtomicBool::new(false),
             detached_at: std::sync::Mutex::new(None),
             detach_cancel: std::sync::Mutex::new(None),
@@ -319,6 +322,12 @@ impl LocalTerminalSession {
         self.running.load(Ordering::Acquire)
     }
 
+    #[cfg(test)]
+    pub(crate) fn install_test_input_channel(&mut self, input_tx: mpsc::Sender<Vec<u8>>) {
+        self.input_tx = Some(input_tx);
+        self.running.store(true, Ordering::Release);
+    }
+
     /// Get session info for serialization
     pub fn info(&self) -> LocalTerminalInfo {
         LocalTerminalInfo {
@@ -327,6 +336,7 @@ impl LocalTerminalSession {
             cols: self.cols,
             rows: self.rows,
             running: self.is_running(),
+            created_at: self.created_at.to_rfc3339(),
             detached: self.is_detached(),
         }
     }
@@ -461,6 +471,7 @@ pub struct LocalTerminalInfo {
     pub cols: u16,
     pub rows: u16,
     pub running: bool,
+    pub created_at: String,
     /// Whether this session is detached (running in background)
     #[serde(default)]
     pub detached: bool,

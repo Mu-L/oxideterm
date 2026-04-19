@@ -160,6 +160,7 @@ async fn list_sessions(app: &tauri::AppHandle) -> Result<Value, (i32, String)> {
                 "username": s.username,
                 "state": format!("{:?}", s.state),
                 "uptime_secs": s.uptime_secs,
+                "created_at": s.created_at,
                 "auth_type": s.auth_type,
                 "connection_id": s.connection_id,
             })
@@ -190,6 +191,7 @@ async fn list_local_terminals(app: &tauri::AppHandle) -> Result<Value, (i32, Str
                     "id": t.id,
                     "shell_name": t.shell.label,
                     "shell_id": t.shell.id,
+                    "created_at": t.created_at,
                     "running": t.running,
                     "detached": t.detached,
                 })
@@ -1714,6 +1716,10 @@ async fn attach(app: &tauri::AppHandle, params: Value) -> Result<Value, (i32, St
         protocol::ERR_INVALID_PARAMS,
         "session_id required".to_string(),
     ))?;
+    let readonly = params
+        .get("readonly")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     // Try SSH session first
     if let Some(session_registry) = app.try_state::<Arc<SessionRegistry>>() {
@@ -1741,6 +1747,12 @@ async fn attach(app: &tauri::AppHandle, params: Value) -> Result<Value, (i32, St
             tokio::spawn(async move {
                 while let Some(cmd) = adapter_rx.recv().await {
                     match cmd {
+                        SessionCommand::Data(_) if readonly => {
+                            tracing::debug!(
+                                "CLI attach adapter: readonly input ignored for SSH {}",
+                                sid_clone
+                            );
+                        }
                         SessionCommand::Close => {
                             tracing::debug!(
                                 "CLI attach adapter: close for SSH {} (ignored)",
@@ -1783,6 +1795,7 @@ async fn attach(app: &tauri::AppHandle, params: Value) -> Result<Value, (i32, St
                 "session_id": session_id,
                 "cols": cols,
                 "rows": rows,
+                "readonly": readonly,
                 "terminal_type": "ssh",
             }));
         }
@@ -1792,7 +1805,7 @@ async fn attach(app: &tauri::AppHandle, params: Value) -> Result<Value, (i32, St
     #[cfg(feature = "local-terminal")]
     {
         if let Some(state) = app.try_state::<Arc<crate::commands::local::LocalTerminalState>>() {
-            let result = state.registry.attach_for_cli(session_id).await;
+            let result = state.registry.attach_for_cli(session_id, readonly).await;
             if let Ok((handle, scroll_buffer, cols, rows)) = result {
                 let (_sid, port, token, _disconnect_rx) =
                     WsBridge::start_extended_with_disconnect(handle, scroll_buffer, true)
@@ -1813,6 +1826,7 @@ async fn attach(app: &tauri::AppHandle, params: Value) -> Result<Value, (i32, St
                     "session_id": session_id,
                     "cols": cols,
                     "rows": rows,
+                    "readonly": readonly,
                     "terminal_type": "local",
                 }));
             }

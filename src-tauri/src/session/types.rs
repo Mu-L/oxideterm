@@ -348,6 +348,7 @@ pub struct SessionInfo {
     pub ws_token: Option<String>,
     pub color: String,
     pub uptime_secs: u64,
+    pub created_at: String,
     pub order: usize,
     // Authentication info for reconnection (password is never exposed)
     pub auth_type: String,
@@ -382,6 +383,10 @@ impl From<&SessionEntry> for SessionInfo {
             ws_token: entry.ws_token.clone(),
             color: entry.config.auto_color(),
             uptime_secs: entry.uptime_secs(),
+            created_at: (chrono::Utc::now()
+                - chrono::Duration::from_std(entry.created_at.elapsed())
+                    .unwrap_or_else(|_| chrono::Duration::zero()))
+            .to_rfc3339(),
             order: entry.order,
             auth_type,
             key_path,

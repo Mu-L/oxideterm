@@ -115,7 +115,9 @@ impl LocalTerminalRegistry {
     /// List all sessions
     pub async fn list_sessions(&self) -> Vec<LocalTerminalInfo> {
         let sessions = self.sessions.read().await;
-        sessions.values().map(|s| s.info()).collect()
+        let mut items: Vec<_> = sessions.values().map(|s| s.info()).collect();
+        items.sort_by(|left, right| left.created_at.cmp(&right.created_at));
+        items
     }
 
     /// Write data to a session
@@ -356,6 +358,7 @@ impl LocalTerminalRegistry {
     pub async fn attach_for_cli(
         &self,
         session_id: &str,
+        readonly: bool,
     ) -> Result<(ExtendedSessionHandle, Arc<ScrollBuffer>, u16, u16), SessionError> {
         let sessions = self.sessions.read().await;
 
@@ -389,6 +392,13 @@ impl LocalTerminalRegistry {
             while let Some(cmd) = cmd_rx.recv().await {
                 match cmd {
                     SessionCommand::Data(data) => {
+                        if readonly {
+                            tracing::debug!(
+                                "CLI attach adapter: readonly input ignored for {}",
+                                sid
+                            );
+                            continue;
+                        }
                         if input_tx.send(data).await.is_err() {
                             tracing::debug!("CLI adapter: input channel closed for {}", sid);
                             break;
@@ -484,6 +494,18 @@ impl Drop for LocalTerminalRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::time::{Duration, timeout};
+
+    fn test_shell() -> ShellInfo {
+        ShellInfo::new("zsh", "Zsh", "/bin/zsh")
+    }
+
+    fn test_session(id: &str, created_at: chrono::DateTime<chrono::Utc>) -> LocalTerminalSession {
+        let mut session = LocalTerminalSession::new(test_shell(), 80, 24);
+        session.id = id.to_string();
+        session.created_at = created_at;
+        session
+    }
 
     #[tokio::test]
     async fn test_registry_new() {
@@ -492,5 +514,98 @@ mod tests {
         assert!(registry.list_sessions().await.is_empty());
     }
 
-    // Note: Full integration tests require a real terminal environment
+    #[tokio::test]
+    async fn list_sessions_returns_created_at_order() {
+        let registry = LocalTerminalRegistry::new();
+        let older = test_session(
+            "local-older",
+            chrono::DateTime::parse_from_rfc3339("2026-04-19T12:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        );
+        let newer = test_session(
+            "local-newer",
+            chrono::DateTime::parse_from_rfc3339("2026-04-19T12:00:01Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        );
+
+        {
+            let mut sessions = registry.sessions.write().await;
+            sessions.insert(newer.id.clone(), newer);
+            sessions.insert(older.id.clone(), older);
+        }
+
+        let listed = registry.list_sessions().await;
+        let ids: Vec<_> = listed.iter().map(|item| item.id.as_str()).collect();
+
+        assert_eq!(ids, vec!["local-older", "local-newer"]);
+    }
+
+    #[tokio::test]
+    async fn attach_for_cli_readonly_drops_input_data() {
+        let registry = LocalTerminalRegistry::new();
+        let mut session = test_session(
+            "local-readonly",
+            chrono::DateTime::parse_from_rfc3339("2026-04-19T12:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        );
+        let (input_tx, mut input_rx) = mpsc::channel::<Vec<u8>>(8);
+        session.install_test_input_channel(input_tx);
+
+        {
+            let mut sessions = registry.sessions.write().await;
+            sessions.insert(session.id.clone(), session);
+        }
+
+        let (handle, _, _, _) = registry
+            .attach_for_cli("local-readonly", true)
+            .await
+            .unwrap();
+        handle
+            .cmd_tx
+            .send(SessionCommand::Data(b"hello".to_vec()))
+            .await
+            .unwrap();
+
+        assert!(
+            timeout(Duration::from_millis(100), input_rx.recv())
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn attach_for_cli_writable_forwards_input_data() {
+        let registry = LocalTerminalRegistry::new();
+        let mut session = test_session(
+            "local-write",
+            chrono::DateTime::parse_from_rfc3339("2026-04-19T12:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        );
+        let (input_tx, mut input_rx) = mpsc::channel::<Vec<u8>>(8);
+        session.install_test_input_channel(input_tx);
+
+        {
+            let mut sessions = registry.sessions.write().await;
+            sessions.insert(session.id.clone(), session);
+        }
+
+        let (handle, _, _, _) = registry.attach_for_cli("local-write", false).await.unwrap();
+        handle
+            .cmd_tx
+            .send(SessionCommand::Data(b"hello".to_vec()))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            timeout(Duration::from_millis(100), input_rx.recv())
+                .await
+                .unwrap()
+                .unwrap(),
+            b"hello".to_vec()
+        );
+    }
 }

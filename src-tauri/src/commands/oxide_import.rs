@@ -26,8 +26,7 @@ use crate::config::types::{
 use crate::forwarding::{ForwardRule, ForwardStatus};
 use crate::oxide_file::{
     EncryptedAuth, EncryptedForward, EncryptedPluginSetting, EncryptedPortableSecret,
-    EncryptedProxyHop, OxideMetadata,
-    decrypt_oxide_file_with_progress,
+    EncryptedProxyHop, OxideMetadata, decrypt_oxide_file_with_progress,
 };
 use crate::state::PersistedForward;
 use zeroize::Zeroizing;

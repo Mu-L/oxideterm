@@ -391,7 +391,10 @@ mod tests {
         assert_eq!(info.host_dir, temp.path());
         assert_eq!(info.marker_path, temp.path().join(PORTABLE_MARKER_FILENAME));
         assert_eq!(info.config_path, temp.path().join(PORTABLE_CONFIG_FILENAME));
-        assert_eq!(info.data_dir, temp.path().join(PORTABLE_DEFAULT_DATA_DIRNAME));
+        assert_eq!(
+            info.data_dir,
+            temp.path().join(PORTABLE_DEFAULT_DATA_DIRNAME)
+        );
     }
 
     #[test]
@@ -406,7 +409,10 @@ mod tests {
         assert_eq!(info.activation, PortableActivationKind::Disabled);
         assert_eq!(info.marker_path, temp.path().join(PORTABLE_MARKER_FILENAME));
         assert_eq!(info.config_path, temp.path().join(PORTABLE_CONFIG_FILENAME));
-        assert_eq!(info.data_dir, temp.path().join(PORTABLE_DEFAULT_DATA_DIRNAME));
+        assert_eq!(
+            info.data_dir,
+            temp.path().join(PORTABLE_DEFAULT_DATA_DIRNAME)
+        );
     }
 
     #[test]

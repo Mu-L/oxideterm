@@ -10,6 +10,9 @@ Options:
       --wait
           Wait until the resulting session appears in the session list
 
+      --focus
+          Focus the resulting tab after the session appears
+
       --interval <INTERVAL>
           Polling interval in milliseconds when --wait is enabled
           

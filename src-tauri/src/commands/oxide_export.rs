@@ -16,8 +16,8 @@ use crate::commands::forwarding::ForwardingRegistry;
 use crate::config::types::SavedAuth;
 use crate::oxide_file::{
     EncryptedAuth, EncryptedConnection, EncryptedForward, EncryptedPayload, EncryptedPluginSetting,
-    EncryptedPortableSecret, EncryptedProxyHop, OxideMetadata, compute_checksum, encrypt_oxide_file,
-    encrypt_oxide_file_with_progress,
+    EncryptedPortableSecret, EncryptedProxyHop, OxideMetadata, compute_checksum,
+    encrypt_oxide_file, encrypt_oxide_file_with_progress,
 };
 use zeroize::Zeroizing;
 

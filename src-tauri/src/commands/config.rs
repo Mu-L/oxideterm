@@ -254,7 +254,9 @@ impl ConfigState {
         &self,
         app_handle: &tauri::AppHandle,
     ) -> Result<usize, String> {
-        Ok(self.resolve_exportable_ai_provider_key_secrets(app_handle)?.len())
+        Ok(self
+            .resolve_exportable_ai_provider_key_secrets(app_handle)?
+            .len())
     }
 
     pub(crate) fn count_exportable_ai_provider_key_ids(
@@ -286,7 +288,8 @@ impl ConfigState {
                 continue;
             }
 
-            if let Some(migrated) = try_migrate_vault_to_keychain(app_handle, &self.ai_keychain, provider_id)
+            if let Some(migrated) =
+                try_migrate_vault_to_keychain(app_handle, &self.ai_keychain, provider_id)
             {
                 fallback_secrets.insert(provider_id.clone(), migrated.clone());
                 self.api_key_cache
@@ -377,7 +380,9 @@ impl ConfigState {
         new_password: &str,
     ) -> Result<(), String> {
         if !crate::config::is_portable_mode().map_err(|e| e.to_string())? {
-            return Err("Portable password changes are only available in portable mode".to_string());
+            return Err(
+                "Portable password changes are only available in portable mode".to_string(),
+            );
         }
 
         crate::config::portable_keystore::change_portable_keystore_password(
@@ -389,18 +394,21 @@ impl ConfigState {
 
     pub async fn enable_portable_biometric_unlock(&self, password: &str) -> Result<(), String> {
         if !crate::config::is_portable_mode().map_err(|e| e.to_string())? {
-            return Err("Portable biometric binding is only available in portable mode".to_string());
+            return Err(
+                "Portable biometric binding is only available in portable mode".to_string(),
+            );
         }
 
         crate::config::portable_keystore::verify_portable_keystore_password(password)
             .map_err(|e| e.to_string())?;
-        crate::config::portable_keystore::bind_biometric_unlock(password)
-            .map_err(|e| e.to_string())
+        crate::config::portable_keystore::bind_biometric_unlock(password).map_err(|e| e.to_string())
     }
 
     pub async fn disable_portable_biometric_unlock(&self) -> Result<(), String> {
         if !crate::config::is_portable_mode().map_err(|e| e.to_string())? {
-            return Err("Portable biometric binding is only available in portable mode".to_string());
+            return Err(
+                "Portable biometric binding is only available in portable mode".to_string(),
+            );
         }
 
         crate::config::portable_keystore::clear_biometric_binding().map_err(|e| e.to_string())

@@ -334,6 +334,10 @@ enum Commands {
         #[arg(long)]
         wait: bool,
 
+        /// Focus the resulting tab after the session appears
+        #[arg(long)]
+        focus: bool,
+
         /// Polling interval in milliseconds when --wait is enabled
         #[arg(long, default_value_t = DEFAULT_WAIT_INTERVAL_MS, value_parser = clap::value_parser!(u64).range(1..))]
         interval: u64,
@@ -351,12 +355,24 @@ enum Commands {
 
     /// Focus an existing session tab
     Focus {
+        /// Focus the most recently created active tab
+        #[arg(long, conflicts_with = "target")]
+        latest: bool,
+
         /// Session ID or name (omit to list available sessions)
         target: Option<String>,
     },
 
     /// Attach to a running session (mirror terminal I/O)
     Attach {
+        /// Attach to the most recently created active session
+        #[arg(long, conflicts_with = "target")]
+        latest: bool,
+
+        /// Mirror output only; suppress stdin forwarding to the session
+        #[arg(long)]
+        readonly: bool,
+
         /// Session ID or name (omit to list available sessions)
         target: Option<String>,
     },
@@ -841,17 +857,33 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
         Commands::Connect {
             target,
             wait,
+            focus,
             interval,
             wait_timeout,
         } => {
             return_if_incompatible(&compatibility)?;
             emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
             let resp = conn.call("connect", serde_json::json!({ "target": target }))?;
-            let final_resp = if *wait {
+            let should_wait = *wait || *focus;
+            let mut final_resp = if should_wait {
                 wait_for_connected_session(&mut conn, &resp, *interval, *wait_timeout)?
             } else {
                 resp
             };
+            if *focus {
+                let session_id = final_resp
+                    .get("session_id")
+                    .and_then(|value| value.as_str())
+                    .ok_or_else(|| {
+                        CliError::runtime(
+                            "connect --focus requires the session to appear before focusing",
+                        )
+                    })?;
+                let focus_resp =
+                    conn.call("focus_tab", serde_json::json!({ "target": session_id }))?;
+                final_resp["focused"] = serde_json::json!(true);
+                final_resp["focus_result"] = focus_resp;
+            }
             out.print_connect_result(&final_resp);
         }
         Commands::Sftp { action } => match action {
@@ -964,12 +996,35 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
             let resp = conn.call("open_tab", serde_json::json!({ "path": dir }))?;
             out.print_json(&resp);
         }
-        Commands::Focus { target } => {
+        Commands::Focus { latest, target } => {
             return_if_incompatible(&compatibility)?;
             emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
+            if *latest {
+                let latest_target =
+                    select_latest_focusable_target(&fetch_focusable_targets(&mut conn)?)?;
+                if should_emit_human_guidance(out, cli.quiet) {
+                    eprintln!(
+                        "Focusing latest {}: {}",
+                        latest_target.kind.label(),
+                        latest_target.label
+                    );
+                }
+                let resp = conn.call(
+                    "focus_tab",
+                    serde_json::json!({ "target": latest_target.id }),
+                )?;
+                out.print_json(&resp);
+                return Ok(ExitCode::Success);
+            }
             match target {
                 Some(t) => {
-                    let resp = conn.call("focus_tab", serde_json::json!({ "target": t }))?;
+                    let focus_target = match resolve_focusable_target(&mut conn, t) {
+                        Ok(resolved) => resolved.id,
+                        Err(error) if error.code == "not_found" => t.to_string(),
+                        Err(error) => return Err(error),
+                    };
+                    let resp =
+                        conn.call("focus_tab", serde_json::json!({ "target": focus_target }))?;
                     out.print_json(&resp);
                 }
                 None => {
@@ -1043,10 +1098,21 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
             let resp = conn.call("ping", serde_json::json!({}))?;
             out.print_json(&resp);
         }
-        Commands::Attach { target } => {
+        Commands::Attach {
+            latest,
+            readonly,
+            target,
+        } => {
             return_if_incompatible(&compatibility)?;
             emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
-            run_attach(&mut conn, out, target.as_deref(), cli.quiet)?;
+            run_attach(
+                &mut conn,
+                out,
+                target.as_deref(),
+                *latest,
+                *readonly,
+                cli.quiet,
+            )?;
             return Ok(ExitCode::Success);
         }
         Commands::Version | Commands::Completions { .. } | Commands::Doctor => unreachable!(),
@@ -2152,47 +2218,150 @@ fn print_conversation_id(resp: &serde_json::Value, quiet: bool) {
     }
 }
 
-/// Resolve a target to a session ID, checking both SSH and local sessions.
-fn resolve_any_session_id(
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum FocusableKind {
+    Ssh,
+    Local,
+}
+
+impl FocusableKind {
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Ssh => "SSH session",
+            Self::Local => "local terminal",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FocusableTarget {
+    id: String,
+    label: String,
+    shell_id: Option<String>,
+    created_at: Option<String>,
+    kind: FocusableKind,
+}
+
+fn fetch_focusable_targets(
+    conn: &mut connect::IpcConnection,
+) -> Result<Vec<FocusableTarget>, CliError> {
+    let sessions = conn.call("list_sessions", serde_json::json!({}))?;
+    let ssh_items = sessions
+        .as_array()
+        .ok_or_else(|| CliError::runtime("Invalid session list from server"))?;
+
+    let locals = conn.call("list_local_terminals", serde_json::json!({}))?;
+    let local_items = locals
+        .as_array()
+        .ok_or_else(|| CliError::runtime("Invalid local terminal list from server"))?;
+
+    let mut targets = Vec::with_capacity(ssh_items.len() + local_items.len());
+
+    for session in ssh_items {
+        let id = session
+            .get("id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| CliError::runtime("Session entry is missing id"))?;
+        let label = session
+            .get("name")
+            .and_then(|value| value.as_str())
+            .unwrap_or(id);
+        targets.push(FocusableTarget {
+            id: id.to_string(),
+            label: label.to_string(),
+            shell_id: None,
+            created_at: session
+                .get("created_at")
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned),
+            kind: FocusableKind::Ssh,
+        });
+    }
+
+    for local in local_items {
+        let id = local
+            .get("id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| CliError::runtime("Local terminal entry is missing id"))?;
+        let label = local
+            .get("shell_name")
+            .and_then(|value| value.as_str())
+            .unwrap_or(id);
+        targets.push(FocusableTarget {
+            id: id.to_string(),
+            label: label.to_string(),
+            shell_id: local
+                .get("shell_id")
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned),
+            created_at: local
+                .get("created_at")
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned),
+            kind: FocusableKind::Local,
+        });
+    }
+
+    Ok(targets)
+}
+
+fn resolve_focusable_target(
     conn: &mut connect::IpcConnection,
     target: &str,
-) -> Result<String, String> {
-    // Try SSH sessions first
-    if let Ok(id) = resolve_session_id(conn, target) {
-        return Ok(id);
+) -> Result<FocusableTarget, CliError> {
+    let targets = fetch_focusable_targets(conn)?;
+    resolve_focusable_target_from_targets(&targets, target)
+}
+
+fn resolve_focusable_target_from_targets(
+    targets: &[FocusableTarget],
+    target: &str,
+) -> Result<FocusableTarget, CliError> {
+    if let Some(found) = targets.iter().find(|item| item.id == target) {
+        return Ok(found.clone());
     }
 
-    // Try local terminals
-    let locals = conn
-        .call("list_local_terminals", serde_json::json!({}))
-        .unwrap_or(serde_json::json!([]));
-    if let Some(items) = locals.as_array() {
-        // Exact ID match
-        if let Some(s) = items
-            .iter()
-            .find(|s| s.get("id").and_then(|v| v.as_str()) == Some(target))
-        {
-            return Ok(s["id"].as_str().unwrap().to_string());
-        }
-        // Shell name match
-        if let Some(s) = items.iter().find(|s| {
-            s.get("shell_name").and_then(|v| v.as_str()) == Some(target)
-                || s.get("shell_id").and_then(|v| v.as_str()) == Some(target)
-        }) {
-            return Ok(s["id"].as_str().unwrap().to_string());
-        }
-        // Partial ID match
-        if let Some(s) = items.iter().find(|s| {
-            s.get("id")
-                .and_then(|v| v.as_str())
-                .map(|id| id.starts_with(target))
-                .unwrap_or(false)
-        }) {
-            return Ok(s["id"].as_str().unwrap().to_string());
-        }
+    let exact_matches: Vec<&FocusableTarget> = targets
+        .iter()
+        .filter(|item| item.label == target || item.shell_id.as_deref() == Some(target))
+        .collect();
+    if exact_matches.len() == 1 {
+        return Ok(exact_matches[0].clone());
+    }
+    if exact_matches.len() > 1 {
+        return Err(CliError::usage(format!(
+            "Multiple active tabs match target: {target}. Use the full session ID."
+        )));
     }
 
-    Err(format!("Session not found: {target}"))
+    let prefix_matches: Vec<&FocusableTarget> = targets
+        .iter()
+        .filter(|item| item.id.starts_with(target))
+        .collect();
+    if prefix_matches.len() == 1 {
+        return Ok(prefix_matches[0].clone());
+    }
+    if prefix_matches.len() > 1 {
+        return Err(CliError::usage(format!(
+            "Multiple active tabs match ID prefix: {target}. Use a longer prefix or the full session ID."
+        )));
+    }
+
+    Err(CliError::not_found(format!("Session not found: {target}")))
+}
+
+fn select_latest_focusable_target(
+    targets: &[FocusableTarget],
+) -> Result<FocusableTarget, CliError> {
+    targets
+        .iter()
+        .max_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.id.cmp(&right.id))
+        })
+        .cloned()
+        .ok_or_else(|| CliError::not_found("No active tabs to focus."))
 }
 
 /// Main entry point for `oxt attach`.
@@ -2200,11 +2369,16 @@ fn run_attach(
     conn: &mut connect::IpcConnection,
     out: &output::OutputMode,
     target: Option<&str>,
+    latest: bool,
+    readonly: bool,
     quiet: bool,
 ) -> Result<(), CliError> {
-    // If no target, list available sessions
-    let session_id = match target {
-        Some(t) => resolve_any_session_id(conn, t)?,
+    let focusable_targets = fetch_focusable_targets(conn)?;
+
+    let resolved_target = match target {
+        Some(t) => resolve_focusable_target_from_targets(&focusable_targets, t)?,
+        None if latest => select_latest_focusable_target(&focusable_targets)
+            .map_err(|_| CliError::not_found("No active sessions to attach to."))?,
         None => {
             let sessions = conn
                 .call("list_sessions", serde_json::json!({}))
@@ -2220,18 +2394,18 @@ fn run_attach(
                 return Err(CliError::not_found("No active sessions to attach to."));
             }
             if total == 1 {
-                let id = if let Some(s) = ssh_items.first() {
-                    s.get("id").and_then(|v| v.as_str()).unwrap_or("")
-                } else {
-                    local_items[0]
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                };
+                let target = focusable_targets
+                    .first()
+                    .cloned()
+                    .ok_or_else(|| CliError::not_found("No active sessions to attach to."))?;
                 if should_emit_human_guidance(out, quiet) {
-                    eprintln!("Auto-attaching to only session: {id}");
+                    eprintln!(
+                        "Auto-attaching to only {}: {}",
+                        target.kind.label(),
+                        target.id
+                    );
                 }
-                id.to_string()
+                target
             } else {
                 if should_emit_human_guidance(out, quiet) {
                     eprintln!("Multiple active sessions — specify a target:\n");
@@ -2244,6 +2418,7 @@ fn run_attach(
                         out.print_local_terminals(&locals);
                     }
                     eprintln!("\nUsage: oxt attach <SESSION-ID-OR-NAME>");
+                    eprintln!("       oxt attach --latest");
                 }
                 return Err(CliError::usage(
                     "Multiple active sessions — specify a target.",
@@ -2252,8 +2427,24 @@ fn run_attach(
         }
     };
 
+    if latest && should_emit_human_guidance(out, quiet) {
+        eprintln!(
+            "Attaching to latest {}: {}",
+            resolved_target.kind.label(),
+            resolved_target.label
+        );
+    }
+
+    let session_id = resolved_target.id;
+
     // Call the attach RPC
-    let resp = conn.call("attach", serde_json::json!({ "session_id": session_id }))?;
+    let resp = conn.call(
+        "attach",
+        serde_json::json!({
+            "session_id": session_id,
+            "readonly": readonly,
+        }),
+    )?;
 
     let ws_url = resp
         .get("ws_url")
@@ -2267,13 +2458,18 @@ fn run_attach(
         .get("terminal_type")
         .and_then(|v| v.as_str())
         .unwrap_or("ssh");
+    let readonly = resp
+        .get("readonly")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(readonly);
     let cols = resp.get("cols").and_then(|v| v.as_u64()).unwrap_or(80) as u16;
     let rows = resp.get("rows").and_then(|v| v.as_u64()).unwrap_or(24) as u16;
 
     if should_emit_human_guidance(out, quiet) {
+        let mode_label = if readonly { "read-only " } else { "" };
         eprintln!(
-            "Attaching to {} session {} ({}x{}) — type ~? for help, ~. to detach",
-            terminal_type, session_id, cols, rows
+            "Attaching {}to {} session {} ({}x{}) — type ~? for help, ~. to detach",
+            mode_label, terminal_type, session_id, cols, rows
         );
     }
 
@@ -2491,7 +2687,7 @@ fn run_attach(
                     }
                 }
 
-                if !to_send.is_empty() {
+                if !readonly && !to_send.is_empty() {
                     let mut frame = Vec::new();
                     wire::encode_data(&to_send, &mut frame);
                     if ws.send(tungstenite::Message::Binary(frame)).is_err() {
@@ -2624,7 +2820,7 @@ fn run_attach(
                             escape::EscapeAction::Consumed => {}
                         }
                     }
-                    if !to_send.is_empty() {
+                    if !readonly && !to_send.is_empty() {
                         let mut frame = Vec::new();
                         wire::encode_data(&to_send, &mut frame);
                         if ws.send(tungstenite::Message::Binary(frame)).is_err() {
@@ -2648,8 +2844,9 @@ mod tests {
     use super::{
         build_compatibility_check, build_endpoint_ownership_check, build_path_check,
         check_compatibility, classify_error_message, compatibility_notice_text,
-        protocol_ranges_overlap, read_stdin_from_reader, select_session_for_inspect,
-        should_emit_human_guidance, Cli, DoctorStatus, ExitCode,
+        protocol_ranges_overlap, read_stdin_from_reader, resolve_focusable_target_from_targets,
+        select_latest_focusable_target, select_session_for_inspect, should_emit_human_guidance,
+        Cli, DoctorStatus, ExitCode, FocusableKind, FocusableTarget,
     };
     use crate::{connect, output::OutputMode};
     use clap::CommandFactory;
@@ -2740,6 +2937,22 @@ mod tests {
         assert_eq!(
             normalize_help(&render_help(&["connect"])),
             normalize_help(include_str!("../tests/snapshots/oxt-connect-help.txt"))
+        );
+    }
+
+    #[test]
+    fn focus_help_matches_snapshot() {
+        assert_eq!(
+            normalize_help(&render_help(&["focus"])),
+            normalize_help(include_str!("../tests/snapshots/oxt-focus-help.txt"))
+        );
+    }
+
+    #[test]
+    fn attach_help_matches_snapshot() {
+        assert_eq!(
+            normalize_help(&render_help(&["attach"])),
+            normalize_help(include_str!("../tests/snapshots/oxt-attach-help.txt"))
         );
     }
 
@@ -2967,6 +3180,81 @@ mod tests {
         let selected = select_session_for_inspect(&sessions, "abc123").unwrap();
 
         assert_eq!(selected["id"], "abc123");
+    }
+
+    #[test]
+    fn resolve_focusable_target_rejects_ambiguous_exact_labels() {
+        let targets = vec![
+            FocusableTarget {
+                id: "ssh-1".to_string(),
+                label: "prod".to_string(),
+                shell_id: None,
+                created_at: Some("2026-04-19T12:00:00Z".to_string()),
+                kind: FocusableKind::Ssh,
+            },
+            FocusableTarget {
+                id: "local-1".to_string(),
+                label: "prod".to_string(),
+                shell_id: Some("shell-prod".to_string()),
+                created_at: Some("2026-04-19T12:00:01Z".to_string()),
+                kind: FocusableKind::Local,
+            },
+        ];
+
+        let error = resolve_focusable_target_from_targets(&targets, "prod").unwrap_err();
+
+        assert_eq!(error.code, "usage_error");
+        assert_eq!(error.exit_code, ExitCode::Usage);
+    }
+
+    #[test]
+    fn resolve_focusable_target_prefers_exact_id_before_label() {
+        let targets = vec![
+            FocusableTarget {
+                id: "abc123".to_string(),
+                label: "shell-a".to_string(),
+                shell_id: Some("shell-a".to_string()),
+                created_at: Some("2026-04-19T12:00:00Z".to_string()),
+                kind: FocusableKind::Local,
+            },
+            FocusableTarget {
+                id: "shell-a".to_string(),
+                label: "other".to_string(),
+                shell_id: None,
+                created_at: Some("2026-04-19T12:00:01Z".to_string()),
+                kind: FocusableKind::Ssh,
+            },
+        ];
+
+        let selected = resolve_focusable_target_from_targets(&targets, "shell-a").unwrap();
+
+        assert_eq!(selected.id, "shell-a");
+        assert_eq!(selected.kind, FocusableKind::Ssh);
+    }
+
+    #[test]
+    fn select_latest_focusable_target_prefers_newer_created_at() {
+        let targets = vec![
+            FocusableTarget {
+                id: "ssh-1".to_string(),
+                label: "prod".to_string(),
+                shell_id: None,
+                created_at: Some("2026-04-19T12:00:00Z".to_string()),
+                kind: FocusableKind::Ssh,
+            },
+            FocusableTarget {
+                id: "local-1".to_string(),
+                label: "zsh".to_string(),
+                shell_id: Some("shell-zsh".to_string()),
+                created_at: Some("2026-04-19T12:00:05Z".to_string()),
+                kind: FocusableKind::Local,
+            },
+        ];
+
+        let selected = select_latest_focusable_target(&targets).unwrap();
+
+        assert_eq!(selected.id, "local-1");
+        assert_eq!(selected.kind, FocusableKind::Local);
     }
 
     #[test]

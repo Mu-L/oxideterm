@@ -1123,8 +1123,16 @@ Host web web-prod web-admin
         assert_eq!(hosts[0].alias, "web");
         assert_eq!(hosts[1].alias, "web-prod");
         assert_eq!(hosts[2].alias, "web-admin");
-        assert!(hosts.iter().all(|host| host.hostname.as_deref() == Some("web.example.com")));
-        assert!(hosts.iter().all(|host| host.user.as_deref() == Some("deploy")));
+        assert!(
+            hosts
+                .iter()
+                .all(|host| host.hostname.as_deref() == Some("web.example.com"))
+        );
+        assert!(
+            hosts
+                .iter()
+                .all(|host| host.user.as_deref() == Some("deploy"))
+        );
     }
 
     #[test]
@@ -1161,7 +1169,9 @@ Match host target
     User conditional-user
 "#;
 
-        let resolved = resolve_ssh_config_host_content(content, "target").unwrap().unwrap();
+        let resolved = resolve_ssh_config_host_content(content, "target")
+            .unwrap()
+            .unwrap();
         assert_eq!(resolved.host, "target.example.com");
         assert_eq!(resolved.port, 22);
         assert_eq!(resolved.user, None);

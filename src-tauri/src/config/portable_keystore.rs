@@ -105,7 +105,10 @@ fn biometric_binding_account() -> Result<String, PortableKeystoreError> {
         .to_string_lossy()
         .to_string();
     let digest = Sha256::digest(binding_key.as_bytes());
-    let suffix: String = digest[..16].iter().map(|byte| format!("{:02x}", byte)).collect();
+    let suffix: String = digest[..16]
+        .iter()
+        .map(|byte| format!("{:02x}", byte))
+        .collect();
     Ok(format!("portable-master-{}", suffix))
 }
 

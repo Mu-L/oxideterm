@@ -637,6 +637,13 @@ impl OutputMode {
                     } else {
                         println!("Connecting to {}...", sanitize_display(name));
                     }
+                    if value
+                        .get("focused")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        println!("  Focused:    yes");
+                    }
                 } else {
                     let error = value
                         .get("error")

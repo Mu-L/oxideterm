@@ -182,11 +182,16 @@
     "connection_id": "conn-456...",
     "name": "prod-server",
     "host": "10.0.1.5",
+    "port": 22,
+    "username": "deploy",
     "state": "active",
-    "uptime_secs": 3600
+    "uptime_secs": 3600,
+    "created_at": "2026-04-19T12:00:00Z"
   }
 ]
 ```
+
+`created_at` 会被 CLI 用作 `focus --latest` 和 `attach --latest` 的统一排序依据，避免依赖 registry/HashMap 的偶然遍历顺序。
 
 ### `list_active_connections`
 
@@ -309,6 +314,7 @@
     "id": "local-123...",
     "shell_name": "zsh",
     "shell_id": "shell-zsh",
+    "created_at": "2026-04-19T12:01:00Z",
     "running": true,
     "detached": false
   }
@@ -382,6 +388,12 @@
 
 **参数**：`{ "target": "prod-server" }`
 
+CLI 额外语义：
+
+1. `oxt connect --wait` 会轮询 `list_sessions`，直到匹配 `connection_id` 的会话真正出现。
+2. `oxt connect --focus` 会隐式启用等待，并在会话出现后调用 `focus_tab` 聚焦新标签。
+3. JSON 成功结果会保留原始 connect 响应，并在可用时补充 `waited`、`session_id`、`session_state`、`focused` 与 `focus_result`。
+
 ### `open_tab`
 
 打开一个新的本地终端标签页。
@@ -394,11 +406,18 @@
 
 **参数**：`{ "target": "session-id-or-name" }`
 
+CLI 额外语义：
+
+1. `oxt focus <target>` 的解析顺序为 exact ID → exact label → unique ID prefix。
+2. 只有在 SSH/local 目标都找不到时，CLI 才会把原始 target 透传给 `focus_tab` 做后端兜底匹配。
+3. `oxt focus --latest` 会先抓取 `list_sessions` 与 `list_local_terminals`，按 `created_at` 选择最新标签，再调用 `focus_tab`。
+4. 若 exact label 在 SSH/local 间产生歧义，CLI 返回 `usage_error`，不会静默选中一个目标。
+
 ### `attach`
 
 附着到一个正在运行的会话（SSH/本地），进行终端镜像。
 
-**参数**：`{ "session_id": "abc123" }`
+**参数**：`{ "session_id": "abc123", "readonly": false }`
 
 **响应示例**：
 ```json
@@ -407,9 +426,16 @@
   "ws_token": "single-use-token",
   "terminal_type": "ssh",
   "cols": 160,
-  "rows": 48
+  "rows": 48,
+  "readonly": false
 }
 ```
+
+CLI 额外语义：
+
+1. `oxt attach --latest` 与 `oxt focus --latest` 共用同一套 `created_at` 最新目标选择逻辑。
+2. `oxt attach --readonly` 不只是 CLI 不发 stdin；服务端 attach adapter 也会显式丢弃 `SessionCommand::Data`，确保只读语义在桥接层成立。
+3. `readonly` 模式下保留 `~.` 和 `~?` escape 行为，便于退出镜像或查看帮助。
 
 ### `create_forward`
 
@@ -674,6 +700,9 @@ CLI 会自动检测 stdout 是否为终端：
 | `--interval <ms>` | `status --watch`、`health --watch`、`connect --wait` | 轮询间隔；`status/health` 默认 `2000`，`connect --wait` 默认 `500` |
 | `--wait` | `connect` | 在 GUI 发起连接后，继续轮询 `list_sessions`，直到新会话出现在活跃列表中 |
 | `--wait-timeout <ms>` | `connect --wait` | 等待新会话出现的最长时间，默认 `30000` |
+| `--focus` | `connect` | 等待新会话出现后自动调用 `focus_tab`，成功结果补充 `focused=true` 与 `focus_result` |
+| `--latest` | `focus`、`attach` | 先收集 SSH 会话与本地终端，按 `created_at` 选择最近创建的目标 |
+| `--readonly` | `attach` | 建立只读镜像；CLI 不转发普通 stdin，服务端 adapter 也会忽略 Data 输入 |
 | `--quiet` | 全局 | 抑制版本兼容提示、自动选择提示等 stderr 文案，便于脚本只消费 stdout |
 
 ### JSON 错误对象
@@ -783,6 +812,10 @@ $ oxt status --timeout 5000
 $ oxt connect prod-server --json --wait --wait-timeout 30000
 {"success":true,"connection_id":"conn-456...","name":"prod-server","waited":true,"session_id":"abc123...","session_state":"active"}
 
+# 连接、等待并把 GUI 聚焦到新标签
+$ oxt connect prod-server --json --focus
+{"success":true,"connection_id":"conn-456...","name":"prod-server","waited":true,"session_id":"abc123...","session_state":"active","focused":true,"focus_result":{"ok":true,"matched":"session","target":"abc123..."}}
+
 # 聚合排查单个会话
 $ oxt session inspect prod
 prod
@@ -819,6 +852,12 @@ $ oxt exec "write a bash script to rotate logs"
 
 # Attach：会话镜像，`~.` 退出
 $ oxt attach prod-server
+
+# Focus：聚焦最近创建的标签（SSH 或本地终端）
+$ oxt focus --latest
+
+# Attach：镜像最近创建的标签，但不允许 stdin 写入会话
+$ oxt attach --latest --readonly
 ```
 
 ### 环境变量

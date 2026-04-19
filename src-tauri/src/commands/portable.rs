@@ -59,8 +59,8 @@ fn build_status_response() -> Result<PortableStatusResponse, String> {
         .map_err(|e| e.to_string())?
         .map(|path| path.to_string_lossy().to_string());
     let supports_biometric_binding = crate::config::portable_keystore::supports_biometric_binding();
-    let has_biometric_binding = crate::config::portable_keystore::has_biometric_binding()
-        .map_err(|e| e.to_string())?;
+    let has_biometric_binding =
+        crate::config::portable_keystore::has_biometric_binding().map_err(|e| e.to_string())?;
 
     Ok(PortableStatusResponse {
         is_portable: info.is_portable,
@@ -119,7 +119,8 @@ pub async fn get_portable_migration_summary(
         is_portable: portable_info.is_portable,
         current_data_dir: data_dir_info.effective.to_string_lossy().to_string(),
         portable_data_dir: portable_info.data_dir.to_string_lossy().to_string(),
-        exportable_portable_secret_count: state.count_exportable_ai_provider_key_ids(&app_handle)?,
+        exportable_portable_secret_count: state
+            .count_exportable_ai_provider_key_ids(&app_handle)?,
     })
 }
 

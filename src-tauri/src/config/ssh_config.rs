@@ -464,6 +464,7 @@ fn resolve_ssh_config_alias_content_internal(
     let mut current_patterns: Option<Vec<String>> = None;
     let mut matched_specific_host = false;
     let mut matched_any_block = false;
+    let mut in_match_block = false;
 
     for raw_line in content.lines() {
         let line = raw_line.trim();
@@ -476,12 +477,23 @@ fn resolve_ssh_config_alias_content_internal(
         };
 
         if key.eq_ignore_ascii_case("host") {
+            in_match_block = false;
             current_patterns = Some(
                 value
                     .split_whitespace()
                     .map(|part| part.to_string())
                     .collect(),
             );
+            continue;
+        }
+
+        if key.eq_ignore_ascii_case("match") {
+            in_match_block = true;
+            current_patterns = None;
+            continue;
+        }
+
+        if in_match_block {
             continue;
         }
 
@@ -702,12 +714,17 @@ pub async fn parse_ssh_config(path: Option<PathBuf>) -> Result<Vec<SshConfigHost
 /// Parse SSH config content string
 pub fn parse_ssh_config_content(content: &str) -> Result<Vec<SshConfigHost>, SshConfigError> {
     let mut hosts = Vec::new();
-    let mut current_host: Option<SshConfigHost> = None;
+    let mut current_hosts: Vec<SshConfigHost> = Vec::new();
+    let mut in_match_block = false;
+
+    let flush_current_hosts =
+        |hosts: &mut Vec<SshConfigHost>, current_hosts: &mut Vec<SshConfigHost>| {
+            hosts.extend(current_hosts.drain(..).filter(|host| !host.is_wildcard()));
+        };
 
     for line in content.lines() {
         let line = line.trim();
 
-        // Skip empty lines and comments
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
@@ -719,25 +736,31 @@ pub fn parse_ssh_config_content(content: &str) -> Result<Vec<SshConfigHost>, Ssh
         let key_lower = key.to_lowercase();
 
         if key_lower == "host" {
-            // Save previous host if exists
-            if let Some(host) = current_host.take() {
-                if !host.is_wildcard() {
-                    hosts.push(host);
-                }
-            }
+            flush_current_hosts(&mut hosts, &mut current_hosts);
+            in_match_block = false;
 
-            // Handle multiple hosts on same line (e.g., "Host foo bar")
             for alias in value.split_whitespace() {
-                // For now, we only take the first non-wildcard host
                 if !alias.contains('*') && !alias.contains('?') {
-                    current_host = Some(SshConfigHost {
+                    current_hosts.push(SshConfigHost {
                         alias: alias.to_string(),
                         ..Default::default()
                     });
-                    break;
                 }
             }
-        } else if let Some(ref mut host) = current_host {
+            continue;
+        }
+
+        if key_lower == "match" {
+            flush_current_hosts(&mut hosts, &mut current_hosts);
+            in_match_block = true;
+            continue;
+        }
+
+        if in_match_block || current_hosts.is_empty() {
+            continue;
+        }
+
+        for host in &mut current_hosts {
             match key_lower.as_str() {
                 "hostname" => host.hostname = Some(value.to_string()),
                 "user" => host.user = Some(value.to_string()),
@@ -745,14 +768,11 @@ pub fn parse_ssh_config_content(content: &str) -> Result<Vec<SshConfigHost>, Ssh
                     host.port = value.parse().ok();
                 }
                 "identityfile" => {
-                    // Expand ~ to home directory
                     host.identity_file = Some(crate::path_utils::expand_tilde(value));
                 }
                 "certificatefile" => {
-                    // Expand ~ to home directory
                     host.certificate_file = Some(crate::path_utils::expand_tilde(value));
                 }
-                // ProxyJump: can be comma-separated for multi-hop
                 "proxyjump" => {
                     if value.to_lowercase() != "none" {
                         for jump in value.split(',') {
@@ -762,7 +782,6 @@ pub fn parse_ssh_config_content(content: &str) -> Result<Vec<SshConfigHost>, Ssh
                         }
                     }
                 }
-                // ProxyCommand (alternative to ProxyJump)
                 "proxycommand" => {
                     if value.to_lowercase() != "none" {
                         host.proxy_command = Some(value.to_string());
@@ -773,19 +792,16 @@ pub fn parse_ssh_config_content(content: &str) -> Result<Vec<SshConfigHost>, Ssh
                         );
                     }
                 }
-                // LocalForward: [bind_address:]port host:hostport
                 "localforward" => {
                     if let Some(rule) = PortForwardRule::parse(value) {
                         host.local_forwards.push(rule);
                     }
                 }
-                // RemoteForward: [bind_address:]port host:hostport
                 "remoteforward" => {
                     if let Some(rule) = PortForwardRule::parse(value) {
                         host.remote_forwards.push(rule);
                     }
                 }
-                // DynamicForward: [bind_address:]port
                 "dynamicforward" => {
                     let port_str = if value.contains(':') {
                         value.rsplit(':').next().unwrap_or(value)
@@ -794,17 +810,12 @@ pub fn parse_ssh_config_content(content: &str) -> Result<Vec<SshConfigHost>, Ssh
                     };
                     host.dynamic_forward = port_str.parse().ok();
                 }
-                _ => {} // Ignore other directives
+                _ => {}
             }
         }
     }
 
-    // Don't forget the last host
-    if let Some(host) = current_host {
-        if !host.is_wildcard() {
-            hosts.push(host);
-        }
-    }
+    flush_current_hosts(&mut hosts, &mut current_hosts);
 
     Ok(hosts)
 }
@@ -1097,6 +1108,63 @@ Host hpc
         let filtered = filter_importable_hosts(hosts);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].alias, "prod");
+    }
+
+    #[test]
+    fn test_parse_multiple_aliases_on_same_host_line() {
+        let content = r#"
+Host web web-prod web-admin
+    HostName web.example.com
+    User deploy
+"#;
+
+        let hosts = parse_ssh_config_content(content).unwrap();
+        assert_eq!(hosts.len(), 3);
+        assert_eq!(hosts[0].alias, "web");
+        assert_eq!(hosts[1].alias, "web-prod");
+        assert_eq!(hosts[2].alias, "web-admin");
+        assert!(hosts.iter().all(|host| host.hostname.as_deref() == Some("web.example.com")));
+        assert!(hosts.iter().all(|host| host.user.as_deref() == Some("deploy")));
+    }
+
+    #[test]
+    fn test_parse_ignores_match_blocks() {
+        let content = r#"
+Host target
+    HostName target.example.com
+
+Match host target
+    User conditional-user
+    Port 2200
+
+Host other
+    HostName other.example.com
+"#;
+
+        let hosts = parse_ssh_config_content(content).unwrap();
+        assert_eq!(hosts.len(), 2);
+        assert_eq!(hosts[0].alias, "target");
+        assert_eq!(hosts[0].user, None);
+        assert_eq!(hosts[0].port, None);
+        assert_eq!(hosts[1].alias, "other");
+        assert_eq!(hosts[1].hostname.as_deref(), Some("other.example.com"));
+    }
+
+    #[test]
+    fn test_resolve_alias_ignores_match_blocks() {
+        let content = r#"
+Host target
+    HostName target.example.com
+
+Match host target
+    Port 2200
+    User conditional-user
+"#;
+
+        let resolved = resolve_ssh_config_host_content(content, "target").unwrap().unwrap();
+        assert_eq!(resolved.host, "target.example.com");
+        assert_eq!(resolved.port, 22);
+        assert_eq!(resolved.user, None);
     }
 
     #[test]

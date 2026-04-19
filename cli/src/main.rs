@@ -16,8 +16,8 @@ mod wire;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 
-const CLI_API_CURRENT_VERSION: u64 = 1;
-const CLI_API_MIN_SUPPORTED_VERSION: u64 = 1;
+const CLI_API_CURRENT_VERSION: u64 = 2;
+const CLI_API_MIN_SUPPORTED_VERSION: u64 = 2;
 const DEFAULT_WATCH_INTERVAL_MS: u64 = 2000;
 const DEFAULT_WAIT_INTERVAL_MS: u64 = 500;
 const DEFAULT_WAIT_TIMEOUT_MS: u64 = 30000;
@@ -323,6 +323,18 @@ enum Commands {
         /// Provider type
         #[arg(short, long)]
         provider: Option<String>,
+
+        /// Target shell for generated commands
+        #[arg(long, value_enum)]
+        shell: Option<ExecShell>,
+
+        /// Output format for generated execution plans
+        #[arg(long, value_enum, default_value_t = ExecFormat::Text)]
+        format: ExecFormat,
+
+        /// Disable streaming and wait for the full response
+        #[arg(long)]
+        no_stream: bool,
     },
 
     /// Connect to a saved connection (opens in GUI)
@@ -420,6 +432,217 @@ enum ListTarget {
         /// Session ID (omit to show all sessions)
         session_id: Option<String>,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum ExecShell {
+    Bash,
+    Zsh,
+    Fish,
+    #[value(name = "powershell", alias = "power-shell")]
+    PowerShell,
+}
+
+impl ExecShell {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Bash => "bash",
+            Self::Zsh => "zsh",
+            Self::Fish => "fish",
+            Self::PowerShell => "powershell",
+        }
+    }
+
+    fn parse_flag_value(value: &str) -> Option<Self> {
+        match value {
+            "bash" => Some(Self::Bash),
+            "zsh" => Some(Self::Zsh),
+            "fish" => Some(Self::Fish),
+            "powershell" | "power-shell" => Some(Self::PowerShell),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum ExecFormat {
+    Text,
+    Json,
+}
+
+impl ExecFormat {
+    fn parse_flag_value(value: &str) -> Option<Self> {
+        match value {
+            "text" => Some(Self::Text),
+            "json" => Some(Self::Json),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct AskPromptTailOptions {
+    prompt_tokens: Vec<String>,
+    session: Option<String>,
+    model: Option<String>,
+    provider: Option<String>,
+    conversation_id: Option<String>,
+    no_stream: bool,
+    raw: bool,
+}
+
+#[derive(Debug, Default)]
+struct ExecPromptTailOptions {
+    prompt_tokens: Vec<String>,
+    session: Option<String>,
+    model: Option<String>,
+    provider: Option<String>,
+    shell: Option<ExecShell>,
+    format: Option<ExecFormat>,
+    no_stream: bool,
+}
+
+fn default_exec_shell() -> ExecShell {
+    #[cfg(windows)]
+    {
+        return ExecShell::PowerShell;
+    }
+
+    #[cfg(not(windows))]
+    {
+        if let Ok(shell) = std::env::var("SHELL") {
+            if shell.ends_with("/zsh") {
+                return ExecShell::Zsh;
+            }
+            if shell.ends_with("/fish") {
+                return ExecShell::Fish;
+            }
+        }
+
+        ExecShell::Bash
+    }
+}
+
+fn split_ask_prompt_and_tail_args(prompt: &[String]) -> AskPromptTailOptions {
+    let mut remaining = prompt.to_vec();
+    let mut overrides = AskPromptTailOptions::default();
+
+    loop {
+        let len = remaining.len();
+        if len == 0 {
+            break;
+        }
+
+        match remaining[len - 1].as_str() {
+            "--no-stream" => {
+                overrides.no_stream = true;
+                remaining.pop();
+                continue;
+            }
+            "--raw" => {
+                overrides.raw = true;
+                remaining.pop();
+                continue;
+            }
+            _ => {}
+        }
+
+        if len >= 2 {
+            let value = remaining[len - 1].clone();
+            match remaining[len - 2].as_str() {
+                "-s" | "--session" => {
+                    overrides.session = Some(value);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                "-m" | "--model" => {
+                    overrides.model = Some(value);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                "-p" | "--provider" => {
+                    overrides.provider = Some(value);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                "-c" | "--continue" => {
+                    overrides.conversation_id = Some(value);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
+        break;
+    }
+
+    overrides.prompt_tokens = remaining;
+    overrides
+}
+
+fn split_exec_prompt_and_tail_args(prompt: &[String]) -> Result<ExecPromptTailOptions, CliError> {
+    let mut remaining = prompt.to_vec();
+    let mut overrides = ExecPromptTailOptions::default();
+
+    loop {
+        let len = remaining.len();
+        if len == 0 {
+            break;
+        }
+
+        if remaining[len - 1] == "--no-stream" {
+            overrides.no_stream = true;
+            remaining.pop();
+            continue;
+        }
+
+        if len >= 2 {
+            let value = remaining[len - 1].clone();
+            match remaining[len - 2].as_str() {
+                "-s" | "--session" => {
+                    overrides.session = Some(value);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                "-m" | "--model" => {
+                    overrides.model = Some(value);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                "-p" | "--provider" => {
+                    overrides.provider = Some(value);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                "--shell" => {
+                    overrides.shell = Some(ExecShell::parse_flag_value(&value).ok_or_else(|| {
+                        CliError::usage(format!(
+                            "Invalid shell target: {value}. Expected one of bash, zsh, fish, powershell"
+                        ))
+                    })?);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                "--format" => {
+                    overrides.format =
+                        Some(ExecFormat::parse_flag_value(&value).ok_or_else(|| {
+                            CliError::usage(format!(
+                                "Invalid exec output format: {value}. Expected text or json"
+                            ))
+                        })?);
+                    remaining.truncate(len - 2);
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
+        break;
+    }
+
+    overrides.prompt_tokens = remaining;
+    Ok(overrides)
 }
 
 #[derive(Subcommand)]
@@ -736,7 +959,8 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
         } => {
             return_if_incompatible(&compatibility)?;
             emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
-            let prompt_text = prompt.join(" ");
+            let prompt_overrides = split_ask_prompt_and_tail_args(prompt);
+            let prompt_text = prompt_overrides.prompt_tokens.join(" ");
             if prompt_text.is_empty() && is_terminal_stdin() {
                 return Err(CliError::usage(
                     "No prompt provided. Usage: oxt ask \"your question\"",
@@ -752,30 +976,35 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
 
             let mut params = serde_json::json!({
                 "prompt": if prompt_text.is_empty() { "Analyze the following".to_string() } else { prompt_text },
-                "stream": !no_stream,
+                "stream": !(*no_stream || prompt_overrides.no_stream),
             });
             if let Some(ctx) = &context {
                 params["context"] = serde_json::json!(ctx);
             }
-            if let Some(s) = session {
+            if let Some(s) = prompt_overrides.session.as_deref().or(session.as_deref()) {
                 let sid = resolve_session_id(&mut conn, s)?;
                 params["session_id"] = serde_json::json!(sid);
             }
-            if let Some(m) = model {
+            if let Some(m) = prompt_overrides.model.as_deref().or(model.as_deref()) {
                 params["model"] = serde_json::json!(m);
             }
-            if let Some(p) = provider {
+            if let Some(p) = prompt_overrides.provider.as_deref().or(provider.as_deref()) {
                 params["provider"] = serde_json::json!(p);
             }
-            if let Some(cid) = continue_id {
+            if let Some(cid) = prompt_overrides
+                .conversation_id
+                .as_deref()
+                .or(continue_id.as_deref())
+            {
                 params["conversation_id"] = serde_json::json!(cid);
             }
 
             // Determine markdown rendering mode:
             // --raw or piped stdout → raw text; TTY stdout → markdown render
-            let use_markdown = !raw && is_terminal_stdout();
+            let use_markdown = should_render_ai_markdown(*raw || prompt_overrides.raw, out);
+            let emit_json_envelope = cli.json;
 
-            if *no_stream {
+            if *no_stream || prompt_overrides.no_stream {
                 let resp = conn.call("ask", params)?;
                 let text = resp
                     .get("text")
@@ -784,23 +1013,50 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
                     .unwrap_or("");
                 if use_markdown {
                     render_markdown(text);
-                } else {
+                } else if emit_json_envelope {
                     out.print_ai_response(&resp);
+                } else {
+                    println!("{text}");
                 }
                 print_conversation_id(&resp, cli.quiet);
             } else {
                 let mut accumulated = String::new();
+                let mut printed_chunks = false;
                 let resp = conn.call_streaming("ask", params, |text| {
-                    if use_markdown {
+                    if use_markdown || emit_json_envelope {
                         accumulated.push_str(text);
                     } else {
                         use std::io::Write;
                         print!("{text}");
                         let _ = std::io::stdout().flush();
+                        printed_chunks = true;
                     }
                 })?;
-                if use_markdown {
-                    render_markdown(&accumulated);
+                if emit_json_envelope {
+                    let mut final_resp = resp.clone();
+                    if final_resp.get("text").and_then(|v| v.as_str()).is_none()
+                        && !accumulated.is_empty()
+                    {
+                        final_resp["text"] = serde_json::json!(accumulated);
+                    }
+                    out.print_ai_response(&final_resp);
+                } else if use_markdown {
+                    let final_text = if accumulated.is_empty() {
+                        resp.get("text")
+                            .and_then(|v| v.as_str())
+                            .or_else(|| resp.get("content").and_then(|v| v.as_str()))
+                            .unwrap_or("")
+                    } else {
+                        &accumulated
+                    };
+                    render_markdown(final_text);
+                } else if !printed_chunks {
+                    let final_text = resp
+                        .get("text")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| resp.get("content").and_then(|v| v.as_str()))
+                        .unwrap_or("");
+                    println!("{final_text}");
                 } else {
                     println!();
                 }
@@ -812,10 +1068,14 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
             session,
             model,
             provider,
+            shell,
+            format,
+            no_stream,
         } => {
             return_if_incompatible(&compatibility)?;
             emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
-            let prompt_text = prompt.join(" ");
+            let prompt_overrides = split_exec_prompt_and_tail_args(prompt)?;
+            let prompt_text = prompt_overrides.prompt_tokens.join(" ");
             if prompt_text.is_empty() && is_terminal_stdin() {
                 return Err(CliError::usage(
                     "No prompt provided. Usage: oxt exec \"generate a script\"",
@@ -828,31 +1088,55 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
                 None
             };
 
+            let shell_target = prompt_overrides
+                .shell
+                .or(*shell)
+                .unwrap_or_else(default_exec_shell);
+            let format = prompt_overrides.format.unwrap_or(*format);
+            let streaming = !(*no_stream || prompt_overrides.no_stream);
+
             let mut params = serde_json::json!({
                 "prompt": if prompt_text.is_empty() { "Generate code for the following".to_string() } else { prompt_text },
-                "stream": true,
+                "stream": streaming,
                 "exec_mode": true,
+                "shell_target": shell_target.as_str(),
             });
             if let Some(ctx) = &context {
                 params["context"] = serde_json::json!(ctx);
             }
-            if let Some(s) = session {
+            if let Some(s) = prompt_overrides.session.as_deref().or(session.as_deref()) {
                 let sid = resolve_session_id(&mut conn, s)?;
                 params["session_id"] = serde_json::json!(sid);
             }
-            if let Some(m) = model {
+            if let Some(m) = prompt_overrides.model.as_deref().or(model.as_deref()) {
                 params["model"] = serde_json::json!(m);
             }
-            if let Some(p) = provider {
+            if let Some(p) = prompt_overrides.provider.as_deref().or(provider.as_deref()) {
                 params["provider"] = serde_json::json!(p);
             }
 
-            conn.call_streaming("ask", params, |text| {
-                use std::io::Write;
-                print!("{text}");
-                let _ = std::io::stdout().flush();
-            })?;
-            println!();
+            let resp = if streaming {
+                let mut accumulated = String::new();
+                let mut resp = conn.call_streaming("ask", params, |text| {
+                    accumulated.push_str(text);
+                })?;
+                if resp.get("text").and_then(|v| v.as_str()).is_none() && !accumulated.is_empty() {
+                    resp["text"] = serde_json::json!(accumulated);
+                }
+                resp
+            } else {
+                conn.call("ask", params)?
+            };
+
+            let exec_output_mode = if cli.json || matches!(format, ExecFormat::Json) {
+                output::OutputMode::Json
+            } else {
+                output::OutputMode::Human
+            };
+
+            exec_output_mode.print_exec_result(&resp);
+
+            print_conversation_id(&resp, cli.quiet);
         }
         Commands::Connect {
             target,
@@ -2168,11 +2452,6 @@ fn is_terminal_stdin() -> bool {
     std::io::stdin().is_terminal()
 }
 
-fn is_terminal_stdout() -> bool {
-    use std::io::IsTerminal;
-    std::io::stdout().is_terminal()
-}
-
 fn read_stdin() -> Result<String, String> {
     let mut stdin = std::io::stdin();
     read_stdin_from_reader(&mut stdin, 512 * 1024)
@@ -2205,6 +2484,10 @@ fn render_markdown(text: &str) {
     let skin = termimad::MadSkin::default();
     // termimad writes ANSI-colored markdown to the terminal
     skin.print_text(text);
+}
+
+fn should_render_ai_markdown(raw: bool, out: &output::OutputMode) -> bool {
+    !raw && matches!(out, output::OutputMode::Human)
 }
 
 /// Print the conversation ID from the response for `--continue` use.
@@ -2846,10 +3129,11 @@ mod tests {
         check_compatibility, classify_error_message, compatibility_notice_text,
         protocol_ranges_overlap, read_stdin_from_reader, resolve_focusable_target_from_targets,
         select_latest_focusable_target, select_session_for_inspect, should_emit_human_guidance,
-        Cli, DoctorStatus, ExitCode, FocusableKind, FocusableTarget,
+        should_render_ai_markdown, Cli, Commands, DoctorStatus, ExecShell, ExitCode, FocusableKind,
+        FocusableTarget,
     };
     use crate::{connect, output::OutputMode};
-    use clap::CommandFactory;
+    use clap::{CommandFactory, Parser};
     use std::io::Cursor;
     use std::sync::Mutex;
 
@@ -2905,6 +3189,14 @@ mod tests {
         assert_eq!(
             normalize_help(&render_help(&["ask"])),
             normalize_help(include_str!("../tests/snapshots/oxt-ask-help.txt"))
+        );
+    }
+
+    #[test]
+    fn exec_help_matches_snapshot() {
+        assert_eq!(
+            normalize_help(&render_help(&["exec"])),
+            normalize_help(include_str!("../tests/snapshots/oxt-exec-help.txt"))
         );
     }
 
@@ -3011,7 +3303,7 @@ mod tests {
     fn compatibility_warns_on_app_version_mismatch() {
         let report = check_compatibility(serde_json::json!({
             "version": "9.9.9",
-            "cli_api": { "version": 1, "min_supported": 1 },
+            "cli_api": { "version": 2, "min_supported": 1 },
             "sessions": 0,
             "connections": { "ssh": 0, "local": 0 }
         }));
@@ -3045,13 +3337,30 @@ mod tests {
     fn compatibility_check_builds_ok_doctor_item() {
         let check = build_compatibility_check(&serde_json::json!({
             "version": env!("CARGO_PKG_VERSION"),
-            "cli_api": { "version": 1, "min_supported": 1 },
+            "cli_api": { "version": 2, "min_supported": 1 },
             "sessions": 0,
             "connections": { "ssh": 0, "local": 0 }
         }));
 
         assert_eq!(check.status, DoctorStatus::Ok);
         assert!(check.summary.contains("CLI API ranges overlap"));
+    }
+
+    #[test]
+    fn compatibility_rejects_pre_phase5_server_contract() {
+        let report = check_compatibility(serde_json::json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "cli_api": { "version": 1, "min_supported": 1 },
+            "sessions": 0,
+            "connections": { "ssh": 0, "local": 0 }
+        }));
+
+        assert!(report.warning.is_none());
+        assert!(report
+            .error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("CLI API mismatch"));
     }
 
     #[cfg(unix)]
@@ -3144,6 +3453,26 @@ mod tests {
         assert!(should_emit_human_guidance(&OutputMode::Human, false));
         assert!(!should_emit_human_guidance(&OutputMode::Human, true));
         assert!(!should_emit_human_guidance(&OutputMode::Json, false));
+    }
+
+    #[test]
+    fn ask_render_mode_respects_raw_and_json_contract() {
+        assert!(should_render_ai_markdown(false, &OutputMode::Human));
+        assert!(!should_render_ai_markdown(true, &OutputMode::Human));
+        assert!(!should_render_ai_markdown(false, &OutputMode::Json));
+    }
+
+    #[test]
+    fn exec_shell_accepts_powershell_aliases() {
+        for value in ["powershell", "power-shell"] {
+            let cli = Cli::try_parse_from(["oxt", "exec", "--shell", value, "echo hi"])
+                .expect("exec shell should parse");
+
+            match cli.command {
+                Commands::Exec { shell, .. } => assert_eq!(shell, Some(ExecShell::PowerShell)),
+                _ => panic!("expected exec command"),
+            }
+        }
     }
 
     #[test]

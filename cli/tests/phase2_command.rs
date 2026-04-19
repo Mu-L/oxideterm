@@ -26,7 +26,7 @@ fn base_status() -> Value {
     json!({
         "version": env!("CARGO_PKG_VERSION"),
         "pid": 4242,
-        "cli_api": { "version": 1, "min_supported": 1 },
+        "cli_api": { "version": 2, "min_supported": 1 },
         "sessions": 0,
         "connections": { "ssh": 0, "local": 0 }
     })

@@ -13,7 +13,7 @@
 - 执行连接、断开、聚焦、附着（mirror）等会话操作
 - 创建/删除端口转发规则
 - 读取配置（分组、连接详情）
-- 使用 AI（`ask` / `exec`），支持流式输出、会话续聊与终端 Markdown 渲染
+- 使用 AI（`ask` / `exec`），支持流式输出、结构化 JSON envelope、会话续聊与终端 Markdown 渲染
 
 **主要设计决策：**
 
@@ -135,7 +135,7 @@
 {
   "version": "0.21.0",
   "cli_api": {
-    "version": 1,
+    "version": 2,
     "min_supported": 1
   },
   "sessions": 5,
@@ -483,6 +483,8 @@ AI 提问接口。支持：
 - `stream` 流式输出
 - `conversation_id` 续聊
 
+最终响应从 Phase 5 起固定为稳定 envelope。即使流式过程中有 `stream_chunk` 增量通知，CLI 在 `--json` 模式下也会等待最终响应并一次性输出完整 JSON 对象，而不是把 chunk 文本直接混进 stdout。
+
 流式过程中服务端会发送：
 
 ```json
@@ -493,6 +495,10 @@ AI 提问接口。支持：
 
 ```json
 {
+  "schema_version": 1,
+  "content_type": "assistant_text",
+  "provider": "openai",
+  "streamed": true,
   "text": "...",
   "model": "moonshot-v1-8k",
   "done": true,
@@ -507,9 +513,39 @@ AI 提问接口。支持：
 当前行为是：
 
 1. CLI 仍然调用 `ask`
-2. 额外传入 `exec_mode=true`
-3. 服务端根据 `exec_mode` 切换更偏命令/代码生成的系统提示
-4. CLI 直接流式输出结果，不在本地执行任何生成内容
+2. 额外传入 `exec_mode=true`，并可附带 `shell_target=bash|zsh|fish|powershell`（兼容别名 `power-shell`）
+3. 服务端根据 `exec_mode` 切换成“命令规划”提示，并把模型文本归一化为结构化 plan
+4. `--format text` 下 CLI 会渲染摘要、前置条件、风险、命令与备注；`--format json` 下输出完整 envelope
+5. CLI 不在本地执行任何生成内容
+
+`exec` 的最终 envelope 示例：
+
+```json
+{
+  "schema_version": 1,
+  "content_type": "exec_plan",
+  "provider": "openai",
+  "streamed": true,
+  "shell_target": "zsh",
+  "text": "{\"summary\":\"List files\",\"commands\":[{\"command\":\"ls -la\",\"description\":\"List directory contents\"}]}",
+  "model": "gpt-4o-mini",
+  "done": true,
+  "conversation_id": "b1d0...",
+  "plan": {
+    "shell": "zsh",
+    "summary": "List files",
+    "commands": [
+      {
+        "command": "ls -la",
+        "description": "List directory contents"
+      }
+    ],
+    "prerequisites": [],
+    "risks": [],
+    "notes": []
+  }
+}
+```
 
 这条边界在 Phase 0 固化，后续增强不能把 `exec` 偷偷扩展成自动执行入口。
 
@@ -597,6 +633,9 @@ oxt ping
 # AI 提问（默认流式）
 oxt ask "explain this log"
 
+# AI：JSON 模式会等待完整 envelope，再输出单个 JSON 对象
+oxt ask --json "summarize this deploy failure"
+
 # 从 stdin 管道上下文
 echo "$(cat app.log)" | oxt ask "find root cause"
 
@@ -608,6 +647,9 @@ oxt ask --continue <conversation-id> "give me safer variant"
 
 # 代码/命令生成模式（代码优先输出）
 oxt exec "write a bash script to rotate logs"
+
+# 代码/命令生成：指定 shell 与 JSON contract
+oxt exec --shell zsh --format json "list files in long format"
 
 # 按名称连接并在 GUI 打开
 oxt connect prod-server
@@ -687,6 +729,13 @@ CLI 会自动检测 stdout 是否为终端：
 
 - **TTY 且未指定 `--raw`**：输出完成后按 Markdown 渲染（ANSI）
 - **管道/重定向 或 `--raw`**：原始文本输出
+- **`--json`**：流式 chunk 只用于内部累积，stdout 最终只输出一个完整 JSON envelope
+
+对于 `oxt exec`：
+
+- **`--format text`**：即使 stdout 被管道/重定向，仍渲染结构化执行计划（摘要、命令、风险、依赖、备注）
+- **`--format json`**：输出稳定 envelope，包含 `content_type=exec_plan`、`shell_target` 与 `plan`
+- **全局 `--json`**：仍可强制 `exec` 输出 JSON；未显式指定全局 `--json` 时，`exec --format` 优先于自动 TTY 检测
 
 使用 `--json` 可强制始终输出 JSON。
 
@@ -847,8 +896,16 @@ $ oxt ask "summarize this" --provider openai
 Conversation: b1d0...
 $ oxt ask --continue b1d0... "give me concise version"
 
+# AI：JSON 模式下输出完整 envelope，适合脚本解析
+$ oxt ask --json "summarize this"
+{"schema_version":1,"content_type":"assistant_text","provider":"openai","streamed":true,"text":"...","model":"gpt-4o-mini","done":true,"conversation_id":"b1d0..."}
+
 # Exec：仍然走 ask RPC，只是切换 exec_mode
 $ oxt exec "write a bash script to rotate logs"
+
+# Exec：JSON 模式输出结构化 plan
+$ oxt exec --shell zsh --format json "list files in long format"
+{"schema_version":1,"content_type":"exec_plan","provider":"openai","streamed":true,"shell_target":"zsh","plan":{"shell":"zsh","summary":"List files","commands":[{"command":"ls -la","description":"List directory contents"}],"prerequisites":[],"risks":[],"notes":[]},"conversation_id":"b1d0..."}
 
 # Attach：会话镜像，`~.` 退出
 $ oxt attach prod-server

@@ -27,7 +27,7 @@ use crate::sftp::session::SftpRegistry;
 use crate::ssh::{ExtendedSessionHandle, SessionCommand, SshConnectionRegistry};
 use crate::state::{AiChatStore, ConversationMeta, PersistedMessage};
 
-const CLI_API_CURRENT_VERSION: u64 = 1;
+const CLI_API_CURRENT_VERSION: u64 = 2;
 const CLI_API_MIN_SUPPORTED_VERSION: u64 = 1;
 
 /// Dispatch a JSON-RPC method call to the appropriate handler.
@@ -1067,6 +1067,312 @@ fn escape_tagged_text(input: &str) -> String {
         .replace('>', "&gt;")
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct ExecPlanCommand {
+    command: String,
+    #[serde(default)]
+    description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct ExecPlan {
+    shell: String,
+    summary: String,
+    commands: Vec<ExecPlanCommand>,
+    prerequisites: Vec<String>,
+    risks: Vec<String>,
+    notes: Vec<String>,
+}
+
+fn extract_json_object_candidate(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed.starts_with('{') && trimmed.ends_with('}') {
+        return Some(trimmed.to_string());
+    }
+
+    if let Some(start) = trimmed.find("```json") {
+        let remainder = &trimmed[start + 7..];
+        if let Some(end) = remainder.find("```") {
+            let candidate = remainder[..end].trim();
+            if candidate.starts_with('{') && candidate.ends_with('}') {
+                return Some(candidate.to_string());
+            }
+        }
+    }
+
+    let start = trimmed.find('{')?;
+    let end = trimmed.rfind('}')?;
+    if end > start {
+        return Some(trimmed[start..=end].to_string());
+    }
+
+    None
+}
+
+fn normalize_exec_list(value: Option<&Value>) -> Vec<String> {
+    let mut items = Vec::new();
+
+    match value {
+        Some(Value::String(single)) => items.push(single.to_string()),
+        Some(Value::Array(values)) => {
+            for item in values {
+                if let Some(text) = item.as_str() {
+                    items.push(text.to_string());
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let mut deduped = Vec::new();
+    for item in items {
+        let trimmed = item.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let normalized = trimmed.to_string();
+        if !deduped.contains(&normalized) {
+            deduped.push(normalized);
+        }
+    }
+
+    deduped
+}
+
+fn fallback_exec_commands(raw_text: &str) -> Vec<ExecPlanCommand> {
+    let trimmed = raw_text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    if let Some(start) = trimmed.find("```") {
+        let remainder = &trimmed[start + 3..];
+        let block = if let Some(newline) = remainder.find('\n') {
+            let remainder = &remainder[newline + 1..];
+            if let Some(end) = remainder.find("```") {
+                remainder[..end].trim()
+            } else {
+                remainder.trim()
+            }
+        } else {
+            remainder.trim()
+        };
+
+        if !block.is_empty() {
+            return vec![ExecPlanCommand {
+                command: block.to_string(),
+                description: "Generated command block".to_string(),
+            }];
+        }
+    }
+
+    vec![ExecPlanCommand {
+        command: trimmed.to_string(),
+        description: "Generated command".to_string(),
+    }]
+}
+
+fn normalize_exec_commands(value: Option<&Value>, raw_text: &str) -> Vec<ExecPlanCommand> {
+    let mut commands = Vec::new();
+
+    if let Some(value) = value {
+        match value {
+            Value::String(command) => commands.push(ExecPlanCommand {
+                command: command.trim().to_string(),
+                description: String::new(),
+            }),
+            Value::Array(items) => {
+                for item in items {
+                    match item {
+                        Value::String(command) => commands.push(ExecPlanCommand {
+                            command: command.trim().to_string(),
+                            description: String::new(),
+                        }),
+                        Value::Object(_) => {
+                            let command = item
+                                .get("command")
+                                .or_else(|| item.get("cmd"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .trim()
+                                .to_string();
+                            let description = item
+                                .get("description")
+                                .or_else(|| item.get("summary"))
+                                .or_else(|| item.get("intent"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .trim()
+                                .to_string();
+                            if !command.is_empty() {
+                                commands.push(ExecPlanCommand {
+                                    command,
+                                    description,
+                                });
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    commands.retain(|item| !item.command.is_empty());
+    if commands.is_empty() {
+        return fallback_exec_commands(raw_text);
+    }
+
+    commands
+}
+
+fn augment_exec_risks(commands: &[ExecPlanCommand], risks: &mut Vec<String>) {
+    let mut append_if_missing = |warning: &str| {
+        if !risks.iter().any(|existing| existing == warning) {
+            risks.push(warning.to_string());
+        }
+    };
+
+    for command in commands {
+        let lower = command.command.to_lowercase();
+
+        if lower.contains("rm -rf")
+            || lower.contains("rm -fr")
+            || lower.contains("remove-item") && lower.contains("-recurse")
+        {
+            append_if_missing(
+                "Potentially destructive delete detected; verify the target paths before running.",
+            );
+        }
+
+        if lower.contains("mkfs")
+            || lower.contains("diskutil erase")
+            || lower.starts_with("format ")
+            || lower.contains(" format ")
+            || lower.contains("dd if=")
+        {
+            append_if_missing(
+                "Disk or volume modification detected; confirm the destination device before execution.",
+            );
+        }
+
+        if lower.contains("shutdown") || lower.contains("reboot") || lower.contains("poweroff") {
+            append_if_missing(
+                "System restart or shutdown detected; make sure the host can be interrupted safely.",
+            );
+        }
+
+        if lower.contains("chmod -r") || lower.contains("chown -r") || lower.contains("icacls ") {
+            append_if_missing(
+                "Recursive permission or ownership change detected; review scope before applying it.",
+            );
+        }
+    }
+}
+
+fn parse_exec_plan(raw_text: &str, shell_target: &str) -> ExecPlan {
+    let mut summary = String::new();
+    let mut prerequisites = Vec::new();
+    let mut risks = Vec::new();
+    let mut notes = Vec::new();
+    let mut commands = Vec::new();
+
+    if let Some(candidate) = extract_json_object_candidate(raw_text) {
+        if let Ok(value) = serde_json::from_str::<Value>(&candidate) {
+            summary = value
+                .get("summary")
+                .or_else(|| value.get("explanation"))
+                .or_else(|| value.get("description"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            prerequisites = normalize_exec_list(value.get("prerequisites"));
+            risks = normalize_exec_list(value.get("risks"));
+            notes = normalize_exec_list(value.get("notes"));
+            commands = normalize_exec_commands(value.get("commands"), raw_text);
+        }
+    }
+
+    if summary.is_empty() {
+        summary = if commands.is_empty() {
+            "Generated execution guidance.".to_string()
+        } else {
+            format!(
+                "Generated {} command(s) for {shell_target}.",
+                commands.len()
+            )
+        };
+    }
+
+    if commands.is_empty() {
+        commands = fallback_exec_commands(raw_text);
+    }
+
+    augment_exec_risks(&commands, &mut risks);
+
+    ExecPlan {
+        shell: shell_target.to_string(),
+        summary,
+        commands,
+        prerequisites,
+        risks,
+        notes,
+    }
+}
+
+fn build_ai_response_envelope(
+    mut result: Value,
+    provider_type: &str,
+    stream: bool,
+    exec_mode: bool,
+    shell_target: Option<&str>,
+) -> Value {
+    result["schema_version"] = json!(1);
+    result["streamed"] = json!(stream);
+    result["provider"] = json!(provider_type);
+
+    if exec_mode {
+        let shell = shell_target.unwrap_or("bash");
+        let text = result.get("text").and_then(|v| v.as_str()).unwrap_or("");
+        let plan = parse_exec_plan(text, shell);
+        result["content_type"] = json!("exec_plan");
+        result["shell_target"] = json!(plan.shell.clone());
+        result["plan"] = serde_json::to_value(plan).unwrap_or(Value::Null);
+    } else {
+        result["content_type"] = json!("assistant_text");
+    }
+
+    result
+}
+
+fn build_assistant_turn_payload(response: &Value) -> Value {
+    json!({
+        "schema_version": response.get("schema_version").cloned().unwrap_or(json!(1)),
+        "content_type": response.get("content_type").cloned().unwrap_or(json!("assistant_text")),
+        "provider": response.get("provider").cloned().unwrap_or(Value::Null),
+        "model": response.get("model").cloned().unwrap_or(Value::Null),
+        "streamed": response.get("streamed").cloned().unwrap_or(json!(false)),
+        "shell_target": response.get("shell_target").cloned().unwrap_or(Value::Null),
+        "plan": response.get("plan").cloned().unwrap_or(Value::Null),
+    })
+}
+
+fn normalize_shell_target(value: &str) -> Option<&'static str> {
+    match value {
+        "bash" => Some("bash"),
+        "zsh" => Some("zsh"),
+        "fish" => Some("fish"),
+        "powershell" | "power-shell" => Some("powershell"),
+        _ => None,
+    }
+}
+
 /// Dispatch the `ask` RPC method with streaming support.
 ///
 /// Writes `stream_chunk` notifications to the writer as AI tokens arrive,
@@ -1137,6 +1443,21 @@ async fn ask<W: AsyncWriteExt + Unpin>(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let shell_target = params
+        .get("shell_target")
+        .and_then(|v| v.as_str())
+        .map(|raw| {
+            normalize_shell_target(raw).map(str::to_string).ok_or_else(|| {
+                (
+                    protocol::ERR_INVALID_PARAMS,
+                    format!(
+                        "Invalid shell_target: {raw}. Expected one of bash, zsh, fish, powershell"
+                    ),
+                )
+            })
+        })
+        .transpose()?;
+
     let conversation_id = params
         .get("conversation_id")
         .and_then(|v| v.as_str())
@@ -1171,8 +1492,10 @@ async fn ask<W: AsyncWriteExt + Unpin>(
 
     // Build system prompt
     let system_prompt = if exec_mode {
-        "You are a code generator. Output only executable code or commands. No explanations, no markdown fences, no comments unless part of the code."
-            .to_string()
+        let shell_name = shell_target.as_deref().unwrap_or("bash");
+        format!(
+            "You are a cautious command planner for {shell_name}. Return valid JSON only, without markdown fences, using this schema: {{\"summary\": string, \"commands\": [{{\"command\": string, \"description\": string}}], \"prerequisites\": [string], \"risks\": [string], \"notes\": [string]}}. Commands must be directly executable in {shell_name}. Put destructive or privileged concerns in risks."
+        )
     } else {
         "You are OxideSens, an expert terminal & DevOps assistant in OxideTerm. Be concise and helpful. When given terminal output or logs, analyze them and provide actionable insights. You can use markdown for formatting."
             .to_string()
@@ -1310,9 +1633,17 @@ async fn ask<W: AsyncWriteExt + Unpin>(
         }
     }?;
 
+    let response = build_ai_response_envelope(
+        result,
+        &provider_type,
+        stream,
+        exec_mode,
+        shell_target.as_deref(),
+    );
+
     // Save assistant response to store
     if let Some(ref store) = ai_store {
-        let assistant_text = result
+        let assistant_text = response
             .get("text")
             .and_then(|v| v.as_str())
             .unwrap_or("")
@@ -1328,7 +1659,7 @@ async fn ask<W: AsyncWriteExt + Unpin>(
                 projection_updated_at: now,
                 tool_calls: vec![],
                 context_snapshot: None,
-                turn: None,
+                turn: Some(build_assistant_turn_payload(&response)),
                 transcript_ref: None,
                 summary_ref: None,
             };
@@ -1337,7 +1668,7 @@ async fn ask<W: AsyncWriteExt + Unpin>(
     }
 
     // Merge conversation_id into the response
-    let mut response = result;
+    let mut response = response;
     response["conversation_id"] = json!(conv_id);
     Ok(response)
 }
@@ -2168,7 +2499,11 @@ async fn import_hosts(app: &tauri::AppHandle, params: Value) -> Result<Value, (i
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_context_from_model_name, get_model_context_window};
+    use super::{
+        build_ai_response_envelope, extract_context_from_model_name, get_model_context_window,
+        normalize_shell_target, parse_exec_plan,
+    };
+    use serde_json::json;
 
     #[test]
     fn extracts_context_from_model_name_suffix() {
@@ -2189,5 +2524,97 @@ mod tests {
         assert_eq!(get_model_context_window("claude-2.1"), 100_000);
         assert_eq!(get_model_context_window("llama3.2"), 128_000);
         assert_eq!(get_model_context_window("glm-4-air"), 128_000);
+    }
+
+    #[test]
+    fn parse_exec_plan_normalizes_json_and_shell_target() {
+        let plan = parse_exec_plan(
+            r#"{
+              "summary": "Rotate logs safely.",
+              "commands": [{"command": "logrotate -f /etc/logrotate.d/app", "description": "Force rotation"}],
+              "prerequisites": ["logrotate installed"],
+              "risks": ["This may overwrite existing archives."],
+              "notes": ["Review the config first."]
+            }"#,
+            "bash",
+        );
+
+        assert_eq!(plan.shell, "bash");
+        assert_eq!(plan.summary, "Rotate logs safely.");
+        assert_eq!(plan.commands.len(), 1);
+        assert_eq!(
+            plan.commands[0].command,
+            "logrotate -f /etc/logrotate.d/app"
+        );
+        assert!(plan.risks.iter().any(|risk| risk.contains("overwrite")));
+    }
+
+    #[test]
+    fn parse_exec_plan_adds_heuristic_risk_warnings() {
+        let plan = parse_exec_plan(
+            r#"{"summary":"Dangerous cleanup","commands":["rm -rf /var/tmp/app-cache"]}"#,
+            "bash",
+        );
+
+        assert!(
+            plan.risks
+                .iter()
+                .any(|risk| risk.contains("destructive delete"))
+        );
+    }
+
+    #[test]
+    fn parse_exec_plan_preserves_multiline_fenced_command_blocks() {
+        let plan = parse_exec_plan(
+            "```bash\ncat <<'EOF' > script.sh\necho first\necho second\nEOF\n```",
+            "bash",
+        );
+
+        assert_eq!(plan.commands.len(), 1);
+        assert!(plan.commands[0].command.contains("echo first\necho second"));
+    }
+
+    #[test]
+    fn parse_exec_plan_does_not_flag_non_destructive_format_flags() {
+        let plan = parse_exec_plan(
+            r#"{"summary":"List containers","commands":["docker ps --format '{{.Names}}'"]}"#,
+            "bash",
+        );
+
+        assert!(
+            !plan
+                .risks
+                .iter()
+                .any(|risk| risk.contains("Disk or volume modification detected"))
+        );
+    }
+
+    #[test]
+    fn build_ai_response_envelope_marks_exec_contract() {
+        let response = build_ai_response_envelope(
+            json!({
+                "text": "{\"summary\":\"List files\",\"commands\":[\"ls -la\"]}",
+                "model": "gpt-4o-mini",
+                "done": true,
+            }),
+            "openai",
+            true,
+            true,
+            Some("zsh"),
+        );
+
+        assert_eq!(response["schema_version"], 1);
+        assert_eq!(response["content_type"], "exec_plan");
+        assert_eq!(response["shell_target"], "zsh");
+        assert_eq!(response["streamed"], true);
+        assert_eq!(response["provider"], "openai");
+        assert_eq!(response["plan"]["commands"][0]["command"], "ls -la");
+    }
+
+    #[test]
+    fn normalize_shell_target_rejects_unknown_values() {
+        assert_eq!(normalize_shell_target("bash"), Some("bash"));
+        assert_eq!(normalize_shell_target("power-shell"), Some("powershell"));
+        assert_eq!(normalize_shell_target("cmd"), None);
     }
 }

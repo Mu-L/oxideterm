@@ -615,6 +615,18 @@ impl OutputMode {
         }
     }
 
+    /// Print structured exec response.
+    pub fn print_exec_result(&self, value: &Value) {
+        match self {
+            Self::Json => {
+                println!("{}", serde_json::to_string(value).unwrap_or_default());
+            }
+            Self::Human => {
+                print!("{}", render_exec_result_human(value));
+            }
+        }
+    }
+
     /// Print connect result.
     pub fn print_connect_result(&self, value: &Value) {
         match self {
@@ -822,6 +834,14 @@ fn is_terminal_stdout() -> bool {
 /// Strip ANSI escape sequences and control characters from a string
 /// to prevent terminal injection attacks via crafted connection names.
 fn sanitize_display(s: &str) -> String {
+    sanitize_filtered_display(s, false)
+}
+
+fn sanitize_multiline_display(s: &str) -> String {
+    sanitize_filtered_display(s, true)
+}
+
+fn sanitize_filtered_display(s: &str, allow_newlines: bool) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
@@ -836,7 +856,7 @@ fn sanitize_display(s: &str) -> String {
                     }
                 }
             }
-        } else if c >= ' ' || c == '\t' {
+        } else if c >= ' ' || c == '\t' || (allow_newlines && c == '\n') {
             result.push(c);
         }
         // Drop other control characters
@@ -1112,10 +1132,120 @@ fn render_session_inspect_human(value: &Value) -> String {
     out
 }
 
+fn render_exec_result_human(value: &Value) -> String {
+    use std::fmt::Write;
+
+    let mut out = String::new();
+    let shell = value
+        .get("shell_target")
+        .and_then(|v| v.as_str())
+        .or_else(|| value.pointer("/plan/shell").and_then(|v| v.as_str()))
+        .unwrap_or("bash");
+    let summary = value
+        .pointer("/plan/summary")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| value.get("text").and_then(|v| v.as_str()).unwrap_or(""));
+    let prerequisites = value
+        .pointer("/plan/prerequisites")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let risks = value
+        .pointer("/plan/risks")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let notes = value
+        .pointer("/plan/notes")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let commands = value
+        .pointer("/plan/commands")
+        .and_then(|v| v.as_array())
+        .map(|items| items.as_slice())
+        .unwrap_or(&[]);
+
+    let _ = writeln!(out, "Exec plan ({shell})");
+    if !summary.is_empty() {
+        let _ = writeln!(out, "  Summary:    {}", sanitize_display(summary));
+    }
+
+    if !prerequisites.is_empty() {
+        let _ = writeln!(out, "  Prerequisites:");
+        for item in prerequisites {
+            let _ = writeln!(out, "    - {}", sanitize_display(item));
+        }
+    }
+
+    if !risks.is_empty() {
+        let _ = writeln!(out, "  Risk warnings:");
+        for item in risks {
+            let _ = writeln!(out, "    - {}", sanitize_display(item));
+        }
+    }
+
+    if !commands.is_empty() {
+        let _ = writeln!(out, "  Commands:");
+        for command in commands {
+            let cmd = command
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let description = command
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !description.is_empty() {
+                let _ = writeln!(out, "    # {}", sanitize_display(description));
+            }
+            write_sanitized_multiline_block(&mut out, "    ", cmd.trim_end_matches('\n'));
+        }
+    }
+
+    if !notes.is_empty() {
+        let _ = writeln!(out, "  Notes:");
+        for item in notes {
+            let _ = writeln!(out, "    - {}", sanitize_display(item));
+        }
+    }
+
+    out
+}
+
+fn write_sanitized_multiline_block(out: &mut String, indent: &str, text: &str) {
+    use std::fmt::Write;
+
+    let sanitized = sanitize_multiline_display(text);
+    for line in sanitized.lines() {
+        let _ = writeln!(out, "{indent}{line}");
+    }
+
+    if sanitized.ends_with('\n') {
+        let _ = writeln!(out, "{indent}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        render_active_connections_human, render_doctor_human, render_session_inspect_human,
+        render_active_connections_human, render_doctor_human, render_exec_result_human,
+        render_session_inspect_human,
     };
     use crate::{DoctorCheck, DoctorEndpoint, DoctorReport, DoctorStatus};
     use serde_json::json;
@@ -1224,5 +1354,74 @@ mod tests {
         assert!(rendered.contains("Health:     healthy (42ms)"));
         assert!(rendered.contains("Forwards:   1"));
         assert!(rendered.contains("127.0.0.1:8080"));
+    }
+
+    #[test]
+    fn exec_renderer_includes_summary_commands_and_risks() {
+        let rendered = render_exec_result_human(&json!({
+            "shell_target": "bash",
+            "plan": {
+                "summary": "Rotate logs and keep seven archives.",
+                "prerequisites": ["logrotate installed"],
+                "risks": ["This overwrites existing rotated files."],
+                "commands": [
+                    {
+                        "command": "logrotate -f /etc/logrotate.d/app",
+                        "description": "Force a manual rotation"
+                    }
+                ],
+                "notes": ["Review the generated config before execution."]
+            }
+        }));
+
+        assert!(rendered.contains("Exec plan (bash)"));
+        assert!(rendered.contains("Rotate logs and keep seven archives."));
+        assert!(rendered.contains("Risk warnings:"));
+        assert!(rendered.contains("logrotate -f /etc/logrotate.d/app"));
+    }
+
+    #[test]
+    fn exec_renderer_preserves_multiline_command_blocks() {
+        let rendered = render_exec_result_human(&json!({
+            "shell_target": "bash",
+            "plan": {
+                "summary": "Create a script.",
+                "prerequisites": [],
+                "risks": [],
+                "commands": [
+                    {
+                        "command": "cat <<'EOF' > script.sh\necho first\necho second\nEOF",
+                        "description": "Write the script"
+                    }
+                ],
+                "notes": []
+            }
+        }));
+
+        assert!(
+            rendered.contains("cat <<'EOF' > script.sh\n    echo first\n    echo second\n    EOF")
+        );
+    }
+
+    #[test]
+    fn exec_renderer_drops_carriage_returns_from_multiline_commands() {
+        let rendered = render_exec_result_human(&json!({
+            "shell_target": "bash",
+            "plan": {
+                "summary": "Create a script.",
+                "prerequisites": [],
+                "risks": [],
+                "commands": [
+                    {
+                        "command": "printf 'safe'\rmalicious-overwrite",
+                        "description": "Render safely"
+                    }
+                ],
+                "notes": []
+            }
+        }));
+
+        assert!(!rendered.contains('\r'));
+        assert!(rendered.contains("printf 'safe'malicious-overwrite"));
     }
 }

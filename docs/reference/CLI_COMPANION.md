@@ -133,6 +133,10 @@
 ```json
 {
   "version": "0.21.0",
+  "cli_api": {
+    "version": 1,
+    "min_supported": 1
+  },
   "sessions": 5,
   "connections": {
     "ssh": 3,
@@ -174,6 +178,7 @@
 [
   {
     "id": "abc123...",
+    "connection_id": "conn-456...",
     "name": "prod-server",
     "host": "10.0.1.5",
     "state": "active",
@@ -548,23 +553,27 @@ oxt completions powershell
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `--json` | 自动检测 | 强制 JSON 输出（默认：管道时输出 JSON，终端时输出人类可读格式） |
+| `--quiet` | `false` | 抑制 stderr 上的人类提示性输出，适合脚本与 CI |
 | `--timeout <ms>` | `30000` | IPC 超时时间（毫秒） |
 | `--socket <path>` | 平台默认值 | 自定义 socket/管道路径（用于调试） |
 
-### 退出码（Phase 0 最小契约）
+### 退出码（Phase 2 契约）
 
-Phase 0 先固定最小退出码契约，后续阶段可以细化，但不能破坏下面三项：
+Phase 2 起，`oxt` 的退出码固定为下面 6 类：
 
-| 退出码 | 含义 | 当前来源 |
+| 退出码 | 含义 | 典型来源 |
 |---|---|---|
 | `0` | 成功执行，或正常显示 help/version | 正常命令路径、Clap help/version |
-| `1` | 命令运行期失败 | IPC 失败、兼容性错误、doctor 发现失败项、RPC 返回错误、目标不存在等 |
-| `2` | CLI 参数或用法错误 | Clap 参数解析失败、未知子命令、缺少必需参数 |
+| `1` | 一般运行期失败 | IPC 失败、doctor 发现失败项、未分类 RPC 错误 |
+| `2` | CLI 参数或用法错误 | Clap 参数解析失败、未知子命令、缺少必需参数、多目标但未指定 |
+| `3` | 超时 | `connect --wait` 等等待型命令超时、服务端超时信号 |
+| `4` | 目标不存在 | 连接/会话不存在、找不到健康跟踪器、无可附着目标 |
+| `5` | CLI API 兼容性失败 | GUI 未暴露兼容元数据、协议范围不重叠 |
 
 说明：
 
-1. Phase 0 只承诺这三个最小出口。
-2. 后续阶段若细化运行期错误码，只能在 `1` 的基础上拆分，不得改变 `0` 和 `2` 的含义。
+1. `0` 和 `2` 的含义保持不变。
+2. 所有 JSON 模式错误都会把同一份退出码写入错误对象，避免脚本同时解析 stderr 文本和进程退出状态。
 
 ### 输出模式
 
@@ -579,6 +588,38 @@ CLI 会自动检测 stdout 是否为终端：
 - **管道/重定向 或 `--raw`**：原始文本输出
 
 使用 `--json` 可强制始终输出 JSON。
+
+### 自动化语义（Phase 2）
+
+`oxt` 在适合脚本的命令上补充了稳定的轮询、等待和静默语义：
+
+| 语义 | 命令 | 说明 |
+|---|---|---|
+| `--watch` | `status`、`health` | 按固定间隔持续轮询并输出，每次输出一条完整记录；JSON 模式下每行一个 JSON 对象 |
+| `--interval <ms>` | `status --watch`、`health --watch`、`connect --wait` | 轮询间隔；`status/health` 默认 `2000`，`connect --wait` 默认 `500` |
+| `--wait` | `connect` | 在 GUI 发起连接后，继续轮询 `list_sessions`，直到新会话出现在活跃列表中 |
+| `--wait-timeout <ms>` | `connect --wait` | 等待新会话出现的最长时间，默认 `30000` |
+| `--quiet` | 全局 | 抑制版本兼容提示、自动选择提示等 stderr 文案，便于脚本只消费 stdout |
+
+### JSON 错误对象
+
+JSON 模式下，命令失败时 stdout 输出稳定错误对象：
+
+```json
+{
+  "error": {
+    "code": "timeout",
+    "message": "Timed out waiting for connection prod-server to appear in the active session list",
+    "exit_code": 3
+  }
+}
+```
+
+其中：
+
+1. `error.code` 是稳定的机器字段，如 `runtime_error`、`usage_error`、`timeout`、`not_found`、`compatibility_error`。
+2. `error.message` 面向人类阅读，但不应用作脚本唯一判定依据。
+3. `error.exit_code` 与进程真实退出码保持一致。
 
 ### 示例
 
@@ -600,6 +641,11 @@ OxideTerm v0.21.0
 $ oxt status --json
 {"version":"0.21.0","sessions":5,"connections":{"ssh":3,"local":2},"pid":12345}
 
+# 持续轮询状态（JSON 模式下一行一个对象）
+$ oxt status --json --watch --interval 1000
+{"version":"0.21.0","sessions":5,"connections":{"ssh":3,"local":2},"pid":12345}
+{"version":"0.21.0","sessions":6,"connections":{"ssh":4,"local":2},"pid":12345}
+
 # 在脚本中列出连接
 $ oxt list connections --json | jq '.[].host'
 "10.0.1.5"
@@ -613,6 +659,11 @@ $ oxt health
 
 # 在监控脚本中检查是否有不健康的会话
 $ oxt health --json | jq 'to_entries[] | select(.value.status != "healthy")'
+
+# 轮询单个会话健康状态
+$ oxt health abc123 --json --watch --interval 1000
+{"session_id":"abc123","status":"healthy","latency_ms":42,"message":"Connected • 42ms"}
+{"session_id":"abc123","status":"healthy","latency_ms":44,"message":"Connected • 44ms"}
 
 # 列出端口转发
 $ oxt list forwards
@@ -642,6 +693,13 @@ $ oxt completions zsh > ~/.zfunc/_oxt
 
 # 自定义超时时间
 $ oxt status --timeout 5000
+
+# 连接并等待新会话真正出现
+$ oxt connect prod-server --json --wait --wait-timeout 30000
+{"success":true,"connection_id":"conn-456...","name":"prod-server","waited":true,"session_id":"abc123...","session_state":"active"}
+
+# 静默模式适合脚本，避免兼容性提示污染 stderr
+$ oxt --quiet status --json
 
 # AI：流式 + Markdown 终端渲染
 $ oxt ask "explain pwd command"

@@ -27,6 +27,9 @@ Options:
       --json
           Force JSON output (default: auto-detect based on terminal/pipe)
 
+      --quiet
+          Suppress human-oriented notices and guidance on stderr
+
       --timeout <TIMEOUT>
           IPC timeout in milliseconds
           

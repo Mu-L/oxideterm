@@ -604,7 +604,15 @@ impl OutputMode {
                     .unwrap_or(false);
                 if success {
                     let name = value.get("name").and_then(|v| v.as_str()).unwrap_or("-");
-                    println!("Connecting to {}...", sanitize_display(name));
+                    if let Some(session_id) = value.get("session_id").and_then(|v| v.as_str()) {
+                        println!(
+                            "Connected to {} (session {})",
+                            sanitize_display(name),
+                            session_id
+                        );
+                    } else {
+                        println!("Connecting to {}...", sanitize_display(name));
+                    }
                 } else {
                     let error = value
                         .get("error")

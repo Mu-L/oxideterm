@@ -18,6 +18,97 @@ use clap_complete::Shell;
 
 const CLI_API_CURRENT_VERSION: u64 = 1;
 const CLI_API_MIN_SUPPORTED_VERSION: u64 = 1;
+const DEFAULT_WATCH_INTERVAL_MS: u64 = 2000;
+const DEFAULT_WAIT_INTERVAL_MS: u64 = 500;
+const DEFAULT_WAIT_TIMEOUT_MS: u64 = 30000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+enum ExitCode {
+    Success = 0,
+    Runtime = 1,
+    Usage = 2,
+    Timeout = 3,
+    NotFound = 4,
+    Compatibility = 5,
+}
+
+impl ExitCode {
+    fn as_i32(self) -> i32 {
+        self as i32
+    }
+}
+
+#[derive(Debug)]
+struct CliError {
+    code: &'static str,
+    message: String,
+    exit_code: ExitCode,
+}
+
+impl CliError {
+    fn runtime(message: impl Into<String>) -> Self {
+        Self {
+            code: "runtime_error",
+            message: message.into(),
+            exit_code: ExitCode::Runtime,
+        }
+    }
+
+    fn usage(message: impl Into<String>) -> Self {
+        Self {
+            code: "usage_error",
+            message: message.into(),
+            exit_code: ExitCode::Usage,
+        }
+    }
+
+    fn timeout(message: impl Into<String>) -> Self {
+        Self {
+            code: "timeout",
+            message: message.into(),
+            exit_code: ExitCode::Timeout,
+        }
+    }
+
+    fn not_found(message: impl Into<String>) -> Self {
+        Self {
+            code: "not_found",
+            message: message.into(),
+            exit_code: ExitCode::NotFound,
+        }
+    }
+
+    fn compatibility(message: impl Into<String>) -> Self {
+        Self {
+            code: "compatibility_error",
+            message: message.into(),
+            exit_code: ExitCode::Compatibility,
+        }
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "error": {
+                "code": self.code,
+                "message": self.message,
+                "exit_code": self.exit_code.as_i32(),
+            }
+        })
+    }
+}
+
+impl From<String> for CliError {
+    fn from(message: String) -> Self {
+        classify_error_message(message)
+    }
+}
+
+impl From<&str> for CliError {
+    fn from(message: &str) -> Self {
+        classify_error_message(message.to_string())
+    }
+}
 
 struct CompatibilityReport {
     status: serde_json::Value,
@@ -111,6 +202,10 @@ struct Cli {
     #[arg(long, global = true)]
     json: bool,
 
+    /// Suppress human-oriented notices and guidance on stderr
+    #[arg(long, global = true)]
+    quiet: bool,
+
     /// IPC timeout in milliseconds
     #[arg(long, global = true, default_value = "30000")]
     timeout: u64,
@@ -126,7 +221,15 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Show OxideTerm status
-    Status,
+    Status {
+        /// Keep polling and printing status updates until interrupted
+        #[arg(long)]
+        watch: bool,
+
+        /// Polling interval in milliseconds when --watch is enabled
+        #[arg(long, default_value_t = DEFAULT_WATCH_INTERVAL_MS, value_parser = clap::value_parser!(u64).range(1..))]
+        interval: u64,
+    },
 
     /// List resources
     List {
@@ -138,6 +241,14 @@ enum Commands {
     Health {
         /// Session ID (omit to show all)
         session_id: Option<String>,
+
+        /// Keep polling and printing health updates until interrupted
+        #[arg(long)]
+        watch: bool,
+
+        /// Polling interval in milliseconds when --watch is enabled
+        #[arg(long, default_value_t = DEFAULT_WATCH_INTERVAL_MS, value_parser = clap::value_parser!(u64).range(1..))]
+        interval: u64,
     },
 
     /// Disconnect a session
@@ -212,6 +323,18 @@ enum Commands {
     Connect {
         /// Connection name, host, or ID
         target: String,
+
+        /// Wait until the resulting session appears in the session list
+        #[arg(long)]
+        wait: bool,
+
+        /// Polling interval in milliseconds when --wait is enabled
+        #[arg(long, default_value_t = DEFAULT_WAIT_INTERVAL_MS, value_parser = clap::value_parser!(u64).range(1..))]
+        interval: u64,
+
+        /// Maximum time to wait for the session to appear, in milliseconds
+        #[arg(long = "wait-timeout", default_value_t = DEFAULT_WAIT_TIMEOUT_MS, value_parser = clap::value_parser!(u64).range(1..))]
+        wait_timeout: u64,
     },
 
     /// Open a new local terminal tab
@@ -379,37 +502,43 @@ fn main() {
 
     match result {
         Ok(code) => {
-            if code != 0 {
-                std::process::exit(code);
+            if code != ExitCode::Success {
+                std::process::exit(code.as_i32());
             }
         }
-        Err(e) => {
+        Err(error) => {
             if out.is_json() {
-                let err = serde_json::json!({ "error": e });
-                eprintln!("{}", serde_json::to_string(&err).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string(&error.to_json()).unwrap_or_default()
+                );
             } else {
-                eprintln!("error: {e}");
+                eprintln!("error: {}", error.message);
             }
-            std::process::exit(1);
+            std::process::exit(error.exit_code.as_i32());
         }
     }
 }
 
-fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
+fn run(cli: &Cli, out: &output::OutputMode) -> Result<ExitCode, CliError> {
     // Commands that don't need IPC
     match &cli.command {
         Commands::Version => {
             out.print_version();
-            return Ok(0);
+            return Ok(ExitCode::Success);
         }
         Commands::Completions { shell } => {
             clap_complete::generate(*shell, &mut Cli::command(), "oxt", &mut std::io::stdout());
-            return Ok(0);
+            return Ok(ExitCode::Success);
         }
         Commands::Doctor => {
             let report = build_doctor_report(cli);
             out.print_doctor(&report);
-            return Ok(if report.ok { 0 } else { 1 });
+            return Ok(if report.ok {
+                ExitCode::Success
+            } else {
+                ExitCode::Runtime
+            });
         }
         _ => {}
     }
@@ -418,32 +547,39 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
     let compatibility = fetch_compatibility_report(&mut conn)?;
 
     match &cli.command {
-        Commands::Status => {
-            out.print_status(&compatibility.status);
-            emit_compatibility_notice(
-                out,
-                compatibility
-                    .error
-                    .as_deref()
-                    .or(compatibility.warning.as_deref()),
-            );
+        Commands::Status { watch, interval } => {
+            if *watch {
+                watch_status(&mut conn, out, cli.quiet, compatibility, *interval)?;
+            } else {
+                out.print_status(&compatibility.status);
+                emit_compatibility_notice(
+                    out,
+                    cli.quiet,
+                    compatibility
+                        .error
+                        .as_deref()
+                        .or(compatibility.warning.as_deref()),
+                );
+            }
         }
         Commands::List { what } => match what {
             _ if compatibility.error.is_some() => {
-                return Err(compatibility.error.unwrap_or_default())
+                return Err(CliError::compatibility(
+                    compatibility.error.unwrap_or_default(),
+                ));
             }
             ListTarget::Connections => {
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let resp = conn.call("list_saved_connections", serde_json::json!({}))?;
                 out.print_connections(&resp);
             }
             ListTarget::Sessions => {
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let resp = conn.call("list_sessions", serde_json::json!({}))?;
                 out.print_sessions(&resp);
             }
             ListTarget::Forwards { session_id } => {
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let params = match session_id {
                     Some(id) => serde_json::json!({ "session_id": id }),
                     None => serde_json::json!({}),
@@ -452,19 +588,27 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
                 out.print_forwards(&resp);
             }
         },
-        Commands::Health { session_id } => {
+        Commands::Health {
+            session_id,
+            watch,
+            interval,
+        } => {
             return_if_incompatible(&compatibility)?;
-            emit_compatibility_notice(out, compatibility.warning.as_deref());
-            let params = match session_id {
-                Some(id) => serde_json::json!({ "session_id": id }),
-                None => serde_json::json!({}),
-            };
-            let resp = conn.call("health", params)?;
-            out.print_health(&resp, session_id.is_some());
+            emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
+            if *watch {
+                watch_health(&mut conn, out, session_id.as_deref(), *interval)?;
+            } else {
+                let params = match session_id {
+                    Some(id) => serde_json::json!({ "session_id": id }),
+                    None => serde_json::json!({}),
+                };
+                let resp = conn.call("health", params)?;
+                out.print_health(&resp, session_id.is_some());
+            }
         }
         Commands::Disconnect { target } => {
             return_if_incompatible(&compatibility)?;
-            emit_compatibility_notice(out, compatibility.warning.as_deref());
+            emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
             let resp = conn.call("disconnect", serde_json::json!({ "target": target }))?;
             out.print_disconnect(&resp);
         }
@@ -476,7 +620,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
                 description,
             } => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let (bind_address, bind_port, target_host, target_port) =
                     parse_forward_spec(spec, r#type)?;
 
@@ -502,7 +646,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
                 session,
             } => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let session_id = resolve_session_id(&mut conn, session)?;
                 let resp = conn.call(
                     "delete_forward",
@@ -517,13 +661,13 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
         Commands::Config { action } => match action {
             ConfigAction::List => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let resp = conn.call("config_list", serde_json::json!({}))?;
                 out.print_config_list(&resp);
             }
             ConfigAction::Get { name } => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let resp = conn.call("config_get", serde_json::json!({ "name": name }))?;
                 out.print_config_get(&resp);
             }
@@ -538,10 +682,12 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
             r#continue: continue_id,
         } => {
             return_if_incompatible(&compatibility)?;
-            emit_compatibility_notice(out, compatibility.warning.as_deref());
+            emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
             let prompt_text = prompt.join(" ");
             if prompt_text.is_empty() && is_terminal_stdin() {
-                return Err("No prompt provided. Usage: oxt ask \"your question\"".to_string());
+                return Err(CliError::usage(
+                    "No prompt provided. Usage: oxt ask \"your question\"",
+                ));
             }
 
             // Read stdin if piped
@@ -588,7 +734,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
                 } else {
                     out.print_ai_response(&resp);
                 }
-                print_conversation_id(&resp);
+                print_conversation_id(&resp, cli.quiet);
             } else {
                 let mut accumulated = String::new();
                 let resp = conn.call_streaming("ask", params, |text| {
@@ -605,7 +751,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
                 } else {
                     println!();
                 }
-                print_conversation_id(&resp);
+                print_conversation_id(&resp, cli.quiet);
             }
         }
         Commands::Exec {
@@ -615,10 +761,12 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
             provider,
         } => {
             return_if_incompatible(&compatibility)?;
-            emit_compatibility_notice(out, compatibility.warning.as_deref());
+            emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
             let prompt_text = prompt.join(" ");
             if prompt_text.is_empty() && is_terminal_stdin() {
-                return Err("No prompt provided. Usage: oxt exec \"generate a script\"".to_string());
+                return Err(CliError::usage(
+                    "No prompt provided. Usage: oxt exec \"generate a script\"",
+                ));
             }
 
             let context = if !is_terminal_stdin() {
@@ -653,16 +801,26 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
             })?;
             println!();
         }
-        Commands::Connect { target } => {
+        Commands::Connect {
+            target,
+            wait,
+            interval,
+            wait_timeout,
+        } => {
             return_if_incompatible(&compatibility)?;
-            emit_compatibility_notice(out, compatibility.warning.as_deref());
+            emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
             let resp = conn.call("connect", serde_json::json!({ "target": target }))?;
-            out.print_connect_result(&resp);
+            let final_resp = if *wait {
+                wait_for_connected_session(&mut conn, &resp, *interval, *wait_timeout)?
+            } else {
+                resp
+            };
+            out.print_connect_result(&final_resp);
         }
         Commands::Sftp { action } => match action {
             SftpAction::Ls { session, path } => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let session_id = resolve_session_id(&mut conn, session)?;
                 let params = serde_json::json!({
                     "session_id": session_id,
@@ -677,7 +835,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
                 local,
             } => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let session_id = resolve_session_id(&mut conn, session)?;
                 // Default local path: filename in current directory
                 let local_path = local.clone().unwrap_or_else(|| {
@@ -700,7 +858,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
                 remote,
             } => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let session_id = resolve_session_id(&mut conn, session)?;
                 let params = serde_json::json!({
                     "session_id": session_id,
@@ -714,13 +872,13 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
         Commands::Import { action } => match action {
             ImportAction::List => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 let resp = conn.call("import_list", serde_json::json!({}))?;
                 out.print_import_list(&resp);
             }
             ImportAction::Add { aliases, all } => {
                 return_if_incompatible(&compatibility)?;
-                emit_compatibility_notice(out, compatibility.warning.as_deref());
+                emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
                 // If --all, first fetch available hosts and use all non-imported aliases
                 let aliases_to_import = if *all {
                     let hosts = conn.call("import_list", serde_json::json!({}))?;
@@ -740,11 +898,15 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
 
                 if aliases_to_import.is_empty() {
                     if *all {
-                        eprintln!("All hosts are already imported.");
+                        if !cli.quiet {
+                            eprintln!("All hosts are already imported.");
+                        }
                     } else {
-                        return Err("No aliases specified. Usage: oxt import add <alias1> <alias2> ... or --all".to_string());
+                        return Err(CliError::usage(
+                            "No aliases specified. Usage: oxt import add <alias1> <alias2> ... or --all",
+                        ));
                     }
-                    return Ok(0);
+                    return Ok(ExitCode::Success);
                 }
 
                 let resp = conn.call(
@@ -756,7 +918,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
         },
         Commands::Open { path } => {
             return_if_incompatible(&compatibility)?;
-            emit_compatibility_notice(out, compatibility.warning.as_deref());
+            emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
             let dir = path.clone().unwrap_or_else(|| {
                 std::env::current_dir()
                     .map(|p| p.to_string_lossy().to_string())
@@ -767,7 +929,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
         }
         Commands::Focus { target } => {
             return_if_incompatible(&compatibility)?;
-            emit_compatibility_notice(out, compatibility.warning.as_deref());
+            emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
             match target {
                 Some(t) => {
                     let resp = conn.call("focus_tab", serde_json::json!({ "target": t }))?;
@@ -787,8 +949,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
 
                     match total {
                         0 => {
-                            eprintln!("No active tabs to focus.");
-                            std::process::exit(1);
+                            return Err(CliError::not_found("No active tabs to focus."));
                         }
                         1 => {
                             // Auto-focus the single tab
@@ -804,24 +965,30 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
                                     l.get("shell_name").and_then(|v| v.as_str()).unwrap_or("?"),
                                 )
                             };
-                            eprintln!("Auto-focusing: {label}");
+                            if should_emit_human_guidance(out, cli.quiet) {
+                                eprintln!("Auto-focusing: {label}");
+                            }
                             let resp =
                                 conn.call("focus_tab", serde_json::json!({ "target": id }))?;
                             out.print_json(&resp);
                         }
                         _ => {
-                            eprintln!("Multiple active tabs — specify a target:\n");
-                            if !ssh_items.is_empty() {
-                                eprintln!("  SSH Sessions:");
-                                out.print_sessions(&sessions);
+                            if should_emit_human_guidance(out, cli.quiet) {
+                                eprintln!("Multiple active tabs — specify a target:\n");
+                                if !ssh_items.is_empty() {
+                                    eprintln!("  SSH Sessions:");
+                                    out.print_sessions(&sessions);
+                                }
+                                if !local_items.is_empty() {
+                                    eprintln!("\n  Local Terminals:");
+                                    out.print_local_terminals(&locals);
+                                }
+                                eprintln!("\nUsage: oxt focus <NAME-OR-ID>");
+                                eprintln!("  Matches: session name/ID, shell name, or tab title");
                             }
-                            if !local_items.is_empty() {
-                                eprintln!("\n  Local Terminals:");
-                                out.print_local_terminals(&locals);
-                            }
-                            eprintln!("\nUsage: oxt focus <NAME-OR-ID>");
-                            eprintln!("  Matches: session name/ID, shell name, or tab title");
-                            std::process::exit(1);
+                            return Err(CliError::usage(
+                                "Multiple active tabs — specify a target.",
+                            ));
                         }
                     }
                 }
@@ -830,6 +997,7 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
         Commands::Ping => {
             emit_compatibility_notice(
                 out,
+                cli.quiet,
                 compatibility
                     .error
                     .as_deref()
@@ -840,14 +1008,14 @@ fn run(cli: &Cli, out: &output::OutputMode) -> Result<i32, String> {
         }
         Commands::Attach { target } => {
             return_if_incompatible(&compatibility)?;
-            emit_compatibility_notice(out, compatibility.warning.as_deref());
-            run_attach(&mut conn, out, target.as_deref())?;
-            return Ok(0);
+            emit_compatibility_notice(out, cli.quiet, compatibility.warning.as_deref());
+            run_attach(&mut conn, out, target.as_deref(), cli.quiet)?;
+            return Ok(ExitCode::Success);
         }
         Commands::Version | Commands::Completions { .. } | Commands::Doctor => unreachable!(),
     }
 
-    Ok(0)
+    Ok(ExitCode::Success)
 }
 
 fn build_doctor_report(cli: &Cli) -> DoctorReport {
@@ -1420,9 +1588,59 @@ fn find_command_in_path(binary_name: &str) -> Result<Option<PathCandidate>, Stri
 
 fn fetch_compatibility_report(
     conn: &mut connect::IpcConnection,
-) -> Result<CompatibilityReport, String> {
+) -> Result<CompatibilityReport, CliError> {
     let status = conn.call("status", serde_json::json!({}))?;
     Ok(check_compatibility(status))
+}
+
+fn classify_error_message(message: String) -> CliError {
+    let message_lower = message.to_ascii_lowercase();
+
+    if message.contains("CLI API mismatch")
+        || message.contains("does not expose CLI API compatibility metadata")
+    {
+        return CliError::compatibility(message);
+    }
+    if message_lower.contains("timed out")
+        || message_lower.contains("timeout")
+        || message.contains("[1003]")
+    {
+        return CliError::timeout(message);
+    }
+    if message_lower.contains("connection not found:")
+        || message_lower.contains("session not found:")
+        || message_lower.contains("no health tracker for session:")
+        || message.starts_with("No active tabs to focus.")
+        || message.starts_with("No active sessions to attach to.")
+    {
+        return CliError::not_found(message);
+    }
+    if message.starts_with("No prompt provided.")
+        || message.starts_with("No aliases specified.")
+        || message.starts_with("Multiple active tabs")
+        || message.starts_with("Forward spec:")
+        || message.starts_with("Dynamic forward spec:")
+        || message.starts_with("Invalid ")
+        || message.starts_with("Unclosed bracket")
+    {
+        return CliError::usage(message);
+    }
+    CliError::runtime(message)
+}
+
+fn compatibility_notice_text(
+    out: &output::OutputMode,
+    quiet: bool,
+    message: Option<&str>,
+) -> Option<String> {
+    if !should_emit_human_guidance(out, quiet) {
+        return None;
+    }
+    message.map(str::to_string)
+}
+
+fn should_emit_human_guidance(out: &output::OutputMode, quiet: bool) -> bool {
+    !out.is_json() && !quiet
 }
 
 fn check_compatibility(status: serde_json::Value) -> CompatibilityReport {
@@ -1496,19 +1714,121 @@ fn protocol_ranges_overlap(
     client_min <= server_max && server_min <= client_max
 }
 
-fn return_if_incompatible(report: &CompatibilityReport) -> Result<(), String> {
+fn return_if_incompatible(report: &CompatibilityReport) -> Result<(), CliError> {
     if let Some(error) = &report.error {
-        return Err(error.clone());
+        return Err(CliError::compatibility(error.clone()));
     }
     Ok(())
 }
 
-fn emit_compatibility_notice(out: &output::OutputMode, message: Option<&str>) {
-    if out.is_json() {
-        return;
-    }
-    if let Some(message) = message {
+fn emit_compatibility_notice(out: &output::OutputMode, quiet: bool, message: Option<&str>) {
+    if let Some(message) = compatibility_notice_text(out, quiet, message) {
         eprintln!("warning: {message}");
+    }
+}
+
+fn watch_status(
+    conn: &mut connect::IpcConnection,
+    out: &output::OutputMode,
+    quiet: bool,
+    first_report: CompatibilityReport,
+    interval_ms: u64,
+) -> Result<(), CliError> {
+    let mut report = first_report;
+    let mut first_iteration = true;
+
+    loop {
+        if !first_iteration && !out.is_json() {
+            println!();
+        }
+        out.print_status(&report.status);
+        if first_iteration {
+            emit_compatibility_notice(
+                out,
+                quiet,
+                report.error.as_deref().or(report.warning.as_deref()),
+            );
+        }
+
+        sleep_poll_interval(interval_ms);
+        report = fetch_compatibility_report(conn)?;
+        first_iteration = false;
+    }
+}
+
+fn watch_health(
+    conn: &mut connect::IpcConnection,
+    out: &output::OutputMode,
+    session_id: Option<&str>,
+    interval_ms: u64,
+) -> Result<(), CliError> {
+    let mut first_iteration = true;
+    loop {
+        let params = match session_id {
+            Some(id) => serde_json::json!({ "session_id": id }),
+            None => serde_json::json!({}),
+        };
+        let resp = conn.call("health", params)?;
+        if !first_iteration && !out.is_json() {
+            println!();
+        }
+        out.print_health(&resp, session_id.is_some());
+
+        sleep_poll_interval(interval_ms);
+        first_iteration = false;
+    }
+}
+
+fn sleep_poll_interval(interval_ms: u64) {
+    std::thread::sleep(std::time::Duration::from_millis(interval_ms));
+}
+
+fn wait_for_connected_session(
+    conn: &mut connect::IpcConnection,
+    connect_response: &serde_json::Value,
+    interval_ms: u64,
+    wait_timeout_ms: u64,
+) -> Result<serde_json::Value, CliError> {
+    let connection_id = connect_response
+        .get("connection_id")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| CliError::runtime("Connect response did not include connection_id"))?;
+    let connection_name = connect_response
+        .get("name")
+        .and_then(|value| value.as_str())
+        .unwrap_or(connection_id);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(wait_timeout_ms);
+
+    loop {
+        let sessions = conn.call("list_sessions", serde_json::json!({}))?;
+        let items = sessions
+            .as_array()
+            .ok_or_else(|| CliError::runtime("Invalid session list from server"))?;
+
+        if let Some(session) = items.iter().find(|session| {
+            session
+                .get("connection_id")
+                .and_then(|value| value.as_str())
+                == Some(connection_id)
+        }) {
+            let mut result = connect_response.clone();
+            result["waited"] = serde_json::json!(true);
+            if let Some(session_id) = session.get("id") {
+                result["session_id"] = session_id.clone();
+            }
+            if let Some(state) = session.get("state") {
+                result["session_state"] = state.clone();
+            }
+            return Ok(result);
+        }
+
+        if std::time::Instant::now() >= deadline {
+            return Err(CliError::timeout(format!(
+                "Timed out waiting for connection {connection_name} to appear in the active session list"
+            )));
+        }
+
+        sleep_poll_interval(interval_ms);
     }
 }
 
@@ -1685,7 +2005,10 @@ fn render_markdown(text: &str) {
 }
 
 /// Print the conversation ID from the response for `--continue` use.
-fn print_conversation_id(resp: &serde_json::Value) {
+fn print_conversation_id(resp: &serde_json::Value, quiet: bool) {
+    if quiet {
+        return;
+    }
     if let Some(cid) = resp.get("conversation_id").and_then(|v| v.as_str()) {
         eprintln!("\n\x1b[2mConversation: {cid}\x1b[0m");
         eprintln!("\x1b[2mContinue with: oxt ask --continue {cid} \"your follow-up\"\x1b[0m");
@@ -1740,7 +2063,8 @@ fn run_attach(
     conn: &mut connect::IpcConnection,
     out: &output::OutputMode,
     target: Option<&str>,
-) -> Result<(), String> {
+    quiet: bool,
+) -> Result<(), CliError> {
     // If no target, list available sessions
     let session_id = match target {
         Some(t) => resolve_any_session_id(conn, t)?,
@@ -1756,7 +2080,7 @@ fn run_attach(
             let total = ssh_items.len() + local_items.len();
 
             if total == 0 {
-                return Err("No active sessions to attach to.".to_string());
+                return Err(CliError::not_found("No active sessions to attach to."));
             }
             if total == 1 {
                 let id = if let Some(s) = ssh_items.first() {
@@ -1767,20 +2091,26 @@ fn run_attach(
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                 };
-                eprintln!("Auto-attaching to only session: {id}");
+                if should_emit_human_guidance(out, quiet) {
+                    eprintln!("Auto-attaching to only session: {id}");
+                }
                 id.to_string()
             } else {
-                eprintln!("Multiple active sessions — specify a target:\n");
-                if !ssh_items.is_empty() {
-                    eprintln!("  SSH Sessions:");
-                    out.print_sessions(&sessions);
+                if should_emit_human_guidance(out, quiet) {
+                    eprintln!("Multiple active sessions — specify a target:\n");
+                    if !ssh_items.is_empty() {
+                        eprintln!("  SSH Sessions:");
+                        out.print_sessions(&sessions);
+                    }
+                    if !local_items.is_empty() {
+                        eprintln!("\n  Local Terminals:");
+                        out.print_local_terminals(&locals);
+                    }
+                    eprintln!("\nUsage: oxt attach <SESSION-ID-OR-NAME>");
                 }
-                if !local_items.is_empty() {
-                    eprintln!("\n  Local Terminals:");
-                    out.print_local_terminals(&locals);
-                }
-                eprintln!("\nUsage: oxt attach <SESSION-ID-OR-NAME>");
-                std::process::exit(1);
+                return Err(CliError::usage(
+                    "Multiple active sessions — specify a target.",
+                ));
             }
         }
     };
@@ -1791,11 +2121,11 @@ fn run_attach(
     let ws_url = resp
         .get("ws_url")
         .and_then(|v| v.as_str())
-        .ok_or("Missing ws_url in response")?;
+        .ok_or_else(|| CliError::runtime("Missing ws_url in response"))?;
     let ws_token = resp
         .get("ws_token")
         .and_then(|v| v.as_str())
-        .ok_or("Missing ws_token in response")?;
+        .ok_or_else(|| CliError::runtime("Missing ws_token in response"))?;
     let terminal_type = resp
         .get("terminal_type")
         .and_then(|v| v.as_str())
@@ -1803,10 +2133,12 @@ fn run_attach(
     let cols = resp.get("cols").and_then(|v| v.as_u64()).unwrap_or(80) as u16;
     let rows = resp.get("rows").and_then(|v| v.as_u64()).unwrap_or(24) as u16;
 
-    eprintln!(
-        "Attaching to {} session {} ({}x{}) — type ~? for help, ~. to detach",
-        terminal_type, session_id, cols, rows
-    );
+    if should_emit_human_guidance(out, quiet) {
+        eprintln!(
+            "Attaching to {} session {} ({}x{}) — type ~? for help, ~. to detach",
+            terminal_type, session_id, cols, rows
+        );
+    }
 
     // Connect WebSocket. Use a short read timeout so ws.read() returns
     // WouldBlock quickly when no data is available, keeping the event
@@ -1867,7 +2199,7 @@ fn run_attach(
         // Set up SIGWINCH pipe for resize notifications
         let mut sigwinch_fds = [0i32; 2];
         if unsafe { libc::pipe(sigwinch_fds.as_mut_ptr()) } != 0 {
-            return Err("Failed to create SIGWINCH pipe".to_string());
+            return Err(CliError::runtime("Failed to create SIGWINCH pipe"));
         }
         let sigwinch_read_fd = sigwinch_fds[0];
         let sigwinch_write_fd = sigwinch_fds[1];
@@ -2132,7 +2464,7 @@ fn run_attach(
 
             match stdin_rx.recv_timeout(std::time::Duration::from_millis(10)) {
                 Ok(WindowsStdinEvent::Closed) => break,
-                Ok(WindowsStdinEvent::Error(err)) => return Err(err),
+                Ok(WindowsStdinEvent::Error(err)) => return Err(err.into()),
                 Ok(WindowsStdinEvent::Bytes(buf)) => {
                     let mut to_send = Vec::new();
                     for byte in buf {
@@ -2178,9 +2510,11 @@ fn run_attach(
 mod tests {
     use super::{
         build_compatibility_check, build_endpoint_ownership_check, build_path_check,
-        check_compatibility, protocol_ranges_overlap, read_stdin_from_reader, Cli, DoctorStatus,
+        check_compatibility, classify_error_message, compatibility_notice_text,
+        protocol_ranges_overlap, read_stdin_from_reader, should_emit_human_guidance, Cli,
+        DoctorStatus, ExitCode,
     };
-    use crate::connect;
+    use crate::{connect, output::OutputMode};
     use clap::CommandFactory;
     use std::io::Cursor;
     use std::sync::Mutex;
@@ -2245,6 +2579,30 @@ mod tests {
         assert_eq!(
             normalize_help(&render_help(&["doctor"])),
             normalize_help(include_str!("../tests/snapshots/oxt-doctor-help.txt"))
+        );
+    }
+
+    #[test]
+    fn status_help_matches_snapshot() {
+        assert_eq!(
+            normalize_help(&render_help(&["status"])),
+            normalize_help(include_str!("../tests/snapshots/oxt-status-help.txt"))
+        );
+    }
+
+    #[test]
+    fn health_help_matches_snapshot() {
+        assert_eq!(
+            normalize_help(&render_help(&["health"])),
+            normalize_help(include_str!("../tests/snapshots/oxt-health-help.txt"))
+        );
+    }
+
+    #[test]
+    fn connect_help_matches_snapshot() {
+        assert_eq!(
+            normalize_help(&render_help(&["connect"])),
+            normalize_help(include_str!("../tests/snapshots/oxt-connect-help.txt"))
         );
     }
 
@@ -2405,6 +2763,40 @@ mod tests {
 
         assert_eq!(check.status, DoctorStatus::Warn);
         assert!(check.summary.contains("broken symlink"));
+    }
+
+    #[test]
+    fn compatibility_notice_text_respects_json_and_quiet() {
+        assert_eq!(
+            compatibility_notice_text(&OutputMode::Human, false, Some("version mismatch")),
+            Some("version mismatch".to_string())
+        );
+        assert_eq!(
+            compatibility_notice_text(&OutputMode::Human, true, Some("version mismatch")),
+            None
+        );
+        assert_eq!(
+            compatibility_notice_text(&OutputMode::Json, false, Some("version mismatch")),
+            None
+        );
+    }
+
+    #[test]
+    fn should_emit_human_guidance_respects_json_and_quiet() {
+        assert!(should_emit_human_guidance(&OutputMode::Human, false));
+        assert!(!should_emit_human_guidance(&OutputMode::Human, true));
+        assert!(!should_emit_human_guidance(&OutputMode::Json, false));
+    }
+
+    #[test]
+    fn classify_error_message_maps_timeout_and_not_found() {
+        let timeout = classify_error_message("Timed out waiting for session to appear".to_string());
+        assert_eq!(timeout.code, "timeout");
+        assert_eq!(timeout.exit_code, ExitCode::Timeout);
+
+        let not_found = classify_error_message("Connection not found: prod".to_string());
+        assert_eq!(not_found.code, "not_found");
+        assert_eq!(not_found.exit_code, ExitCode::NotFound);
     }
 
     #[test]

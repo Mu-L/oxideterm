@@ -159,6 +159,8 @@
       "osc52_clipboard_hint": "Remote-Programme (tmux, vim) dürfen über OSC 52 Escape-Sequenz in die System-Zwischenablage schreiben",
       "smart_copy": "Smartes Strg+C-Kopieren",
       "smart_copy_hint": "Unter Windows und Linux kopiert Strg+C die aktuelle Auswahl und sendet nur dann SIGINT, wenn nichts ausgewählt ist",
+      "selection_requires_shift": "Shift zum Auswählen von Text erforderlich",
+      "selection_requires_shift_hint": "Wenn aktiviert, bleibt die Terminalinteraktion bei normalem Ziehen erhalten und nur Shift + Ziehen startet eine Textauswahl",
       "buffer": "Puffer",
       "scrollback": "Scrollback-Zeilen",
       "scrollback_hint": "Anzahl der im Speicher für Scrollen gehaltenen Zeilen",

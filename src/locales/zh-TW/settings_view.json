@@ -159,6 +159,8 @@
       "osc52_clipboard_hint": "允許遠端程式（tmux、vim）透過 OSC 52 跳脫序列寫入系統剪貼簿",
       "smart_copy": "智慧 Ctrl+C 複製",
       "smart_copy_hint": "在 Windows 和 Linux 上，Ctrl+C 會複製目前選取內容，只有在未選取任何內容時才送出 SIGINT",
+      "selection_requires_shift": "按住 Shift 才能選取文字",
+      "selection_requires_shift_hint": "啟用後，普通拖曳會優先保留終端互動；只有 Shift + 拖曳才會開始文字選取",
       "buffer": "緩衝區",
       "scrollback": "捲動緩衝區行數",
       "scrollback_hint": "保存在記憶體中供捲動的行數",

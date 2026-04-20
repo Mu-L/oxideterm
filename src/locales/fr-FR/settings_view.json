@@ -159,6 +159,8 @@
       "osc52_clipboard_hint": "Autoriser les programmes distants (tmux, vim) à écrire dans le presse-papiers système via la séquence d'échappement OSC 52",
       "smart_copy": "Copie intelligente avec Ctrl+C",
       "smart_copy_hint": "Sous Windows et Linux, Ctrl+C copie la sélection actuelle et n'envoie SIGINT que si rien n'est sélectionné",
+      "selection_requires_shift": "Exiger Maj pour sélectionner du texte",
+      "selection_requires_shift_hint": "Lorsqu'elle est activée, un glisser simple préserve l'interaction du terminal et seul Maj + glisser démarre une sélection de texte",
       "buffer": "Tampon",
       "scrollback": "Lignes de défilement",
       "scrollback_hint": "Nombre de lignes conservées en mémoire pour le défilement",

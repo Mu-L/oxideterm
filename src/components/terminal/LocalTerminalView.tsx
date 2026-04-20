@@ -63,6 +63,7 @@ import {
   getHighlightRulesSignature,
   markRuntimeDisabledHighlightRules,
 } from '../../lib/terminal/runtimeDisabledHighlightRules';
+import { installShiftSelectionGuard, type SelectionGestureController } from '../../lib/terminalSelectionGesture';
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
 import type { HighlightRule } from '../../types';
@@ -95,6 +96,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const imageAddonRef = useRef<ImageAddon | null>(null);
   const clipboardAddonRef = useRef<{ dispose: () => void } | null>(null);
+  const selectionGestureRef = useRef<SelectionGestureController | null>(null);
   const smartCopyDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const highlightEngineRef = useRef<HighlightEngine | null>(null);
   const runtimeDisabledHighlightRulesRef = useRef<Map<string, string>>(new Map());
@@ -649,6 +651,10 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     };
 
     term.open(containerRef.current);
+    selectionGestureRef.current = installShiftSelectionGuard(
+      term,
+      () => useSettingsStore.getState().settings.terminal.selectionRequiresShift,
+    );
 
     // Force xterm DOM elements transparent for bg image
     if (hasBgImage) {
@@ -855,6 +861,11 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         clipboardAddonRef.current = null;
       }
 
+      if (selectionGestureRef.current) {
+        selectionGestureRef.current.dispose();
+        selectionGestureRef.current = null;
+      }
+
       if (smartCopyDisposableRef.current) {
         try {
           smartCopyDisposableRef.current.dispose();
@@ -948,6 +959,10 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       console.debug(`[LocalTerminalView] Unmount cleanup for ${sessionId} (PTY kept alive)`);
     };
   }, [sessionId]); // Only remount on session change — bg image is handled dynamically
+
+  useEffect(() => {
+    selectionGestureRef.current?.refresh();
+  }, [terminalSettings.selectionRequiresShift]);
 
   // Listen for terminal data events from backend
   useEffect(() => {

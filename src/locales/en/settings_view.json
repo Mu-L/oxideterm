@@ -157,6 +157,8 @@
       "paste_protection_hint": "Confirm before pasting multi-line content to prevent accidental command execution",
       "osc52_clipboard": "OSC 52 Clipboard",
       "osc52_clipboard_hint": "Allow remote programs (tmux, vim) to write to system clipboard via OSC 52 escape sequence",
+      "selection_requires_shift": "Require Shift to Select Text",
+      "selection_requires_shift_hint": "When enabled, plain drag keeps terminal interaction intact and only Shift + drag starts a text selection",
       "smart_copy": "Smart Ctrl+C Copy",
       "smart_copy_hint": "On Windows and Linux, copy the current selection with Ctrl+C and only send SIGINT when nothing is selected",
       "buffer": "Buffer",

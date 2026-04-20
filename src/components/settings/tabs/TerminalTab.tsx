@@ -257,6 +257,13 @@ export const TerminalTab = ({ terminal, updateTerminal }: TerminalTabProps) => {
                         <Checkbox id="smart-copy" checked={terminal.smartCopy} onCheckedChange={(checked) => updateTerminal('smartCopy', checked as boolean)} />
                     </div>
                 )}
+                <div className="flex items-center justify-between mt-4">
+                    <div>
+                        <Label className="text-theme-text">{t('settings_view.terminal.selection_requires_shift')}</Label>
+                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.selection_requires_shift_hint')}</p>
+                    </div>
+                    <Checkbox id="selection-requires-shift" checked={terminal.selectionRequiresShift} onCheckedChange={(checked) => updateTerminal('selectionRequiresShift', checked as boolean)} />
+                </div>
             </div>
 
             <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">

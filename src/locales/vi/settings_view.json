@@ -159,6 +159,8 @@
       "osc52_clipboard_hint": "Cho phép các chương trình từ xa (tmux, vim) ghi vào clipboard hệ thống qua chuỗi escape OSC 52",
       "smart_copy": "Sao chép Ctrl+C thông minh",
       "smart_copy_hint": "Trên Windows và Linux, Ctrl+C sẽ sao chép vùng chọn hiện tại và chỉ gửi SIGINT khi không có gì được chọn",
+      "selection_requires_shift": "Yêu cầu giữ Shift để chọn văn bản",
+      "selection_requires_shift_hint": "Khi bật, thao tác kéo thông thường vẫn giữ nguyên tương tác với terminal và chỉ Shift + kéo mới bắt đầu chọn văn bản",
       "buffer": "Buffer",
       "scrollback": "Dòng cuộn lại",
       "scrollback_hint": "Số dòng được giữ trong bộ nhớ để cuộn",

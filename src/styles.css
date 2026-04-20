@@ -184,6 +184,15 @@
   --theme-selection: rgba(234, 88, 12, 0.25);
 }
 
+.xterm.oxide-selection-requires-shift,
+.xterm.oxide-selection-requires-shift .xterm-screen,
+.xterm.oxide-selection-requires-shift .xterm-screen canvas,
+.xterm.oxide-selection-requires-shift .xterm-rows,
+.xterm.oxide-selection-requires-shift .xterm-rows * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
 /* Neutral Theme (Default) */
 [data-theme="neutral"] {
   --theme-bg: #09090b;

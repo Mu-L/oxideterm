@@ -207,6 +207,32 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().settings.terminal.osc52Clipboard).toBe(true);
   });
 
+  it('defaults selectionRequiresShift to false when the persisted terminal settings omit it', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      terminal: { theme: 'default', renderer: 'auto' },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+
+    expect(useSettingsStore.getState().settings.terminal.selectionRequiresShift).toBe(false);
+  });
+
+  it('preserves an explicit selectionRequiresShift setting on load and update', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      terminal: { theme: 'default', renderer: 'auto', selectionRequiresShift: true },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+
+    expect(useSettingsStore.getState().settings.terminal.selectionRequiresShift).toBe(true);
+
+    useSettingsStore.getState().updateTerminal('selectionRequiresShift', false);
+
+    expect(useSettingsStore.getState().settings.terminal.selectionRequiresShift).toBe(false);
+    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    expect(persisted.terminal.selectionRequiresShift).toBe(false);
+  });
+
   it('sanitizes persisted terminal highlight rules on load', async () => {
     localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
       terminal: {

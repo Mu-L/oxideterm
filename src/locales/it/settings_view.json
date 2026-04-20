@@ -159,6 +159,8 @@
       "osc52_clipboard_hint": "Consenti ai programmi remoti (tmux, vim) di scrivere negli appunti di sistema tramite sequenza di escape OSC 52",
       "smart_copy": "Copia intelligente con Ctrl+C",
       "smart_copy_hint": "Su Windows e Linux, Ctrl+C copia la selezione corrente e invia SIGINT solo quando non c'è nulla di selezionato",
+      "selection_requires_shift": "Richiedi Shift per selezionare il testo",
+      "selection_requires_shift_hint": "Quando è abilitato, il trascinamento normale mantiene intatta l'interazione del terminale e solo Shift + trascinamento avvia una selezione di testo",
       "buffer": "Buffer",
       "scrollback": "Linee Scrollback",
       "scrollback_hint": "Numero di linee mantenute in memoria per lo scorrimento",

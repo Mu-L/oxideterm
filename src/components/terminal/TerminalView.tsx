@@ -73,6 +73,7 @@ import {
   getHighlightRulesSignature,
   markRuntimeDisabledHighlightRules,
 } from '../../lib/terminal/runtimeDisabledHighlightRules';
+import { installShiftSelectionGuard, type SelectionGestureController } from '../../lib/terminalSelectionGesture';
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
 import { HistorySearchMatch, TerminalHistorySearchProgress, type HighlightRule } from '../../types';
@@ -134,6 +135,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const imageAddonRef = useRef<ImageAddon | null>(null);
   const clipboardAddonRef = useRef<{ dispose: () => void } | null>(null);
+  const selectionGestureRef = useRef<SelectionGestureController | null>(null);
   const rendererAddonRef = useRef<{ dispose: () => void } | null>(null);
   const rendererSuspendedRef = useRef(false);
   const rendererTransitionTokenRef = useRef(0);
@@ -1221,6 +1223,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     loadRenderer();
 
     term.open(containerRef.current);
+    selectionGestureRef.current = installShiftSelectionGuard(
+      term,
+      () => useSettingsStore.getState().settings.terminal.selectionRequiresShift,
+    );
 
     // Force xterm internal DOM elements transparent when bg image is set.
     if (hasBgImage) {
@@ -1746,6 +1752,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           clipboardAddonRef.current = null;
         }
 
+        if (selectionGestureRef.current) {
+          selectionGestureRef.current.dispose();
+          selectionGestureRef.current = null;
+        }
+
         if (smartCopyDisposableRef.current) {
           try {
             smartCopyDisposableRef.current.dispose();
@@ -1828,6 +1839,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         terminalRef.current = null;
     };
   }, [sessionId, syncRemotePtySize]); // Only remount on session change — bg image is handled dynamically
+
+  useEffect(() => {
+    selectionGestureRef.current?.refresh();
+  }, [terminalSettings.selectionRequiresShift]);
 
   // Listen for AI insert command events (only when this terminal is active and connected)
   useEffect(() => {

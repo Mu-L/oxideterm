@@ -2,6 +2,12 @@ import { TextProgressBar } from '@/lib/terminal/trzsz/upstream/progress';
 import { TrzszTransfer } from '@/lib/terminal/trzsz/upstream/transfer';
 import type { TrzszOptions } from '@/lib/terminal/trzsz/upstream/options';
 import {
+  isTrzszCancelledError,
+  type TrzszTransferDirection,
+  type TrzszTransferEvent,
+  type TrzszTransferPolicy,
+} from '@/lib/terminal/trzsz/types';
+import {
   checkDuplicateNames,
   formatSavedFiles,
   isArrayOfType,
@@ -79,14 +85,16 @@ export class TrzszFilter {
   private readonly writeToTerminal: (output: string | ArrayBuffer | Uint8Array | Blob) => void;
   private readonly sendToServer: (input: string | Uint8Array) => void;
   private readonly chooseSendFiles: (directory?: boolean) => Promise<string[] | undefined>;
-  private readonly buildFileReaders: (paths: string[], directory: boolean) => Promise<TrzszFileReader[] | undefined>;
+  private readonly buildFileReaders: (paths: string[], directory: boolean, policy: TrzszTransferPolicy) => Promise<TrzszFileReader[] | undefined>;
   private readonly chooseSaveDirectory: NonNullable<TrzszOptions['chooseSaveDirectory']>;
-  private readonly openSaveFile: NonNullable<TrzszOptions['openSaveFile']>;
+  private readonly createOpenSaveFile: NonNullable<TrzszOptions['createOpenSaveFile']>;
+  private readonly getTransferPolicy: NonNullable<TrzszOptions['getTransferPolicy']>;
+  private readonly onTransferEvent?: (event: TrzszTransferEvent) => void;
   private readonly terminalColumnsDefault: number;
   private readonly isWindowsShell: boolean;
   private readonly dragInitTimeout: number;
-  private readonly maxDataChunkSize?: number;
   private trzszTransfer: TrzszTransfer | null = null;
+  private suppressCancelledEvent = false;
   private textProgressBar: TextProgressBar | null = null;
   private uniqueIdMaps = new Map<string, number>();
   private uploadFilesList: TrzszFileReader[] | null = null;
@@ -118,8 +126,11 @@ export class TrzszFilter {
     if (!options.chooseSaveDirectory) {
       throw new TrzszError('TrzszOptions.chooseSaveDirectory is required');
     }
-    if (!options.openSaveFile) {
-      throw new TrzszError('TrzszOptions.openSaveFile is required');
+    if (!options.createOpenSaveFile) {
+      throw new TrzszError('TrzszOptions.createOpenSaveFile is required');
+    }
+    if (!options.getTransferPolicy) {
+      throw new TrzszError('TrzszOptions.getTransferPolicy is required');
     }
 
     this.writeToTerminal = options.writeToTerminal;
@@ -127,12 +138,13 @@ export class TrzszFilter {
     this.chooseSendFiles = options.chooseSendFiles;
     this.buildFileReaders = options.buildFileReaders;
     this.chooseSaveDirectory = options.chooseSaveDirectory;
-    this.openSaveFile = options.openSaveFile;
+    this.createOpenSaveFile = options.createOpenSaveFile;
+    this.getTransferPolicy = options.getTransferPolicy;
+    this.onTransferEvent = options.onTransferEvent;
     this.terminalColumnsDefault = options.terminalColumns || 80;
     this.terminalColumns = this.terminalColumnsDefault;
     this.isWindowsShell = options.isWindowsShell === true;
     this.dragInitTimeout = options.dragInitTimeout || 3000;
-    this.maxDataChunkSize = options.maxDataChunkSize;
   }
 
   processServerOutput(output: string | ArrayBuffer | Uint8Array | Blob): void {
@@ -210,11 +222,16 @@ export class TrzszFilter {
     return this.trzszTransfer !== null;
   }
 
+  private emitTransferEvent(event: TrzszTransferEvent): void {
+    this.onTransferEvent?.(event);
+  }
+
   async dispose(): Promise<void> {
     this.disposed = true;
     this.clearPendingTimers();
 
     if (this.trzszTransfer) {
+      this.suppressCancelledEvent = true;
       await this.trzszTransfer.stopTransferring();
     }
 
@@ -240,7 +257,7 @@ export class TrzszFilter {
       throw new Error('The upload items type is not supported');
     }
 
-    this.uploadFilesList = (await this.buildFileReaders(items as string[], true)) ?? null;
+    this.uploadFilesList = (await this.buildFileReaders(items as string[], true, this.getTransferPolicy())) ?? null;
     if (!this.uploadFilesList || this.uploadFilesList.length === 0) {
       this.uploadFilesList = null;
       throw new Error('No files to upload');
@@ -322,6 +339,9 @@ export class TrzszFilter {
     const mode = found[1];
     const version = found[2];
     const remoteIsWindows = uniqueId === ':1' || (uniqueId.length === 14 && uniqueId.endsWith('10'));
+    const direction: TrzszTransferDirection = mode === 'S' ? 'download' : 'upload';
+    let selection: 'file' | 'directory' = mode === 'D' ? 'directory' : 'file';
+    const policy = this.getTransferPolicy();
 
     try {
       if (this.disposed) {
@@ -330,19 +350,28 @@ export class TrzszFilter {
 
       this.handshakeLocked = true;
       this.detectTail = new Uint8Array(0);
-      this.trzszTransfer = new TrzszTransfer(this.sendToServer, this.isWindowsShell, this.maxDataChunkSize);
+      this.trzszTransfer = new TrzszTransfer(this.sendToServer, this.isWindowsShell, policy.maxChunkBytes);
       if (mode === 'S') {
-        await this.handleTrzszDownloadFiles(version, remoteIsWindows);
+        selection = await this.handleTrzszDownloadFiles(version, remoteIsWindows, policy);
       } else if (mode === 'R') {
-        await this.handleTrzszUploadFiles(version, false, remoteIsWindows);
+        await this.handleTrzszUploadFiles(version, false, remoteIsWindows, policy);
       } else if (mode === 'D') {
-        await this.handleTrzszUploadFiles(version, true, remoteIsWindows);
+        await this.handleTrzszUploadFiles(version, true, remoteIsWindows, policy);
       }
       this.uploadFilesResolve?.();
+      this.emitTransferEvent({ type: 'completed', direction, selection });
     } catch (error) {
       await this.trzszTransfer?.clientError(error instanceof Error ? error : new Error(String(error)));
       this.uploadFilesReject?.(error);
+      if (isTrzszCancelledError(error)) {
+        if (!this.suppressCancelledEvent) {
+          this.emitTransferEvent({ type: 'cancelled', direction, selection });
+        }
+      } else {
+        this.emitTransferEvent({ type: 'failed', direction, selection, error });
+      }
     } finally {
+      this.suppressCancelledEvent = false;
       this.handshakeLocked = false;
       this.uploadFilesResolve = null;
       this.uploadFilesReject = null;
@@ -363,39 +392,63 @@ export class TrzszFilter {
     this.textProgressBar.hideCursor();
   }
 
-  private async handleTrzszDownloadFiles(_version: string, remoteIsWindows: boolean): Promise<void> {
+  private async handleTrzszDownloadFiles(
+    _version: string,
+    remoteIsWindows: boolean,
+    policy: TrzszTransferPolicy,
+  ): Promise<'file' | 'directory'> {
+    this.emitTransferEvent({ type: 'prompt', direction: 'download', selection: 'directory' });
     const saveRoot = await this.chooseSaveDirectory();
     if (!saveRoot) {
       await this.trzszTransfer?.sendAction(false, remoteIsWindows);
-      return;
+      throw new TrzszError('Stopped');
     }
 
     await this.trzszTransfer?.sendAction(true, remoteIsWindows);
     const config = await this.trzszTransfer?.recvConfig();
+    const selection: 'file' | 'directory' = config?.directory === true ? 'directory' : 'file';
+    if (selection === 'directory' && !policy.allowDirectory) {
+      throw new TrzszError('Directory transfer is disabled', 'directory_not_allowed');
+    }
     this.createProgressBar(config?.quiet === true, typeof config?.tmux_pane_width === 'number' ? config.tmux_pane_width : undefined);
-    const localNames = await this.trzszTransfer?.recvFiles(saveRoot, this.openSaveFile, this.textProgressBar ?? null);
+    const localNames = await this.trzszTransfer?.recvFiles(
+      saveRoot,
+      this.createOpenSaveFile(policy),
+      this.textProgressBar ?? null,
+    );
     await this.trzszTransfer?.clientExit(formatSavedFiles(localNames ?? [], saveRoot.rootPath));
+    return selection;
   }
 
   private async handleTrzszUploadFiles(
     _version: string,
     directory: boolean,
     remoteIsWindows: boolean,
+    policy: TrzszTransferPolicy,
   ): Promise<void> {
     let sendFiles: TrzszFileReader[] | undefined;
     if (this.uploadFilesList) {
       sendFiles = this.uploadFilesList;
       this.uploadFilesList = null;
     } else {
+      if (directory && !policy.allowDirectory) {
+        throw new TrzszError('Directory transfer is disabled', 'directory_not_allowed');
+      }
+
+      this.emitTransferEvent({
+        type: 'prompt',
+        direction: 'upload',
+        selection: directory ? 'directory' : 'file',
+      });
       const filePaths = await this.chooseSendFiles(directory);
       if (filePaths) {
-        sendFiles = await this.buildFileReaders(filePaths, directory);
+        sendFiles = await this.buildFileReaders(filePaths, directory, policy);
       }
     }
 
     if (!sendFiles || sendFiles.length === 0) {
       await this.trzszTransfer?.sendAction(false, remoteIsWindows);
-      return;
+      throw new TrzszError('Stopped');
     }
 
     await this.trzszTransfer?.sendAction(true, remoteIsWindows);

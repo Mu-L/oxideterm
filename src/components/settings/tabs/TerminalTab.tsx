@@ -43,6 +43,20 @@ const getPreviewFontFamily = (terminal: TerminalSettings) => {
 
 export const TerminalTab = ({ terminal, updateTerminal }: TerminalTabProps) => {
     const { t } = useTranslation();
+    const parseIntegerInput = (value: string, fallback: number) => {
+        const parsed = parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    const updateInBandTransfer = <K extends keyof TerminalSettings['inBandTransfer']>(
+        key: K,
+        value: TerminalSettings['inBandTransfer'][K],
+    ) => {
+        updateTerminal('inBandTransfer', {
+            ...terminal.inBandTransfer,
+            [key]: value,
+        });
+    };
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -277,6 +291,92 @@ export const TerminalTab = ({ terminal, updateTerminal }: TerminalTabProps) => {
                         <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.selection_requires_shift_hint')}</p>
                     </div>
                     <Checkbox id="selection-requires-shift" checked={terminal.selectionRequiresShift} onCheckedChange={(checked) => updateTerminal('selectionRequiresShift', checked as boolean)} />
+                </div>
+            </div>
+
+            <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
+                <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.terminal.in_band_transfer.title')}</h4>
+                <div className="space-y-5">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <Label className="text-theme-text">{t('settings_view.terminal.in_band_transfer.enabled')}</Label>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.in_band_transfer.enabled_hint')}</p>
+                        </div>
+                        <Checkbox
+                            id="in-band-transfer-enabled"
+                            checked={terminal.inBandTransfer.enabled}
+                            onCheckedChange={(checked) => updateInBandTransfer('enabled', checked as boolean)}
+                        />
+                    </div>
+
+                    <Separator className="opacity-50" />
+
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <Label className="text-theme-text">{t('settings_view.terminal.in_band_transfer.allow_directory')}</Label>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.in_band_transfer.allow_directory_hint')}</p>
+                        </div>
+                        <Checkbox
+                            id="in-band-transfer-allow-directory"
+                            checked={terminal.inBandTransfer.allowDirectory}
+                            onCheckedChange={(checked) => updateInBandTransfer('allowDirectory', checked as boolean)}
+                        />
+                    </div>
+
+                    <Separator className="opacity-50" />
+
+                    <div className="flex items-center justify-between gap-6">
+                        <div>
+                            <Label className="text-theme-text">{t('settings_view.terminal.in_band_transfer.max_chunk_bytes')}</Label>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.in_band_transfer.max_chunk_bytes_hint')}</p>
+                        </div>
+                        <Input
+                            type="number"
+                            min={1024}
+                            step={1024}
+                            value={terminal.inBandTransfer.maxChunkBytes}
+                            onChange={(event) => updateInBandTransfer('maxChunkBytes', parseIntegerInput(event.target.value, terminal.inBandTransfer.maxChunkBytes))}
+                            className="w-32"
+                        />
+                    </div>
+
+                    <Separator className="opacity-50" />
+
+                    <div className="flex items-center justify-between gap-6">
+                        <div>
+                            <Label className="text-theme-text">{t('settings_view.terminal.in_band_transfer.max_file_count')}</Label>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.in_band_transfer.max_file_count_hint')}</p>
+                        </div>
+                        <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={terminal.inBandTransfer.maxFileCount}
+                            onChange={(event) => updateInBandTransfer('maxFileCount', parseIntegerInput(event.target.value, terminal.inBandTransfer.maxFileCount))}
+                            className="w-32"
+                        />
+                    </div>
+
+                    <Separator className="opacity-50" />
+
+                    <div className="flex items-center justify-between gap-6">
+                        <div>
+                            <Label className="text-theme-text">{t('settings_view.terminal.in_band_transfer.max_total_bytes')}</Label>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.in_band_transfer.max_total_bytes_hint')}</p>
+                        </div>
+                        <Input
+                            type="number"
+                            min={1024}
+                            step={1024}
+                            value={terminal.inBandTransfer.maxTotalBytes}
+                            onChange={(event) => updateInBandTransfer('maxTotalBytes', parseIntegerInput(event.target.value, terminal.inBandTransfer.maxTotalBytes))}
+                            className="w-40"
+                        />
+                    </div>
+
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-theme-text-muted">
+                        {t('settings_view.terminal.in_band_transfer.runtime_note')}
+                    </div>
                 </div>
             </div>
 

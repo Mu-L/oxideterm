@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTauriOpenSaveFile } from '@/lib/terminal/trzsz/TauriFileWriter';
-import type { TrzszSaveRoot } from '@/lib/terminal/trzsz/types';
+import type { TrzszSaveRoot, TrzszTransferPolicy } from '@/lib/terminal/trzsz/types';
 
 const apiMock = vi.hoisted(() => ({
   trzszOpenSaveFile: vi.fn(),
@@ -23,6 +23,16 @@ function createSaveRoot(): TrzszSaveRoot {
     rootPath: '/downloads',
     displayName: 'Downloads',
     maps: new Map(),
+  };
+}
+
+function createPolicy(overrides: Partial<TrzszTransferPolicy> = {}): TrzszTransferPolicy {
+  return {
+    allowDirectory: true,
+    maxChunkBytes: 1024 * 1024,
+    maxFileCount: 1024,
+    maxTotalBytes: 10 * 1024 * 1024 * 1024,
+    ...overrides,
   };
 }
 
@@ -360,5 +370,58 @@ describe('TauriFileWriter', () => {
       true,
     );
     expect(writer.getLocalName()).toBe('folder.0');
+  });
+
+  it('rejects directory downloads when directory transfer is disabled', async () => {
+    const openSaveFile = createTauriOpenSaveFile('owner-1', createPolicy({ allowDirectory: false }));
+
+    await expect(
+      openSaveFile(
+        createSaveRoot(),
+        JSON.stringify({
+          path_id: 15,
+          path_name: ['folder'],
+          is_dir: true,
+        }),
+        true,
+        false,
+      ),
+    ).rejects.toMatchObject({ code: 'directory_not_allowed' });
+  });
+
+  it('rejects downloads that exceed the configured file count limit', async () => {
+    apiMock.trzszOpenSaveFile
+      .mockResolvedValueOnce({
+        writerId: 'writer-limit-1',
+        localName: 'a.txt',
+        displayName: 'a.txt',
+        tempPath: '/tmp/a.part',
+        finalPath: '/downloads/a.txt',
+      });
+
+    const openSaveFile = createTauriOpenSaveFile('owner-1', createPolicy({ maxFileCount: 1 }));
+    await openSaveFile(createSaveRoot(), 'a.txt', false, false);
+
+    await expect(openSaveFile(createSaveRoot(), 'b.txt', false, false)).rejects.toMatchObject({
+      code: 'max_file_count_exceeded',
+    });
+  });
+
+  it('rejects download chunks that exceed the configured total byte limit', async () => {
+    apiMock.trzszOpenSaveFile.mockResolvedValue({
+      writerId: 'writer-bytes-1',
+      localName: 'file.txt',
+      displayName: 'file.txt',
+      tempPath: '/tmp/file.part',
+      finalPath: '/downloads/file.txt',
+    });
+
+    const openSaveFile = createTauriOpenSaveFile('owner-1', createPolicy({ maxTotalBytes: 4 }));
+    const writer = await openSaveFile(createSaveRoot(), 'file.txt', false, false);
+
+    await expect(writer.writeFile?.(new Uint8Array([1, 2, 3, 4, 5]))).rejects.toMatchObject({
+      code: 'max_total_bytes_exceeded',
+    });
+    expect(apiMock.trzszWriteDownloadChunk).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ import {
 } from '@/lib/terminal/trzsz/capabilities';
 import { TrzszController } from '@/lib/terminal/trzsz/controller';
 import type { RemoteTerminalTransport } from '@/lib/terminal/trzsz/transport';
+import type { InBandTransferSettings } from '@/store/settingsStore';
 
 vi.mock('@/lib/terminal/trzsz/dialogs', () => ({
   chooseSendEntries: vi.fn(),
@@ -17,6 +18,19 @@ vi.mock('@/lib/api', () => ({
     trzszPrepareDownloadRoot: vi.fn(async (_ownerId: string, rootPath: string) => ({ rootPath })),
   },
 }));
+
+vi.mock('@/lib/terminal/trzsz/notifications', () => ({
+  notifyTrzszTransferEvent: vi.fn(),
+}));
+
+const transferSettings: InBandTransferSettings = {
+  enabled: true,
+  provider: 'trzsz',
+  allowDirectory: true,
+  maxChunkBytes: 1024 * 1024,
+  maxFileCount: 1024,
+  maxTotalBytes: 10 * 1024 * 1024 * 1024,
+};
 
 function createTransportMock(): RemoteTerminalTransport {
   return {
@@ -52,6 +66,7 @@ describe('TrzszController', () => {
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
       cleanupOwner,
+      transferSettings,
     });
 
     controller.processServerOutput(new Uint8Array([0x61, 0x62]));
@@ -84,6 +99,7 @@ describe('TrzszController', () => {
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
       cleanupOwner,
+      transferSettings,
     });
 
     controller.stop();
@@ -117,6 +133,7 @@ describe('TrzszController', () => {
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
       cleanupOwner,
+      transferSettings,
     });
 
     controller.stop();
@@ -149,6 +166,7 @@ describe('TrzszController', () => {
       writeServerOutput,
       loadCapabilities: async () => available,
       cleanupOwner,
+      transferSettings,
     });
 
     await flushMicrotasks();
@@ -173,6 +191,7 @@ describe('TrzszController', () => {
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
       cleanupOwner,
+      transferSettings,
     });
 
     controller.processServerOutput(
@@ -202,6 +221,7 @@ describe('TrzszController', () => {
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
       cleanupOwner,
+      transferSettings,
     });
 
     controller.processServerOutput(new TextEncoder().encode('::TRZSZ:TRANS'));
@@ -229,6 +249,7 @@ describe('TrzszController', () => {
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
       cleanupOwner,
+      transferSettings,
     });
 
     controller.processServerOutput(new TextEncoder().encode('::TRZSZ:TRANS'));
@@ -238,6 +259,10 @@ describe('TrzszController', () => {
     await vi.runAllTimersAsync();
     await flushMicrotasks();
 
-    expect(transport.sendRawInput).toHaveBeenCalledTimes(1);
+    expect(transport.sendRawInput).toHaveBeenCalledTimes(2);
+    const actionFrames = vi.mocked(transport.sendRawInput).mock.calls.filter(
+      ([payload]) => typeof payload === 'string' && payload.startsWith('#ACT:'),
+    );
+    expect(actionFrames).toHaveLength(1);
   });
 });

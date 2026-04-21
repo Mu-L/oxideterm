@@ -48,11 +48,64 @@ export type TrzszDirectoryEntry = {
   isDir: boolean;
 };
 
+export type TrzszTransferDirection = 'upload' | 'download';
+
+export type TrzszTransferSelection = 'file' | 'directory';
+
+export type TrzszTransferPolicy = {
+  allowDirectory: boolean;
+  maxChunkBytes: number;
+  maxFileCount: number;
+  maxTotalBytes: number;
+};
+
+export type TrzszTransferEvent =
+  | {
+      type: 'prompt';
+      direction: TrzszTransferDirection;
+      selection: TrzszTransferSelection;
+    }
+  | {
+      type: 'cancelled';
+      direction: TrzszTransferDirection;
+      selection: TrzszTransferSelection;
+    }
+  | {
+      type: 'completed';
+      direction: TrzszTransferDirection;
+      selection: TrzszTransferSelection;
+    }
+  | {
+      type: 'failed';
+      direction: TrzszTransferDirection;
+      selection: TrzszTransferSelection;
+      error: unknown;
+    }
+  | {
+      type: 'connection_lost';
+    }
+  | {
+      type: 'partial_cleanup';
+    };
+
 export type TrzszInvokeError = {
   code?: string;
   message?: string;
   detail?: string | null;
 };
+
+export class TrzszClientError extends Error {
+  readonly code: string;
+  readonly detail: string | null;
+
+  constructor(code: string, message: string, detail?: string | null) {
+    super(message);
+    Object.setPrototypeOf(this, TrzszClientError.prototype);
+    this.name = 'TrzszClientError';
+    this.code = code;
+    this.detail = detail ?? null;
+  }
+}
 
 export function normalizeTrzszDialogSelection(
   selection: string | string[] | null | undefined,
@@ -105,6 +158,30 @@ export function getTrzszErrorMessage(error: unknown): string {
   }
 
   return String(error);
+}
+
+export function getTrzszErrorDetail(error: unknown): string | undefined {
+  if (error && typeof error === 'object' && 'detail' in error) {
+    const detail = (error as TrzszInvokeError).detail;
+    return typeof detail === 'string' && detail.length > 0 ? detail : undefined;
+  }
+
+  return undefined;
+}
+
+export function isTrzszCancelledError(error: unknown): boolean {
+  const code = getTrzszErrorCode(error);
+  if (code === 'user_cancelled') {
+    return true;
+  }
+
+  if (error instanceof Error) {
+    return error.message === 'Stopped'
+      || error.message === 'Interrupted'
+      || error.message === 'Stopped and deleted';
+  }
+
+  return false;
 }
 
 export function parseTrzszDirectoryEntry(raw: string): TrzszDirectoryEntry {

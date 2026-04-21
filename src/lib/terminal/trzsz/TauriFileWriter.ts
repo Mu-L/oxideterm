@@ -2,11 +2,13 @@ import { api } from '@/lib/api';
 import { TrzszError } from '@/lib/terminal/trzsz/upstream/comm';
 import type { OpenSaveFile, TrzszFileWriter } from '@/lib/terminal/trzsz/upstream/comm';
 import {
+  TrzszClientError,
   getTrzszErrorMessage,
   isTrzszErrorCode,
   parseTrzszDirectoryEntry,
   type TrzszDirectoryEntry,
   type TrzszSaveRoot,
+  type TrzszTransferPolicy,
 } from '@/lib/terminal/trzsz/types';
 
 function joinRelPath(pathName: string[]): string {
@@ -96,6 +98,7 @@ class TauriDownloadFileWriter implements TrzszFileWriter {
     private readonly fileName: string,
     private readonly localName: string,
     private readonly cleanupDirectories: string[],
+    private readonly constraintTracker: DownloadConstraintTracker,
   ) {}
 
   getFileName(): string {
@@ -115,6 +118,7 @@ class TauriDownloadFileWriter implements TrzszFileWriter {
       throw new TrzszError(`Download writer is no longer active: ${this.fileName}`);
     }
 
+    this.constraintTracker.consumeBytes(buffer.length);
     await api.trzszWriteDownloadChunk(this.ownerId, this.writerId, buffer);
   }
 
@@ -170,6 +174,49 @@ class TauriDownloadFileWriter implements TrzszFileWriter {
   }
 }
 
+class DownloadConstraintTracker {
+  private fileCount = 0;
+  private totalBytes = 0;
+
+  constructor(private readonly policy: TrzszTransferPolicy) {}
+
+  ensureDirectoryAllowed(): void {
+    if (!this.policy.allowDirectory) {
+      throw new TrzszClientError(
+        'directory_not_allowed',
+        'Directory transfer is disabled by terminal settings.',
+      );
+    }
+  }
+
+  assertCanAddFile(): void {
+    if (this.fileCount + 1 > this.policy.maxFileCount) {
+      throw new TrzszClientError(
+        'max_file_count_exceeded',
+        `Transfer exceeds the current file limit of ${this.policy.maxFileCount}.`,
+        `selected=${this.fileCount + 1}, max=${this.policy.maxFileCount}`,
+      );
+    }
+  }
+
+  commitFile(): void {
+    this.fileCount += 1;
+  }
+
+  consumeBytes(bytes: number): void {
+    const nextTotal = this.totalBytes + bytes;
+    if (nextTotal > this.policy.maxTotalBytes) {
+      throw new TrzszClientError(
+        'max_total_bytes_exceeded',
+        `Transfer exceeds the current total size limit of ${this.policy.maxTotalBytes} bytes.`,
+        `received=${nextTotal}, max=${this.policy.maxTotalBytes}`,
+      );
+    }
+
+    this.totalBytes = nextTotal;
+  }
+}
+
 async function ensureDownloadDirectory(
   ownerId: string,
   rootPath: string,
@@ -188,13 +235,16 @@ async function openFlatSaveFile(
   saveRoot: TrzszSaveRoot,
   fileName: string,
   overwrite: boolean,
+  constraintTracker: DownloadConstraintTracker,
 ): Promise<TrzszFileWriter> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 1000; attempt += 1) {
     const candidateName = overwrite ? fileName : nextCollisionName(fileName, attempt);
 
     try {
+      constraintTracker.assertCanAddFile();
       const dto = await api.trzszOpenSaveFile(ownerId, saveRoot.rootPath, candidateName, false, overwrite);
+      constraintTracker.commitFile();
       return new TauriDownloadFileWriter(
         ownerId,
         dto.writerId,
@@ -203,6 +253,7 @@ async function openFlatSaveFile(
         fileName,
         dto.localName,
         [],
+        constraintTracker,
       );
     } catch (error) {
       lastError = error;
@@ -221,6 +272,7 @@ async function openDirectorySaveEntry(
   saveRoot: TrzszSaveRoot,
   entry: TrzszDirectoryEntry,
   overwrite: boolean,
+  constraintTracker: DownloadConstraintTracker,
 ): Promise<TrzszFileWriter> {
   const existingLocalName = overwrite ? entry.pathName[0] : saveRoot.maps.get(entry.pathId);
   const restPath = entry.pathName.slice(1);
@@ -228,6 +280,10 @@ async function openDirectorySaveEntry(
   const tryOpenWithRoot = async (localRoot: string, claimTopLevel: boolean): Promise<TrzszFileWriter> => {
     const cleanupDirectories: string[] = [];
     try {
+      if (entry.isDir || restPath.length > 0) {
+        constraintTracker.ensureDirectoryAllowed();
+      }
+
       if (claimTopLevel && (entry.isDir || restPath.length > 0)) {
         await ensureDownloadDirectory(ownerId, saveRoot.rootPath, localRoot, cleanupDirectories, !overwrite);
       }
@@ -248,12 +304,15 @@ async function openDirectorySaveEntry(
         );
       }
 
+      constraintTracker.assertCanAddFile();
+
       for (let index = 0; index < restPath.length - 1; index += 1) {
         const directoryPath = joinRelPath([localRoot, ...restPath.slice(0, index + 1)]);
         await ensureDownloadDirectory(ownerId, saveRoot.rootPath, directoryPath, cleanupDirectories);
       }
 
       const dto = await api.trzszOpenSaveFile(ownerId, saveRoot.rootPath, relativePath, false, overwrite);
+      constraintTracker.commitFile();
       return new TauriDownloadFileWriter(
         ownerId,
         dto.writerId,
@@ -262,6 +321,7 @@ async function openDirectorySaveEntry(
         entry.pathName[entry.pathName.length - 1],
         localRoot,
         cleanupDirectories,
+        constraintTracker,
       );
     } catch (error) {
       for (let index = cleanupDirectories.length - 1; index >= 0; index -= 1) {
@@ -298,13 +358,28 @@ async function openDirectorySaveEntry(
   throw new TrzszError(getTrzszErrorMessage(lastError));
 }
 
-export function createTauriOpenSaveFile(ownerId: string): OpenSaveFile {
+export function createTauriOpenSaveFile(
+  ownerId: string,
+  policy: TrzszTransferPolicy = {
+    allowDirectory: true,
+    maxChunkBytes: 1024 * 1024,
+    maxFileCount: 1024,
+    maxTotalBytes: 10 * 1024 * 1024 * 1024,
+  },
+): OpenSaveFile {
+  const constraintTracker = new DownloadConstraintTracker(policy);
   return async (saveParam, fileName, directory, overwrite) => {
     const saveRoot = saveParam as TrzszSaveRoot;
     if (!directory) {
-      return openFlatSaveFile(ownerId, saveRoot, fileName, overwrite);
+      return openFlatSaveFile(ownerId, saveRoot, fileName, overwrite, constraintTracker);
     }
 
-    return openDirectorySaveEntry(ownerId, saveRoot, parseTrzszDirectoryEntry(fileName), overwrite);
+    return openDirectorySaveEntry(
+      ownerId,
+      saveRoot,
+      parseTrzszDirectoryEntry(fileName),
+      overwrite,
+      constraintTracker,
+    );
   };
 }

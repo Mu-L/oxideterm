@@ -48,6 +48,12 @@ const TERMINAL_SCROLLBACK_MIN = 500;
 const TERMINAL_SCROLLBACK_MAX = 20_000;
 const BACKEND_HOT_BUFFER_MIN = 5_000;
 const BACKEND_HOT_BUFFER_MAX = 12_000;
+const IN_BAND_TRANSFER_CHUNK_MIN = 64 * 1024;
+const IN_BAND_TRANSFER_CHUNK_MAX = 8 * 1024 * 1024;
+const IN_BAND_TRANSFER_FILE_COUNT_MIN = 1;
+const IN_BAND_TRANSFER_FILE_COUNT_MAX = 10_000;
+const IN_BAND_TRANSFER_TOTAL_BYTES_MIN = 100 * 1024 * 1024;
+const IN_BAND_TRANSFER_TOTAL_BYTES_MAX = 100 * 1024 * 1024 * 1024;
 
 function clampTerminalScrollback(scrollback: number): number {
   if (!Number.isFinite(scrollback)) {
@@ -65,6 +71,14 @@ export function deriveBackendHotLines(scrollback: number): number {
     BACKEND_HOT_BUFFER_MAX,
     Math.max(BACKEND_HOT_BUFFER_MIN, normalizedScrollback * 2),
   );
+}
+
+function clampFiniteInteger(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 // ============================================================================
@@ -122,6 +136,17 @@ export interface GeneralSettings {
 /** Terminal background image fit mode */
 export type BackgroundFit = 'cover' | 'contain' | 'fill' | 'tile';
 
+export type InBandTransferProvider = 'trzsz';
+
+export interface InBandTransferSettings {
+  enabled: boolean;
+  provider: InBandTransferProvider;
+  allowDirectory: boolean;
+  maxChunkBytes: number;
+  maxFileCount: number;
+  maxTotalBytes: number;
+}
+
 /** Terminal settings */
 export interface TerminalSettings {
   theme: string;
@@ -149,6 +174,7 @@ export interface TerminalSettings {
   backgroundFit: BackgroundFit;      // How the image fills the terminal area
   backgroundEnabledTabs: string[];   // Which tab types show the background image
   highlightRules: HighlightRule[];
+  inBandTransfer: InBandTransferSettings;
 }
 
 /** Buffer settings (used by backend) */
@@ -387,6 +413,14 @@ const defaultTerminalSettings: TerminalSettings = {
   backgroundFit: 'cover',
   backgroundEnabledTabs: ['terminal', 'local_terminal'],
   highlightRules: [],
+  inBandTransfer: {
+    enabled: false,
+    provider: 'trzsz',
+    allowDirectory: true,
+    maxChunkBytes: 1024 * 1024,
+    maxFileCount: 1024,
+    maxTotalBytes: 10 * 1024 * 1024 * 1024,
+  },
 };
 
 const defaultBufferSettings: BufferSettings = {
@@ -584,10 +618,34 @@ function createDefaultSettings(): PersistedSettingsV2 {
 }
 
 function normalizeTerminalSettings(settings: TerminalSettings): TerminalSettings {
+  const inBandTransfer = settings.inBandTransfer;
   return {
     ...settings,
     scrollback: clampTerminalScrollback(settings.scrollback),
     highlightRules: sanitizeHighlightRules(settings.highlightRules),
+    inBandTransfer: {
+      enabled: inBandTransfer?.enabled === true,
+      provider: 'trzsz',
+      allowDirectory: inBandTransfer?.allowDirectory !== false,
+      maxChunkBytes: clampFiniteInteger(
+        inBandTransfer?.maxChunkBytes,
+        defaultTerminalSettings.inBandTransfer.maxChunkBytes,
+        IN_BAND_TRANSFER_CHUNK_MIN,
+        IN_BAND_TRANSFER_CHUNK_MAX,
+      ),
+      maxFileCount: clampFiniteInteger(
+        inBandTransfer?.maxFileCount,
+        defaultTerminalSettings.inBandTransfer.maxFileCount,
+        IN_BAND_TRANSFER_FILE_COUNT_MIN,
+        IN_BAND_TRANSFER_FILE_COUNT_MAX,
+      ),
+      maxTotalBytes: clampFiniteInteger(
+        inBandTransfer?.maxTotalBytes,
+        defaultTerminalSettings.inBandTransfer.maxTotalBytes,
+        IN_BAND_TRANSFER_TOTAL_BYTES_MIN,
+        IN_BAND_TRANSFER_TOTAL_BYTES_MAX,
+      ),
+    },
   };
 }
 
@@ -1545,6 +1603,7 @@ const TERMINAL_BEHAVIOR_KEYS: Array<keyof TerminalSettings> = [
   'middleClickPaste',
   'selectionRequiresShift',
   'highlightRules',
+  'inBandTransfer',
 ];
 
 const GENERAL_KEYS: Array<keyof GeneralSettings> = ['language', 'updateChannel'];

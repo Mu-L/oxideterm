@@ -2,13 +2,25 @@ import {
   createUnavailableTrzszCapabilities,
   type TrzszCapabilitiesProbeResult,
 } from '@/lib/terminal/trzsz/capabilities';
+import { notifyTrzszTransferEvent } from '@/lib/terminal/trzsz/notifications';
 import { buildTauriFileReaders } from '@/lib/terminal/trzsz/TauriFileReader';
 import { createTauriOpenSaveFile } from '@/lib/terminal/trzsz/TauriFileWriter';
 import { chooseSaveRoot, chooseSendEntries } from '@/lib/terminal/trzsz/dialogs';
+import type { InBandTransferSettings } from '@/store/settingsStore';
+import type { TrzszTransferPolicy } from '@/lib/terminal/trzsz/types';
 import { TrzszFilter } from '@/lib/terminal/trzsz/upstream/filter';
 import type { RemoteTerminalTransport } from '@/lib/terminal/trzsz/transport';
 
 type TrzszControllerState = 'active' | 'draining' | 'disposed';
+
+const DEFAULT_TRANSFER_SETTINGS: InBandTransferSettings = {
+  enabled: false,
+  provider: 'trzsz',
+  allowDirectory: true,
+  maxChunkBytes: 1024 * 1024,
+  maxFileCount: 1024,
+  maxTotalBytes: 10 * 1024 * 1024 * 1024,
+};
 
 export type TrzszControllerParams = {
   sessionId: string;
@@ -19,6 +31,7 @@ export type TrzszControllerParams = {
   writeServerOutput: (output: Uint8Array) => void;
   loadCapabilities: () => Promise<TrzszCapabilitiesProbeResult>;
   cleanupOwner: () => Promise<void>;
+  transferSettings?: InBandTransferSettings;
 };
 
 function toUint8Array(output: Uint8Array | ArrayBuffer): Uint8Array {
@@ -36,6 +49,7 @@ export class TrzszController {
   private capabilities: TrzszCapabilitiesProbeResult = createUnavailableTrzszCapabilities('invoke-failed');
   private allowCleanupProtocol = false;
   private readonly filter: TrzszFilter;
+  private transferSettings: InBandTransferSettings;
 
   readonly sessionId: string;
   readonly connectionId: string;
@@ -47,6 +61,7 @@ export class TrzszController {
     this.connectionId = params.connectionId;
     this.wsUrl = params.wsUrl;
     this.ownerId = params.ownerId;
+    this.transferSettings = params.transferSettings ?? DEFAULT_TRANSFER_SETTINGS;
     this.filter = new TrzszFilter({
       writeToTerminal: (output) => {
         if (!this.canProcessIo()) {
@@ -83,7 +98,7 @@ export class TrzszController {
         this.params.transport.sendEncodedPayload(input);
       },
       chooseSendFiles: chooseSendEntries,
-      buildFileReaders: (paths, directory) => buildTauriFileReaders(this.ownerId, paths, directory),
+      buildFileReaders: (paths, directory, policy) => buildTauriFileReaders(this.ownerId, paths, directory, policy),
       chooseSaveDirectory: async () => {
         const saveRoot = await chooseSaveRoot();
         if (!saveRoot) {
@@ -96,12 +111,22 @@ export class TrzszController {
           rootPath: prepared.rootPath,
         };
       },
-      openSaveFile: createTauriOpenSaveFile(this.ownerId),
+      createOpenSaveFile: (policy) => createTauriOpenSaveFile(this.ownerId, policy),
+      getTransferPolicy: () => this.getTransferPolicy(),
+      onTransferEvent: notifyTrzszTransferEvent,
       terminalColumns: this.terminalColumns ?? 80,
       isWindowsShell: false,
-      maxDataChunkSize: 1024 * 1024,
     });
     void this.refreshCapabilities();
+  }
+
+  private getTransferPolicy(): TrzszTransferPolicy {
+    return {
+      allowDirectory: this.transferSettings.allowDirectory,
+      maxChunkBytes: this.transferSettings.maxChunkBytes,
+      maxFileCount: this.transferSettings.maxFileCount,
+      maxTotalBytes: this.transferSettings.maxTotalBytes,
+    };
   }
 
   private canProcessIo(): boolean {
@@ -194,6 +219,18 @@ export class TrzszController {
     return this.capabilities;
   }
 
+  getTransferSettings(): InBandTransferSettings {
+    return this.transferSettings;
+  }
+
+  updateTransferSettings(settings: InBandTransferSettings): void {
+    this.transferSettings = settings;
+  }
+
+  isTransferring(): boolean {
+    return this.filter.isTransferringFiles();
+  }
+
   isDraining(): boolean {
     return this.state === 'draining';
   }
@@ -229,7 +266,7 @@ export class TrzszController {
       .finally(() => {
         this.allowCleanupProtocol = false;
         void this.params.cleanupOwner().catch(() => {
-          // Owner cleanup is best-effort during reconnect or unmount.
+          notifyTrzszTransferEvent({ type: 'partial_cleanup' });
         });
       });
   }

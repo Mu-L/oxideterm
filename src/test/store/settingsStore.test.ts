@@ -228,6 +228,80 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().settings.terminal.middleClickPaste).toBe(false);
   });
 
+  it('defaults and normalizes in-band transfer settings on load and update', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      terminal: {
+        theme: 'default',
+        renderer: 'auto',
+        inBandTransfer: {
+          enabled: true,
+          provider: 'other',
+          allowDirectory: false,
+          maxChunkBytes: 1,
+          maxFileCount: 0,
+          maxTotalBytes: 1,
+        },
+      },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+
+    expect(useSettingsStore.getState().settings.terminal.inBandTransfer).toEqual({
+      enabled: true,
+      provider: 'trzsz',
+      allowDirectory: false,
+      maxChunkBytes: 64 * 1024,
+      maxFileCount: 1,
+      maxTotalBytes: 100 * 1024 * 1024,
+    });
+
+    useSettingsStore.getState().updateTerminal('inBandTransfer', {
+      enabled: false,
+      provider: 'trzsz',
+      allowDirectory: true,
+      maxChunkBytes: 99 * 1024 * 1024,
+      maxFileCount: 99_999,
+      maxTotalBytes: 999 * 1024 * 1024 * 1024,
+    });
+
+    expect(useSettingsStore.getState().settings.terminal.inBandTransfer).toEqual({
+      enabled: false,
+      provider: 'trzsz',
+      allowDirectory: true,
+      maxChunkBytes: 8 * 1024 * 1024,
+      maxFileCount: 10_000,
+      maxTotalBytes: 100 * 1024 * 1024 * 1024,
+    });
+
+    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    expect(persisted.terminal.inBandTransfer).toEqual({
+      enabled: false,
+      provider: 'trzsz',
+      allowDirectory: true,
+      maxChunkBytes: 8 * 1024 * 1024,
+      maxFileCount: 10_000,
+      maxTotalBytes: 100 * 1024 * 1024 * 1024,
+    });
+
+    useSettingsStore.getState().updateTerminal('inBandTransfer', {
+      enabled: true,
+      provider: 'trzsz',
+      allowDirectory: true,
+      maxChunkBytes: Number.NaN,
+      maxFileCount: Number.NaN,
+      maxTotalBytes: Number.NaN,
+    });
+
+    expect(useSettingsStore.getState().settings.terminal.inBandTransfer).toEqual({
+      enabled: true,
+      provider: 'trzsz',
+      allowDirectory: true,
+      maxChunkBytes: 1024 * 1024,
+      maxFileCount: 1024,
+      maxTotalBytes: 10 * 1024 * 1024 * 1024,
+    });
+  });
+
   it('preserves explicit copyOnSelect and middleClickPaste settings on load and update', async () => {
     localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
       terminal: {

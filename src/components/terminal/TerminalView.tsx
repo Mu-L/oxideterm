@@ -76,6 +76,7 @@ import { installShiftSelectionGuard, type SelectionGestureController } from '../
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
 import { HistorySearchMatch, TerminalHistorySearchProgress, type HighlightRule } from '../../types';
+import { notifyTrzszTransferEvent } from '../../lib/terminal/trzsz/notifications';
 import { TrzszController } from '../../lib/terminal/trzsz/controller';
 import { createRemoteTerminalTransport, type RemoteTerminalTransport } from '../../lib/terminal/trzsz/transport';
 
@@ -290,6 +291,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // Get terminal settings from unified store (read early for adaptive renderer)
   const terminalSettings = useSettingsStore((state) => state.settings.terminal);
+  const inBandTransferSettings = terminalSettings.inBandTransfer;
 
   useEffect(() => {
     isActiveRef.current = isActive;
@@ -453,9 +455,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, []);
 
-  const disposeTrzszController = useCallback(() => {
+  const disposeTrzszController = useCallback((options?: { notifyConnectionLost?: boolean }) => {
     const controller = trzszControllerRef.current;
     if (!controller) return;
+
+    if (options?.notifyConnectionLost && controller.isTransferring()) {
+      notifyTrzszTransferEvent({ type: 'connection_lost' });
+    }
 
     controller.stop();
     controller.dispose();
@@ -471,7 +477,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const activeWsUrl = activeWs?.url ? normalizeWebSocketUrl(activeWs.url) : null;
 
     if (
-      !term
+      !inBandTransferSettings.enabled
+      || !term
       || !connectionId
       || !wsUrl
       || connectionStatusRef.current !== 'connected'
@@ -491,6 +498,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       && !currentController.isDraining()
       && currentController.matchesRuntime(connectionId, wsUrl)
     ) {
+      currentController.updateTransferSettings(inBandTransferSettings);
       currentController.setTerminalColumns(term.cols);
       controllerRuntimePendingRef.current = false;
       blockedRuntimeWebSocketRef.current = null;
@@ -512,13 +520,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       cleanupOwner: async () => {
         await api.cleanupTrzszOwner(ownerId);
       },
+      transferSettings: inBandTransferSettings,
     });
     controller.setTerminalColumns(term.cols);
     trzszControllerRef.current = controller;
     controllerRuntimePendingRef.current = false;
     blockedRuntimeWebSocketRef.current = null;
     unlockRuntimeGateIfReady();
-  }, [disposeTrzszController, sessionId, unlockRuntimeGateIfReady, writeServerOutputToTerminal]);
+  }, [disposeTrzszController, inBandTransferSettings, sessionId, unlockRuntimeGateIfReady, writeServerOutputToTerminal]);
 
   const syncRemotePtySize = useCallback(() => {
     const dims = resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current);
@@ -602,8 +611,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   }, [connectionStatus]);
 
   useEffect(() => {
+    if (!inBandTransferSettings.enabled) {
+      disposeTrzszController();
+      return;
+    }
+
+    trzszControllerRef.current?.updateTransferSettings(inBandTransferSettings);
     syncTrzszController();
-  }, [session?.connectionId, session?.ws_url, connectionStatus, syncTrzszController]);
+  }, [
+    connectionStatus,
+    disposeTrzszController,
+    inBandTransferSettings,
+    session?.connectionId,
+    session?.ws_url,
+    syncTrzszController,
+  ]);
 
   const recoverWebSocket = useCallback((reason: string) => {
     if (wsRecoveryInFlightRef.current) return;
@@ -806,7 +828,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       }
 
       if (shouldHoldRuntimeGate) {
-        disposeTrzszController();
+        disposeTrzszController({ notifyConnectionLost: true });
       }
 
       if (status === 'disconnected') {
@@ -1081,7 +1103,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         reconnectingRef.current = true;
         controllerRuntimePendingRef.current = true;
         blockedRuntimeWebSocketRef.current = existingWs;
-        disposeTrzszController();
+        disposeTrzszController({ notifyConnectionLost: true });
         wsRef.current = null;
         manualCloseRef.current = true;
         cleanupWebSocket(existingWs, 'Reconnect');

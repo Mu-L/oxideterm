@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildTauriFileReaders, TauriFileReader } from '@/lib/terminal/trzsz/TauriFileReader';
-import type { TrzszUploadEntryDto } from '@/lib/terminal/trzsz/types';
+import type { TrzszTransferPolicy, TrzszUploadEntryDto } from '@/lib/terminal/trzsz/types';
 
 const apiMock = vi.hoisted(() => ({
   trzszBuildUploadEntries: vi.fn(),
@@ -22,6 +22,16 @@ function createEntry(overrides: Partial<TrzszUploadEntryDto> = {}): TrzszUploadE
     size: 11,
     isDir: false,
     isSymlink: false,
+    ...overrides,
+  };
+}
+
+function createPolicy(overrides: Partial<TrzszTransferPolicy> = {}): TrzszTransferPolicy {
+  return {
+    allowDirectory: true,
+    maxChunkBytes: 1024 * 1024,
+    maxFileCount: 1024,
+    maxTotalBytes: 10 * 1024 * 1024 * 1024,
     ...overrides,
   };
 }
@@ -51,7 +61,7 @@ describe('TauriFileReader', () => {
       }),
     ]);
 
-    const readers = await buildTauriFileReaders('owner-1', ['/tmp/folder'], true);
+    const readers = await buildTauriFileReaders('owner-1', ['/tmp/folder'], true, createPolicy());
 
     expect(apiMock.trzszBuildUploadEntries).toHaveBeenCalledWith('owner-1', ['/tmp/folder'], true);
     expect(readers).toHaveLength(2);
@@ -106,5 +116,49 @@ describe('TauriFileReader', () => {
     expect(chunk).toEqual(new Uint8Array(0));
     expect(apiMock.trzszOpenUploadFile).not.toHaveBeenCalled();
     expect(apiMock.trzszCloseUploadFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects directory uploads when directory transfer is disabled', async () => {
+    apiMock.trzszBuildUploadEntries.mockResolvedValue([
+      createEntry({
+        pathId: 7,
+        path: '/tmp/folder',
+        relPath: ['folder'],
+        size: 0,
+        isDir: true,
+      }),
+      createEntry({
+        pathId: 8,
+        path: '/tmp/folder/nested.txt',
+        relPath: ['folder', 'nested.txt'],
+        size: 23,
+      }),
+    ]);
+
+    await expect(
+      buildTauriFileReaders('owner-1', ['/tmp/folder'], true, createPolicy({ allowDirectory: false })),
+    ).rejects.toMatchObject({ code: 'directory_not_allowed' });
+  });
+
+  it('rejects uploads that exceed the configured file count limit', async () => {
+    apiMock.trzszBuildUploadEntries.mockResolvedValue([
+      createEntry({ pathId: 1, path: '/tmp/a.txt', relPath: ['a.txt'], size: 10 }),
+      createEntry({ pathId: 2, path: '/tmp/b.txt', relPath: ['b.txt'], size: 12 }),
+    ]);
+
+    await expect(
+      buildTauriFileReaders('owner-1', ['/tmp/a.txt', '/tmp/b.txt'], false, createPolicy({ maxFileCount: 1 })),
+    ).rejects.toMatchObject({ code: 'max_file_count_exceeded' });
+  });
+
+  it('rejects uploads that exceed the configured total byte limit', async () => {
+    apiMock.trzszBuildUploadEntries.mockResolvedValue([
+      createEntry({ pathId: 1, path: '/tmp/a.txt', relPath: ['a.txt'], size: 10 }),
+      createEntry({ pathId: 2, path: '/tmp/b.txt', relPath: ['b.txt'], size: 12 }),
+    ]);
+
+    await expect(
+      buildTauriFileReaders('owner-1', ['/tmp/a.txt', '/tmp/b.txt'], false, createPolicy({ maxTotalBytes: 16 })),
+    ).rejects.toMatchObject({ code: 'max_total_bytes_exceeded' });
   });
 });

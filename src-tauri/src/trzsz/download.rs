@@ -649,6 +649,55 @@ mod tests {
         assert!(temp.path().join("kept").is_dir());
     }
 
+    #[test]
+    fn cleanup_owner_removes_temp_files_and_uncommitted_directories() {
+        let temp = tempdir().expect("tempdir");
+        let state = TrzszState::new_for_tests(Duration::from_secs(60));
+        prepare_download_root(
+            state.as_ref(),
+            "owner-1",
+            TRZSZ_API_VERSION,
+            temp.path().to_string_lossy().to_string(),
+        )
+        .expect("prepare root");
+
+        create_download_directory(
+            state.as_ref(),
+            "owner-1",
+            TRZSZ_API_VERSION,
+            temp.path().to_string_lossy().to_string(),
+            "staged".to_string(),
+            false,
+        )
+        .expect("create directory");
+
+        let open = open_save_file(
+            state.as_ref(),
+            "owner-1",
+            TRZSZ_API_VERSION,
+            temp.path().to_string_lossy().to_string(),
+            "staged/file.txt".to_string(),
+            true,
+            false,
+        )
+        .expect("open save file");
+
+        write_download_chunk(
+            state.as_ref(),
+            "owner-1",
+            TRZSZ_API_VERSION,
+            &open.writer_id,
+            b"hello".to_vec(),
+        )
+        .expect("write chunk");
+
+        let cleanup = state.cleanup_owner("owner-1");
+
+        assert_eq!(cleanup.download_handles, 1);
+        assert!(!PathBuf::from(open.temp_path).exists());
+        assert!(!temp.path().join("staged").exists());
+    }
+
     #[cfg(unix)]
     #[test]
     fn finish_rejects_target_replaced_with_symlink() {

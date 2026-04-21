@@ -71,6 +71,15 @@ export class TrzszTransfer {
     this.buffer.stopBuffer();
   }
 
+  setRemotePlatform(remoteIsWindows: boolean): void {
+    if (!remoteIsWindows) {
+      return;
+    }
+
+    this.remoteIsWindows = true;
+    this.protocolNewline = '!\n';
+  }
+
   async sendAction(confirm: boolean, remoteIsWindows: boolean): Promise<void> {
     const action: Record<string, unknown> = {
       lang: 'js',

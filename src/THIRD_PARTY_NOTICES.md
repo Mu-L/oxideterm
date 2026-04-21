@@ -1,10 +1,10 @@
 # Third-Party Notices (Frontend)
 
 This file lists third-party components used by the frontend (including transitive production dependencies) and their declared licenses.
-Generated: 2026-04-15T13:04:25.108Z
+Generated: 2026-04-21T17:39:16.804Z
 
 ## Summary
-- MIT: 228
+- MIT: 229
 - ISC: 34
 - Apache-2.0: 18
 - BSD-3-Clause: 8
@@ -245,7 +245,7 @@ Generated: 2026-04-15T13:04:25.108Z
 | delaunator | 5.0.1 | ISC | https://github.com/mapbox/delaunator#readme |
 | detect-node-es | 1.1.0 | MIT | https://github.com/thekashey/detect-node |
 | dingbat-to-unicode | 1.0.1 | BSD-2-Clause | https://github.com/mwilliamson/dingbat-to-unicode#readme |
-| dompurify | 3.3.3 | (MPL-2.0 OR Apache-2.0) | https://github.com/cure53/DOMPurify |
+| dompurify | 3.4.0 | (MPL-2.0 OR Apache-2.0) | https://github.com/cure53/DOMPurify |
 | duck | 0.1.12 | BSD | https://github.com/mwilliamson/duck.js#readme |
 | frac | 1.1.2 | Apache-2.0 | http://sheetjs.com/opensource |
 | get-nonce | 1.0.1 | MIT | https://github.com/theKashey/get-nonce |
@@ -275,7 +275,7 @@ Generated: 2026-04-15T13:04:25.108Z
 | nanoid | 5.1.6 | MIT | https://github.com/ai/nanoid#readme |
 | option | 0.2.4 | BSD-2-Clause | https://github.com/mwilliamson/node-options#readme |
 | package-manager-detector | 1.6.0 | MIT | https://github.com/antfu-collective/package-manager-detector#readme |
-| pako | 1.0.11 | (MIT AND Zlib) | https://github.com/nodeca/pako |
+| pako | 1.0.11, 2.1.0 | (MIT AND Zlib) | https://github.com/nodeca/pako#readme |
 | path-data-parser | 0.1.0 | MIT | https://github.com/pshihn/path-data-parser#readme |
 | path-is-absolute | 1.0.1 | MIT | https://github.com/sindresorhus/path-is-absolute#readme |
 | pathe | 2.0.3 | MIT | https://github.com/unjs/pathe#readme |
@@ -305,9 +305,10 @@ Generated: 2026-04-15T13:04:25.108Z
 | string_decoder | 1.1.1 | MIT | https://github.com/nodejs/string_decoder |
 | style-mod | 4.1.3 | MIT | https://github.com/marijnh/style-mod#readme |
 | stylis | 4.3.6 | MIT | https://github.com/thysultan/stylis.js |
-| tailwind-merge | 3.4.0 | MIT | https://github.com/dcastil/tailwind-merge |
+| tailwind-merge | 3.5.0 | MIT | https://github.com/dcastil/tailwind-merge |
 | tinyexec | 1.1.1 | MIT | https://github.com/tinylibs/tinyexec#readme |
 | ts-dedent | 2.2.0 | MIT | https://github.com/tamino-martinius/node-ts-dedent#readme |
+| ts-md5 | 2.0.1 | MIT | https://github.com/cotag/ts-md5 |
 | tslib | 2.8.1 | 0BSD | https://www.typescriptlang.org/ |
 | typescript | 5.9.3 | Apache-2.0 | https://www.typescriptlang.org/ |
 | ufo | 1.6.3 | MIT | https://github.com/unjs/ufo#readme |

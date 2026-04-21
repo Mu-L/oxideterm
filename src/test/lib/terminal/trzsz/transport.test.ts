@@ -59,6 +59,21 @@ describe('createRemoteTerminalTransport', () => {
     expect(vi.mocked(ws.send)).not.toHaveBeenCalled();
   });
 
+  it('can bypass the input lock for controller cleanup transports', () => {
+    const ws = createWebSocketMock();
+    const transport = createRemoteTerminalTransport({
+      getWebSocket: () => ws,
+      isInputLocked: () => true,
+      ignoreInputLock: true,
+    });
+
+    expect(transport.canSendInput()).toBe(true);
+    expect(transport.sendRawInput('#fail:cleanup\n')).toBe(true);
+    expect(vi.mocked(ws.send)).toHaveBeenCalledWith(
+      encodeDataFrame(new TextEncoder().encode('#fail:cleanup\n')),
+    );
+  });
+
   it('sends resize frames when writable', () => {
     const ws = createWebSocketMock();
     const transport = createRemoteTerminalTransport({

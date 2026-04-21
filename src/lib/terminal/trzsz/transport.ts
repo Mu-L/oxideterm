@@ -14,6 +14,7 @@ export interface RemoteTerminalTransport {
 type RemoteTerminalTransportOptions = {
   getWebSocket: () => WebSocket | null;
   isInputLocked: () => boolean;
+  ignoreInputLock?: boolean;
 };
 
 function binaryStringToBytes(input: string): Uint8Array {
@@ -28,7 +29,7 @@ export function createRemoteTerminalTransport(
   options: RemoteTerminalTransportOptions,
 ): RemoteTerminalTransport {
   const canSendInput = () => {
-    if (options.isInputLocked()) {
+    if (!options.ignoreInputLock && options.isInputLocked()) {
       return false;
     }
 

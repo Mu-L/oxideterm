@@ -350,6 +350,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const inputLockedRef = useRef(false); // For synchronous check in onData callback
   const connectionStatusRef = useRef<'connected' | 'link_down' | 'reconnecting' | 'disconnected'>('connected');
   const controllerRuntimePendingRef = useRef(false);
+  const trzszRuntimeEpochRef = useRef(0);
   const blockedRuntimeWebSocketRef = useRef<WebSocket | null>(null);
   const transportRef = useRef<RemoteTerminalTransport | null>(null);
   if (!transportRef.current) {
@@ -459,6 +460,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const controller = trzszControllerRef.current;
     if (!controller) return;
 
+    trzszRuntimeEpochRef.current += 1;
+
     if (options?.notifyConnectionLost && controller.isTransferring()) {
       notifyTrzszTransferEvent({ type: 'connection_lost' });
     }
@@ -509,12 +512,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     disposeTrzszController();
 
     const ownerId = `trzsz:${sessionId}:${connectionId}:${crypto.randomUUID()}`;
+    const runtimeEpoch = ++trzszRuntimeEpochRef.current;
+    const controllerTransport = createRemoteTerminalTransport({
+      getWebSocket: () => activeWs,
+      isInputLocked: () => inputLockedRef.current,
+      ignoreInputLock: true,
+    });
     const controller = new TrzszController({
       sessionId,
       connectionId,
       wsUrl,
       ownerId,
-      transport: transportRef.current!,
+      isRuntimeCurrent: () => trzszRuntimeEpochRef.current === runtimeEpoch,
+      transport: controllerTransport,
       writeServerOutput: writeServerOutputToTerminal,
       loadCapabilities: () => api.getTrzszCapabilities(),
       cleanupOwner: async () => {

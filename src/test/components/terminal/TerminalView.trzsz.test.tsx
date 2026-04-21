@@ -37,6 +37,14 @@ const settingsState = vi.hoisted(() => ({
       selectionRequiresShift: false,
       autoScrollOnOutput: true,
       highlightRules: [],
+      inBandTransfer: {
+        enabled: true,
+        provider: 'trzsz',
+        allowDirectory: true,
+        maxChunkBytes: 1024 * 1024,
+        maxFileCount: 1024,
+        maxTotalBytes: 10 * 1024 * 1024 * 1024,
+      },
     },
     ai: {
       enabled: true,
@@ -66,6 +74,7 @@ const apiMocks = vi.hoisted(() => ({
     status: 'unavailable',
     reason: 'command-missing',
   }),
+  trzszPrepareDownloadRoot: vi.fn(async (_ownerId: string, rootPath: string) => ({ rootPath })),
   getTerminalHistoryStatus: vi.fn().mockResolvedValue({ available: false }),
   cancelTerminalHistorySearch: vi.fn().mockResolvedValue(undefined),
   recreateTerminalPty: vi.fn(),
@@ -74,6 +83,10 @@ const apiMocks = vi.hoisted(() => ({
   startTerminalHistorySearch: vi.fn(),
   getArchivedHistoryExcerpt: vi.fn(),
   scrollToLine: vi.fn(),
+}));
+
+const dialogMocks = vi.hoisted(() => ({
+  chooseSaveRoot: vi.fn(),
 }));
 
 const recordingMocks = vi.hoisted(() => ({
@@ -321,6 +334,11 @@ vi.mock('@/lib/api', () => ({
   api: apiMocks,
 }));
 
+vi.mock('@/lib/terminal/trzsz/dialogs', () => ({
+  chooseSendEntries: vi.fn(),
+  chooseSaveRoot: dialogMocks.chooseSaveRoot,
+}));
+
 vi.mock('@/lib/themes', () => ({
   getTerminalTheme: vi.fn(() => ({ background: '#000000', foreground: '#ffffff' })),
 }));
@@ -464,6 +482,17 @@ function emitEvent<T>(name: string, payload: T) {
   listeners?.forEach((listener) => listener({ payload }));
 }
 
+function hasDataFrameWithTextPrefix(socket: MockWebSocket | undefined, prefix: string) {
+  return vi.mocked(socket?.send).mock.calls.some(([payload]) => {
+    if (!(payload instanceof Uint8Array) || payload[0] !== 0x00 || payload.length < 5) {
+      return false;
+    }
+
+    const text = new TextDecoder().decode(payload.slice(5));
+    return text.startsWith(prefix);
+  });
+}
+
 function setConnectedSession(overrides: Record<string, unknown> = {}) {
   appStoreState.sessions = new Map([
     ['session-1', {
@@ -478,6 +507,13 @@ function setConnectedSession(overrides: Record<string, unknown> = {}) {
   ]);
 }
 
+function setInBandTransferEnabled(enabled: boolean) {
+  settingsState.settings.terminal.inBandTransfer = {
+    ...settingsState.settings.terminal.inBandTransfer,
+    enabled,
+  };
+}
+
 describe('TerminalView trzsz Phase 1 wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -486,6 +522,8 @@ describe('TerminalView trzsz Phase 1 wiring', () => {
     mockSockets.length = 0;
     shortcutState.handlers = null;
     setConnectedSession();
+    setInBandTransferEnabled(true);
+    dialogMocks.chooseSaveRoot.mockReset();
 
     Object.defineProperty(document, 'fonts', {
       configurable: true,
@@ -612,5 +650,75 @@ describe('TerminalView trzsz Phase 1 wiring', () => {
 
     unmount();
     expect(terminalInstances[0]?.onBinaryDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('disposes the controller when the in-band transfer setting is disabled at runtime', async () => {
+    const processTerminalInputSpy = vi.spyOn(TrzszController.prototype, 'processTerminalInput');
+    const disposeSpy = vi.spyOn(TrzszController.prototype, 'dispose');
+
+    const { rerender } = render(<TerminalView sessionId="session-1" />);
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+      expect(mockSockets).toHaveLength(1);
+    });
+
+    setInBandTransferEnabled(false);
+    rerender(<TerminalView sessionId="session-1" />);
+
+    await waitFor(() => {
+      expect(disposeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      terminalInstances[0]?.onDataHandler?.('echo fallback');
+    });
+
+    expect(processTerminalInputSpy).not.toHaveBeenCalledWith('echo fallback');
+  });
+
+  it('sends cleanup on the original websocket when reconnecting interrupts a pending download prompt', async () => {
+    let resolveSaveRoot: ((value: { rootPath: string; displayName: string; maps: Map<number, string> }) => void) | null = null;
+    dialogMocks.chooseSaveRoot.mockImplementation(
+      () => new Promise((resolve) => {
+        resolveSaveRoot = resolve;
+      }),
+    );
+
+    render(<TerminalView sessionId="session-1" />);
+
+    await waitFor(() => {
+      expect(mockSockets).toHaveLength(1);
+      expect(typeof mockSockets[0]?.onmessage).toBe('function');
+    });
+
+    act(() => {
+      mockSockets[0]?.emitMessage(
+        encodeDataFrame(new TextEncoder().encode('::TRZSZ:TRANSFER:S:1.1.6:12345678\r\n')),
+      );
+    });
+
+    await waitFor(() => {
+      expect(dialogMocks.chooseSaveRoot).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      emitEvent('connection_status_changed', {
+        connection_id: 'connection-1',
+        status: 'reconnecting',
+      });
+    });
+
+    act(() => {
+      resolveSaveRoot?.({
+        rootPath: '/tmp/trzsz-downloads',
+        displayName: 'downloads',
+        maps: new Map(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(hasDataFrameWithTextPrefix(mockSockets[0], '#fail:')).toBe(true);
+    });
   });
 });

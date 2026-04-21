@@ -1,13 +1,13 @@
 # Third-Party Notices (Backend / Rust)
 
 This file lists third-party crates used by the Rust backend and their detected licenses (including transitive dependencies).
-Generated: 2026-04-15T13:04:30.355Z
+Generated: 2026-04-21T17:39:11.053Z
 
 ## Summary
-- MIT: 687
-- Apache-2.0: 515
+- MIT: 691
+- Apache-2.0: 519
 - Unicode-3.0: 19
-- Zlib: 15
+- Zlib: 17
 - BSD-3-Clause: 13
 - Apache-2.0 WITH LLVM-exception: 8
 - Unlicense: 7
@@ -205,6 +205,7 @@ This report does not attempt to interpret SPDX boolean logic beyond simple group
 | foreign-types-macros | 0.2.3 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | foreign-types-shared | 0.3.1 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | form_urlencoded | 1.2.2 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
+| fs2 | 0.4.3 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | futf | 0.1.5 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | futures | 0.3.32 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | futures-channel | 0.3.32 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
@@ -595,6 +596,8 @@ This report does not attempt to interpret SPDX boolean logic beyond simple group
 | time-macros | 0.2.27 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | tiny-keccak | 2.0.2 | CC0-1.0 | registry+https://github.com/rust-lang/crates.io-index |
 | tinystr | 0.8.2 | Unicode-3.0 | registry+https://github.com/rust-lang/crates.io-index |
+| tinyvec | 1.10.0 | Zlib, Apache-2.0, MIT | registry+https://github.com/rust-lang/crates.io-index |
+| tinyvec_macros | 0.1.1 | MIT, Apache-2.0, Zlib | registry+https://github.com/rust-lang/crates.io-index |
 | tokio | 1.51.1 | MIT | registry+https://github.com/rust-lang/crates.io-index |
 | tokio-macros | 2.7.0 | MIT | registry+https://github.com/rust-lang/crates.io-index |
 | tokio-rustls | 0.26.4 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
@@ -631,6 +634,7 @@ This report does not attempt to interpret SPDX boolean logic beyond simple group
 | unic-ucd-version | 0.9.0 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | unicase | 2.9.0 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | unicode-ident | 1.0.24 | MIT, Apache-2.0, Unicode-3.0 | registry+https://github.com/rust-lang/crates.io-index |
+| unicode-normalization | 0.1.25 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | unicode-segmentation | 1.12.0 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | universal-hash | 0.5.1 | MIT, Apache-2.0 | registry+https://github.com/rust-lang/crates.io-index |
 | untrusted | 0.9.0 | ISC | registry+https://github.com/rust-lang/crates.io-index |

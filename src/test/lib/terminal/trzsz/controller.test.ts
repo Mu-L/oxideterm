@@ -4,8 +4,11 @@ import {
   createUnavailableTrzszCapabilities,
   type TrzszCapabilitiesProbeResult,
 } from '@/lib/terminal/trzsz/capabilities';
+import { chooseSaveRoot } from '@/lib/terminal/trzsz/dialogs';
+import { notifyTrzszTransferEvent } from '@/lib/terminal/trzsz/notifications';
 import { TrzszController } from '@/lib/terminal/trzsz/controller';
 import type { RemoteTerminalTransport } from '@/lib/terminal/trzsz/transport';
+import type { TrzszSaveRoot } from '@/lib/terminal/trzsz/types';
 import type { InBandTransferSettings } from '@/store/settingsStore';
 
 vi.mock('@/lib/terminal/trzsz/dialogs', () => ({
@@ -32,6 +35,18 @@ const transferSettings: InBandTransferSettings = {
   maxTotalBytes: 10 * 1024 * 1024 * 1024,
 };
 
+const availableCapabilities: TrzszCapabilitiesProbeResult = {
+  status: 'available',
+  capabilities: {
+    apiVersion: 1,
+    provider: 'trzsz',
+    features: {
+      directory: true,
+      atomicDirectoryStage: true,
+    },
+  },
+};
+
 function createTransportMock(): RemoteTerminalTransport {
   return {
     canSendInput: vi.fn(() => true),
@@ -51,6 +66,9 @@ async function flushMicrotasks() {
 describe('TrzszController', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.mocked(chooseSaveRoot).mockReset();
+    vi.mocked(chooseSaveRoot).mockResolvedValue(undefined);
+    vi.mocked(notifyTrzszTransferEvent).mockReset();
   });
 
   it('passes server output to the writer and forwards input while active', () => {
@@ -62,6 +80,7 @@ describe('TrzszController', () => {
       connectionId: 'conn-1',
       wsUrl: 'ws://localhost:1234',
       ownerId: 'trzsz:session-1:conn-1:owner',
+      isRuntimeCurrent: () => true,
       transport,
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
@@ -95,6 +114,7 @@ describe('TrzszController', () => {
       connectionId: 'conn-1',
       wsUrl: 'ws://localhost:1234',
       ownerId: 'trzsz:session-1:conn-1:owner',
+      isRuntimeCurrent: () => true,
       transport,
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
@@ -129,6 +149,7 @@ describe('TrzszController', () => {
       connectionId: 'conn-cleanup',
       wsUrl: 'ws://localhost:1357',
       ownerId: 'trzsz:session-cleanup:conn-cleanup:owner',
+      isRuntimeCurrent: () => true,
       transport,
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
@@ -149,8 +170,7 @@ describe('TrzszController', () => {
     const available: TrzszCapabilitiesProbeResult = {
       status: 'available',
       capabilities: {
-        apiVersion: 1,
-        provider: 'trzsz',
+        ...availableCapabilities.capabilities,
         features: {
           directory: false,
           atomicDirectoryStage: false,
@@ -162,6 +182,7 @@ describe('TrzszController', () => {
       connectionId: 'conn-2',
       wsUrl: 'ws://localhost:4321',
       ownerId: 'trzsz:session-2:conn-2:owner',
+      isRuntimeCurrent: () => true,
       transport,
       writeServerOutput,
       loadCapabilities: async () => available,
@@ -176,6 +197,133 @@ describe('TrzszController', () => {
     expect(transport.sendRawInput).toHaveBeenCalledWith('echo ready');
   });
 
+  it('fails transfer handshakes when the backend capability version mismatches', async () => {
+    vi.useFakeTimers();
+
+    const writeServerOutput = vi.fn();
+    const transport = createTransportMock();
+    const cleanupOwner = vi.fn(async () => undefined);
+    const mismatch: TrzszCapabilitiesProbeResult = {
+      status: 'available',
+      capabilities: {
+        ...availableCapabilities.capabilities,
+        apiVersion: 2,
+      },
+    };
+    const controller = new TrzszController({
+      sessionId: 'session-mismatch',
+      connectionId: 'conn-mismatch',
+      wsUrl: 'ws://localhost:7001',
+      ownerId: 'trzsz:session-mismatch:conn-mismatch:owner',
+      isRuntimeCurrent: () => true,
+      transport,
+      writeServerOutput,
+      loadCapabilities: async () => mismatch,
+      cleanupOwner,
+      transferSettings,
+    });
+
+    controller.processServerOutput(new TextEncoder().encode('::TRZSZ:TRANSFER:S:1.1.6:12345678\r\n'));
+
+    await vi.runAllTimersAsync();
+    await flushMicrotasks();
+
+    expect(controller.getCapabilities()).toEqual(mismatch);
+    expect(vi.mocked(chooseSaveRoot)).not.toHaveBeenCalled();
+    expect(transport.sendRawInput).toHaveBeenCalledWith(expect.stringContaining('#fail:'));
+    expect(transport.sendEncodedPayload).not.toHaveBeenCalled();
+    expect(vi.mocked(notifyTrzszTransferEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'failed',
+        error: expect.objectContaining({
+          message: expect.stringContaining('invalid_api_version'),
+        }),
+      }),
+    );
+  });
+
+  it('keeps cleanup protocol pinned to the original transport after the controller runtime is invalidated', async () => {
+    vi.useFakeTimers();
+
+    const writeServerOutput = vi.fn();
+    const transport = createTransportMock();
+    const cleanupOwner = vi.fn(async () => undefined);
+    let runtimeCurrent = true;
+    let resolveSaveRoot: ((value: TrzszSaveRoot | undefined) => void) | null = null;
+    vi.mocked(chooseSaveRoot).mockImplementation(
+      () => new Promise((resolve) => {
+        resolveSaveRoot = resolve;
+      }),
+    );
+
+    const controller = new TrzszController({
+      sessionId: 'session-stale',
+      connectionId: 'conn-stale',
+      wsUrl: 'ws://localhost:7002',
+      ownerId: 'trzsz:session-stale:conn-stale:owner',
+      isRuntimeCurrent: () => runtimeCurrent,
+      transport,
+      writeServerOutput,
+      loadCapabilities: async () => availableCapabilities,
+      cleanupOwner,
+      transferSettings,
+    });
+
+    controller.processServerOutput(new TextEncoder().encode('::TRZSZ:TRANSFER:S:1.1.6:12345678\r\n'));
+
+    await vi.runAllTimersAsync();
+    await flushMicrotasks();
+    vi.mocked(notifyTrzszTransferEvent).mockClear();
+
+    runtimeCurrent = false;
+    controller.dispose();
+    resolveSaveRoot?.({
+      rootPath: '/tmp/trzsz-downloads',
+      displayName: 'downloads',
+      maps: new Map(),
+    });
+
+    await vi.runAllTimersAsync();
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(transport.sendRawInput).toHaveBeenCalledWith(expect.stringContaining('#fail:'));
+    expect(transport.sendEncodedPayload).not.toHaveBeenCalled();
+    expect(vi.mocked(notifyTrzszTransferEvent)).not.toHaveBeenCalled();
+    expect(cleanupOwner).toHaveBeenCalledTimes(1);
+  });
+
+  it('suppresses partial cleanup toasts after the runtime is invalidated', async () => {
+    const writeServerOutput = vi.fn();
+    const transport = createTransportMock();
+    let runtimeCurrent = true;
+    const cleanupOwner = vi.fn(async () => {
+      throw new Error('cleanup failed');
+    });
+    const controller = new TrzszController({
+      sessionId: 'session-cleanup-toast',
+      connectionId: 'conn-cleanup-toast',
+      wsUrl: 'ws://localhost:7003',
+      ownerId: 'trzsz:session-cleanup-toast:conn-cleanup-toast:owner',
+      isRuntimeCurrent: () => runtimeCurrent,
+      transport,
+      writeServerOutput,
+      loadCapabilities: async () => availableCapabilities,
+      cleanupOwner,
+      transferSettings,
+    });
+
+    runtimeCurrent = false;
+    controller.dispose();
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(cleanupOwner).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(notifyTrzszTransferEvent)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'partial_cleanup' }),
+    );
+  });
+
   it('does not start delayed trzsz detection after disposal', async () => {
     vi.useFakeTimers();
 
@@ -187,6 +335,7 @@ describe('TrzszController', () => {
       connectionId: 'conn-3',
       wsUrl: 'ws://localhost:2468',
       ownerId: 'trzsz:session-3:conn-3:owner',
+      isRuntimeCurrent: () => true,
       transport,
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
@@ -217,6 +366,7 @@ describe('TrzszController', () => {
       connectionId: 'conn-4',
       wsUrl: 'ws://localhost:9999',
       ownerId: 'trzsz:session-4:conn-4:owner',
+      isRuntimeCurrent: () => true,
       transport,
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),
@@ -245,6 +395,7 @@ describe('TrzszController', () => {
       connectionId: 'conn-5',
       wsUrl: 'ws://localhost:8888',
       ownerId: 'trzsz:session-5:conn-5:owner',
+      isRuntimeCurrent: () => true,
       transport,
       writeServerOutput,
       loadCapabilities: async () => createUnavailableTrzszCapabilities('command-missing'),

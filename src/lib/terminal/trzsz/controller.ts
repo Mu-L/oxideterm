@@ -1,5 +1,6 @@
 import {
   createUnavailableTrzszCapabilities,
+  isTrzszCapabilitiesAvailable,
   type TrzszCapabilitiesProbeResult,
 } from '@/lib/terminal/trzsz/capabilities';
 import { notifyTrzszTransferEvent } from '@/lib/terminal/trzsz/notifications';
@@ -8,6 +9,7 @@ import { createTauriOpenSaveFile } from '@/lib/terminal/trzsz/TauriFileWriter';
 import { chooseSaveRoot, chooseSendEntries } from '@/lib/terminal/trzsz/dialogs';
 import type { InBandTransferSettings } from '@/store/settingsStore';
 import type { TrzszTransferPolicy } from '@/lib/terminal/trzsz/types';
+import { TrzszError } from '@/lib/terminal/trzsz/upstream/comm';
 import { TrzszFilter } from '@/lib/terminal/trzsz/upstream/filter';
 import type { RemoteTerminalTransport } from '@/lib/terminal/trzsz/transport';
 
@@ -22,11 +24,14 @@ const DEFAULT_TRANSFER_SETTINGS: InBandTransferSettings = {
   maxTotalBytes: 10 * 1024 * 1024 * 1024,
 };
 
+const TRZSZ_CAPABILITIES_API_VERSION = 1;
+
 export type TrzszControllerParams = {
   sessionId: string;
   connectionId: string;
   wsUrl: string;
   ownerId: string;
+  isRuntimeCurrent: () => boolean;
   transport: RemoteTerminalTransport;
   writeServerOutput: (output: Uint8Array) => void;
   loadCapabilities: () => Promise<TrzszCapabilitiesProbeResult>;
@@ -47,8 +52,10 @@ export class TrzszController {
   private terminalColumns: number | null = null;
   private capabilityRequestVersion = 0;
   private capabilities: TrzszCapabilitiesProbeResult = createUnavailableTrzszCapabilities('invoke-failed');
+  private capabilityError: TrzszError | null = null;
   private allowCleanupProtocol = false;
   private readonly filter: TrzszFilter;
+  private readonly capabilitiesReady: Promise<void>;
   private transferSettings: InBandTransferSettings;
 
   readonly sessionId: string;
@@ -97,6 +104,7 @@ export class TrzszController {
 
         this.params.transport.sendEncodedPayload(input);
       },
+      waitForTransferReady: async () => this.waitForTransferReady(),
       chooseSendFiles: chooseSendEntries,
       buildFileReaders: (paths, directory, policy) => buildTauriFileReaders(this.ownerId, paths, directory, policy),
       chooseSaveDirectory: async () => {
@@ -113,11 +121,17 @@ export class TrzszController {
       },
       createOpenSaveFile: (policy) => createTauriOpenSaveFile(this.ownerId, policy),
       getTransferPolicy: () => this.getTransferPolicy(),
-      onTransferEvent: notifyTrzszTransferEvent,
+      onTransferEvent: (event) => {
+        if (!this.params.isRuntimeCurrent() || this.state === 'disposed') {
+          return;
+        }
+        notifyTrzszTransferEvent(event);
+      },
       terminalColumns: this.terminalColumns ?? 80,
       isWindowsShell: false,
     });
-    void this.refreshCapabilities();
+    this.capabilitiesReady = this.refreshCapabilities();
+    void this.capabilitiesReady;
   }
 
   private getTransferPolicy(): TrzszTransferPolicy {
@@ -130,7 +144,7 @@ export class TrzszController {
   }
 
   private canProcessIo(): boolean {
-    return this.state === 'active';
+    return this.state === 'active' && this.params.isRuntimeCurrent();
   }
 
   private canSendCleanupProtocol(): boolean {
@@ -146,6 +160,7 @@ export class TrzszController {
         return;
       }
       this.capabilities = result;
+      this.capabilityError = this.validateCapabilities(result);
     } catch (error) {
       if (this.state === 'disposed' || requestVersion !== this.capabilityRequestVersion) {
         return;
@@ -153,6 +168,32 @@ export class TrzszController {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.capabilities = createUnavailableTrzszCapabilities('invoke-failed', errorMessage);
+      this.capabilityError = null;
+    }
+  }
+
+  private validateCapabilities(result: TrzszCapabilitiesProbeResult): TrzszError | null {
+    if (!isTrzszCapabilitiesAvailable(result)) {
+      return null;
+    }
+
+    if (
+      result.capabilities.provider !== 'trzsz'
+      || result.capabilities.apiVersion !== TRZSZ_CAPABILITIES_API_VERSION
+    ) {
+      return new TrzszError(
+        `Unsupported trzsz capabilities API version: expected ${TRZSZ_CAPABILITIES_API_VERSION}, received ${result.capabilities.apiVersion}`,
+        'invalid_api_version',
+      );
+    }
+
+    return null;
+  }
+
+  private async waitForTransferReady(): Promise<void> {
+    await this.capabilitiesReady;
+    if (this.capabilityError) {
+      throw this.capabilityError;
     }
   }
 
@@ -266,7 +307,9 @@ export class TrzszController {
       .finally(() => {
         this.allowCleanupProtocol = false;
         void this.params.cleanupOwner().catch(() => {
-          notifyTrzszTransferEvent({ type: 'partial_cleanup' });
+          if (this.params.isRuntimeCurrent()) {
+            notifyTrzszTransferEvent({ type: 'partial_cleanup' });
+          }
         });
       });
   }

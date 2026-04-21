@@ -84,6 +84,7 @@ export async function findTrzszMagicKey(
 export class TrzszFilter {
   private readonly writeToTerminal: (output: string | ArrayBuffer | Uint8Array | Blob) => void;
   private readonly sendToServer: (input: string | Uint8Array) => void;
+  private readonly waitForTransferReady?: () => Promise<void>;
   private readonly chooseSendFiles: (directory?: boolean) => Promise<string[] | undefined>;
   private readonly buildFileReaders: (paths: string[], directory: boolean, policy: TrzszTransferPolicy) => Promise<TrzszFileReader[] | undefined>;
   private readonly chooseSaveDirectory: NonNullable<TrzszOptions['chooseSaveDirectory']>;
@@ -135,6 +136,7 @@ export class TrzszFilter {
 
     this.writeToTerminal = options.writeToTerminal;
     this.sendToServer = options.sendToServer;
+  this.waitForTransferReady = options.waitForTransferReady;
     this.chooseSendFiles = options.chooseSendFiles;
     this.buildFileReaders = options.buildFileReaders;
     this.chooseSaveDirectory = options.chooseSaveDirectory;
@@ -344,13 +346,14 @@ export class TrzszFilter {
     const policy = this.getTransferPolicy();
 
     try {
-      if (this.disposed) {
-        return;
-      }
-
       this.handshakeLocked = true;
       this.detectTail = new Uint8Array(0);
       this.trzszTransfer = new TrzszTransfer(this.sendToServer, this.isWindowsShell, policy.maxChunkBytes);
+      this.trzszTransfer.setRemotePlatform(remoteIsWindows);
+      await this.waitForTransferReady?.();
+      if (this.disposed) {
+        return;
+      }
       if (mode === 'S') {
         selection = await this.handleTrzszDownloadFiles(version, remoteIsWindows, policy);
       } else if (mode === 'R') {
@@ -399,6 +402,9 @@ export class TrzszFilter {
   ): Promise<'file' | 'directory'> {
     this.emitTransferEvent({ type: 'prompt', direction: 'download', selection: 'directory' });
     const saveRoot = await this.chooseSaveDirectory();
+    if (this.disposed) {
+      throw new TrzszError('Stopped');
+    }
     if (!saveRoot) {
       await this.trzszTransfer?.sendAction(false, remoteIsWindows);
       throw new TrzszError('Stopped');
@@ -441,8 +447,14 @@ export class TrzszFilter {
         selection: directory ? 'directory' : 'file',
       });
       const filePaths = await this.chooseSendFiles(directory);
+      if (this.disposed) {
+        throw new TrzszError('Stopped');
+      }
       if (filePaths) {
         sendFiles = await this.buildFileReaders(filePaths, directory, policy);
+        if (this.disposed) {
+          throw new TrzszError('Stopped');
+        }
       }
     }
 

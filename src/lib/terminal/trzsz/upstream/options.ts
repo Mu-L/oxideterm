@@ -8,6 +8,7 @@ import type { OpenSaveFile, TrzszFileReader } from '@/lib/terminal/trzsz/upstrea
 export type TrzszOptions = {
   writeToTerminal?: (output: string | ArrayBuffer | Uint8Array | Blob) => void;
   sendToServer?: (input: string | Uint8Array) => void;
+  waitForTransferReady?: () => Promise<void>;
   chooseSendFiles?: (directory?: boolean) => Promise<string[] | undefined>;
   buildFileReaders?: (
     paths: string[],

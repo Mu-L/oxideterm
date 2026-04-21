@@ -839,7 +839,7 @@ export const TabBar = () => {
         <div
           ref={scrollContainerRef}
           onWheel={handleWheel}
-          className="h-full overflow-x-auto scrollbar-thin scroll-smooth"
+          className="h-full overflow-x-auto overflow-y-hidden scrollbar-hidden scroll-smooth"
         >
         {/* 最内层（渲染层）：inline-flex 让子元素一行排列，不换行 */}
         <div className="inline-flex h-full">

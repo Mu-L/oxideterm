@@ -1172,6 +1172,18 @@ html {
   /* WebGL addon handles DPI scaling internally */
 }
 
+/* ── Scrollbar utilities ──────────────────────────────────────────────────
+   scrollbar-hidden: completely hide the native scrollbar (VS Code style).
+   Scrolling still works via wheel/pointer events and overflow-x: auto.
+   Applies to both Blink/WebKit (Tauri WebView) and Firefox.
+─────────────────────────────────────────────────────────────────────────── */
+@utility scrollbar-hidden {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Data Visualization Animations */
 @keyframes progress-indeterminate {
   0% {

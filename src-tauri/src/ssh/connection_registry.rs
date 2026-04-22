@@ -35,8 +35,10 @@
 //! - keep_alive=true：忽略空闲超时
 
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
+use std::time::Instant;
 
 use super::auth::{
     DEFAULT_AUTH_TIMEOUT_SECS, authenticate_certificate_best_algo, authenticate_password,
@@ -54,7 +56,7 @@ use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
@@ -73,6 +75,28 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 
 /// Heartbeat consecutive failure threshold → mark LinkDown
 const HEARTBEAT_FAIL_THRESHOLD: u32 = 2;
+const LOCK_PROFILE_ENV: &str = "OXIDETERM_PROFILE_LOCKS";
+
+fn connection_lock_profiling_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| cfg!(debug_assertions) && std::env::var_os(LOCK_PROFILE_ENV).is_some())
+}
+
+async fn lock_mutex_with_diagnostics<'a, T>(
+    mutex: &'a Mutex<T>,
+    context: &'static str,
+) -> tokio::sync::MutexGuard<'a, T> {
+    let started = Instant::now();
+    let guard = mutex.lock().await;
+    if connection_lock_profiling_enabled() {
+        debug!(
+            "[ConnectionRegistry] lock wait context={} waited_us={}",
+            context,
+            started.elapsed().as_micros()
+        );
+    }
+    guard
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🛑 RECONNECT CONSTANTS - REMOVED
@@ -166,6 +190,22 @@ pub struct ConnectionInfo {
     pub remote_env: Option<RemoteEnvInfo>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct ConnectionResourceSummary {
+    terminal_count: usize,
+    has_sftp_session: bool,
+    forward_count: usize,
+}
+
+enum SharedSftpState {
+    Empty,
+    Initializing {
+        notify: Arc<Notify>,
+        generation: u64,
+    },
+    Ready(Arc<tokio::sync::Mutex<SftpSession>>),
+}
+
 /// 连接池统计信息（用于监控面板）
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -243,9 +283,11 @@ pub struct ConnectionEntry {
 
     /// 关联的 terminal session IDs
     terminal_ids: RwLock<Vec<String>>,
+    terminal_count: AtomicU32,
 
     /// 关联的 SFTP session ID
     sftp_session_id: RwLock<Option<String>>,
+    has_sftp_session: AtomicBool,
 
     /// SFTP session 实例 — Oxide-Next Phase 1.5 唯一真源
     ///
@@ -254,12 +296,13 @@ pub struct ConnectionEntry {
     /// - 连接重连后按需重建（`acquire_sftp()`）
     /// - 终端重建不影响 SFTP
     ///
-    /// 使用 `tokio::sync::Mutex` 包裹 Option，确保 acquire_sftp()
-    /// 的双重检查锁在 await 点安全。
-    sftp: tokio::sync::Mutex<Option<Arc<tokio::sync::Mutex<SftpSession>>>>,
+    /// 使用初始化占位状态，避免在外层锁内跨 await 创建 SFTP channel。
+    sftp: tokio::sync::Mutex<SharedSftpState>,
+    sftp_generation: AtomicU64,
 
     /// 关联的 forward IDs
     forward_ids: RwLock<Vec<String>>,
+    forward_count: AtomicU32,
 
     /// 心跳任务句柄
     heartbeat_task: Mutex<Option<JoinHandle<()>>>,
@@ -368,7 +411,8 @@ impl ConnectionEntry {
 
     /// 取消空闲计时器
     pub async fn cancel_idle_timer(&self) {
-        let mut timer = self.idle_timer.lock().await;
+        let mut timer =
+            lock_mutex_with_diagnostics(&self.idle_timer, "entry.cancel_idle_timer").await;
         if let Some(handle) = timer.take() {
             handle.abort();
             debug!("Connection {} idle timer cancelled", self.id);
@@ -377,7 +421,7 @@ impl ConnectionEntry {
 
     /// 设置空闲计时器
     pub async fn set_idle_timer(&self, handle: JoinHandle<()>) {
-        let mut timer = self.idle_timer.lock().await;
+        let mut timer = lock_mutex_with_diagnostics(&self.idle_timer, "entry.set_idle_timer").await;
         // 取消之前的计时器
         if let Some(old_handle) = timer.take() {
             old_handle.abort();
@@ -387,15 +431,22 @@ impl ConnectionEntry {
 
     /// 添加关联的 terminal session ID
     pub async fn add_terminal(&self, session_id: String) {
-        self.terminal_ids.write().await.push(session_id);
+        let len = {
+            let mut terminal_ids = self.terminal_ids.write().await;
+            terminal_ids.push(session_id);
+            terminal_ids.len()
+        };
+        self.terminal_count.store(len as u32, Ordering::Release);
     }
 
     /// 移除关联的 terminal session ID
     pub async fn remove_terminal(&self, session_id: &str) {
-        self.terminal_ids
-            .write()
-            .await
-            .retain(|id| id != session_id);
+        let len = {
+            let mut terminal_ids = self.terminal_ids.write().await;
+            terminal_ids.retain(|id| id != session_id);
+            terminal_ids.len()
+        };
+        self.terminal_count.store(len as u32, Ordering::Release);
     }
 
     /// 获取关联的 terminal session IDs
@@ -405,6 +456,8 @@ impl ConnectionEntry {
 
     /// 设置关联的 SFTP session ID
     pub async fn set_sftp_session(&self, session_id: Option<String>) {
+        self.has_sftp_session
+            .store(session_id.is_some(), Ordering::Release);
         *self.sftp_session_id.write().await = session_id;
     }
 
@@ -425,22 +478,66 @@ impl ConnectionEntry {
     ///
     /// 参考: docs/reference/OXIDE_NEXT_ARCHITECTURE.md §3.3
     pub async fn acquire_sftp(&self) -> Result<Arc<tokio::sync::Mutex<SftpSession>>, SftpError> {
-        // 持有外层锁贯穿整个创建过程，防止并发创建多个 SSH channel。
-        // tokio::sync::Mutex 允许跨 await 点持有。
-        let mut guard = self.sftp.lock().await;
+        loop {
+            let init_notify = {
+                let mut guard =
+                    lock_mutex_with_diagnostics(&self.sftp, "entry.acquire_sftp.state").await;
+                match &*guard {
+                    SharedSftpState::Ready(sftp) => return Ok(Arc::clone(sftp)),
+                    SharedSftpState::Initializing { notify, .. } => Some(notify.clone()),
+                    SharedSftpState::Empty => {
+                        let generation = self.sftp_generation.load(Ordering::Acquire);
+                        let notify = Arc::new(Notify::new());
+                        *guard = SharedSftpState::Initializing {
+                            notify: notify.clone(),
+                            generation,
+                        };
+                        None
+                    }
+                }
+            };
 
-        // 快速路径：已有 SFTP session
-        if let Some(ref sftp) = *guard {
-            return Ok(Arc::clone(sftp));
+            if let Some(notify) = init_notify {
+                notify.notified().await;
+                continue;
+            }
+
+            let created = SftpSession::new(self.handle_controller.clone(), self.id.clone()).await;
+            let mut guard =
+                lock_mutex_with_diagnostics(&self.sftp, "entry.acquire_sftp.install").await;
+
+            match created {
+                Ok(new_sftp) => {
+                    let arc = Arc::new(tokio::sync::Mutex::new(new_sftp));
+                    match &*guard {
+                        SharedSftpState::Ready(existing) => return Ok(existing.clone()),
+                        SharedSftpState::Initializing { notify, generation }
+                            if *generation == self.sftp_generation.load(Ordering::Acquire) =>
+                        {
+                            let notify = notify.clone();
+                            *guard = SharedSftpState::Ready(Arc::clone(&arc));
+                            notify.notify_waiters();
+                            info!("Created SFTP session for connection {}", self.id);
+                            return Ok(arc);
+                        }
+                        SharedSftpState::Initializing { notify, .. } => {
+                            notify.clone().notify_waiters();
+                            *guard = SharedSftpState::Empty;
+                            continue;
+                        }
+                        SharedSftpState::Empty => continue,
+                    }
+                }
+                Err(err) => {
+                    if let SharedSftpState::Initializing { notify, .. } = &*guard {
+                        let notify = notify.clone();
+                        *guard = SharedSftpState::Empty;
+                        notify.notify_waiters();
+                    }
+                    return Err(err);
+                }
+            }
         }
-
-        // 慢路径：在锁内创建新 SFTP session，确保同连接只创建一次
-        let new_sftp = SftpSession::new(self.handle_controller.clone(), self.id.clone()).await?;
-
-        let arc = Arc::new(tokio::sync::Mutex::new(new_sftp));
-        *guard = Some(Arc::clone(&arc));
-        info!("Created SFTP session for connection {}", self.id);
-        Ok(arc)
     }
 
     /// 创建一个独立的 SFTP session 用于文件传输。
@@ -471,10 +568,20 @@ impl ConnectionEntry {
     ///
     /// SFTP session 随连接自动释放，无僵尸通道。
     pub async fn clear_sftp(&self) {
-        let mut guard = self.sftp.lock().await;
-        if guard.is_some() {
-            *guard = None;
-            info!("Cleared SFTP session for connection {}", self.id);
+        let mut guard = lock_mutex_with_diagnostics(&self.sftp, "entry.clear_sftp").await;
+        self.sftp_generation.fetch_add(1, Ordering::AcqRel);
+        match std::mem::replace(&mut *guard, SharedSftpState::Empty) {
+            SharedSftpState::Empty => {}
+            SharedSftpState::Initializing { notify, .. } => {
+                notify.notify_waiters();
+                info!(
+                    "Cancelled in-flight SFTP initialization for connection {}",
+                    self.id
+                );
+            }
+            SharedSftpState::Ready(_) => {
+                info!("Cleared SFTP session for connection {}", self.id);
+            }
         }
     }
 
@@ -490,28 +597,47 @@ impl ConnectionEntry {
     /// - `true`: 存在 SFTP session 且已清除
     /// - `false`: 不存在 SFTP session
     pub async fn invalidate_sftp(&self) -> bool {
-        let mut guard = self.sftp.lock().await;
-        if guard.is_some() {
-            *guard = None;
-            info!(
-                "Invalidated SFTP session for connection {} (preparing rebuild)",
-                self.id
-            );
-            true
-        } else {
-            false
+        let mut guard = lock_mutex_with_diagnostics(&self.sftp, "entry.invalidate_sftp").await;
+        self.sftp_generation.fetch_add(1, Ordering::AcqRel);
+        match std::mem::replace(&mut *guard, SharedSftpState::Empty) {
+            SharedSftpState::Empty => false,
+            SharedSftpState::Initializing { notify, .. } => {
+                notify.notify_waiters();
+                info!(
+                    "Invalidated in-flight SFTP initialization for connection {} (preparing rebuild)",
+                    self.id
+                );
+                true
+            }
+            SharedSftpState::Ready(_) => {
+                info!(
+                    "Invalidated SFTP session for connection {} (preparing rebuild)",
+                    self.id
+                );
+                true
+            }
         }
     }
 
     /// 检查是否有活跃的 SFTP session
     pub async fn has_sftp(&self) -> bool {
-        self.sftp.lock().await.is_some()
+        matches!(
+            &*lock_mutex_with_diagnostics(&self.sftp, "entry.has_sftp").await,
+            SharedSftpState::Ready(_)
+        )
     }
 
     /// 获取 SFTP session 的 cwd（如果存在）
     pub async fn sftp_cwd(&self) -> Option<String> {
-        let guard = self.sftp.lock().await;
-        if let Some(ref sftp_arc) = *guard {
+        let sftp_arc = {
+            let guard = lock_mutex_with_diagnostics(&self.sftp, "entry.sftp_cwd.outer").await;
+            match &*guard {
+                SharedSftpState::Ready(sftp_arc) => Some(sftp_arc.clone()),
+                _ => None,
+            }
+        };
+
+        if let Some(sftp_arc) = sftp_arc {
             let sftp = sftp_arc.lock().await;
             Some(sftp.cwd().to_string())
         } else {
@@ -521,12 +647,22 @@ impl ConnectionEntry {
 
     /// 添加关联的 forward ID
     pub async fn add_forward(&self, forward_id: String) {
-        self.forward_ids.write().await.push(forward_id);
+        let len = {
+            let mut forward_ids = self.forward_ids.write().await;
+            forward_ids.push(forward_id);
+            forward_ids.len()
+        };
+        self.forward_count.store(len as u32, Ordering::Release);
     }
 
     /// 移除关联的 forward ID
     pub async fn remove_forward(&self, forward_id: &str) {
-        self.forward_ids.write().await.retain(|id| id != forward_id);
+        let len = {
+            let mut forward_ids = self.forward_ids.write().await;
+            forward_ids.retain(|id| id != forward_id);
+            forward_ids.len()
+        };
+        self.forward_count.store(len as u32, Ordering::Release);
     }
 
     /// 获取关联的 forward IDs
@@ -573,6 +709,14 @@ impl ConnectionEntry {
         }
     }
 
+    fn resource_summary(&self) -> ConnectionResourceSummary {
+        ConnectionResourceSummary {
+            terminal_count: self.terminal_count.load(Ordering::Acquire) as usize,
+            has_sftp_session: self.has_sftp_session.load(Ordering::Acquire),
+            forward_count: self.forward_count.load(Ordering::Acquire) as usize,
+        }
+    }
+
     /// 获取父连接 ID
     pub fn parent_connection_id(&self) -> Option<&str> {
         self.parent_connection_id.as_deref()
@@ -595,7 +739,8 @@ impl ConnectionEntry {
 
     /// 取消心跳任务
     pub async fn cancel_heartbeat(&self) {
-        let mut task = self.heartbeat_task.lock().await;
+        let mut task =
+            lock_mutex_with_diagnostics(&self.heartbeat_task, "entry.cancel_heartbeat").await;
         if let Some(handle) = task.take() {
             handle.abort();
             debug!("Connection {} heartbeat task cancelled", self.id);
@@ -604,7 +749,8 @@ impl ConnectionEntry {
 
     /// 设置心跳任务句柄
     pub async fn set_heartbeat_task(&self, handle: JoinHandle<()>) {
-        let mut task = self.heartbeat_task.lock().await;
+        let mut task =
+            lock_mutex_with_diagnostics(&self.heartbeat_task, "entry.set_heartbeat_task").await;
         if let Some(old_handle) = task.take() {
             old_handle.abort();
         }
@@ -613,7 +759,8 @@ impl ConnectionEntry {
 
     /// 取消重连任务
     pub async fn cancel_reconnect(&self) {
-        let mut task = self.reconnect_task.lock().await;
+        let mut task =
+            lock_mutex_with_diagnostics(&self.reconnect_task, "entry.cancel_reconnect").await;
         if let Some(handle) = task.take() {
             handle.abort();
             debug!("Connection {} reconnect task cancelled", self.id);
@@ -624,7 +771,8 @@ impl ConnectionEntry {
 
     /// 设置重连任务句柄
     pub async fn set_reconnect_task(&self, handle: JoinHandle<()>) {
-        let mut task = self.reconnect_task.lock().await;
+        let mut task =
+            lock_mutex_with_diagnostics(&self.reconnect_task, "entry.set_reconnect_task").await;
         if let Some(old_handle) = task.take() {
             old_handle.abort();
         }
@@ -695,7 +843,7 @@ pub struct SshConnectionRegistry {
     app_handle: RwLock<Option<AppHandle>>,
 
     /// 待发送的事件（AppHandle 未就绪时缓存）
-    pending_events: Mutex<Vec<(String, String)>>,
+    pending_events: parking_lot::Mutex<Vec<(String, String)>>,
 
     /// Oxide-Next Phase 2: 节点事件发射器
     node_event_emitter: parking_lot::RwLock<Option<Arc<crate::router::NodeEventEmitter>>>,
@@ -714,7 +862,7 @@ impl SshConnectionRegistry {
             connections: Arc::new(DashMap::new()),
             config: RwLock::new(ConnectionPoolConfig::default()),
             app_handle: RwLock::new(None),
-            pending_events: Mutex::new(Vec::new()),
+            pending_events: parking_lot::Mutex::new(Vec::new()),
             node_event_emitter: parking_lot::RwLock::new(None),
         }
     }
@@ -725,7 +873,7 @@ impl SshConnectionRegistry {
             connections: Arc::new(DashMap::new()),
             config: RwLock::new(config),
             app_handle: RwLock::new(None),
-            pending_events: Mutex::new(Vec::new()),
+            pending_events: parking_lot::Mutex::new(Vec::new()),
             node_event_emitter: parking_lot::RwLock::new(None),
         }
     }
@@ -738,7 +886,7 @@ impl SshConnectionRegistry {
 
         // 先取出所有缓存的事件
         let pending = {
-            let mut events = self.pending_events.lock().await;
+            let mut events = self.pending_events.lock();
             std::mem::take(&mut *events)
         };
 
@@ -823,6 +971,7 @@ impl SshConnectionRegistry {
 
         for conn in &entries {
             let state = conn.state().await;
+            let resources = conn.resource_summary();
 
             match state {
                 ConnectionState::Active => active_connections += 1,
@@ -832,11 +981,11 @@ impl SshConnectionRegistry {
                 _ => {}
             }
 
-            total_terminals += conn.terminal_ids.read().await.len();
-            if conn.sftp_session_id.read().await.is_some() {
+            total_terminals += resources.terminal_count;
+            if resources.has_sftp_session {
                 total_sftp_sessions += 1;
             }
-            total_forwards += conn.forward_ids.read().await.len();
+            total_forwards += resources.forward_count;
             total_ref_count = total_ref_count.saturating_add(conn.ref_count());
         }
 
@@ -950,9 +1099,13 @@ impl SshConnectionRegistry {
             created_at: Utc::now(),
             idle_timer: Mutex::new(None),
             terminal_ids: RwLock::new(Vec::new()),
+            terminal_count: AtomicU32::new(0),
             sftp_session_id: RwLock::new(None),
-            sftp: tokio::sync::Mutex::new(None),
+            has_sftp_session: AtomicBool::new(false),
+            sftp: tokio::sync::Mutex::new(SharedSftpState::Empty),
+            sftp_generation: AtomicU64::new(0),
             forward_ids: RwLock::new(Vec::new()),
+            forward_count: AtomicU32::new(0),
             heartbeat_task: Mutex::new(None),
             heartbeat_failures: AtomicU32::new(0),
             reconnect_task: Mutex::new(None),
@@ -1230,9 +1383,13 @@ impl SshConnectionRegistry {
                         created_at: Utc::now(),
                         idle_timer: Mutex::new(None),
                         terminal_ids: RwLock::new(Vec::new()),
+                        terminal_count: AtomicU32::new(0),
                         sftp_session_id: RwLock::new(None),
-                        sftp: tokio::sync::Mutex::new(None),
+                        has_sftp_session: AtomicBool::new(false),
+                        sftp: tokio::sync::Mutex::new(SharedSftpState::Empty),
+                        sftp_generation: AtomicU64::new(0),
                         forward_ids: RwLock::new(Vec::new()),
+                        forward_count: AtomicU32::new(0),
                         heartbeat_task: Mutex::new(None),
                         heartbeat_failures: AtomicU32::new(0),
                         reconnect_task: Mutex::new(None),
@@ -1291,9 +1448,13 @@ impl SshConnectionRegistry {
                         created_at: Utc::now(),
                         idle_timer: Mutex::new(None),
                         terminal_ids: RwLock::new(Vec::new()),
+                        terminal_count: AtomicU32::new(0),
                         sftp_session_id: RwLock::new(None),
-                        sftp: tokio::sync::Mutex::new(None),
+                        has_sftp_session: AtomicBool::new(false),
+                        sftp: tokio::sync::Mutex::new(SharedSftpState::Empty),
+                        sftp_generation: AtomicU64::new(0),
                         forward_ids: RwLock::new(Vec::new()),
+                        forward_count: AtomicU32::new(0),
                         heartbeat_task: Mutex::new(None),
                         heartbeat_failures: AtomicU32::new(0),
                         reconnect_task: Mutex::new(None),
@@ -1348,9 +1509,13 @@ impl SshConnectionRegistry {
             created_at: Utc::now(),
             idle_timer: Mutex::new(None),
             terminal_ids: RwLock::new(Vec::new()),
+            terminal_count: AtomicU32::new(0),
             sftp_session_id: RwLock::new(None),
-            sftp: tokio::sync::Mutex::new(None),
+            has_sftp_session: AtomicBool::new(false),
+            sftp: tokio::sync::Mutex::new(SharedSftpState::Empty),
+            sftp_generation: AtomicU64::new(0),
             forward_ids: RwLock::new(Vec::new()),
+            forward_count: AtomicU32::new(0),
             heartbeat_task: Mutex::new(None),
             heartbeat_failures: AtomicU32::new(0),
             reconnect_task: Mutex::new(None),
@@ -2086,9 +2251,13 @@ impl SshConnectionRegistry {
             created_at: Utc::now(),
             idle_timer: Mutex::new(None),
             terminal_ids: RwLock::new(vec![session_id]),
+            terminal_count: AtomicU32::new(1),
             sftp_session_id: RwLock::new(None),
-            sftp: tokio::sync::Mutex::new(None),
+            has_sftp_session: AtomicBool::new(false),
+            sftp: tokio::sync::Mutex::new(SharedSftpState::Empty),
+            sftp_generation: AtomicU64::new(0),
             forward_ids: RwLock::new(Vec::new()),
+            forward_count: AtomicU32::new(0),
             heartbeat_task: Mutex::new(None),
             heartbeat_failures: AtomicU32::new(0),
             reconnect_task: Mutex::new(None),
@@ -2672,7 +2841,7 @@ impl SshConnectionRegistry {
                 "AppHandle not ready, caching event: {} -> {}",
                 connection_id, status
             );
-            let mut pending = self.pending_events.lock().await;
+            let mut pending = self.pending_events.lock();
             if pending.len() < 1000 {
                 pending.push((connection_id.to_string(), status.to_string()));
                 debug!("Event cached, total pending: {}", pending.len());
@@ -2968,9 +3137,13 @@ mod tests {
             created_at: Utc::now(),
             idle_timer: Mutex::new(None),
             terminal_ids: RwLock::new(Vec::new()),
+            terminal_count: AtomicU32::new(0),
             sftp_session_id: RwLock::new(None),
-            sftp: tokio::sync::Mutex::new(None),
+            has_sftp_session: AtomicBool::new(false),
+            sftp: tokio::sync::Mutex::new(SharedSftpState::Empty),
+            sftp_generation: AtomicU64::new(0),
             forward_ids: RwLock::new(Vec::new()),
+            forward_count: AtomicU32::new(0),
             heartbeat_task: Mutex::new(None),
             heartbeat_failures: AtomicU32::new(0),
             reconnect_task: Mutex::new(None),
@@ -3017,9 +3190,13 @@ mod tests {
             created_at: Utc::now(),
             idle_timer: Mutex::new(None),
             terminal_ids: RwLock::new(Vec::new()),
+            terminal_count: AtomicU32::new(0),
             sftp_session_id: RwLock::new(None),
-            sftp: tokio::sync::Mutex::new(None),
+            has_sftp_session: AtomicBool::new(false),
+            sftp: tokio::sync::Mutex::new(SharedSftpState::Empty),
+            sftp_generation: AtomicU64::new(0),
             forward_ids: RwLock::new(Vec::new()),
+            forward_count: AtomicU32::new(0),
             heartbeat_task: Mutex::new(None),
             heartbeat_failures: AtomicU32::new(0),
             reconnect_task: Mutex::new(None),
@@ -3266,6 +3443,31 @@ mod tests {
         assert_eq!(info.sftp_session_id, Some("sftp-1".to_string()));
         assert_eq!(info.forward_ids, vec!["fwd-1"]);
         assert!(info.keep_alive);
+    }
+
+    #[tokio::test]
+    async fn test_resource_summary_tracks_runtime_counts() {
+        let entry = create_test_entry("resource-summary-test");
+
+        entry.add_terminal("term-1".to_string()).await;
+        entry.add_terminal("term-2".to_string()).await;
+        entry.set_sftp_session(Some("sftp-1".to_string())).await;
+        entry.add_forward("fwd-1".to_string()).await;
+        entry.add_forward("fwd-2".to_string()).await;
+
+        let summary = entry.resource_summary();
+        assert_eq!(summary.terminal_count, 2);
+        assert!(summary.has_sftp_session);
+        assert_eq!(summary.forward_count, 2);
+
+        entry.remove_terminal("term-1").await;
+        entry.set_sftp_session(None).await;
+        entry.remove_forward("fwd-1").await;
+
+        let summary = entry.resource_summary();
+        assert_eq!(summary.terminal_count, 1);
+        assert!(!summary.has_sftp_session);
+        assert_eq!(summary.forward_count, 1);
     }
 
     #[tokio::test]

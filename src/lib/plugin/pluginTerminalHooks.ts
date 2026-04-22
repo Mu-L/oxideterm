@@ -22,6 +22,107 @@ import { normalizePluginKeyboardEvent } from './pluginHostUi';
 
 /** Maximum time (ms) a single hook handler should take before warning */
 const HOOK_BUDGET_MS = 5;
+const PROFILE_SAMPLE_LIMIT = 64;
+const PROFILE_REPORT_EVERY = 200;
+const PROFILE_REPORT_INTERVAL_MS = 5_000;
+
+type HookKind = 'input' | 'output';
+
+type HookProfileStats = {
+  count: number;
+  slowCount: number;
+  totalMs: number;
+  maxMs: number;
+  samples: number[];
+  lastReportedAt: number;
+};
+
+function isTerminalHookProfilingEnabled(): boolean {
+  if (!import.meta.env.DEV) return false;
+  return Boolean(
+    (
+      globalThis as typeof globalThis & {
+        __OXIDE_PROFILE__?: { terminalHooks?: boolean };
+      }
+    ).__OXIDE_PROFILE__?.terminalHooks,
+  );
+}
+
+const hookProfileStats = new Map<string, HookProfileStats>();
+
+function getHookProfileKey(kind: HookKind, pluginId: string): string {
+  return `${kind}:${pluginId}`;
+}
+
+function computeP95(samples: number[]): number {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+}
+
+function recordHookProfile(kind: HookKind, pluginId: string, elapsedMs: number, slow: boolean): void {
+  if (!isTerminalHookProfilingEnabled()) return;
+
+  const key = getHookProfileKey(kind, pluginId);
+  let stats = hookProfileStats.get(key);
+  if (!stats) {
+    stats = {
+      count: 0,
+      slowCount: 0,
+      totalMs: 0,
+      maxMs: 0,
+      samples: [],
+      lastReportedAt: performance.now(),
+    };
+    hookProfileStats.set(key, stats);
+  }
+
+  stats.count += 1;
+  stats.totalMs += elapsedMs;
+  stats.maxMs = Math.max(stats.maxMs, elapsedMs);
+  if (slow) stats.slowCount += 1;
+
+  if (stats.samples.length >= PROFILE_SAMPLE_LIMIT) {
+    stats.samples.shift();
+  }
+  stats.samples.push(elapsedMs);
+
+  const now = performance.now();
+  if (
+    stats.count % PROFILE_REPORT_EVERY === 0
+    || now - stats.lastReportedAt >= PROFILE_REPORT_INTERVAL_MS
+  ) {
+    console.debug(
+      `[PluginTerminalHooks] ${kind} profile plugin=${pluginId} count=${stats.count} avg=${(stats.totalMs / stats.count).toFixed(2)}ms p95=${computeP95(stats.samples).toFixed(2)}ms max=${stats.maxMs.toFixed(2)}ms slow=${stats.slowCount}`,
+    );
+    stats.lastReportedAt = now;
+  }
+}
+
+function schedulePluginUnload(pluginId: string): void {
+  import('./pluginLoader').then(({ unloadPlugin }) => unloadPlugin(pluginId));
+}
+
+function maybeTripCircuitBreaker(pluginId: string): void {
+  if (trackPluginError(pluginId)) {
+    schedulePluginUnload(pluginId);
+  }
+}
+
+function reportSlowHook(kind: HookKind, pluginId: string, elapsedMs: number): void {
+  console.warn(
+    `[PluginTerminalHooks] ${kind === 'input' ? 'Input interceptor' : 'Output processor'} (plugin: ${pluginId}) took ${elapsedMs.toFixed(1)}ms (budget: ${HOOK_BUDGET_MS}ms)`,
+  );
+  maybeTripCircuitBreaker(pluginId);
+}
+
+function reportHookError(kind: HookKind, pluginId: string, err: unknown): void {
+  console.error(
+    `[PluginTerminalHooks] ${kind === 'input' ? 'Input interceptor' : 'Output processor'} error (plugin: ${pluginId}):`,
+    err,
+  );
+  maybeTripCircuitBreaker(pluginId);
+}
 
 /**
  * Run the input interceptor pipeline.
@@ -32,7 +133,7 @@ const HOOK_BUDGET_MS = 5;
  * @returns Modified string, or null if a plugin suppresses input
  */
 export function runInputPipeline(data: string, sessionId: string, nodeId?: string): string | null {
-  const interceptors = usePluginStore.getState().inputInterceptors;
+  const { inputInterceptors: interceptors } = usePluginStore.getState();
   if (interceptors.length === 0) return data;
 
   let current: string | null = data;
@@ -45,26 +146,12 @@ export function runInputPipeline(data: string, sessionId: string, nodeId?: strin
       const t0 = performance.now();
       current = entry.handler(current, context);
       const elapsed = performance.now() - t0;
+      const isSlow = elapsed > HOOK_BUDGET_MS;
 
-      if (elapsed > HOOK_BUDGET_MS) {
-        console.warn(
-          `[PluginTerminalHooks] Input interceptor (plugin: ${entry.pluginId}) took ${elapsed.toFixed(1)}ms (budget: ${HOOK_BUDGET_MS}ms)`,
-        );
-        // Slow hooks count toward circuit breaker
-        if (trackPluginError(entry.pluginId)) {
-          import('./pluginLoader').then(({ unloadPlugin }) => unloadPlugin(entry.pluginId));
-        }
-      }
+      recordHookProfile('input', entry.pluginId, elapsed, isSlow);
+      if (isSlow) reportSlowHook('input', entry.pluginId, elapsed);
     } catch (err) {
-      console.error(`[PluginTerminalHooks] Input interceptor error (plugin: ${entry.pluginId}):`, err);
-
-      // Circuit breaker check
-      if (trackPluginError(entry.pluginId)) {
-        // Auto-disable will be handled by the loader
-        import('./pluginLoader').then(({ unloadPlugin }) => unloadPlugin(entry.pluginId));
-      }
-
-      // Fail-open: continue with the current (unmodified) data
+      reportHookError('input', entry.pluginId, err);
     }
   }
 
@@ -80,7 +167,7 @@ export function runInputPipeline(data: string, sessionId: string, nodeId?: strin
  * @returns Modified Uint8Array
  */
 export function runOutputPipeline(data: Uint8Array, sessionId: string, nodeId?: string): Uint8Array {
-  const processors = usePluginStore.getState().outputProcessors;
+  const { outputProcessors: processors } = usePluginStore.getState();
   if (processors.length === 0) return data;
 
   let current = data;
@@ -91,24 +178,12 @@ export function runOutputPipeline(data: Uint8Array, sessionId: string, nodeId?: 
       const t0 = performance.now();
       current = entry.handler(current, context);
       const elapsed = performance.now() - t0;
+      const isSlow = elapsed > HOOK_BUDGET_MS;
 
-      if (elapsed > HOOK_BUDGET_MS) {
-        console.warn(
-          `[PluginTerminalHooks] Output processor (plugin: ${entry.pluginId}) took ${elapsed.toFixed(1)}ms (budget: ${HOOK_BUDGET_MS}ms)`,
-        );
-        if (trackPluginError(entry.pluginId)) {
-          import('./pluginLoader').then(({ unloadPlugin }) => unloadPlugin(entry.pluginId));
-        }
-      }
+      recordHookProfile('output', entry.pluginId, elapsed, isSlow);
+      if (isSlow) reportSlowHook('output', entry.pluginId, elapsed);
     } catch (err) {
-      console.error(`[PluginTerminalHooks] Output processor error (plugin: ${entry.pluginId}):`, err);
-
-      // Circuit breaker check
-      if (trackPluginError(entry.pluginId)) {
-        import('./pluginLoader').then(({ unloadPlugin }) => unloadPlugin(entry.pluginId));
-      }
-
-      // Fail-open: continue with previous data unchanged
+      reportHookError('output', entry.pluginId, err);
     }
   }
 
@@ -128,7 +203,7 @@ export function runOutputPipeline(data: Uint8Array, sessionId: string, nodeId?: 
  * @returns The handler function if matched, undefined otherwise
  */
 export function matchPluginShortcut(event: KeyboardEvent): (() => void) | undefined {
-  const shortcuts = usePluginStore.getState().shortcuts;
+  const { shortcuts } = usePluginStore.getState();
   if (shortcuts.size === 0) return undefined;
 
   const normalizedKey = normalizePluginKeyboardEvent(event);

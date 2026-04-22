@@ -76,11 +76,15 @@ export const pluginEventBridge = new PluginEventBridge();
 export function setupConnectionBridge(
   useAppStore: typeof import('../../store/appStore').useAppStore,
 ): () => void {
-  let prevConnections = new Map(useAppStore.getState().connections);
+  type AppState = ReturnType<typeof useAppStore.getState>;
+  type ConnectionsSlice = AppState['connections'];
+  const subscribeToConnections = useAppStore.subscribe as unknown as (
+    selector: (state: AppState) => ConnectionsSlice,
+    listener: (curr: ConnectionsSlice) => void,
+  ) => () => void;
+  let prevConnections = useAppStore.getState().connections;
 
-  const unsubscribe = useAppStore.subscribe((state) => {
-    const curr = state.connections;
-
+  const unsubscribe = subscribeToConnections((state) => state.connections, (curr) => {
     // Detect new, changed, and removed connections
     for (const [id, conn] of curr) {
       const prev = prevConnections.get(id);
@@ -111,17 +115,6 @@ export function setupConnectionBridge(
           pluginEventBridge.emit('connection:disconnect', snapshot);
         }
       }
-
-      // Detect session (terminal) changes (tracked for internal use)
-      if (prev) {
-        const prevTerminals = new Set(prev.terminalIds);
-        const currTerminals = new Set(conn.terminalIds);
-
-        // New sessions — no longer emitted as plugin events (use node:ready)
-        // Removed sessions — no longer emitted as plugin events (use node:disconnected)
-        void prevTerminals;
-        void currTerminals;
-      }
     }
 
     // Detect removed connections
@@ -134,8 +127,7 @@ export function setupConnectionBridge(
         }
       }
     }
-
-    prevConnections = new Map(curr);
+    prevConnections = curr;
   });
 
   return unsubscribe;
@@ -227,11 +219,16 @@ export function setupTransferBridge(): () => void {
   let prevStates = new Map<string, string>();
 
   void import('../../store/transferStore').then(({ useTransferStore }) => {
-    prevStates = new Map(
-      Array.from(useTransferStore.getState().transfers.entries()).map(([k, v]) => [k, v.state]),
-    );
-    unsub = useTransferStore.subscribe((state) => {
-      const transfers = state.transfers;
+    type TransferState = ReturnType<typeof useTransferStore.getState>;
+    type TransferSlice = TransferState['transfers'];
+    const subscribeToTransfers = useTransferStore.subscribe as unknown as (
+      selector: (state: TransferState) => TransferSlice,
+      listener: (transfers: TransferSlice) => void,
+    ) => () => void;
+    for (const [id, transfer] of useTransferStore.getState().transfers) {
+      prevStates.set(id, transfer.state);
+    }
+    unsub = subscribeToTransfers((state) => state.transfers, (transfers) => {
       for (const [id, t] of transfers) {
         const prev = prevStates.get(id);
         if (t.state === 'completed' && prev !== 'completed') {
@@ -239,8 +236,14 @@ export function setupTransferBridge(): () => void {
         } else if (t.state === 'error' && prev !== 'error') {
           pluginEventBridge.emit('transfer:error', { id: t.id, nodeId: t.nodeId, name: t.name, error: t.error });
         }
+        prevStates.set(id, t.state);
       }
-      prevStates = new Map(Array.from(transfers.entries()).map(([k, v]) => [k, v.state]));
+
+      for (const id of Array.from(prevStates.keys())) {
+        if (!transfers.has(id)) {
+          prevStates.delete(id);
+        }
+      }
     });
   }).catch((err) => {
     console.error('[PluginEventBridge] Failed to setup transfer bridge:', err);

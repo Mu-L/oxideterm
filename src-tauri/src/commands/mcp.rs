@@ -16,12 +16,37 @@
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use tauri::State;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
+
+const LOCK_PROFILE_ENV: &str = "OXIDETERM_PROFILE_LOCKS";
+
+fn mcp_lock_profiling_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| cfg!(debug_assertions) && std::env::var_os(LOCK_PROFILE_ENV).is_some())
+}
+
+async fn lock_with_diagnostics<'a, T>(
+    mutex: &'a Mutex<T>,
+    context: &'static str,
+) -> tokio::sync::MutexGuard<'a, T> {
+    let started = Instant::now();
+    let guard = mutex.lock().await;
+    if mcp_lock_profiling_enabled() {
+        tracing::debug!(
+            "[MCP] lock wait context={} waited_us={}",
+            context,
+            started.elapsed().as_micros()
+        );
+    }
+    guard
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // State
@@ -57,19 +82,23 @@ impl McpProcessRegistry {
     }
 
     pub async fn stop_all(&self) {
-        let mut procs = self.processes.lock().await;
+        let mut procs = lock_with_diagnostics(&self.processes, "registry.stop_all.processes").await;
         for (id, proc) in procs.drain() {
             tracing::info!("[MCP] Stopping server {}", id);
             proc.reader_task.abort();
             proc.stderr_task.abort();
             // Reject all pending waiters
             {
-                let mut pending = proc.pending.lock().await;
+                let mut pending =
+                    lock_with_diagnostics(&proc.pending, "registry.stop_all.pending").await;
                 for (_, tx) in pending.drain() {
                     let _ = tx.send(Err("MCP server shutting down".to_string()));
                 }
             }
-            let _ = proc.child.lock().await.kill().await;
+            let _ = lock_with_diagnostics(&proc.child, "registry.stop_all.child")
+                .await
+                .kill()
+                .await;
         }
     }
 }
@@ -190,7 +219,8 @@ where
                 if let Some(id) = val.get("id").and_then(|v| v.as_u64()) {
                     // This is a response — find and notify the waiter
                     let tx = {
-                        let mut map = pending.lock().await;
+                        let mut map =
+                            lock_with_diagnostics(&pending, "stdout_reader.pending_remove").await;
                         map.remove(&id)
                     };
                     if let Some(tx) = tx {
@@ -233,7 +263,7 @@ where
     }
 
     // Reader exiting — reject all remaining pending waiters
-    let mut map = pending.lock().await;
+    let mut map = lock_with_diagnostics(&pending, "stdout_reader.pending_drain").await;
     for (_, tx) in map.drain() {
         let _ = tx.send(Err("MCP server closed stdout".to_string()));
     }
@@ -403,7 +433,9 @@ pub async fn mcp_spawn_server(
         stderr_task,
     });
 
-    state.processes.lock().await.insert(server_id.clone(), proc);
+    lock_with_diagnostics(&state.processes, "spawn_server.registry_insert")
+        .await
+        .insert(server_id.clone(), proc);
     tracing::info!("[MCP] Spawned server '{}' as {}", command, server_id);
 
     Ok(server_id)
@@ -426,7 +458,7 @@ pub async fn mcp_send_request(
 ) -> Result<Value, String> {
     // Clone the Arc so we can release the registry lock immediately
     let proc = {
-        let procs = state.processes.lock().await;
+        let procs = lock_with_diagnostics(&state.processes, "send_request.registry_get").await;
         procs
             .get(&server_id)
             .cloned()
@@ -464,7 +496,9 @@ pub async fn mcp_send_request(
     // to avoid a race where the reader task dispatches before we register.
     let rx = if !is_notification {
         let (tx, rx) = oneshot::channel();
-        proc.pending.lock().await.insert(request_id, tx);
+        lock_with_diagnostics(&proc.pending, "send_request.pending_insert")
+            .await
+            .insert(request_id, tx);
         Some(rx)
     } else {
         None
@@ -472,10 +506,12 @@ pub async fn mcp_send_request(
 
     // Write to stdin with Content-Length framing per MCP spec.
     {
-        let mut stdin = proc.stdin.lock().await;
+        let mut stdin = lock_with_diagnostics(&proc.stdin, "send_request.stdin_write").await;
         if let Err(err) = write_framed_message(&mut *stdin, &request_str).await {
             if !is_notification {
-                proc.pending.lock().await.remove(&request_id);
+                lock_with_diagnostics(&proc.pending, "send_request.pending_remove_on_write_error")
+                    .await
+                    .remove(&request_id);
             }
             return Err(err);
         }
@@ -497,7 +533,9 @@ pub async fn mcp_send_request(
         }
         Err(_) => {
             // Timeout — clean up the pending entry
-            proc.pending.lock().await.remove(&request_id);
+            lock_with_diagnostics(&proc.pending, "send_request.pending_remove_on_timeout")
+                .await
+                .remove(&request_id);
             Err(format!("MCP server {} timed out (30s)", server_id))
         }
     }
@@ -510,7 +548,8 @@ pub async fn mcp_close_server(
     server_id: String,
 ) -> Result<(), String> {
     let proc = {
-        let mut procs = state.processes.lock().await;
+        let mut procs =
+            lock_with_diagnostics(&state.processes, "close_server.registry_remove").await;
         procs.remove(&server_id)
     };
     if let Some(proc) = proc {
@@ -519,17 +558,22 @@ pub async fn mcp_close_server(
         let shutdown_rx = {
             let id = proc.next_id.fetch_add(1, Ordering::Relaxed);
             let (tx, rx) = oneshot::channel();
-            proc.pending.lock().await.insert(id, tx);
+            lock_with_diagnostics(&proc.pending, "close_server.shutdown_pending_insert")
+                .await
+                .insert(id, tx);
             let shutdown_body = format!(
                 "{{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"shutdown\"}}",
                 id
             );
             let write_result = {
-                let mut stdin = proc.stdin.lock().await;
+                let mut stdin =
+                    lock_with_diagnostics(&proc.stdin, "close_server.shutdown_write").await;
                 write_framed_message(&mut *stdin, &shutdown_body).await
             };
             if write_result.is_err() {
-                proc.pending.lock().await.remove(&id);
+                lock_with_diagnostics(&proc.pending, "close_server.shutdown_pending_remove")
+                    .await
+                    .remove(&id);
                 None
             } else {
                 Some(rx)
@@ -542,16 +586,20 @@ pub async fn mcp_close_server(
 
         // Send exit notification (no id — it's a notification)
         {
-            let mut stdin = proc.stdin.lock().await;
+            let mut stdin = lock_with_diagnostics(&proc.stdin, "close_server.exit_write").await;
             let exit_body = "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}";
             let _ = write_framed_message(&mut *stdin, exit_body).await;
         }
-        let _ = proc.child.lock().await.kill().await;
+        let _ = lock_with_diagnostics(&proc.child, "close_server.child_kill")
+            .await
+            .kill()
+            .await;
         proc.reader_task.abort();
         proc.stderr_task.abort();
         // Reject all remaining pending waiters
         {
-            let mut pending = proc.pending.lock().await;
+            let mut pending =
+                lock_with_diagnostics(&proc.pending, "close_server.pending_drain").await;
             for (_, tx) in pending.drain() {
                 let _ = tx.send(Err("MCP server closed".to_string()));
             }

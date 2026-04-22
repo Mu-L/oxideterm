@@ -18,8 +18,8 @@ use reqwest::header::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 use thiserror::Error;
@@ -76,6 +76,7 @@ const BASE_RETRY_DELAY_MS: u64 = 1_500;
 const MAX_RETRY_DELAY_MS: u64 = 12_000;
 const DOWNLOAD_TIMEOUT_MS: u64 = 120_000;
 const SAVE_STATE_INTERVAL_BYTES: u64 = 256 * 1024;
+const LOCK_PROFILE_ENV: &str = "OXIDETERM_PROFILE_LOCKS";
 
 // ── Data types ──────────────────────────────────────────────
 
@@ -169,6 +170,36 @@ impl Default for UpdateManagerState {
     }
 }
 
+impl UpdateManagerState {
+    async fn lock_runtime(
+        &self,
+        context: &'static str,
+    ) -> tokio::sync::MutexGuard<'_, UpdateManagerRuntime> {
+        lock_update_runtime(&self.inner, context).await
+    }
+}
+
+fn update_lock_profiling_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| cfg!(debug_assertions) && std::env::var_os(LOCK_PROFILE_ENV).is_some())
+}
+
+async fn lock_update_runtime<'a>(
+    runtime: &'a Arc<Mutex<UpdateManagerRuntime>>,
+    context: &'static str,
+) -> tokio::sync::MutexGuard<'a, UpdateManagerRuntime> {
+    let started = Instant::now();
+    let guard = runtime.lock().await;
+    if update_lock_profiling_enabled() {
+        tracing::debug!(
+            "[UpdateManager] lock wait context={} waited_us={}",
+            context,
+            started.elapsed().as_micros()
+        );
+    }
+    guard
+}
+
 // ── Update channel ──────────────────────────────────────────
 
 const BETA_ENDPOINT: &str =
@@ -256,7 +287,9 @@ pub async fn update_start_resumable_install(
 
     // Return existing task if already running for this version
     {
-        let runtime = manager_state.inner.lock().await;
+        let runtime = manager_state
+            .lock_runtime("update_start_resumable_install:read_active")
+            .await;
         if let Some(active_task_id) = runtime.active_task_id.as_ref() {
             if let Some(active_status) = runtime.statuses.get(active_task_id) {
                 if active_status.version == update.version && !active_status.stage.is_terminal() {
@@ -295,7 +328,9 @@ pub async fn update_start_resumable_install(
     let is_resumed = persisted_state.status.downloaded_bytes > 0;
 
     {
-        let mut runtime = manager_state.inner.lock().await;
+        let mut runtime = manager_state
+            .lock_runtime("update_start_resumable_install:store_active")
+            .await;
         runtime.active_task_id = Some(task_id.clone());
         runtime.cancelled_tasks.remove(&task_id);
         runtime
@@ -334,7 +369,9 @@ pub async fn update_get_resumable_status(
     task_id: Option<String>,
 ) -> Result<Option<ResumableUpdateStatus>, UpdateError> {
     {
-        let runtime = manager_state.inner.lock().await;
+        let runtime = manager_state
+            .lock_runtime("update_get_resumable_status")
+            .await;
         if let Some(task_id) = task_id.as_ref() {
             if let Some(status) = runtime.statuses.get(task_id) {
                 return Ok(Some(status.clone()));
@@ -367,7 +404,9 @@ pub async fn update_cancel_resumable_install(
 ) -> Result<(), UpdateError> {
     let mut status_to_emit: Option<ResumableUpdateStatus> = None;
     let target_task_id = {
-        let mut runtime = manager_state.inner.lock().await;
+        let mut runtime = manager_state
+            .lock_runtime("update_cancel_resumable_install")
+            .await;
         let target_task_id = task_id
             .or_else(|| runtime.active_task_id.clone())
             .ok_or_else(|| UpdateError::General("no active update task".to_string()))?;
@@ -430,7 +469,9 @@ pub async fn update_clear_resumable_cache(
                 .await
                 .map_err(|err| UpdateError::State(format!("remove cache dir failed: {err}")))?;
         }
-        let mut runtime = manager_state.inner.lock().await;
+        let mut runtime = manager_state
+            .lock_runtime("update_clear_resumable_cache:version")
+            .await;
         runtime.statuses.retain(|_, s| s.version != version);
         if let Some(active) = runtime.active_task_id.clone() {
             if runtime
@@ -454,7 +495,9 @@ pub async fn update_clear_resumable_cache(
         .await
         .map_err(|err| UpdateError::State(format!("recreate cache root failed: {err}")))?;
 
-    let mut runtime = manager_state.inner.lock().await;
+    let mut runtime = manager_state
+        .lock_runtime("update_clear_resumable_cache:all")
+        .await;
     runtime.active_task_id = None;
     runtime.statuses.clear();
     runtime.cancelled_tasks.clear();
@@ -852,7 +895,7 @@ async fn emit_terminal_error(
 ) -> Result<(), UpdateError> {
     let mut status: Option<ResumableUpdateStatus> = None;
     {
-        let mut runtime = runtime_state.lock().await;
+        let mut runtime = lock_update_runtime(&runtime_state, "emit_terminal_error").await;
         if let Some(existing) = runtime.statuses.get_mut(task_id) {
             existing.stage = if existing.error_code.as_deref() == Some("cancelled") {
                 UpdateStage::Cancelled
@@ -899,7 +942,7 @@ async fn clear_active_task_if_needed(
     runtime_state: Arc<Mutex<UpdateManagerRuntime>>,
     task_id: &str,
 ) {
-    let mut runtime = runtime_state.lock().await;
+    let mut runtime = lock_update_runtime(&runtime_state, "clear_active_task_if_needed").await;
     if runtime.active_task_id.as_deref() == Some(task_id) {
         runtime.active_task_id = None;
     }
@@ -909,7 +952,7 @@ async fn store_runtime_status(
     runtime_state: Arc<Mutex<UpdateManagerRuntime>>,
     status: ResumableUpdateStatus,
 ) {
-    let mut runtime = runtime_state.lock().await;
+    let mut runtime = lock_update_runtime(&runtime_state, "store_runtime_status").await;
     runtime.statuses.insert(status.task_id.clone(), status);
 }
 
@@ -924,7 +967,7 @@ async fn ensure_task_not_cancelled(
 }
 
 async fn is_task_cancelled(runtime_state: Arc<Mutex<UpdateManagerRuntime>>, task_id: &str) -> bool {
-    let runtime = runtime_state.lock().await;
+    let runtime = lock_update_runtime(&runtime_state, "is_task_cancelled").await;
     runtime.cancelled_tasks.contains(task_id)
 }
 

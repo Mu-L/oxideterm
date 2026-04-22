@@ -8,7 +8,8 @@ use redb::{Database, ReadableTable, TableDefinition};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
+use std::time::Instant;
 use tracing::{debug, info, warn};
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -27,6 +28,30 @@ const DOC_RAW_CONTENT_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new
 
 /// Compression threshold: compress chunks larger than 4 KB.
 const COMPRESSION_THRESHOLD: usize = 4096;
+const LOCK_PROFILE_ENV: &str = "OXIDETERM_PROFILE_LOCKS";
+
+fn rag_lock_profiling_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| cfg!(debug_assertions) && std::env::var_os(LOCK_PROFILE_ENV).is_some())
+}
+
+fn lock_with_diagnostics<'a, T>(
+    mutex: &'a Mutex<T>,
+    context: &'static str,
+) -> Result<MutexGuard<'a, T>, RagError> {
+    let started = Instant::now();
+    let guard = mutex
+        .lock()
+        .map_err(|e| RagError::HnswIndex(format!("lock poisoned: {e}")))?;
+    if rag_lock_profiling_enabled() {
+        debug!(
+            "[RAG] lock wait context={} waited_us={}",
+            context,
+            started.elapsed().as_micros()
+        );
+    }
+    Ok(guard)
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RagStore
@@ -80,14 +105,11 @@ pub struct RagStore {
 
 impl RagStore {
     fn hnsw_operation_lock(&self) -> Result<std::sync::MutexGuard<'_, ()>, RagError> {
-        self.hnsw_index
-            .operation
-            .lock()
-            .map_err(|e| RagError::HnswIndex(format!("lock poisoned: {e}")))
+        lock_with_diagnostics(&self.hnsw_index.operation, "hnsw.operation")
     }
 
     fn set_hnsw_failed_state(&self, message: String) {
-        match self.hnsw_index.state.lock() {
+        match lock_with_diagnostics(&self.hnsw_index.state, "hnsw.set_failed_state") {
             Ok(mut guard) => {
                 *guard = HnswRuntimeState::Failed(message);
                 self.hnsw_index.ready.notify_all();
@@ -151,11 +173,8 @@ impl RagStore {
 
     pub fn ensure_hnsw_loaded(&self) -> Result<Option<Arc<PersistedHnswIndex>>, RagError> {
         let load_generation;
-        let mut state = self
-            .hnsw_index
-            .state
-            .lock()
-            .map_err(|e| RagError::HnswIndex(format!("lock poisoned: {e}")))?;
+        let mut state =
+            lock_with_diagnostics(&self.hnsw_index.state, "hnsw.ensure_loaded.initial")?;
 
         loop {
             match &*state {
@@ -184,11 +203,8 @@ impl RagStore {
 
         let load_result = PersistedHnswIndex::load_detailed(&hnsw_index_path(&self.data_dir));
 
-        let mut state = self
-            .hnsw_index
-            .state
-            .lock()
-            .map_err(|e| RagError::HnswIndex(format!("lock poisoned: {e}")))?;
+        let mut state =
+            lock_with_diagnostics(&self.hnsw_index.state, "hnsw.ensure_loaded.resolve")?;
 
         let resolved = match (&*state, load_result) {
             (HnswRuntimeState::Loading, HnswLoadOutcome::Loaded(index))
@@ -219,7 +235,7 @@ impl RagStore {
     }
 
     pub fn hnsw_status(&self) -> HnswIndexStatus {
-        match self.hnsw_index.state.lock() {
+        match lock_with_diagnostics(&self.hnsw_index.state, "hnsw.status") {
             Ok(state) => match &*state {
                 HnswRuntimeState::Unloaded => HnswIndexStatus::Unloaded,
                 HnswRuntimeState::Loading => HnswIndexStatus::Loading,

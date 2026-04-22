@@ -2578,18 +2578,16 @@ impl SftpRegistry {
 
     /// Close all SFTP sessions (for app shutdown)
     pub async fn close_all(&self) {
-        let session_ids: Vec<String> = {
-            let sessions = self.sessions.read();
-            sessions.keys().cloned().collect()
+        let sessions: Vec<(String, Arc<tokio::sync::Mutex<SftpSession>>)> = {
+            let mut sessions = self.sessions.write();
+            std::mem::take(&mut *sessions).into_iter().collect()
         };
 
-        tracing::info!("Closing {} SFTP sessions on shutdown", session_ids.len());
+        tracing::info!("Closing {} SFTP sessions on shutdown", sessions.len());
 
-        for session_id in session_ids {
-            if let Some(session) = self.remove(&session_id) {
-                // Lock and drop to ensure cleanup
-                let _ = session.lock().await;
-            }
+        for (_, session) in sessions {
+            // Lock and drop to ensure cleanup
+            let _ = session.lock().await;
         }
     }
 }

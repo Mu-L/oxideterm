@@ -98,7 +98,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
 | 分類 | 功能 |
 |---|---|
-| **終端** | 本機 PTY（zsh/bash/fish/pwsh/WSL2）、SSH 遠端、分割窗格、廣播輸入、工作階段錄製/回放（asciicast v2）、WebGL 算繪、30+ 主題 + 自訂編輯器、命令面板（`⌘K`）、禪模式 |
+| **終端** | 本機 PTY（zsh/bash/fish/pwsh/WSL2）、SSH 遠端、分割窗格、廣播輸入、工作階段錄製/回放（asciicast v2）、WebGL 算繪、30+ 主題 + 自訂編輯器、命令面板（`⌘K`）、禪模式, **trzsz** 帶內檔案傳輸 |
 | **SSH 與驗證** | 連線池與多工複用、ProxyJump（無限跳數）拓撲圖、寬限期自動重連、Agent 轉發。驗證方式：密碼、SSH 金鑰（RSA/Ed25519/ECDSA）、SSH Agent、憑證、keyboard-interactive 2FA、Known Hosts TOFU |
 | **SFTP** | 雙窗格瀏覽器、拖放操作、智慧預覽（圖片/影片/音訊/程式碼/PDF/十六進位/字型）、帶進度和預估時間的傳輸佇列、書籤、壓縮檔解壓 |
 | **IDE 模式** | CodeMirror 6 支援 30+ 語言、檔案樹 + Git 狀態、多分頁、衝突解決、整合終端。可選 Linux 遠端 Agent（9 種額外架構） |
@@ -232,7 +232,19 @@ CodeMirror 6 編輯器基於 SFTP 運作——預設無需伺服端安裝：
 - **自動恢復**：`Suspended` 狀態的轉發在重連時自動恢復，無需使用者介入
 - **閒置逾時**：`FORWARD_IDLE_TIMEOUT`（300 秒）防止殭屍連線堆積
 
-### 🔌 執行階段外掛系統
+### � trzsz — 帶內檔案傳輸
+
+無需 SFTP 連線，直接透過 SSH 終端機工作階段上傳和下載檔案：
+
+- **帶內協定**：檔案以 Base64 編碼框架的形式在現有終端機串流中傳輸——無需額外連接埠或 Agent，可透明穿透 ProxyJump 鏈和 tmux
+- **雙向傳輸**：伺服器執行 `tsz <file>` 向客戶端傳送檔案；`trz` 觸發客戶端上傳；支援拖放
+- **目錄支援**：透過 `trz -d` / `tsz -d` 進行遞迴目錄傳輸
+- **傳輸限制**：可為每個工作階段設定分塊大小、檔案數量及總位元組數上限
+- **原生 Tauri I/O**：檔案讀寫使用 Tauri 原生檔案對話框和 Rust I/O——無瀏覽器記憶體限制
+- **即時通知**：提供傳輸開始、完成、取消和錯誤的 Toast 通知——當偵測到 trzsz 但功能未啟用時也會給出提示
+- 前往 **設定 → 終端機 → 帶內傳輸** 啟用
+
+### �🔌 執行階段外掛系統
 
 動態 ESM 載入，安全強化的凍結 API 表面：
 

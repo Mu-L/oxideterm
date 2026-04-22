@@ -124,7 +124,9 @@
       "max_file_count_title": "Arquivos demais selecionados",
       "max_file_count_description": "Esta transferência inclui {{selected}} arquivos, excedendo o limite configurado de {{max}}.",
       "max_total_bytes_title": "Limite de tamanho da transferência excedido",
-      "max_total_bytes_description": "Esta transferência exige {{selected}}, excedendo o limite configurado de {{max}}."
+      "max_total_bytes_description": "Esta transferência exige {{selected}}, excedendo o limite configurado de {{max}}.",
+      "disabled_title": "trzsz não está habilitado",
+      "disabled_description": "O servidor remoto iniciou uma transferência trzsz, mas a transferência de arquivos em banda está desabilitada. Habilite em Configurações → Terminal para usar o trzsz."
     },
     "standby": {
       "connection_lost": "Conexão perdida",

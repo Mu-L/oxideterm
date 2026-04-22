@@ -98,7 +98,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
 | 分类 | 功能 |
 |---|---|
-| **终端** | 本地 PTY（zsh/bash/fish/pwsh/WSL2）、SSH 远程、分屏窗格、广播输入、会话录制/回放（asciicast v2）、WebGL 渲染、30+ 主题 + 自定义编辑器、命令面板（`⌘K`）、禅模式 |
+| **终端** | 本地 PTY（zsh/bash/fish/pwsh/WSL2）、SSH 远程、分屏窗格、广播输入、会话录制/回放（asciicast v2）、WebGL 渲染、30+ 主题 + 自定义编辑器、命令面板（`⌘K`）、禅模式, **trzsz** 带内文件传输 |
 | **SSH 与认证** | 连接池与多路复用、ProxyJump（无限跳数）拓扑图、宽限期自动重连、Agent 转发。认证方式：密码、SSH 密钥（RSA/Ed25519/ECDSA）、SSH Agent、证书、keyboard-interactive 2FA、Known Hosts TOFU |
 | **SFTP** | 双窗格浏览器、拖放操作、智能预览（图片/视频/音频/代码/PDF/十六进制/字体）、带进度和预计到达时间的传输队列、书签、压缩包解压 |
 | **IDE 模式** | CodeMirror 6 支持 30+ 语言、文件树 + Git 状态、多标签页、冲突解决、集成终端。可选 Linux 远程 Agent，其他架构需自行编译并上传 |
@@ -232,7 +232,19 @@ CodeMirror 6 编辑器基于 SFTP 运行——默认无需服务端安装：
 - **自动恢复**：`Suspended` 状态的转发在重连时自动恢复，无需用户干预
 - **空闲超时**：`FORWARD_IDLE_TIMEOUT`（300 秒）防止僵尸连接堆积
 
-### 🔌 运行时插件系统
+### � trzsz — 带内文件传输
+
+无需 SFTP 连接，直接通过 SSH 终端会话上传和下载文件：
+
+- **带内协议**：文件以 Base64 编码帧的形式在现有终端流中传输——无需额外端口或 Agent，可透明穿透 ProxyJump 链和 tmux
+- **双向传输**：服务端运行 `tsz <file>` 向客户端发送文件；`trz` 触发客户端上传；支持拖放
+- **目录支持**：通过 `trz -d` / `tsz -d` 进行递归目录传输
+- **传输限制**：可为每个会话配置分块大小、文件数量和总字节数上限
+- **原生 Tauri I/O**：文件读写使用 Tauri 原生文件对话框和 Rust I/O——无浏览器内存限制
+- **实时通知**：提供传输开始、完成、取消和错误的 Toast 通知——当检测到 trzsz 但功能未启用时也会给出提示
+- 前往 **设置 → 终端 → 带内传输** 启用
+
+### �🔌 运行时插件系统
 
 动态 ESM 加载，安全加固的冻结 API 表面：
 

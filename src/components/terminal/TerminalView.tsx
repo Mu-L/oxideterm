@@ -42,6 +42,7 @@ import { useReconnectOrchestratorStore } from '../../store/reconnectOrchestrator
 import {
   hexToRgba,
   getBackgroundFitStyles,
+  detectChunkedMarker,
   getWebglRendererInfo,
   logWebglRendererInfo,
   isLowEndGPU,
@@ -83,6 +84,7 @@ import { TrzszController } from '../../lib/terminal/trzsz/controller';
 import { createRemoteTerminalTransport, type RemoteTerminalTransport } from '../../lib/terminal/trzsz/transport';
 
 const PREFILL_REPLAY_LINE_COUNT = 50; // Keep aligned with backend replay count
+const TRZSZ_MAGIC_PREFIX = '::TRZSZ:TRANSFER:';
 
 function normalizeWebSocketUrl(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value;
@@ -353,6 +355,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const connectionStatusRef = useRef<'connected' | 'link_down' | 'reconnecting' | 'disconnected'>('connected');
   const controllerRuntimePendingRef = useRef(false);
   const trzszRuntimeEpochRef = useRef(0);
+  const trzszDisabledToastShownRef = useRef(false);
+  const trzszDisabledDetectTailRef = useRef('');
+  const inBandTransferEnabledRef = useRef(inBandTransferSettings.enabled);
   const blockedRuntimeWebSocketRef = useRef<WebSocket | null>(null);
   const transportRef = useRef<RemoteTerminalTransport | null>(null);
   if (!transportRef.current) {
@@ -584,6 +589,25 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         if (controller && !controller.isDisposed()) {
           controller.processServerOutput(payloadCopy);
         } else if (!controllerRuntimePendingRef.current) {
+          if (!inBandTransferEnabledRef.current && !trzszDisabledToastShownRef.current) {
+            const text = new TextDecoder().decode(payloadCopy);
+            const detection = detectChunkedMarker(
+              trzszDisabledDetectTailRef.current,
+              text,
+              TRZSZ_MAGIC_PREFIX,
+            );
+            if (detection.matched) {
+              trzszDisabledToastShownRef.current = true;
+              trzszDisabledDetectTailRef.current = detection.tail;
+              useToastStore.getState().addToast({
+                title: i18n.t('terminal.trzsz.disabled_title'),
+                description: i18n.t('terminal.trzsz.disabled_description'),
+                variant: 'warning',
+              });
+            } else {
+              trzszDisabledDetectTailRef.current = detection.tail;
+            }
+          }
           writeServerOutputToTerminal(payloadCopy);
         }
         break;
@@ -623,11 +647,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   }, [connectionStatus]);
 
   useEffect(() => {
+    inBandTransferEnabledRef.current = inBandTransferSettings.enabled;
     if (!inBandTransferSettings.enabled) {
       disposeTrzszController();
       return;
     }
 
+    trzszDisabledToastShownRef.current = false;
+    trzszDisabledDetectTailRef.current = '';
     trzszControllerRef.current?.updateTransferSettings(inBandTransferSettings);
     syncTrzszController();
   }, [

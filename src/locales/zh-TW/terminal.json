@@ -124,7 +124,9 @@
       "max_file_count_title": "選取的檔案過多",
       "max_file_count_description": "這次傳輸包含 {{selected}} 個檔案，已超過設定上限 {{max}}。",
       "max_total_bytes_title": "已超過傳輸大小限制",
-      "max_total_bytes_description": "這次傳輸需要 {{selected}}，已超過設定上限 {{max}}。"
+      "max_total_bytes_description": "這次傳輸需要 {{selected}}，已超過設定上限 {{max}}。",
+      "disabled_title": "trzsz 未啟用",
+      "disabled_description": "遠端伺服器發起了 trzsz 傳輸，但帶內檔案傳輸功能未啟用。請前往「設定 → 終端機」以啟用 trzsz。"
     },
     "standby": {
       "connection_lost": "連線中斷",

@@ -124,7 +124,9 @@
       "max_file_count_title": "Zu viele Dateien ausgewählt",
       "max_file_count_description": "Diese Übertragung enthält {{selected}} Dateien und überschreitet damit das konfigurierte Limit von {{max}}.",
       "max_total_bytes_title": "Übertragungsgrößenlimit überschritten",
-      "max_total_bytes_description": "Für diese Übertragung werden {{selected}} benötigt, was das konfigurierte Limit von {{max}} überschreitet."
+      "max_total_bytes_description": "Für diese Übertragung werden {{selected}} benötigt, was das konfigurierte Limit von {{max}} überschreitet.",
+      "disabled_title": "trzsz ist nicht aktiviert",
+      "disabled_description": "Der Remote-Server hat eine trzsz-Übertragung initiiert, aber die In-Band-Dateiübertragung ist deaktiviert. Aktivieren Sie sie unter Einstellungen → Terminal, um trzsz zu verwenden."
     },
     "standby": {
       "connection_lost": "Verbindung verloren",

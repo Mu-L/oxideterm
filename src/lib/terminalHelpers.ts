@@ -62,6 +62,22 @@ export function isSoftwareWebglRenderer(renderer: string | null | undefined): bo
   return Boolean(renderer && SOFTWARE_WEBGL_RENDERER_RE.test(renderer));
 }
 
+export function detectChunkedMarker(
+  previousTail: string,
+  chunkText: string,
+  marker: string,
+): { matched: boolean; tail: string } {
+  const combined = `${previousTail}${chunkText}`;
+  if (combined.includes(marker)) {
+    return { matched: true, tail: '' };
+  }
+
+  return {
+    matched: false,
+    tail: combined.slice(-(marker.length - 1)),
+  };
+}
+
 export function getWebglRendererInfo(): WebglRendererInfo | null {
   if (_webglRendererInfo !== undefined) return _webglRendererInfo;
 

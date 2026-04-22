@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  detectChunkedMarker,
   getBackgroundFitStyles,
   hexToRgba,
   isTerminalContainerRenderable,
@@ -159,5 +160,31 @@ describe('isSoftwareWebglRenderer', () => {
     'AMD Radeon RX 7800 XT (radeonsi, navi31, LLVM 18.1.8, DRM 3.61, 6.13.0)',
   ])('returns false for hardware-backed renderer string %s', (renderer) => {
     expect(isSoftwareWebglRenderer(renderer)).toBe(false);
+  });
+});
+
+describe('detectChunkedMarker', () => {
+  it('matches a marker split across adjacent chunks', () => {
+    const first = detectChunkedMarker('', 'prefix ::TRZSZ:TR', '::TRZSZ:TRANSFER:');
+    expect(first).toEqual({
+      matched: false,
+      tail: 'prefix ::TRZSZ:TR'.slice(-('::TRZSZ:TRANSFER:'.length - 1)),
+    });
+
+    expect(
+      detectChunkedMarker(first.tail, 'ANSFER:S:1.1.6:12345678', '::TRZSZ:TRANSFER:'),
+    ).toEqual({
+      matched: true,
+      tail: '',
+    });
+  });
+
+  it('keeps only the minimum suffix needed for future matching', () => {
+    expect(
+      detectChunkedMarker('', 'abcdefghijklmnopqrstuvwxyz', '::TRZSZ:TRANSFER:'),
+    ).toEqual({
+      matched: false,
+      tail: 'abcdefghijklmnopqrstuvwxyz'.slice(-('::TRZSZ:TRANSFER:'.length - 1)),
+    });
   });
 });

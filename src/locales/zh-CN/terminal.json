@@ -124,7 +124,9 @@
       "max_file_count_title": "选择的文件过多",
       "max_file_count_description": "这次传输包含 {{selected}} 个文件，超过了配置上限 {{max}}。",
       "max_total_bytes_title": "超过传输大小限制",
-      "max_total_bytes_description": "这次传输需要 {{selected}}，超过了配置上限 {{max}}。"
+      "max_total_bytes_description": "这次传输需要 {{selected}}，超过了配置上限 {{max}}。",
+      "disabled_title": "trzsz 未启用",
+      "disabled_description": "远程服务器发起了 trzsz 传输，但带内文件传输功能未启用。请前往「设置 → 终端」以启用 trzsz。"
     },
     "standby": {
       "connection_lost": "连接丢失",

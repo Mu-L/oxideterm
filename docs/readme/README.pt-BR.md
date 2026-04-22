@@ -98,7 +98,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
 | Categoria | Funcionalidades |
 |---|---|
-| **Terminal** | PTY local (zsh/bash/fish/pwsh/WSL2), SSH remoto, painéis divididos, broadcast de entrada, gravação/reprodução de sessões (asciicast v2), renderização WebGL, 30+ temas + editor personalizado, paleta de comandos (`⌘K`), modo zen |
+| **Terminal** | PTY local (zsh/bash/fish/pwsh/WSL2), SSH remoto, painéis divididos, broadcast de entrada, gravação/reprodução de sessões (asciicast v2), renderização WebGL, 30+ temas + editor personalizado, paleta de comandos (`⌘K`), modo zen, transferência de arquivos **trzsz** integrada |
 | **SSH e autenticação** | Pool de conexões e multiplexação, ProxyJump (saltos ilimitados) com grafo topológico, reconexão automática com período de carência, Encaminhamento de agente. Auth: senha, chave SSH (RSA/Ed25519/ECDSA), SSH Agent, certificados, 2FA interativo por teclado, Known Hosts TOFU |
 | **SFTP** | Navegador de painel duplo, arrastar e soltar, pré-visualização inteligente (imagens/vídeo/áudio/código/PDF/hex/fontes), fila de transferência com progresso e ETA, favoritos, extração de arquivos |
 | **Modo IDE** | CodeMirror 6 com 30+ linguagens, árvore de arquivos + status Git, multi-abas, resolução de conflitos, terminal integrado. Agente remoto opcional para Linux (9 arquiteturas adicionais) |
@@ -232,7 +232,19 @@ Encaminhamento local (-L), remoto (-R) e SOCKS5 dinâmico (-D) completo:
 - **Restauração automática**: encaminhamentos `Suspended` retomados automaticamente na reconexão sem intervenção do usuário
 - **Timeout de inatividade**: `FORWARD_IDLE_TIMEOUT` (300 s) previne o acúmulo de conexões zumbi
 
-### 🔌 Sistema de plugins em runtime
+### � trzsz — Transferência de Arquivos Integrada
+
+Faça upload e download de arquivos diretamente pela sessão SSH — sem conexão SFTP:
+
+- **Protocolo integrado**: os arquivos trafegam como frames Base64 dentro do fluxo terminal existente — funciona de forma transparente através de cadeias ProxyJump e tmux sem portas ou agentes adicionais
+- **Bidirecional**: o servidor executa `tsz <arquivo>` para enviar arquivos ao cliente; `trz` inicia o upload do cliente; suporte a arrastar e soltar
+- **Suporte a diretórios**: transferências recursivas via `trz -d` / `tsz -d`
+- **Limites de transferência**: limites configuráveis por sessão para tamanho do bloco, contagem de arquivos e total de bytes
+- **I/O nativo Tauri**: leituras e escritas de arquivos usam diálogos nativos do Tauri e Rust I/O — sem restrições de memória do navegador
+- **Notificações em tempo real**: notificações Toast para início, conclusão, cancelamento e erros — incluindo uma dica quando o trzsz é detectado mas a funcionalidade está desabilitada
+- Ativar em **Configurações → Terminal → Transferência Integrada**
+
+### �🔌 Sistema de plugins em runtime
 
 Carregamento ESM dinâmico com superfície API congelada e reforçada em segurança:
 

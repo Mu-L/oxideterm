@@ -98,7 +98,7 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
 | Category | Features |
 |---|---|
-| **Terminal** | Local PTY (zsh/bash/fish/pwsh/WSL2), SSH remote, split panes, broadcast input, session recording/playback (asciicast v2), WebGL rendering, 30+ themes + custom editor, command palette (`⌘K`), zen mode |
+| **Terminal** | Local PTY (zsh/bash/fish/pwsh/WSL2), SSH remote, split panes, broadcast input, session recording/playback (asciicast v2), WebGL rendering, 30+ themes + custom editor, command palette (`⌘K`), zen mode, **trzsz** in-band file transfer |
 | **SSH & Auth** | Connection pooling & multiplexing, ProxyJump (unlimited hops) with topology graph, auto-reconnect with Grace Period, Agent Forwarding. Auth: password, SSH key (RSA/Ed25519/ECDSA), SSH Agent, certificates, keyboard-interactive 2FA, Known Hosts TOFU |
 | **SFTP** | Dual-pane browser, drag-and-drop, smart preview (images/video/audio/code/PDF/hex/fonts), transfer queue with progress & ETA, bookmarks, archive extraction |
 | **IDE Mode** | CodeMirror 6 with 24 languages, file tree + Git status, multi-tab, conflict resolution, integrated terminal. Optional remote agent for Linux; unsupported architectures can self-build and upload |
@@ -232,7 +232,19 @@ Full local (-L), remote (-R), and dynamic SOCKS5 (-D) forwarding:
 - **Auto-restore**: `Suspended` forwards automatically resume on reconnect without user intervention
 - **Idle timeout**: `FORWARD_IDLE_TIMEOUT` (300s) prevents zombie connections from accumulating
 
-### 🔌 Runtime Plugin System
+### � trzsz — In-Band File Transfer
+
+Upload and download files directly through the SSH terminal session — no SFTP connection required:
+
+- **In-band protocol**: files travel as base64-encoded frames inside the existing terminal stream — works transparently through ProxyJump chains and tmux without extra ports or agents
+- **Bidirectional**: server runs `tsz <file>` to send files to the client; `trz` triggers client upload; drag-and-drop supported
+- **Directory support**: recursive transfers via `trz -d` / `tsz -d`
+- **Transfer limits**: configurable per-session limits for chunk size, file count, and total bytes
+- **Native Tauri I/O**: file reads and writes use Tauri native file dialogs and Rust I/O — no browser memory constraints
+- **Live notifications**: toast notifications for start, completion, cancellation, and errors — including a hint when trzsz is detected but the feature is disabled
+- Enable in **Settings → Terminal → In-Band Transfer**
+
+### �🔌 Runtime Plugin System
 
 Dynamic ESM loading with a security-hardened, frozen API surface:
 

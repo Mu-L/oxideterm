@@ -124,7 +124,9 @@
       "max_file_count_title": "Too many files selected",
       "max_file_count_description": "This transfer includes {{selected}} files, exceeding the configured limit of {{max}}.",
       "max_total_bytes_title": "Transfer size limit exceeded",
-      "max_total_bytes_description": "This transfer needs {{selected}}, exceeding the configured limit of {{max}}."
+      "max_total_bytes_description": "This transfer needs {{selected}}, exceeding the configured limit of {{max}}.",
+      "disabled_title": "trzsz is not enabled",
+      "disabled_description": "The remote server initiated a trzsz transfer, but in-band file transfer is disabled. Enable it in Settings → Terminal to use trzsz."
     },
     "standby": {
       "connection_lost": "Connection Lost",

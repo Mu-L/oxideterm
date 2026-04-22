@@ -124,7 +124,9 @@
       "max_file_count_title": "Trop de fichiers sélectionnés",
       "max_file_count_description": "Ce transfert comprend {{selected}} fichiers, ce qui dépasse la limite configurée de {{max}}.",
       "max_total_bytes_title": "Limite de taille de transfert dépassée",
-      "max_total_bytes_description": "Ce transfert nécessite {{selected}}, ce qui dépasse la limite configurée de {{max}}."
+      "max_total_bytes_description": "Ce transfert nécessite {{selected}}, ce qui dépasse la limite configurée de {{max}}.",
+      "disabled_title": "trzsz n'est pas activé",
+      "disabled_description": "Le serveur distant a initié un transfert trzsz, mais le transfert de fichiers intégré est désactivé. Activez-le dans Paramètres → Terminal pour utiliser trzsz."
     },
     "standby": {
       "connection_lost": "Connexion perdue",

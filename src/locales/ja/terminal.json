@@ -124,7 +124,9 @@
       "max_file_count_title": "選択したファイルが多すぎます",
       "max_file_count_description": "この転送には {{selected}} 個のファイルが含まれており、設定された上限 {{max}} を超えています。",
       "max_total_bytes_title": "転送サイズの上限を超えました",
-      "max_total_bytes_description": "この転送には {{selected}} が必要で、設定された上限 {{max}} を超えています。"
+      "max_total_bytes_description": "この転送には {{selected}} が必要で、設定された上限 {{max}} を超えています。",
+      "disabled_title": "trzsz が無効です",
+      "disabled_description": "リモートサーバーが trzsz 転送を開始しましたが、帯域内ファイル転送が無効になっています。trzsz を使用するには、設定 → ターミナル で有効にしてください。"
     },
     "standby": {
       "connection_lost": "接続が切断されました",

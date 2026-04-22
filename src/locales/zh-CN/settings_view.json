@@ -135,7 +135,7 @@
       "line_height": "行高",
       "line_height_hint": "行间距",
       "renderer": "渲染器",
-      "renderer_hint": "选择 WebGL 或 Canvas 渲染",
+      "renderer_hint": "选择 WebGL 或 Canvas 渲染。Linux 上自动模式会优先尝试 WebGL，但在检测到软件 WebGL 或不安全的 WebKitGTK 路径时会自动回退到 Canvas。",
       "renderer_auto": "自动（优先 WebGL）",
       "adaptive_renderer": "动态刷新率",
       "adaptive_renderer_hint": "根据活动状态自适应渲染频率：高吞吐时提升至120Hz+，常规操作60Hz，空闲时降至1-15Hz",

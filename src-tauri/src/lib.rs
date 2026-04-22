@@ -156,27 +156,14 @@ fn show_startup_error(_title: &str, _message: &str) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // On Linux, disable WebKitGTK DMA-BUF renderer and compositing mode to
-    // prevent EGL_BAD_PARAMETER crashes and blank-window rendering failures
-    // on AMD Wayland setups (especially AppImage with bundled libs).
-    // Both must be set before any WebKitGTK initialization.
-    #[cfg(target_os = "linux")]
-    {
-        if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
-            unsafe {
-                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-            }
-        }
-        if std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_err() {
-            unsafe {
-                std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
-            }
-        }
-    }
-
     write_startup_log("OxideTerm starting...");
 
     init_logging();
+
+    let linux_startup_recovery = commands::startup::configure_linux_startup_recovery();
+    if let Some(summary) = linux_startup_recovery.diagnostics_summary() {
+        write_startup_log(&summary);
+    }
 
     tracing::info!("Starting OxideTerm...");
     write_startup_log("Logging initialized");
@@ -427,7 +414,8 @@ pub fn run() {
         .manage(Arc::new(PluginFileServer::new()))
         .manage(update_manager::UpdateManagerState::default())
         .manage(Arc::new(commands::McpProcessRegistry::new()))
-        .manage(commands::AiStreamCancelRegistry::default());
+        .manage(commands::AiStreamCancelRegistry::default())
+        .manage(linux_startup_recovery.clone());
 
     let builder = if portable_bootstrap_status == config::PortableBootstrapStatus::Disabled {
         builder.plugin(tauri_plugin_updater::Builder::new().build())
@@ -520,6 +508,7 @@ pub fn run() {
             });
         }
 
+        linux_startup_recovery.spawn_frontend_ready_watchdog();
         write_startup_log("Tauri setup complete");
         Ok(())
     });
@@ -661,6 +650,7 @@ pub fn run() {
         commands::get_portable_info,
         commands::get_portable_status,
         commands::get_portable_migration_summary,
+        commands::frontend_ready,
         commands::setup_portable_keystore,
         commands::unlock_portable_keystore,
         commands::unlock_portable_keystore_with_biometrics,
@@ -1043,6 +1033,7 @@ pub fn run() {
         commands::get_portable_info,
         commands::get_portable_status,
         commands::get_portable_migration_summary,
+        commands::frontend_ready,
         commands::setup_portable_keystore,
         commands::unlock_portable_keystore,
         commands::unlock_portable_keystore_with_biometrics,

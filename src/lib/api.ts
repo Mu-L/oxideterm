@@ -674,6 +674,11 @@ export const api = {
     return invoke('get_portable_info');
   },
 
+  frontendReady: async (): Promise<void> => {
+    if (USE_MOCK || !hasTauriRuntime()) return;
+    return invoke('frontend_ready');
+  },
+
   getPortableStatus: async (): Promise<PortableStatusResponse> => {
     if (USE_MOCK || !hasTauriRuntime()) {
       return {

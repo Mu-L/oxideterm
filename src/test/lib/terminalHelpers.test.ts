@@ -3,6 +3,7 @@ import {
   getBackgroundFitStyles,
   hexToRgba,
   isTerminalContainerRenderable,
+  isSoftwareWebglRenderer,
   resolveTerminalDimensions,
 } from '@/lib/terminalHelpers';
 
@@ -136,5 +137,27 @@ describe('resolveTerminalDimensions', () => {
     ).toBeNull();
 
     container.remove();
+  });
+});
+
+describe('isSoftwareWebglRenderer', () => {
+  it.each([
+    'llvmpipe (LLVM 19.1.7, 256 bits)',
+    'Google SwiftShader',
+    'softpipe',
+    'Mesa OffScreen',
+    'D3D12 WARP adapter',
+    'SWR rasterizer',
+  ])('returns true for software renderer string %s', (renderer) => {
+    expect(isSoftwareWebglRenderer(renderer)).toBe(true);
+  });
+
+  it.each([
+    'NVIDIA GeForce RTX 5060/PCIe/SSE2',
+    'ANGLE (NVIDIA, NVIDIA GeForce RTX 5060 Direct3D11 vs_5_0 ps_5_0)',
+    'Mesa Intel(R) Arc Graphics (BMG G21)',
+    'AMD Radeon RX 7800 XT (radeonsi, navi31, LLVM 18.1.8, DRM 3.61, 6.13.0)',
+  ])('returns false for hardware-backed renderer string %s', (renderer) => {
+    expect(isSoftwareWebglRenderer(renderer)).toBe(false);
   });
 });

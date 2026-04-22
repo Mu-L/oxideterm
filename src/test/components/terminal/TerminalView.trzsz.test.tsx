@@ -406,6 +406,8 @@ vi.mock('@/lib/plugin/pluginTerminalHooks', () => ({
 vi.mock('@/lib/terminalHelpers', () => ({
   hexToRgba: vi.fn(() => 'rgba(0, 0, 0, 1)'),
   getBackgroundFitStyles: vi.fn(() => ({ backgroundSize: 'cover' })),
+  getWebglRendererInfo: vi.fn(() => null),
+  logWebglRendererInfo: vi.fn(),
   isLowEndGPU: vi.fn(() => false),
   forceViewportTransparent: vi.fn(),
   clearViewportTransparent: vi.fn(),
@@ -483,7 +485,8 @@ function emitEvent<T>(name: string, payload: T) {
 }
 
 function hasDataFrameWithTextPrefix(socket: MockWebSocket | undefined, prefix: string) {
-  return vi.mocked(socket?.send).mock.calls.some(([payload]) => {
+  if (!socket) return false;
+  return vi.mocked(socket.send).mock.calls.some(([payload]) => {
     if (!(payload instanceof Uint8Array) || payload[0] !== 0x00 || payload.length < 5) {
       return false;
     }

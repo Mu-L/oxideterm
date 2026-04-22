@@ -348,6 +348,8 @@ Group: Production
 
 - **输入延迟**：排查网络延迟、服务端负载；尝试 Canvas 渲染、略减小字号。  
 - **颜色异常**：切换终端主题；远端 `TERM` 建议 `xterm-256color`（视环境而定）。  
+- **Linux 下 WebGL 很卡**：这通常不是“WebGL 不可用”，而是底层落到了 `llvmpipe`、`SwiftShader`、`softpipe`、`Mesa OffScreen` 等软件渲染。现在自动模式会检测真实 renderer 并优先回退到 Canvas。反馈问题时建议附上日志里的 WebGL vendor / renderer。  
+- **Linux AppImage / Wayland 白屏**：应用会先尝试加速 WebKitGTK 路径，若首屏在约 5 秒内未就绪，会自动以安全模式重启一次。若仍需手动排查，可设置环境变量 `OXIDETERM_LINUX_WEBVIEW_PROFILE=safe` 或 `accelerated` 对比行为，并附上会话类型（Wayland / X11）、打包形式（AppImage / 系统包）和 renderer 日志。  
 
 更多已知问题见 [knownissues.md](./knownissues.md)。
 

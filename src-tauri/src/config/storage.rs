@@ -115,13 +115,25 @@ pub struct BootstrapConfig {
     /// Custom data directory path. If None, uses the default location.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     data_dir: Option<String>,
+    /// Last known good Linux WebView startup profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    linux_webview_profile: Option<String>,
 }
 
 impl BootstrapConfig {
     pub fn new_with_data_dir(path: String) -> Self {
         Self {
             data_dir: Some(path),
+            linux_webview_profile: None,
         }
+    }
+
+    pub fn linux_webview_profile(&self) -> Option<&str> {
+        self.linux_webview_profile.as_deref()
+    }
+
+    pub fn set_linux_webview_profile(&mut self, profile: Option<String>) {
+        self.linux_webview_profile = profile;
     }
 }
 
@@ -166,6 +178,11 @@ fn read_bootstrap_config() -> Option<BootstrapConfig> {
             None
         }
     }
+}
+
+/// Read the bootstrap config from disk (synchronous, used during init)
+pub fn load_bootstrap_config() -> Option<BootstrapConfig> {
+    read_bootstrap_config()
 }
 
 /// Save bootstrap config to disk (atomic write)
@@ -563,5 +580,20 @@ mod tests {
         assert!(info.is_portable);
         assert!(!info.is_custom);
         assert!(!info.can_change);
+    }
+
+    #[test]
+    fn bootstrap_config_round_trips_linux_webview_profile() {
+        let json = r#"{
+          "data_dir": "/tmp/oxideterm-data",
+          "linux_webview_profile": "safe"
+        }"#;
+
+        let config: BootstrapConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.linux_webview_profile(), Some("safe"));
+
+        let serialized = serde_json::to_string(&config).unwrap();
+        assert!(serialized.contains("\"linux_webview_profile\":\"safe\""));
+        assert!(serialized.contains("\"data_dir\":\"/tmp/oxideterm-data\""));
     }
 }

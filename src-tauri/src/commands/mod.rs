@@ -38,6 +38,7 @@ pub mod scroll;
 pub mod session_tree;
 pub mod sftp;
 pub mod ssh;
+pub mod startup;
 pub mod trzsz;
 
 pub use agent_history::*;
@@ -67,4 +68,5 @@ pub use scroll::*;
 pub use session_tree::*;
 pub use sftp::*;
 pub use ssh::*;
+pub use startup::*;
 pub use trzsz::*;

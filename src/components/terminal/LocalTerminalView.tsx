@@ -27,6 +27,8 @@ import { useTranslation } from 'react-i18next';
 import {
   hexToRgba,
   getBackgroundFitStyles,
+  getWebglRendererInfo,
+  logWebglRendererInfo,
   isLowEndGPU,
   forceViewportTransparent,
   clearViewportTransparent,
@@ -453,23 +455,31 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
           rendererAddonRef.current = await loadCanvasAddon();
         }
       } else {
-        try {
-          if (isStale()) return;
-          const webglAddon = new WebglAddon();
-          webglAddon.onContextLoss(async () => {
-            webglAddon.dispose();
-            if (!isStale()) {
-              rendererAddonRef.current = await loadCanvasAddon();
-            }
-          });
-          currentTerm.loadAddon(webglAddon);
-          if (isStale()) {
-            webglAddon.dispose();
-            return;
-          }
-          rendererAddonRef.current = webglAddon;
-        } catch {
+        const rendererInfo = getWebglRendererInfo();
+        if (rendererInfo?.isSoftwareRenderer) {
+          console.warn(
+            `[LocalTerminal] WebGL renderer "${rendererInfo.renderer ?? 'unknown'}" appears software-backed, using Canvas in auto mode`,
+          );
           rendererAddonRef.current = await loadCanvasAddon();
+        } else {
+          try {
+            if (isStale()) return;
+            const webglAddon = new WebglAddon();
+            webglAddon.onContextLoss(async () => {
+              webglAddon.dispose();
+              if (!isStale()) {
+                rendererAddonRef.current = await loadCanvasAddon();
+              }
+            });
+            currentTerm.loadAddon(webglAddon);
+            if (isStale()) {
+              webglAddon.dispose();
+              return;
+            }
+            rendererAddonRef.current = webglAddon;
+          } catch {
+            rendererAddonRef.current = await loadCanvasAddon();
+          }
         }
       }
 
@@ -616,6 +626,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         }
       } else if (rendererSetting === 'webgl') {
         try {
+          logWebglRendererInfo('[LocalTerminal:webgl]', getWebglRendererInfo());
           const webglAddon = new WebglAddon();
           webglAddon.onContextLoss(() => {
             webglAddon.dispose();
@@ -628,18 +639,35 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         }
       } else {
         // Auto: try WebGL first, fallback to Canvas
-        try {
-          const webglAddon = new WebglAddon();
-          webglAddon.onContextLoss(async () => {
-            webglAddon.dispose();
-            const canvasAddon = await loadCanvasAddon();
-            rendererAddonRef.current = canvasAddon;
-          });
-          term.loadAddon(webglAddon);
-          rendererAddonRef.current = webglAddon;
-        } catch (e) {
+        const rendererInfo = getWebglRendererInfo();
+        logWebglRendererInfo('[LocalTerminal:auto]', rendererInfo);
+        if (rendererInfo?.isSoftwareRenderer) {
+          console.warn(
+            `[LocalTerminal] WebGL renderer "${rendererInfo.renderer ?? 'unknown'}" appears software-backed, using Canvas in auto mode`,
+          );
           const canvasAddon = await loadCanvasAddon();
           rendererAddonRef.current = canvasAddon;
+          if (canvasAddon) {
+            console.log('[LocalTerminal] Auto mode selected Canvas (software WebGL renderer detected)');
+          }
+        } else {
+          try {
+            const webglAddon = new WebglAddon();
+            webglAddon.onContextLoss(async () => {
+              webglAddon.dispose();
+              const canvasAddon = await loadCanvasAddon();
+              rendererAddonRef.current = canvasAddon;
+            });
+            term.loadAddon(webglAddon);
+            rendererAddonRef.current = webglAddon;
+            console.log('[LocalTerminal] Auto mode selected WebGL');
+          } catch (e) {
+            const canvasAddon = await loadCanvasAddon();
+            rendererAddonRef.current = canvasAddon;
+            if (canvasAddon) {
+              console.log('[LocalTerminal] Auto mode selected Canvas after WebGL load failure');
+            }
+          }
         }
       }
     };

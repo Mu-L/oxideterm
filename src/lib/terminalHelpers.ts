@@ -30,6 +30,82 @@ export function getBackgroundFitStyles(fit: BackgroundFit): React.CSSProperties 
   }
 }
 
+export type WebglRendererInfo = {
+  renderer: string | null;
+  vendor: string | null;
+  isSoftwareRenderer: boolean;
+};
+
+const SOFTWARE_WEBGL_RENDERER_RE =
+  /\b(llvmpipe|softpipe|swiftshader|software rasterizer|software adapter|mesa offscreen|d3d12 warp|swr|lavapipe)\b/i;
+
+let _webglRendererInfo: WebglRendererInfo | null | undefined;
+
+function normalizeWebglString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function getWebglContext(): WebGLRenderingContext | null {
+  const canvas = document.createElement('canvas');
+  const contextOptions = { failIfMajorPerformanceCaveat: true };
+  const gl = canvas.getContext('webgl', contextOptions)
+    || canvas.getContext('experimental-webgl', contextOptions)
+    || canvas.getContext('webgl')
+    || canvas.getContext('experimental-webgl');
+
+  return gl && typeof (gl as WebGLRenderingContext).getParameter === 'function'
+    ? gl as WebGLRenderingContext
+    : null;
+}
+
+export function isSoftwareWebglRenderer(renderer: string | null | undefined): boolean {
+  return Boolean(renderer && SOFTWARE_WEBGL_RENDERER_RE.test(renderer));
+}
+
+export function getWebglRendererInfo(): WebglRendererInfo | null {
+  if (_webglRendererInfo !== undefined) return _webglRendererInfo;
+
+  try {
+    const gl = getWebglContext();
+    if (!gl) {
+      _webglRendererInfo = null;
+      return null;
+    }
+
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = normalizeWebglString(
+      ext
+        ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+        : gl.getParameter(gl.RENDERER),
+    );
+    const vendor = normalizeWebglString(
+      ext
+        ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL)
+        : gl.getParameter(gl.VENDOR),
+    );
+
+    _webglRendererInfo = {
+      renderer,
+      vendor,
+      isSoftwareRenderer: isSoftwareWebglRenderer(renderer),
+    };
+    return _webglRendererInfo;
+  } catch {
+    _webglRendererInfo = null;
+    return null;
+  }
+}
+
+export function logWebglRendererInfo(prefix: string, rendererInfo: WebglRendererInfo | null): void {
+  if (!rendererInfo) {
+    console.info(`${prefix} WebGL renderer info unavailable`);
+    return;
+  }
+  console.info(
+    `${prefix} WebGL vendor=${rendererInfo.vendor ?? 'unknown'} renderer=${rendererInfo.renderer ?? 'unknown'} software=${rendererInfo.isSoftwareRenderer}`,
+  );
+}
+
 /**
  * Detect if the GPU is low-end (integrated graphics).
  * Returns true if we should cap blur to ≤5px for performance.
@@ -38,19 +114,12 @@ export function getBackgroundFitStyles(fit: BackgroundFit): React.CSSProperties 
 let _gpuDetectionResult: boolean | null = null;
 export function isLowEndGPU(): boolean {
   if (_gpuDetectionResult !== null) return _gpuDetectionResult;
-  try {
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    if (gl && gl instanceof WebGLRenderingContext) {
-      const ext = gl.getExtension('WEBGL_debug_renderer_info');
-      if (ext) {
-        const renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) as string;
-        const low = /Intel|Mesa|SwiftShader|llvmpipe|Apple GPU/i.test(renderer);
-        _gpuDetectionResult = low;
-        return low;
-      }
-    }
-  } catch { /* noop */ }
+  const rendererInfo = getWebglRendererInfo();
+  if (rendererInfo?.renderer) {
+    const low = /Intel|Mesa|SwiftShader|llvmpipe|Apple GPU/i.test(rendererInfo.renderer);
+    _gpuDetectionResult = low;
+    return low;
+  }
   _gpuDetectionResult = false;
   return false;
 }

@@ -116,7 +116,9 @@ pub fn create_download_directory(
             match fs::symlink_metadata(&parent_path) {
                 Ok(metadata) => {
                     if metadata.file_type().is_symlink() {
-                        return Err(TrzszError::SymlinkNotAllowed(parent_path.display().to_string()));
+                        return Err(TrzszError::SymlinkNotAllowed(
+                            parent_path.display().to_string(),
+                        ));
                     }
                     if !metadata.is_dir() {
                         return Err(TrzszError::InvalidPath(format!(
@@ -533,7 +535,11 @@ mod tests {
         )
         .expect_err("missing parent should be rejected");
 
-        assert!(error.to_string().contains("Parent directory does not exist"));
+        assert!(
+            error
+                .to_string()
+                .contains("Parent directory does not exist")
+        );
     }
 
     #[test]

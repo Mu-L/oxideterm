@@ -102,6 +102,7 @@ function BootstrapErrorApp({ error, onRetry, copy }: { error: string; onRetry: (
 
 // Single root instance to prevent listener leaks on retry
 let activeRoot: ReactDOM.Root | null = null;
+let frontendReadySignalSent = false;
 
 function ensureRoot(): ReactDOM.Root {
   if (activeRoot) {
@@ -115,6 +116,20 @@ window.addEventListener('beforeunload', () => {
   activeRoot?.unmount();
 });
 
+function notifyFrontendReady() {
+  if (frontendReadySignalSent) return;
+  frontendReadySignalSent = true;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      api.frontendReady().catch((err) => {
+        frontendReadySignalSent = false;
+        console.warn('Failed to notify frontend_ready:', err);
+      });
+    });
+  });
+}
+
 function mountApp(snapshot: PortableBootstrapSnapshot) {
   const root = ensureRoot();
 
@@ -123,6 +138,8 @@ function mountApp(snapshot: PortableBootstrapSnapshot) {
       <BootstrapGateApp initialSnapshot={snapshot} />
     </React.StrictMode>,
   );
+
+  notifyFrontendReady();
 }
 
 function mountError(error: string) {

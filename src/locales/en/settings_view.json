@@ -135,7 +135,7 @@
       "line_height": "Line Height",
       "line_height_hint": "Spacing between lines",
       "renderer": "Renderer",
-      "renderer_hint": "Choose WebGL or Canvas rendering",
+      "renderer_hint": "Choose WebGL or Canvas rendering. On Linux, Auto prefers WebGL but falls back to Canvas when software WebGL or unsafe WebKitGTK paths are detected.",
       "renderer_auto": "Auto (WebGL preferred)",
       "adaptive_renderer": "Dynamic Refresh Rate",
       "adaptive_renderer_hint": "Automatically adjusts rendering rate based on activity: Boost (120Hz+) during fast output, Normal (60Hz) for typing, Idle (1-15Hz) when inactive",

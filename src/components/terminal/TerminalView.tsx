@@ -42,6 +42,8 @@ import { useReconnectOrchestratorStore } from '../../store/reconnectOrchestrator
 import {
   hexToRgba,
   getBackgroundFitStyles,
+  getWebglRendererInfo,
+  logWebglRendererInfo,
   isLowEndGPU,
   forceViewportTransparent,
   clearViewportTransparent,
@@ -1030,23 +1032,34 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           rendererAddonRef.current = await loadCanvasAddon();
         }
       } else {
-        try {
-          if (isStale()) return;
-          const webglAddon = new WebglAddon();
-          webglAddon.onContextLoss(async () => {
-            webglAddon.dispose();
-            if (!isStale()) {
-              rendererAddonRef.current = await loadCanvasAddon();
-            }
-          });
-          currentTerm.loadAddon(webglAddon);
-          if (isStale()) {
-            webglAddon.dispose();
-            return;
-          }
-          rendererAddonRef.current = webglAddon;
-        } catch {
+        const rendererInfo = getWebglRendererInfo();
+        if (rendererInfo?.isSoftwareRenderer) {
+          console.warn(
+            `[Renderer] WebGL renderer "${rendererInfo.renderer ?? 'unknown'}" appears software-backed, using Canvas in auto mode`,
+          );
           rendererAddonRef.current = await loadCanvasAddon();
+          if (rendererAddonRef.current) {
+            console.log('[Renderer] Canvas addon loaded (auto software fallback)');
+          }
+        } else {
+          try {
+            if (isStale()) return;
+            const webglAddon = new WebglAddon();
+            webglAddon.onContextLoss(async () => {
+              webglAddon.dispose();
+              if (!isStale()) {
+                rendererAddonRef.current = await loadCanvasAddon();
+              }
+            });
+            currentTerm.loadAddon(webglAddon);
+            if (isStale()) {
+              webglAddon.dispose();
+              return;
+            }
+            rendererAddonRef.current = webglAddon;
+          } catch {
+            rendererAddonRef.current = await loadCanvasAddon();
+          }
         }
       }
 
@@ -1319,6 +1332,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             // Force WebGL renderer
             try {
                 const dpr = Math.ceil(window.devicePixelRatio || 1);
+                logWebglRendererInfo('[Renderer:webgl]', getWebglRendererInfo());
                 const webglAddon = new WebglAddon();
                 webglAddon.onContextLoss(() => {
                     console.warn('[Renderer] WebGL context lost, disposing');
@@ -1333,6 +1347,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             }
         } else {
             // Auto: Try WebGL first, fallback to Canvas
+            const rendererInfo = getWebglRendererInfo();
+            logWebglRendererInfo('[Renderer:auto]', rendererInfo);
+            if (rendererInfo?.isSoftwareRenderer) {
+                console.warn(
+                    `[Renderer] WebGL renderer "${rendererInfo.renderer ?? 'unknown'}" appears software-backed, using Canvas in auto mode`,
+                );
+                const canvasAddon = await loadCanvasAddon();
+                rendererAddonRef.current = canvasAddon;
+                if (canvasAddon) {
+                    console.log('[Renderer] Auto mode selected Canvas (software WebGL renderer detected)');
+                } else {
+                    console.warn('[Renderer] Canvas fallback failed, using DOM');
+                }
+                return;
+            }
+
             try {
                 const dpr = Math.ceil(window.devicePixelRatio || 1);
                 const webglAddon = new WebglAddon();
@@ -1348,14 +1378,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 });
                 term.loadAddon(webglAddon);
                 rendererAddonRef.current = webglAddon;
-                console.log(`[Renderer] WebGL addon loaded (auto) with DPR: ${dpr}`);
+                console.log(`[Renderer] Auto mode selected WebGL with DPR: ${dpr}`);
             } catch (e) {
                 console.warn('[Renderer] WebGL addon failed, trying Canvas fallback', e);
                 // Fallback to Canvas
                 const canvasAddon = await loadCanvasAddon();
                 rendererAddonRef.current = canvasAddon;
                 if (canvasAddon) {
-                    console.log('[Renderer] Canvas addon loaded as fallback');
+                    console.log('[Renderer] Auto mode selected Canvas after WebGL load failure');
                 } else {
                     console.warn('[Renderer] Canvas fallback failed, using DOM');
                 }

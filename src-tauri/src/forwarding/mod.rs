@@ -6,6 +6,7 @@
 //! Provides local, remote, and dynamic port forwarding for SSH connections.
 //! Designed for HPC/supercomputing workflows (Jupyter, TensorBoard, etc.)
 
+mod bridge;
 mod dynamic;
 mod events;
 mod local;

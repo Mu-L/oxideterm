@@ -222,6 +222,12 @@ struct DynamicForwardEntry {
     handle: DynamicForwardHandle,
 }
 
+enum ActiveForwardEntry {
+    Local(LocalForwardEntry),
+    Remote(RemoteForwardEntry),
+    Dynamic(DynamicForwardEntry),
+}
+
 /// Port forwarding manager
 ///
 /// Manages all port forwards for a session. Thread-safe and designed
@@ -621,10 +627,19 @@ impl ForwardingManager {
 
     /// List all active forwards
     pub async fn list_forwards(&self) -> Vec<ForwardRule> {
-        let mut forwards = Vec::new();
+        let local_forwards = self.local_forwards.read().await;
+        let remote_forwards = self.remote_forwards.read().await;
+        let dynamic_forwards = self.dynamic_forwards.read().await;
+        let stopped_forwards = self.stopped_forwards.read().await;
 
-        // Add local forwards
-        for entry in self.local_forwards.read().await.values() {
+        let mut forwards = Vec::with_capacity(
+            local_forwards.len()
+                + remote_forwards.len()
+                + dynamic_forwards.len()
+                + stopped_forwards.len(),
+        );
+
+        for entry in local_forwards.values() {
             let mut rule = entry.rule.clone();
             rule.status = if entry.handle.is_running() {
                 ForwardStatus::Active
@@ -634,8 +649,7 @@ impl ForwardingManager {
             forwards.push(rule);
         }
 
-        // Add remote forwards
-        for entry in self.remote_forwards.read().await.values() {
+        for entry in remote_forwards.values() {
             let mut rule = entry.rule.clone();
             rule.status = if entry.handle.is_running() {
                 ForwardStatus::Active
@@ -645,8 +659,7 @@ impl ForwardingManager {
             forwards.push(rule);
         }
 
-        // Add dynamic forwards
-        for entry in self.dynamic_forwards.read().await.values() {
+        for entry in dynamic_forwards.values() {
             let mut rule = entry.rule.clone();
             rule.status = if entry.handle.is_running() {
                 ForwardStatus::Active
@@ -656,8 +669,7 @@ impl ForwardingManager {
             forwards.push(rule);
         }
 
-        // Add stopped forwards
-        for rule in self.stopped_forwards.read().await.values() {
+        for rule in stopped_forwards.values() {
             forwards.push(rule.clone());
         }
 
@@ -685,27 +697,12 @@ impl ForwardingManager {
     pub async fn stop_all(&self) {
         info!("Stopping all forwards for session {}", self.session_id);
 
-        // Stop local forwards
-        let local_ids: Vec<String> = self.local_forwards.read().await.keys().cloned().collect();
-        for id in local_ids {
-            if let Some(entry) = self.local_forwards.write().await.remove(&id) {
-                entry.handle.stop().await;
-            }
-        }
-
-        // Stop remote forwards
-        let remote_ids: Vec<String> = self.remote_forwards.read().await.keys().cloned().collect();
-        for id in remote_ids {
-            if let Some(entry) = self.remote_forwards.write().await.remove(&id) {
-                entry.handle.stop().await;
-            }
-        }
-
-        // Stop dynamic forwards
-        let dynamic_ids: Vec<String> = self.dynamic_forwards.read().await.keys().cloned().collect();
-        for id in dynamic_ids {
-            if let Some(entry) = self.dynamic_forwards.write().await.remove(&id) {
-                entry.handle.stop().await;
+        let active_forwards = self.take_all_active_forwards().await;
+        for entry in active_forwards {
+            match entry {
+                ActiveForwardEntry::Local(entry) => entry.handle.stop().await,
+                ActiveForwardEntry::Remote(entry) => entry.handle.stop().await,
+                ActiveForwardEntry::Dynamic(entry) => entry.handle.stop().await,
             }
         }
 
@@ -720,40 +717,39 @@ impl ForwardingManager {
             self.session_id
         );
         let mut saved_rules = Vec::new();
-
-        // Stop local forwards and save rules
-        let local_ids: Vec<String> = self.local_forwards.read().await.keys().cloned().collect();
-        for id in local_ids {
-            if let Some(entry) = self.local_forwards.write().await.remove(&id) {
-                entry.handle.stop().await;
-                let mut rule = entry.rule.clone();
-                rule.status = ForwardStatus::Stopped;
-                saved_rules.push(rule.clone());
-                self.stopped_forwards.write().await.insert(id, rule);
-            }
-        }
-
-        // Stop remote forwards and save rules
-        let remote_ids: Vec<String> = self.remote_forwards.read().await.keys().cloned().collect();
-        for id in remote_ids {
-            if let Some(entry) = self.remote_forwards.write().await.remove(&id) {
-                entry.handle.stop().await;
-                let mut rule = entry.rule.clone();
-                rule.status = ForwardStatus::Stopped;
-                saved_rules.push(rule.clone());
-                self.stopped_forwards.write().await.insert(id, rule);
-            }
-        }
-
-        // Stop dynamic forwards and save rules
-        let dynamic_ids: Vec<String> = self.dynamic_forwards.read().await.keys().cloned().collect();
-        for id in dynamic_ids {
-            if let Some(entry) = self.dynamic_forwards.write().await.remove(&id) {
-                entry.handle.stop().await;
-                let mut rule = entry.rule.clone();
-                rule.status = ForwardStatus::Stopped;
-                saved_rules.push(rule.clone());
-                self.stopped_forwards.write().await.insert(id, rule);
+        let active_forwards = self.take_all_active_forwards().await;
+        for entry in active_forwards {
+            match entry {
+                ActiveForwardEntry::Local(entry) => {
+                    entry.handle.stop().await;
+                    let mut rule = entry.rule.clone();
+                    rule.status = ForwardStatus::Stopped;
+                    saved_rules.push(rule.clone());
+                    self.stopped_forwards
+                        .write()
+                        .await
+                        .insert(rule.id.clone(), rule);
+                }
+                ActiveForwardEntry::Remote(entry) => {
+                    entry.handle.stop().await;
+                    let mut rule = entry.rule.clone();
+                    rule.status = ForwardStatus::Stopped;
+                    saved_rules.push(rule.clone());
+                    self.stopped_forwards
+                        .write()
+                        .await
+                        .insert(rule.id.clone(), rule);
+                }
+                ActiveForwardEntry::Dynamic(entry) => {
+                    entry.handle.stop().await;
+                    let mut rule = entry.rule.clone();
+                    rule.status = ForwardStatus::Stopped;
+                    saved_rules.push(rule.clone());
+                    self.stopped_forwards
+                        .write()
+                        .await
+                        .insert(rule.id.clone(), rule);
+                }
             }
         }
 
@@ -780,6 +776,37 @@ impl ForwardingManager {
         self.local_forwards.read().await.len()
             + self.remote_forwards.read().await.len()
             + self.dynamic_forwards.read().await.len()
+    }
+
+    async fn take_all_active_forwards(&self) -> Vec<ActiveForwardEntry> {
+        let mut active = Vec::new();
+
+        {
+            let mut local_forwards = self.local_forwards.write().await;
+            active.extend(
+                std::mem::take(&mut *local_forwards)
+                    .into_values()
+                    .map(ActiveForwardEntry::Local),
+            );
+        }
+        {
+            let mut remote_forwards = self.remote_forwards.write().await;
+            active.extend(
+                std::mem::take(&mut *remote_forwards)
+                    .into_values()
+                    .map(ActiveForwardEntry::Remote),
+            );
+        }
+        {
+            let mut dynamic_forwards = self.dynamic_forwards.write().await;
+            active.extend(
+                std::mem::take(&mut *dynamic_forwards)
+                    .into_values()
+                    .map(ActiveForwardEntry::Dynamic),
+            );
+        }
+
+        active
     }
 
     /// Check if a port is available on the remote host

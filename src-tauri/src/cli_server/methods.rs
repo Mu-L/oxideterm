@@ -248,23 +248,32 @@ async fn list_forwards(app: &tauri::AppHandle, params: Value) -> Result<Value, (
             .collect()
     };
 
+    let forward_groups = futures_util::future::join_all(session_ids.iter().cloned().map(|sid| {
+        let forwarding_registry = forwarding_registry.clone();
+        async move {
+            forwarding_registry
+                .get(&sid)
+                .await
+                .map(|manager| async move { (sid, manager.list_forwards().await) })
+        }
+    }))
+    .await;
+
     let mut all_forwards = Vec::new();
-    for sid in &session_ids {
-        if let Some(manager) = forwarding_registry.get(sid).await {
-            let forwards = manager.list_forwards().await;
-            for rule in forwards {
-                all_forwards.push(json!({
-                    "session_id": sid,
-                    "id": rule.id,
-                    "forward_type": format!("{:?}", rule.forward_type).to_lowercase(),
-                    "bind_address": rule.bind_address,
-                    "bind_port": rule.bind_port,
-                    "target_host": rule.target_host,
-                    "target_port": rule.target_port,
-                    "status": format!("{:?}", rule.status).to_lowercase(),
-                    "description": rule.description,
-                }));
-            }
+    for group in forward_groups.into_iter().flatten() {
+        let (sid, forwards) = group.await;
+        for rule in forwards {
+            all_forwards.push(json!({
+                "session_id": sid,
+                "id": rule.id,
+                "forward_type": format!("{:?}", rule.forward_type).to_lowercase(),
+                "bind_address": rule.bind_address,
+                "bind_port": rule.bind_port,
+                "target_host": rule.target_host,
+                "target_port": rule.target_port,
+                "status": format!("{:?}", rule.status).to_lowercase(),
+                "description": rule.description,
+            }));
         }
     }
 

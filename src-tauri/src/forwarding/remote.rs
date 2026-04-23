@@ -21,11 +21,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use std::sync::LazyLock;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tracing::{debug, info, warn};
 
+use super::bridge::{ActiveConnectionCounter, BridgeStatsRecorder, bridge_stream_to_ssh_channel};
 use super::events::ForwardEventEmitter;
 use super::manager::ForwardStatus;
 use crate::ssh::{HandleController, SshError};
@@ -106,7 +106,7 @@ pub struct RemoteForwardTarget {
 #[derive(Debug, Default)]
 pub struct RemoteForwardStatsAtomic {
     pub connection_count: AtomicU64,
-    pub active_connections: AtomicU64,
+    pub active_connections: ActiveConnectionCounter,
     pub bytes_sent: AtomicU64,
     pub bytes_received: AtomicU64,
 }
@@ -119,10 +119,20 @@ impl RemoteForwardStatsAtomic {
     pub fn to_stats(&self) -> ForwardStats {
         ForwardStats {
             connection_count: self.connection_count.load(Ordering::Relaxed),
-            active_connections: self.active_connections.load(Ordering::Relaxed),
+            active_connections: self.active_connections.load(),
             bytes_sent: self.bytes_sent.load(Ordering::Relaxed),
             bytes_received: self.bytes_received.load(Ordering::Relaxed),
         }
+    }
+}
+
+impl BridgeStatsRecorder for RemoteForwardStatsAtomic {
+    fn record_bytes_sent(&self, bytes: u64) {
+        self.bytes_sent.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    fn record_bytes_received(&self, bytes: u64) {
+        self.bytes_received.fetch_add(bytes, Ordering::Relaxed);
     }
 }
 
@@ -133,7 +143,7 @@ impl RemoteForwardStatsAtomic {
 /// a forwarded-tcpip channel is opened by the server.
 pub struct RemoteForwardRegistry {
     /// Map from (address, port) to local target
-    forwards: RwLock<HashMap<(String, u16), RemoteForwardTarget>>,
+    forwards: RwLock<HashMap<String, HashMap<u16, RemoteForwardTarget>>>,
 }
 
 impl RemoteForwardRegistry {
@@ -152,14 +162,18 @@ impl RemoteForwardRegistry {
         local_host: String,
         local_port: u16,
     ) -> Arc<RemoteForwardStatsAtomic> {
-        let key = (remote_addr.clone(), remote_port);
         let stats = Arc::new(RemoteForwardStatsAtomic::new());
         let target = RemoteForwardTarget {
             local_host,
             local_port,
             stats: stats.clone(),
         };
-        self.forwards.write().await.insert(key, target);
+        self.forwards
+            .write()
+            .await
+            .entry(remote_addr.clone())
+            .or_default()
+            .insert(remote_port, target);
         debug!(
             "Registered remote forward: {}:{} -> target",
             remote_addr, remote_port
@@ -169,8 +183,13 @@ impl RemoteForwardRegistry {
 
     /// Unregister a remote forward
     pub async fn unregister(&self, remote_addr: &str, remote_port: u16) {
-        let key = (remote_addr.to_string(), remote_port);
-        self.forwards.write().await.remove(&key);
+        let mut forwards = self.forwards.write().await;
+        if let Some(ports) = forwards.get_mut(remote_addr) {
+            ports.remove(&remote_port);
+            if ports.is_empty() {
+                forwards.remove(remote_addr);
+            }
+        }
         debug!(
             "Unregistered remote forward: {}:{}",
             remote_addr, remote_port
@@ -179,15 +198,22 @@ impl RemoteForwardRegistry {
 
     /// Look up a remote forward target
     pub async fn lookup(&self, remote_addr: &str, remote_port: u16) -> Option<RemoteForwardTarget> {
-        let key = (remote_addr.to_string(), remote_port);
-        self.forwards.read().await.get(&key).cloned()
+        self.forwards
+            .read()
+            .await
+            .get(remote_addr)
+            .and_then(|ports| ports.get(&remote_port))
+            .cloned()
     }
 
     /// Check if a forward exists
     #[allow(dead_code)]
     pub async fn exists(&self, remote_addr: &str, remote_port: u16) -> bool {
-        let key = (remote_addr.to_string(), remote_port);
-        self.forwards.read().await.contains_key(&key)
+        self.forwards
+            .read()
+            .await
+            .get(remote_addr)
+            .is_some_and(|ports| ports.contains_key(&remote_port))
     }
 }
 
@@ -242,20 +268,14 @@ impl RemoteForwardHandle {
 
         let _ = self.stop_tx.send(()).await;
 
-        // 等待活跃连接关闭（最多等待 5 秒）
-        let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(5);
-        while self.stats.active_connections.load(Ordering::Acquire) > 0 {
-            if start.elapsed() > timeout {
-                warn!(
-                    "Timeout waiting for {} active connections to close on {}:{}",
-                    self.stats.active_connections.load(Ordering::Acquire),
-                    self.config.remote_addr,
-                    self.bound_port
-                );
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        if !self.stats.active_connections.wait_for_zero(timeout).await {
+            warn!(
+                "Timeout waiting for {} active connections to close on {}:{}",
+                self.stats.active_connections.load(),
+                self.config.remote_addr,
+                self.bound_port
+            );
         }
     }
 
@@ -414,17 +434,14 @@ pub async fn handle_forwarded_connection(
         .stats
         .connection_count
         .fetch_add(1, Ordering::Relaxed);
-    target
-        .stats
-        .active_connections
-        .fetch_add(1, Ordering::Relaxed);
+    target.stats.active_connections.increment();
     let stats = target.stats.clone();
 
     // Connect to local service
     let local_addr = format!("{}:{}", target.local_host, target.local_port);
     let local_stream = TcpStream::connect(&local_addr).await.map_err(|e| {
         // Decrement active connections on connection failure
-        stats.active_connections.fetch_sub(1, Ordering::Relaxed);
+        stats.active_connections.decrement();
         SshError::ConnectionFailed(format!("Failed to connect to {}: {}", local_addr, e))
     })?;
 
@@ -442,7 +459,7 @@ pub async fn handle_forwarded_connection(
     let result = bridge_forwarded_connection(local_stream, channel, stats.clone()).await;
 
     // Decrement active connections when done
-    stats.active_connections.fetch_sub(1, Ordering::Relaxed);
+    stats.active_connections.decrement();
 
     result
 }
@@ -462,164 +479,19 @@ const REMOTE_FORWARD_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::fr
 /// 2. Explicit timeout on all I/O operations (protects against zombie connections)
 /// 3. Clean shutdown propagation via broadcast channel
 async fn bridge_forwarded_connection(
-    mut local_stream: TcpStream,
-    mut channel: russh::Channel<russh::client::Msg>,
+    local_stream: TcpStream,
+    channel: russh::Channel<russh::client::Msg>,
     stats: Arc<RemoteForwardStatsAtomic>,
 ) -> Result<(), SshError> {
-    let (mut local_read, mut local_write) = local_stream.split();
-
-    // Create internal channels for lock-free data flow
-    let (local_to_ssh_tx, mut local_to_ssh_rx) = mpsc::channel::<Vec<u8>>(32);
-    let (ssh_to_local_tx, mut ssh_to_local_rx) = mpsc::channel::<Vec<u8>>(32);
-
-    // Control signals for clean shutdown
-    let (close_tx, _) = broadcast::channel::<()>(1);
-    let mut close_rx1 = close_tx.subscribe();
-    let mut close_rx2 = close_tx.subscribe();
-
-    let stats_for_send = stats.clone();
-    let stats_for_recv = stats.clone();
-
-    // Task 1: Read from local socket, send to mpsc channel
-    let local_reader = async move {
-        let mut buf = vec![0u8; 32768];
-        loop {
-            tokio::select! {
-                biased;
-
-                _ = close_rx1.recv() => {
-                    debug!("Remote forward local reader: received close signal");
-                    break;
-                }
-
-                result = tokio::time::timeout(REMOTE_FORWARD_IDLE_TIMEOUT, local_read.read(&mut buf)) => {
-                    match result {
-                        Ok(Ok(0)) => {
-                            debug!("Remote forward local reader: EOF");
-                            break;
-                        }
-                        Ok(Ok(n)) => {
-                            stats_for_send.bytes_sent.fetch_add(n as u64, Ordering::Relaxed);
-                            if local_to_ssh_tx.send(buf[..n].to_vec()).await.is_err() {
-                                debug!("Remote forward local reader: channel closed");
-                                break;
-                            }
-                        }
-                        Ok(Err(e)) => {
-                            debug!("Remote forward local reader: error {}", e);
-                            break;
-                        }
-                        Err(_) => {
-                            debug!("Remote forward local reader: idle timeout ({}s)", REMOTE_FORWARD_IDLE_TIMEOUT.as_secs());
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    };
-
-    // Task 2: Read from mpsc channel, write to local socket
-    let local_writer = async move {
-        loop {
-            tokio::select! {
-                biased;
-
-                _ = close_rx2.recv() => {
-                    debug!("Remote forward local writer: received close signal");
-                    break;
-                }
-
-                data = ssh_to_local_rx.recv() => {
-                    match data {
-                        Some(data) => {
-                            if let Err(e) = local_write.write_all(&data).await {
-                                debug!("Remote forward local writer: error {}", e);
-                                break;
-                            }
-                        }
-                        None => {
-                            debug!("Remote forward local writer: channel closed");
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    };
-
-    // Task 3: SSH channel I/O loop (single owner of Channel, no mutex needed)
-    let ssh_io = async move {
-        loop {
-            tokio::select! {
-                biased;
-
-                // Priority 1: Send data to SSH channel
-                data = local_to_ssh_rx.recv() => {
-                    match data {
-                        Some(data) => {
-                            if let Err(e) = channel.data(&data[..]).await {
-                                debug!("Remote forward SSH I/O: send error {}", e);
-                                break;
-                            }
-                        }
-                        None => {
-                            debug!("Remote forward SSH I/O: local reader closed, sending EOF");
-                            let _ = channel.eof().await;
-                            break;
-                        }
-                    }
-                }
-
-                // Priority 2: Receive data from SSH channel (with timeout)
-                result = tokio::time::timeout(REMOTE_FORWARD_IDLE_TIMEOUT, channel.wait()) => {
-                    match result {
-                        Ok(Some(russh::ChannelMsg::Data { data })) => {
-                            let data_len = data.len();
-                            stats_for_recv.bytes_received.fetch_add(data_len as u64, Ordering::Relaxed);
-                            if ssh_to_local_tx.send(data.to_vec()).await.is_err() {
-                                debug!("Remote forward SSH I/O: local writer closed");
-                                break;
-                            }
-                        }
-                        Ok(Some(russh::ChannelMsg::Eof)) => {
-                            debug!("Remote forward SSH I/O: received EOF");
-                            break;
-                        }
-                        Ok(Some(russh::ChannelMsg::Close)) => {
-                            debug!("Remote forward SSH I/O: channel closed by remote");
-                            break;
-                        }
-                        Ok(None) => {
-                            debug!("Remote forward SSH I/O: channel ended");
-                            break;
-                        }
-                        Ok(_) => continue,
-                        Err(_) => {
-                            debug!("Remote forward SSH I/O: idle timeout ({}s)", REMOTE_FORWARD_IDLE_TIMEOUT.as_secs());
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Cleanup: close the channel
-        let _ = channel.close().await;
-    };
-
-    // Run all tasks concurrently, exit when any completes
-    tokio::select! {
-        _ = local_reader => {}
-        _ = local_writer => {}
-        _ = ssh_io => {}
-    }
-
-    // Signal all tasks to close
-    let _ = close_tx.send(());
-
-    debug!("Remote forward connection closed");
-    Ok(())
+    bridge_stream_to_ssh_channel(
+        local_stream,
+        channel,
+        stats,
+        REMOTE_FORWARD_IDLE_TIMEOUT,
+        None,
+        "Remote forward",
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -659,5 +531,23 @@ mod tests {
         // Unregister
         registry.unregister("0.0.0.0", 9000).await;
         assert!(registry.lookup("0.0.0.0", 9000).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_registry_keeps_other_ports_for_same_address() {
+        let registry = RemoteForwardRegistry::new();
+
+        registry
+            .register("0.0.0.0".to_string(), 9000, "localhost".to_string(), 3000)
+            .await;
+        registry
+            .register("0.0.0.0".to_string(), 9001, "localhost".to_string(), 3001)
+            .await;
+
+        registry.unregister("0.0.0.0", 9000).await;
+
+        assert!(registry.lookup("0.0.0.0", 9000).await.is_none());
+        let remaining = registry.lookup("0.0.0.0", 9001).await.unwrap();
+        assert_eq!(remaining.local_port, 3001);
     }
 }

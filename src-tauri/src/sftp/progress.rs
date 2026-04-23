@@ -204,10 +204,22 @@ pub trait ProgressStore: Send + Sync {
 /// Table definition for progress storage
 const PROGRESS_TABLE: redb::TableDefinition<&str, &[u8]> =
     redb::TableDefinition::new("sftp_transfer_progress");
+const INCOMPLETE_PROGRESS_TABLE: redb::TableDefinition<&str, &[u8]> =
+    redb::TableDefinition::new("sftp_transfer_incomplete_progress");
+const SESSION_INCOMPLETE_INDEX_TABLE: redb::TableDefinition<&str, &str> =
+    redb::TableDefinition::new("sftp_transfer_incomplete_session_index");
 
 /// redb-based progress store implementation
 pub struct RedbProgressStore {
     db: redb::Database,
+}
+
+fn session_incomplete_index_key(session_id: &str, transfer_id: &str) -> String {
+    format!("{session_id}:{transfer_id}")
+}
+
+fn session_incomplete_index_end_key(session_id: &str) -> String {
+    format!("{session_id};")
 }
 
 /// Lazily initialized progress store that opens the redb database on first use.
@@ -268,6 +280,22 @@ impl RedbProgressStore {
             let _table = write_txn.open_table(PROGRESS_TABLE).map_err(|e| {
                 SftpError::StorageError(format!("Failed to open progress table: {}", e))
             })?;
+            let _table = write_txn
+                .open_table(INCOMPLETE_PROGRESS_TABLE)
+                .map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to open incomplete progress table: {}",
+                        e
+                    ))
+                })?;
+            let _table = write_txn
+                .open_table(SESSION_INCOMPLETE_INDEX_TABLE)
+                .map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to open session incomplete index table: {}",
+                        e
+                    ))
+                })?;
         }
 
         write_txn
@@ -275,8 +303,9 @@ impl RedbProgressStore {
             .map_err(|e| SftpError::StorageError(format!("Failed to commit transaction: {}", e)))?;
 
         debug!("SFTP progress store initialized successfully");
-
-        Ok(Self { db })
+        let store = Self { db };
+        store.rebuild_incomplete_indexes()?;
+        Ok(store)
     }
 
     /// Get default progress store path (in config dir)
@@ -291,6 +320,112 @@ impl RedbProgressStore {
         })?;
 
         Ok(config_dir.join("sftp_progress.redb"))
+    }
+
+    fn rebuild_incomplete_indexes(&self) -> Result<(), SftpError> {
+        let read_txn = self.db.begin_read().map_err(|e| {
+            SftpError::StorageError(format!("Failed to begin read transaction: {}", e))
+        })?;
+        let table = read_txn.open_table(PROGRESS_TABLE).map_err(|e| {
+            SftpError::StorageError(format!("Failed to open progress table: {}", e))
+        })?;
+
+        let mut incomplete_entries = Vec::new();
+        for item in table.iter().map_err(|e| {
+            SftpError::StorageError(format!("Failed to iterate progress table: {}", e))
+        })? {
+            let (_key, value) = item.map_err(|e| {
+                SftpError::StorageError(format!("Failed to read progress entry: {}", e))
+            })?;
+            let progress: StoredTransferProgress =
+                rmp_serde::from_slice(value.value()).map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to deserialize progress during index rebuild: {}",
+                        e
+                    ))
+                })?;
+            if progress.is_incomplete() {
+                incomplete_entries
+                    .push((progress.transfer_id.clone(), progress.session_id.clone()));
+            }
+        }
+        drop(table);
+        drop(read_txn);
+
+        let write_txn = self.db.begin_write().map_err(|e| {
+            SftpError::StorageError(format!("Failed to begin write transaction: {}", e))
+        })?;
+        {
+            let progress_table = write_txn.open_table(PROGRESS_TABLE).map_err(|e| {
+                SftpError::StorageError(format!("Failed to open progress table: {}", e))
+            })?;
+            let mut incomplete_table =
+                write_txn
+                    .open_table(INCOMPLETE_PROGRESS_TABLE)
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to open incomplete progress table: {}",
+                            e
+                        ))
+                    })?;
+            let mut session_index_table = write_txn
+                .open_table(SESSION_INCOMPLETE_INDEX_TABLE)
+                .map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to open session incomplete index table: {}",
+                        e
+                    ))
+                })?;
+
+            incomplete_table
+                .retain_in::<&str, _>(.., |_, _| false)
+                .map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to clear incomplete progress table: {}",
+                        e
+                    ))
+                })?;
+            session_index_table
+                .retain_in::<&str, _>(.., |_, _| false)
+                .map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to clear session incomplete index table: {}",
+                        e
+                    ))
+                })?;
+
+            for (transfer_id, session_id) in incomplete_entries {
+                if let Some(value) = progress_table.get(transfer_id.as_str()).map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to load progress during index rebuild: {}",
+                        e
+                    ))
+                })? {
+                    incomplete_table
+                        .insert(transfer_id.as_str(), value.value())
+                        .map_err(|e| {
+                            SftpError::StorageError(format!(
+                                "Failed to rebuild incomplete progress table: {}",
+                                e
+                            ))
+                        })?;
+                    let session_key = session_incomplete_index_key(&session_id, &transfer_id);
+                    session_index_table
+                        .insert(session_key.as_str(), transfer_id.as_str())
+                        .map_err(|e| {
+                            SftpError::StorageError(format!(
+                                "Failed to rebuild session incomplete index: {}",
+                                e
+                            ))
+                        })?;
+                }
+            }
+        }
+        write_txn
+            .commit()
+            .map_err(|e| SftpError::StorageError(format!("Failed to commit transaction: {}", e)))?;
+
+        Ok(())
     }
 }
 
@@ -329,6 +464,8 @@ impl LazyProgressStore {
 impl ProgressStore for RedbProgressStore {
     async fn save(&self, progress: &StoredTransferProgress) -> Result<(), SftpError> {
         let transfer_id = progress.transfer_id.clone();
+        let session_index_key =
+            session_incomplete_index_key(&progress.session_id, transfer_id.as_str());
 
         debug!(
             "Saving progress for transfer {}: {} / {} bytes ({:.1}%)",
@@ -349,12 +486,60 @@ impl ProgressStore for RedbProgressStore {
             let mut table = write_txn.open_table(PROGRESS_TABLE).map_err(|e| {
                 SftpError::StorageError(format!("Failed to open progress table: {}", e))
             })?;
+            let mut incomplete_table =
+                write_txn
+                    .open_table(INCOMPLETE_PROGRESS_TABLE)
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to open incomplete progress table: {}",
+                            e
+                        ))
+                    })?;
+            let mut session_index_table = write_txn
+                .open_table(SESSION_INCOMPLETE_INDEX_TABLE)
+                .map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to open session incomplete index table: {}",
+                        e
+                    ))
+                })?;
 
             table
                 .insert(transfer_id.as_str(), serialized.as_slice())
                 .map_err(|e| {
                     SftpError::StorageError(format!("Failed to insert progress: {}", e))
                 })?;
+
+            if progress.is_incomplete() {
+                incomplete_table
+                    .insert(transfer_id.as_str(), serialized.as_slice())
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to insert incomplete progress: {}",
+                            e
+                        ))
+                    })?;
+                session_index_table
+                    .insert(session_index_key.as_str(), transfer_id.as_str())
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to insert incomplete session index: {}",
+                            e
+                        ))
+                    })?;
+            } else {
+                incomplete_table.remove(transfer_id.as_str()).map_err(|e| {
+                    SftpError::StorageError(format!("Failed to remove incomplete progress: {}", e))
+                })?;
+                session_index_table
+                    .remove(session_index_key.as_str())
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to remove incomplete session index: {}",
+                            e
+                        ))
+                    })?;
+            }
         }
 
         write_txn
@@ -414,29 +599,73 @@ impl ProgressStore for RedbProgressStore {
         let table = read_txn.open_table(PROGRESS_TABLE).map_err(|e| {
             SftpError::StorageError(format!("Failed to open progress table: {}", e))
         })?;
-
-        let mut results = Vec::new();
-
-        for item in table.iter().map_err(|e| {
-            SftpError::StorageError(format!("Failed to iterate progress table: {}", e))
-        })? {
-            let (key, value) = item.map_err(|e| {
-                SftpError::StorageError(format!("Failed to read progress entry: {}", e))
+        let session_index_table = read_txn
+            .open_table(SESSION_INCOMPLETE_INDEX_TABLE)
+            .map_err(|e| {
+                SftpError::StorageError(format!(
+                    "Failed to open session incomplete index table: {}",
+                    e
+                ))
+            })?;
+        let incomplete_table = read_txn
+            .open_table(INCOMPLETE_PROGRESS_TABLE)
+            .map_err(|e| {
+                SftpError::StorageError(format!("Failed to open incomplete progress table: {}", e))
             })?;
 
-            let progress: StoredTransferProgress =
-                rmp_serde::from_slice(value.value()).map_err(|e| {
-                    SftpError::StorageError(format!("Failed to deserialize progress: {}", e))
-                })?;
+        let mut results = Vec::new();
+        let start_key = session_incomplete_index_key(session_id, "");
+        let end_key = session_incomplete_index_end_key(session_id);
 
-            // Filter by session ID and incomplete status
-            if progress.session_id == session_id && progress.is_incomplete() {
+        for item in session_index_table
+            .range(start_key.as_str()..end_key.as_str())
+            .map_err(|e| {
+                SftpError::StorageError(format!(
+                    "Failed to iterate incomplete session index: {}",
+                    e
+                ))
+            })?
+        {
+            let (_key, transfer_id) = item.map_err(|e| {
+                SftpError::StorageError(format!("Failed to read session index entry: {}", e))
+            })?;
+
+            if let Some(value) = incomplete_table.get(transfer_id.value()).map_err(|e| {
+                SftpError::StorageError(format!(
+                    "Failed to read indexed incomplete progress: {}",
+                    e
+                ))
+            })? {
+                let progress: StoredTransferProgress = rmp_serde::from_slice(value.value())
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to deserialize indexed progress: {}",
+                            e
+                        ))
+                    })?;
+
                 debug!(
                     "Found incomplete transfer {}: {:?}",
-                    key.value(),
+                    transfer_id.value(),
                     progress.status
                 );
                 results.push(progress);
+            } else if let Some(value) = table.get(transfer_id.value()).map_err(|e| {
+                SftpError::StorageError(format!(
+                    "Failed to read fallback progress entry from progress table: {}",
+                    e
+                ))
+            })? {
+                let progress: StoredTransferProgress = rmp_serde::from_slice(value.value())
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to deserialize fallback progress: {}",
+                            e
+                        ))
+                    })?;
+                if progress.session_id == session_id && progress.is_incomplete() {
+                    results.push(progress);
+                }
             }
         }
 
@@ -456,9 +685,11 @@ impl ProgressStore for RedbProgressStore {
             SftpError::StorageError(format!("Failed to begin read transaction: {}", e))
         })?;
 
-        let table = read_txn.open_table(PROGRESS_TABLE).map_err(|e| {
-            SftpError::StorageError(format!("Failed to open progress table: {}", e))
-        })?;
+        let table = read_txn
+            .open_table(INCOMPLETE_PROGRESS_TABLE)
+            .map_err(|e| {
+                SftpError::StorageError(format!("Failed to open incomplete progress table: {}", e))
+            })?;
 
         let mut results = Vec::new();
 
@@ -466,17 +697,14 @@ impl ProgressStore for RedbProgressStore {
             SftpError::StorageError(format!("Failed to iterate progress table: {}", e))
         })? {
             let (_key, value) = item.map_err(|e| {
-                SftpError::StorageError(format!("Failed to read progress entry: {}", e))
+                SftpError::StorageError(format!("Failed to read incomplete progress entry: {}", e))
             })?;
 
             let progress: StoredTransferProgress =
                 rmp_serde::from_slice(value.value()).map_err(|e| {
                     SftpError::StorageError(format!("Failed to deserialize progress: {}", e))
                 })?;
-
-            if progress.is_incomplete() {
-                results.push(progress);
-            }
+            results.push(progress);
         }
 
         debug!("Found {} incomplete transfers total", results.len());
@@ -487,6 +715,8 @@ impl ProgressStore for RedbProgressStore {
     async fn delete(&self, transfer_id: &str) -> Result<(), SftpError> {
         debug!("Deleting progress for transfer {}", transfer_id);
 
+        let existing = self.load(transfer_id).await?;
+
         let write_txn = self.db.begin_write().map_err(|e| {
             SftpError::StorageError(format!("Failed to begin write transaction: {}", e))
         })?;
@@ -495,10 +725,42 @@ impl ProgressStore for RedbProgressStore {
             let mut table = write_txn.open_table(PROGRESS_TABLE).map_err(|e| {
                 SftpError::StorageError(format!("Failed to open progress table: {}", e))
             })?;
+            let mut incomplete_table =
+                write_txn
+                    .open_table(INCOMPLETE_PROGRESS_TABLE)
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to open incomplete progress table: {}",
+                            e
+                        ))
+                    })?;
+            let mut session_index_table = write_txn
+                .open_table(SESSION_INCOMPLETE_INDEX_TABLE)
+                .map_err(|e| {
+                    SftpError::StorageError(format!(
+                        "Failed to open session incomplete index table: {}",
+                        e
+                    ))
+                })?;
 
             table.remove(transfer_id).map_err(|e| {
                 SftpError::StorageError(format!("Failed to delete progress: {}", e))
             })?;
+            incomplete_table.remove(transfer_id).map_err(|e| {
+                SftpError::StorageError(format!("Failed to delete incomplete progress: {}", e))
+            })?;
+            if let Some(progress) = existing.as_ref() {
+                let session_index_key =
+                    session_incomplete_index_key(&progress.session_id, transfer_id);
+                session_index_table
+                    .remove(session_index_key.as_str())
+                    .map_err(|e| {
+                        SftpError::StorageError(format!(
+                            "Failed to delete session incomplete index entry: {}",
+                            e
+                        ))
+                    })?;
+            }
         }
 
         write_txn
@@ -726,6 +988,65 @@ mod tests {
         // Verify deleted
         let loaded = store.load("test-1").await.unwrap();
         assert!(loaded.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_progress_store_completed_transfer_is_removed_from_incomplete_indexes() {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.redb");
+        let store = RedbProgressStore::new(&db_path).unwrap();
+
+        let mut progress = StoredTransferProgress::new(
+            "test-1".to_string(),
+            TransferType::Download,
+            "/remote/file.txt".into(),
+            "/local/file.txt".into(),
+            2048,
+            "session-1".to_string(),
+        );
+
+        progress.mark_failed("network".to_string());
+        store.save(&progress).await.unwrap();
+        assert_eq!(store.list_incomplete("session-1").await.unwrap().len(), 1);
+
+        progress.mark_completed();
+        store.save(&progress).await.unwrap();
+
+        assert!(store.list_incomplete("session-1").await.unwrap().is_empty());
+        assert!(store.list_all_incomplete().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_progress_store_rebuilds_indexes_from_existing_records() {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.redb");
+
+        let db = redb::Database::create(&db_path).unwrap();
+        let mut progress = StoredTransferProgress::new(
+            "legacy-1".to_string(),
+            TransferType::Download,
+            "/remote/file.txt".into(),
+            "/local/file.txt".into(),
+            2048,
+            "session-legacy".to_string(),
+        );
+        progress.mark_failed("legacy".to_string());
+        let serialized = rmp_serde::to_vec_named(&progress).unwrap();
+
+        let write_txn = db.begin_write().unwrap();
+        {
+            let mut table = write_txn.open_table(PROGRESS_TABLE).unwrap();
+            table
+                .insert(progress.transfer_id.as_str(), serialized.as_slice())
+                .unwrap();
+        }
+        write_txn.commit().unwrap();
+        drop(db);
+
+        let store = RedbProgressStore::new(&db_path).unwrap();
+        let incomplete = store.list_incomplete("session-legacy").await.unwrap();
+        assert_eq!(incomplete.len(), 1);
+        assert_eq!(incomplete[0].transfer_id, "legacy-1");
     }
 
     #[test]

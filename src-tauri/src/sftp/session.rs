@@ -11,10 +11,11 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
 use base64::Engine;
+use futures_util::stream::{self, StreamExt, TryStreamExt};
 use parking_lot::RwLock;
 use russh_sftp::client::SftpSession as RusshSftpSession;
 use russh_sftp::client::error::Error as SftpErrorInner;
-use russh_sftp::protocol::OpenFlags;
+use russh_sftp::protocol::{FileAttributes, OpenFlags};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
@@ -67,6 +68,35 @@ fn classify_list_entry_file_type(
             _ => FileType::Symlink,
         },
         other => other,
+    }
+}
+
+const DIRECTORY_TRANSFER_PARALLELISM: usize = 4;
+const STREAMING_PREVIEW_CHUNK_SIZE: usize = 64 * 1024;
+
+#[derive(Clone)]
+struct DownloadDirFileJob {
+    remote_path: String,
+    local_path: String,
+    total_bytes: u64,
+}
+
+#[derive(Clone)]
+struct UploadDirFileJob {
+    local_path: String,
+    remote_path: String,
+    total_bytes: u64,
+}
+
+fn file_type_from_attrs(metadata: &FileAttributes) -> FileType {
+    if metadata.is_dir() {
+        FileType::Directory
+    } else if metadata.is_symlink() {
+        FileType::Symlink
+    } else if metadata.is_regular() {
+        FileType::File
+    } else {
+        FileType::Unknown
     }
 }
 
@@ -159,27 +189,20 @@ impl SftpSession {
             let metadata = entry.metadata();
 
             // Determine file type
-            let entry_file_type = if metadata.is_dir() {
-                FileType::Directory
-            } else if metadata.is_symlink() {
-                FileType::Symlink
-            } else if metadata.is_regular() {
-                FileType::File
-            } else {
-                FileType::Unknown
-            };
+            let entry_file_type = file_type_from_attrs(&metadata);
 
             // Get symlink target if applicable
-            let symlink_target = if entry_file_type == FileType::Symlink {
-                self.sftp.read_link(&full_path).await.ok()
+            let (symlink_target, target_file_type) = if entry_file_type == FileType::Symlink {
+                let symlink_target = self.sftp.read_link(&full_path).await.ok();
+                let target_file_type = self
+                    .sftp
+                    .metadata(&full_path)
+                    .await
+                    .ok()
+                    .map(|target_metadata| file_type_from_attrs(&target_metadata));
+                (symlink_target, target_file_type)
             } else {
-                None
-            };
-
-            let target_file_type = if entry_file_type == FileType::Symlink {
-                self.stat(&full_path).await.ok().map(|info| info.file_type)
-            } else {
-                None
+                (None, None)
             };
 
             let file_type = classify_list_entry_file_type(entry_file_type, target_file_type);
@@ -261,15 +284,7 @@ impl SftpSession {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        let file_type = if metadata.is_dir() {
-            FileType::Directory
-        } else if metadata.is_symlink() {
-            FileType::Symlink
-        } else if metadata.is_regular() {
-            FileType::File
-        } else {
-            FileType::Unknown
-        };
+        let file_type = file_type_from_attrs(&metadata);
 
         let symlink_target = if file_type == FileType::Symlink {
             self.sftp.read_link(&canonical_path).await.ok()
@@ -496,9 +511,12 @@ impl SftpSession {
         let canonical_path = self.resolve_path(path).await?;
         debug!("Previewing file: {} (offset: {})", canonical_path, offset);
 
-        // Get file info first
-        let info = self.stat(&canonical_path).await?;
-        let file_size = info.size;
+        let metadata = self
+            .sftp
+            .metadata(&canonical_path)
+            .await
+            .map_err(|e| self.map_sftp_error(e, &canonical_path))?;
+        let file_size = metadata.size.unwrap_or(0);
 
         // Get file name for special handling
         let file_name = Path::new(&canonical_path)
@@ -625,6 +643,35 @@ impl SftpSession {
         Ok(buffer)
     }
 
+    async fn read_file_limited(&self, path: &str, max_bytes: usize) -> Result<Vec<u8>, SftpError> {
+        use tokio::io::AsyncReadExt;
+
+        let mut file = self
+            .sftp
+            .open(path)
+            .await
+            .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
+
+        let mut content = Vec::with_capacity(max_bytes.min(STREAMING_PREVIEW_CHUNK_SIZE));
+        let mut remaining = max_bytes;
+        let mut buffer = vec![0u8; STREAMING_PREVIEW_CHUNK_SIZE.min(max_bytes.max(1))];
+
+        while remaining > 0 {
+            let read_len = remaining.min(buffer.len());
+            let bytes_read = file
+                .read(&mut buffer[..read_len])
+                .await
+                .map_err(SftpError::IoError)?;
+            if bytes_read == 0 {
+                break;
+            }
+            content.extend_from_slice(&buffer[..bytes_read]);
+            remaining -= bytes_read;
+        }
+
+        Ok(content)
+    }
+
     /// Preview text/code files with syntax highlighting hint
     async fn preview_text(
         &self,
@@ -642,11 +689,7 @@ impl SftpSession {
             });
         }
 
-        let content = self
-            .sftp
-            .read(path)
-            .await
-            .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
+        let content = self.read_file_limited(path, file_size as usize).await?;
 
         // Detect encoding using chardetng
         let (text, encoding_name, confidence, has_bom) = detect_and_decode(&content);
@@ -735,11 +778,7 @@ impl SftpSession {
         // Small images: inline base64 (fast, negligible memory)
         const INLINE_THRESHOLD: u64 = 512 * 1024;
         if size <= INLINE_THRESHOLD {
-            let content = self
-                .sftp
-                .read(path)
-                .await
-                .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
+            let content = self.read_file_limited(path, size as usize).await?;
             let data = base64::engine::general_purpose::STANDARD.encode(&content);
             return Ok(PreviewContent::Image {
                 data,
@@ -931,20 +970,20 @@ impl SftpSession {
     ) -> Result<u64, SftpError> {
         let canonical_path = self.resolve_path(remote_path).await?;
         info!("Downloading directory {} to {}", canonical_path, local_path);
-        let start_time = std::time::Instant::now();
 
-        // Create local directory
         tokio::fs::create_dir_all(local_path)
             .await
             .map_err(SftpError::IoError)?;
 
+        let mut jobs = Vec::new();
+        self.collect_download_jobs_depth(&canonical_path, local_path, 0, &cancel_flag, &mut jobs)
+            .await?;
+
         let total_count = self
-            .download_dir_inner(
-                &canonical_path,
-                local_path,
+            .run_download_jobs(
+                jobs,
                 transfer_id,
                 &progress_tx,
-                &start_time,
                 &cancel_flag,
                 &speed_limit_bps,
             )
@@ -954,43 +993,14 @@ impl SftpSession {
         Ok(total_count)
     }
 
-    /// Internal recursive directory download implementation
-    async fn download_dir_inner(
+    async fn collect_download_jobs_depth(
         &self,
         remote_path: &str,
         local_path: &str,
-        transfer_id: &str,
-        progress_tx: &Option<mpsc::Sender<TransferProgress>>,
-        start_time: &std::time::Instant,
-        cancel_flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
-    ) -> Result<u64, SftpError> {
-        self.download_dir_inner_depth(
-            remote_path,
-            local_path,
-            transfer_id,
-            progress_tx,
-            start_time,
-            0,
-            cancel_flag,
-            speed_limit_bps,
-        )
-        .await
-    }
-
-    /// Internal recursive directory download with depth guard
-    async fn download_dir_inner_depth(
-        &self,
-        remote_path: &str,
-        local_path: &str,
-        transfer_id: &str,
-        progress_tx: &Option<mpsc::Sender<TransferProgress>>,
-        start_time: &std::time::Instant,
         depth: u32,
         cancel_flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
-    ) -> Result<u64, SftpError> {
-        // Guard against symlink cycles
+        jobs: &mut Vec<DownloadDirFileJob>,
+    ) -> Result<(), SftpError> {
         const MAX_DEPTH: u32 = 64;
         if depth >= MAX_DEPTH {
             warn!(
@@ -1011,143 +1021,138 @@ impl SftpSession {
             )
             .await?;
 
-        let mut count = 0u64;
-
         for entry in entries {
-            // Check cancellation before processing each entry
             if let Some(flag) = cancel_flag {
                 if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                    info!("Download directory cancelled at {} files", count);
                     return Err(SftpError::TransferCancelled);
                 }
             }
 
             let local_entry_path = join_local_path(local_path, &entry.name);
-
-            // Resolve symlinks: stat follows symlinks, so we get the target type
-            let is_dir = match entry.file_type {
-                FileType::Directory => true,
-                FileType::Symlink => {
-                    // SFTP stat follows symlinks, giving us the target's type
-                    self.stat(&entry.path)
-                        .await
-                        .map(|info| info.file_type == FileType::Directory)
-                        .unwrap_or(false) // Broken symlink → treat as file (will fail gracefully)
-                }
-                _ => false,
-            };
-
-            if is_dir {
-                // Create local directory
+            if entry.file_type == FileType::Directory {
                 tokio::fs::create_dir_all(&local_entry_path)
                     .await
                     .map_err(SftpError::IoError)?;
-
-                // Recurse into subdirectory (boxed to avoid infinite future size)
-                count += Box::pin(self.download_dir_inner_depth(
+                Box::pin(self.collect_download_jobs_depth(
                     &entry.path,
                     &local_entry_path,
-                    transfer_id,
-                    progress_tx,
-                    start_time,
                     depth + 1,
                     cancel_flag,
-                    speed_limit_bps,
+                    jobs,
                 ))
                 .await?;
             } else {
-                // Download file using streaming chunks instead of full-file buffering
-                use tokio::io::{AsyncReadExt, AsyncWriteExt};
-                let mut remote_file = self
+                let total_bytes = self
                     .sftp
-                    .open(&entry.path)
+                    .metadata(&entry.path)
                     .await
-                    .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
-                let mut local_file = tokio::fs::File::create(&local_entry_path)
-                    .await
-                    .map_err(SftpError::IoError)?;
-                let mut chunk_sizer = super::types::AdaptiveChunkSizer::new();
-                let mut buf = vec![0u8; super::types::AdaptiveChunkSizer::MAX_CHUNK];
-                let mut file_transferred: u64 = 0;
-                let file_start = std::time::Instant::now();
-                let mut last_file_progress = std::time::Instant::now();
-                // For symlinks, entry.size is the symlink size, not the target's.
-                // Pre-fetch the real file size for accurate progress reporting.
-                let real_size = if entry.file_type == FileType::Symlink {
-                    self.stat(&entry.path)
-                        .await
-                        .map(|info| info.size)
-                        .unwrap_or(entry.size)
-                } else {
-                    entry.size
-                };
-                loop {
-                    let n = remote_file
-                        .read(&mut buf[..chunk_sizer.chunk_size()])
-                        .await
-                        .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
-                    if n == 0 {
-                        break;
-                    }
-                    local_file
-                        .write_all(&buf[..n])
-                        .await
-                        .map_err(SftpError::IoError)?;
-                    file_transferred += n as u64;
-                    chunk_sizer.record(n);
+                    .ok()
+                    .and_then(|metadata| metadata.size)
+                    .unwrap_or(entry.size);
+                jobs.push(DownloadDirFileJob {
+                    remote_path: entry.path,
+                    local_path: local_entry_path,
+                    total_bytes,
+                });
+            }
+        }
 
-                    // Speed limit throttle (token-bucket style)
-                    if let Some(limit) = speed_limit_bps {
-                        let bps = limit.load(std::sync::atomic::Ordering::Relaxed);
-                        if bps > 0 {
-                            let elapsed = file_start.elapsed().as_secs_f64();
-                            let expected_secs = file_transferred as f64 / bps as f64;
-                            if expected_secs > elapsed {
-                                tokio::time::sleep(std::time::Duration::from_secs_f64(
-                                    expected_secs - elapsed,
-                                ))
-                                .await;
-                            }
-                        }
-                    }
+        Ok(())
+    }
 
-                    // Per-chunk progress for large files (throttled to 200ms)
-                    if last_file_progress.elapsed().as_millis() >= 200 {
-                        if let Some(tx) = progress_tx {
-                            let elapsed = file_start.elapsed().as_secs_f64();
-                            let speed = if elapsed > 0.0 {
-                                (file_transferred as f64 / elapsed) as u64
-                            } else {
-                                0
-                            };
-                            let eta = if speed > 0 && real_size > file_transferred {
-                                Some(((real_size - file_transferred) as f64 / speed as f64) as u64)
-                            } else {
-                                None
-                            };
-                            let _ = tx
-                                .send(TransferProgress {
-                                    id: transfer_id.to_string(),
-                                    remote_path: entry.path.clone(),
-                                    local_path: local_entry_path.clone(),
-                                    direction: TransferDirection::Download,
-                                    state: TransferState::InProgress,
-                                    total_bytes: real_size,
-                                    transferred_bytes: file_transferred,
-                                    speed,
-                                    eta_seconds: eta,
-                                    error: None,
-                                })
-                                .await;
-                            last_file_progress = std::time::Instant::now();
-                        }
+    async fn run_download_jobs(
+        &self,
+        jobs: Vec<DownloadDirFileJob>,
+        transfer_id: &str,
+        progress_tx: &Option<mpsc::Sender<TransferProgress>>,
+        cancel_flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
+    ) -> Result<u64, SftpError> {
+        if !Self::directory_parallelism_enabled(speed_limit_bps) {
+            for job in &jobs {
+                self.download_dir_file(job, transfer_id, progress_tx, cancel_flag, speed_limit_bps)
+                    .await?;
+            }
+            return Ok(jobs.len() as u64);
+        }
+
+        stream::iter(jobs)
+            .map(|job| async move {
+                self.download_dir_file(
+                    &job,
+                    transfer_id,
+                    progress_tx,
+                    cancel_flag,
+                    speed_limit_bps,
+                )
+                .await?;
+                Ok::<u64, SftpError>(1)
+            })
+            .buffer_unordered(DIRECTORY_TRANSFER_PARALLELISM)
+            .try_fold(0u64, |count, delta| async move { Ok(count + delta) })
+            .await
+    }
+
+    async fn download_dir_file(
+        &self,
+        job: &DownloadDirFileJob,
+        transfer_id: &str,
+        progress_tx: &Option<mpsc::Sender<TransferProgress>>,
+        cancel_flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
+    ) -> Result<(), SftpError> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let mut remote_file = self
+            .sftp
+            .open(&job.remote_path)
+            .await
+            .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
+        let mut local_file = tokio::fs::File::create(&job.local_path)
+            .await
+            .map_err(SftpError::IoError)?;
+        let mut chunk_sizer = super::types::AdaptiveChunkSizer::new();
+        let mut buf = vec![0u8; super::types::AdaptiveChunkSizer::MAX_CHUNK];
+        let mut file_transferred: u64 = 0;
+        let file_start = std::time::Instant::now();
+        let mut last_file_progress = std::time::Instant::now();
+
+        loop {
+            if let Some(flag) = cancel_flag {
+                if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err(SftpError::TransferCancelled);
+                }
+            }
+
+            let n = remote_file
+                .read(&mut buf[..chunk_sizer.chunk_size()])
+                .await
+                .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
+            if n == 0 {
+                break;
+            }
+            local_file
+                .write_all(&buf[..n])
+                .await
+                .map_err(SftpError::IoError)?;
+            file_transferred += n as u64;
+            chunk_sizer.record(n);
+
+            if let Some(limit) = speed_limit_bps {
+                let bps = limit.load(std::sync::atomic::Ordering::Relaxed);
+                if bps > 0 {
+                    let elapsed = file_start.elapsed().as_secs_f64();
+                    let expected_secs = file_transferred as f64 / bps as f64;
+                    if expected_secs > elapsed {
+                        tokio::time::sleep(std::time::Duration::from_secs_f64(
+                            expected_secs - elapsed,
+                        ))
+                        .await;
                     }
                 }
-                local_file.flush().await.map_err(SftpError::IoError)?;
+            }
 
-                count += 1;
-
-                // Final file progress (ensure 100%)
+            if last_file_progress.elapsed().as_millis() >= 200 {
                 if let Some(tx) = progress_tx {
                     let elapsed = file_start.elapsed().as_secs_f64();
                     let speed = if elapsed > 0.0 {
@@ -1155,26 +1160,56 @@ impl SftpSession {
                     } else {
                         0
                     };
-
+                    let eta = if speed > 0 && job.total_bytes > file_transferred {
+                        Some(((job.total_bytes - file_transferred) as f64 / speed as f64) as u64)
+                    } else {
+                        None
+                    };
                     let _ = tx
                         .send(TransferProgress {
                             id: transfer_id.to_string(),
-                            remote_path: entry.path.clone(),
-                            local_path: local_entry_path.clone(),
+                            remote_path: job.remote_path.clone(),
+                            local_path: job.local_path.clone(),
                             direction: TransferDirection::Download,
                             state: TransferState::InProgress,
-                            total_bytes: real_size,
+                            total_bytes: job.total_bytes,
                             transferred_bytes: file_transferred,
                             speed,
-                            eta_seconds: Some(0),
+                            eta_seconds: eta,
                             error: None,
                         })
                         .await;
+                    last_file_progress = std::time::Instant::now();
                 }
             }
         }
 
-        Ok(count)
+        local_file.flush().await.map_err(SftpError::IoError)?;
+
+        if let Some(tx) = progress_tx {
+            let elapsed = file_start.elapsed().as_secs_f64();
+            let speed = if elapsed > 0.0 {
+                (file_transferred as f64 / elapsed) as u64
+            } else {
+                0
+            };
+            let _ = tx
+                .send(TransferProgress {
+                    id: transfer_id.to_string(),
+                    remote_path: job.remote_path.clone(),
+                    local_path: job.local_path.clone(),
+                    direction: TransferDirection::Download,
+                    state: TransferState::InProgress,
+                    total_bytes: job.total_bytes,
+                    transferred_bytes: file_transferred,
+                    speed,
+                    eta_seconds: Some(0),
+                    error: None,
+                })
+                .await;
+        }
+
+        Ok(())
     }
 
     /// Upload directory recursively with progress reporting
@@ -1193,38 +1228,19 @@ impl SftpSession {
             join_remote_path(&self.cwd, remote_path)
         };
         info!("Uploading directory {} to {}", local_path, canonical_path);
-        let start_time = std::time::Instant::now();
 
-        // Phase 1: Pre-scan local directory tree and batch-create all remote directories.
-        // This eliminates serial mkdir round-trips (N dirs × RTT → 1 parallel batch).
-        let mut dir_queue = vec![(local_path.to_string(), canonical_path.clone())];
-        let mut all_remote_dirs: Vec<String> = vec![canonical_path.clone()];
-        while let Some((local_dir, remote_dir)) = dir_queue.pop() {
-            // Check cancellation during scan
-            if let Some(ref flag) = cancel_flag {
-                if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                    info!("Upload directory cancelled during pre-scan");
-                    return Err(SftpError::TransferCancelled);
-                }
-            }
-            let mut entries = tokio::fs::read_dir(&local_dir)
-                .await
-                .map_err(SftpError::IoError)?;
-            while let Some(entry) = entries.next_entry().await.map_err(SftpError::IoError)? {
-                let metadata = match tokio::fs::metadata(entry.path()).await {
-                    Ok(m) => m,
-                    Err(_) => continue,
-                };
-                if metadata.is_dir() {
-                    let name = entry.file_name().to_string_lossy().to_string();
-                    let child_remote = join_remote_path(&remote_dir, &name);
-                    all_remote_dirs.push(child_remote.clone());
-                    dir_queue.push((entry.path().to_string_lossy().to_string(), child_remote));
-                }
-            }
-        }
+        let mut jobs = Vec::new();
+        let mut all_remote_dirs = vec![canonical_path.clone()];
+        self.collect_upload_jobs_depth(
+            local_path,
+            &canonical_path,
+            0,
+            &cancel_flag,
+            &mut all_remote_dirs,
+            &mut jobs,
+        )
+        .await?;
 
-        // Batch create all remote directories (parallel, ignoring "already exists" errors)
         let mkdir_futs: Vec<_> = all_remote_dirs.iter().map(|d| self.mkdir(d)).collect();
         let mkdir_results = futures_util::future::join_all(mkdir_futs).await;
         for (i, result) in mkdir_results.iter().enumerate() {
@@ -1234,12 +1250,10 @@ impl SftpSession {
         }
 
         let total_count = self
-            .upload_dir_inner(
-                local_path,
-                &canonical_path,
+            .run_upload_jobs(
+                jobs,
                 transfer_id,
                 &progress_tx,
-                &start_time,
                 &cancel_flag,
                 &speed_limit_bps,
             )
@@ -1249,43 +1263,15 @@ impl SftpSession {
         Ok(total_count)
     }
 
-    /// Internal recursive directory upload implementation
-    async fn upload_dir_inner(
+    async fn collect_upload_jobs_depth(
         &self,
         local_path: &str,
         remote_path: &str,
-        transfer_id: &str,
-        progress_tx: &Option<mpsc::Sender<TransferProgress>>,
-        start_time: &std::time::Instant,
-        cancel_flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
-    ) -> Result<u64, SftpError> {
-        self.upload_dir_inner_depth(
-            local_path,
-            remote_path,
-            transfer_id,
-            progress_tx,
-            start_time,
-            0,
-            cancel_flag,
-            speed_limit_bps,
-        )
-        .await
-    }
-
-    /// Internal recursive directory upload with depth guard
-    async fn upload_dir_inner_depth(
-        &self,
-        local_path: &str,
-        remote_path: &str,
-        transfer_id: &str,
-        progress_tx: &Option<mpsc::Sender<TransferProgress>>,
-        start_time: &std::time::Instant,
         depth: u32,
         cancel_flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
-    ) -> Result<u64, SftpError> {
-        // Guard against symlink cycles
+        all_remote_dirs: &mut Vec<String>,
+        jobs: &mut Vec<UploadDirFileJob>,
+    ) -> Result<(), SftpError> {
         const MAX_DEPTH: u32 = 64;
         if depth >= MAX_DEPTH {
             warn!(
@@ -1299,13 +1285,9 @@ impl SftpSession {
             .await
             .map_err(SftpError::IoError)?;
 
-        let mut count = 0u64;
-
         while let Some(entry) = entries.next_entry().await.map_err(SftpError::IoError)? {
-            // Check cancellation before processing each entry
             if let Some(flag) = cancel_flag {
                 if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                    info!("Upload directory cancelled at {} files", count);
                     return Err(SftpError::TransferCancelled);
                 }
             }
@@ -1313,127 +1295,129 @@ impl SftpSession {
             let name = entry.file_name().to_string_lossy().to_string();
             let local_entry_path = entry.path();
             let remote_entry_path = join_remote_path(remote_path, &name);
-
-            // Use tokio::fs::metadata (stat) instead of entry.metadata (lstat)
-            // so that symlinks to directories are correctly identified as directories.
             let metadata = match tokio::fs::metadata(&local_entry_path).await {
                 Ok(m) => m,
                 Err(e) => {
-                    // Broken symlink or inaccessible entry — skip with warning
                     warn!("Skipping inaccessible entry {:?}: {}", local_entry_path, e);
                     continue;
                 }
             };
 
             if metadata.is_dir() {
-                // Directory already created in batch phase; just recurse
-                count += Box::pin(self.upload_dir_inner_depth(
-                    local_entry_path.to_string_lossy().as_ref(),
+                all_remote_dirs.push(remote_entry_path.clone());
+                let local_entry_path_string = local_entry_path.to_string_lossy().to_string();
+                Box::pin(self.collect_upload_jobs_depth(
+                    &local_entry_path_string,
                     &remote_entry_path,
-                    transfer_id,
-                    progress_tx,
-                    start_time,
                     depth + 1,
                     cancel_flag,
-                    speed_limit_bps,
+                    all_remote_dirs,
+                    jobs,
                 ))
                 .await?;
             } else if !metadata.is_file() {
-                // Skip special files (named pipes, sockets, devices)
                 warn!(
                     "Skipping special file {:?} (not regular file or directory)",
                     local_entry_path
                 );
-                continue;
             } else {
-                // Upload file using streaming chunks instead of full-file buffering
-                use tokio::io::AsyncReadExt;
-                let mut local_file = tokio::fs::File::open(&local_entry_path)
-                    .await
-                    .map_err(SftpError::IoError)?;
-                let file_size = local_file
-                    .metadata()
-                    .await
-                    .map_err(SftpError::IoError)?
-                    .len();
-                let mut remote_file = self
-                    .sftp
-                    .create(&remote_entry_path)
-                    .await
-                    .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
-                let mut chunk_sizer = super::types::AdaptiveChunkSizer::new();
-                let mut buf = vec![0u8; super::types::AdaptiveChunkSizer::MAX_CHUNK];
-                let mut file_transferred: u64 = 0;
-                let file_start = std::time::Instant::now();
-                let mut last_file_progress = std::time::Instant::now();
-                loop {
-                    let n = local_file
-                        .read(&mut buf[..chunk_sizer.chunk_size()])
-                        .await
-                        .map_err(SftpError::IoError)?;
-                    if n == 0 {
-                        break;
-                    }
-                    tokio::io::AsyncWriteExt::write_all(&mut remote_file, &buf[..n])
-                        .await
-                        .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
-                    file_transferred += n as u64;
-                    chunk_sizer.record(n);
+                jobs.push(UploadDirFileJob {
+                    local_path: local_entry_path.to_string_lossy().to_string(),
+                    remote_path: remote_entry_path,
+                    total_bytes: metadata.len(),
+                });
+            }
+        }
 
-                    // Speed limit throttle (token-bucket style)
-                    if let Some(limit) = speed_limit_bps {
-                        let bps = limit.load(std::sync::atomic::Ordering::Relaxed);
-                        if bps > 0 {
-                            let elapsed = file_start.elapsed().as_secs_f64();
-                            let expected_secs = file_transferred as f64 / bps as f64;
-                            if expected_secs > elapsed {
-                                tokio::time::sleep(std::time::Duration::from_secs_f64(
-                                    expected_secs - elapsed,
-                                ))
-                                .await;
-                            }
-                        }
-                    }
+        Ok(())
+    }
 
-                    // Per-chunk progress for large files (throttled to 200ms)
-                    if last_file_progress.elapsed().as_millis() >= 200 {
-                        if let Some(tx) = progress_tx {
-                            let elapsed = file_start.elapsed().as_secs_f64();
-                            let speed = if elapsed > 0.0 {
-                                (file_transferred as f64 / elapsed) as u64
-                            } else {
-                                0
-                            };
-                            let eta = if speed > 0 && file_size > file_transferred {
-                                Some(((file_size - file_transferred) as f64 / speed as f64) as u64)
-                            } else {
-                                None
-                            };
-                            let _ = tx
-                                .send(TransferProgress {
-                                    id: transfer_id.to_string(),
-                                    remote_path: remote_entry_path.clone(),
-                                    local_path: local_entry_path.to_string_lossy().to_string(),
-                                    direction: TransferDirection::Upload,
-                                    state: TransferState::InProgress,
-                                    total_bytes: file_size,
-                                    transferred_bytes: file_transferred,
-                                    speed,
-                                    eta_seconds: eta,
-                                    error: None,
-                                })
-                                .await;
-                            last_file_progress = std::time::Instant::now();
-                        }
+    async fn run_upload_jobs(
+        &self,
+        jobs: Vec<UploadDirFileJob>,
+        transfer_id: &str,
+        progress_tx: &Option<mpsc::Sender<TransferProgress>>,
+        cancel_flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
+    ) -> Result<u64, SftpError> {
+        if !Self::directory_parallelism_enabled(speed_limit_bps) {
+            for job in &jobs {
+                self.upload_dir_file(job, transfer_id, progress_tx, cancel_flag, speed_limit_bps)
+                    .await?;
+            }
+            return Ok(jobs.len() as u64);
+        }
+
+        stream::iter(jobs)
+            .map(|job| async move {
+                self.upload_dir_file(&job, transfer_id, progress_tx, cancel_flag, speed_limit_bps)
+                    .await?;
+                Ok::<u64, SftpError>(1)
+            })
+            .buffer_unordered(DIRECTORY_TRANSFER_PARALLELISM)
+            .try_fold(0u64, |count, delta| async move { Ok(count + delta) })
+            .await
+    }
+
+    async fn upload_dir_file(
+        &self,
+        job: &UploadDirFileJob,
+        transfer_id: &str,
+        progress_tx: &Option<mpsc::Sender<TransferProgress>>,
+        cancel_flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
+    ) -> Result<(), SftpError> {
+        use tokio::io::AsyncReadExt;
+
+        let mut local_file = tokio::fs::File::open(&job.local_path)
+            .await
+            .map_err(SftpError::IoError)?;
+        let mut remote_file = self
+            .sftp
+            .create(&job.remote_path)
+            .await
+            .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
+        let mut chunk_sizer = super::types::AdaptiveChunkSizer::new();
+        let mut buf = vec![0u8; super::types::AdaptiveChunkSizer::MAX_CHUNK];
+        let mut file_transferred: u64 = 0;
+        let file_start = std::time::Instant::now();
+        let mut last_file_progress = std::time::Instant::now();
+
+        loop {
+            if let Some(flag) = cancel_flag {
+                if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err(SftpError::TransferCancelled);
+                }
+            }
+
+            let n = local_file
+                .read(&mut buf[..chunk_sizer.chunk_size()])
+                .await
+                .map_err(SftpError::IoError)?;
+            if n == 0 {
+                break;
+            }
+            tokio::io::AsyncWriteExt::write_all(&mut remote_file, &buf[..n])
+                .await
+                .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
+            file_transferred += n as u64;
+            chunk_sizer.record(n);
+
+            if let Some(limit) = speed_limit_bps {
+                let bps = limit.load(std::sync::atomic::Ordering::Relaxed);
+                if bps > 0 {
+                    let elapsed = file_start.elapsed().as_secs_f64();
+                    let expected_secs = file_transferred as f64 / bps as f64;
+                    if expected_secs > elapsed {
+                        tokio::time::sleep(std::time::Duration::from_secs_f64(
+                            expected_secs - elapsed,
+                        ))
+                        .await;
                     }
                 }
-                tokio::io::AsyncWriteExt::flush(&mut remote_file)
-                    .await
-                    .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
+            }
 
-                count += 1;
-
-                // Final file progress (ensure 100%)
+            if last_file_progress.elapsed().as_millis() >= 200 {
                 if let Some(tx) = progress_tx {
                     let elapsed = file_start.elapsed().as_secs_f64();
                     let speed = if elapsed > 0.0 {
@@ -1441,26 +1425,67 @@ impl SftpSession {
                     } else {
                         0
                     };
-
+                    let eta = if speed > 0 && job.total_bytes > file_transferred {
+                        Some(((job.total_bytes - file_transferred) as f64 / speed as f64) as u64)
+                    } else {
+                        None
+                    };
                     let _ = tx
                         .send(TransferProgress {
                             id: transfer_id.to_string(),
-                            remote_path: remote_entry_path.clone(),
-                            local_path: local_entry_path.to_string_lossy().to_string(),
+                            remote_path: job.remote_path.clone(),
+                            local_path: job.local_path.clone(),
                             direction: TransferDirection::Upload,
                             state: TransferState::InProgress,
-                            total_bytes: file_size,
+                            total_bytes: job.total_bytes,
                             transferred_bytes: file_transferred,
                             speed,
-                            eta_seconds: Some(0),
+                            eta_seconds: eta,
                             error: None,
                         })
                         .await;
+                    last_file_progress = std::time::Instant::now();
                 }
             }
         }
+        tokio::io::AsyncWriteExt::flush(&mut remote_file)
+            .await
+            .map_err(|e| SftpError::ProtocolError(e.to_string()))?;
 
-        Ok(count)
+        if let Some(tx) = progress_tx {
+            let elapsed = file_start.elapsed().as_secs_f64();
+            let speed = if elapsed > 0.0 {
+                (file_transferred as f64 / elapsed) as u64
+            } else {
+                0
+            };
+
+            let _ = tx
+                .send(TransferProgress {
+                    id: transfer_id.to_string(),
+                    remote_path: job.remote_path.clone(),
+                    local_path: job.local_path.clone(),
+                    direction: TransferDirection::Upload,
+                    state: TransferState::InProgress,
+                    total_bytes: job.total_bytes,
+                    transferred_bytes: file_transferred,
+                    speed,
+                    eta_seconds: Some(0),
+                    error: None,
+                })
+                .await;
+        }
+
+        Ok(())
+    }
+
+    fn directory_parallelism_enabled(
+        speed_limit_bps: &Option<std::sync::Arc<AtomicUsize>>,
+    ) -> bool {
+        match speed_limit_bps {
+            Some(limit) => limit.load(std::sync::atomic::Ordering::Relaxed) == 0,
+            None => true,
+        }
     }
 
     /// Delete file or empty directory

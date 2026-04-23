@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use parking_lot::RwLock;
-use tokio::sync::{Semaphore, watch};
+use tokio::sync::{Notify, Semaphore, watch};
 use tracing::{debug, info, warn};
 
 /// Transfer control signals
@@ -80,6 +80,7 @@ impl Default for TransferControl {
 pub struct TransferPermit {
     _permit: tokio::sync::OwnedSemaphorePermit,
     active_count: Arc<AtomicUsize>,
+    availability_notify: Arc<Notify>,
 }
 
 impl Drop for TransferPermit {
@@ -91,6 +92,7 @@ impl Drop for TransferPermit {
             Ok(prev) => debug!("TransferPermit dropped, active count: {}", prev - 1),
             Err(_) => warn!("TransferPermit dropped with active_count already 0"),
         }
+        self.availability_notify.notify_one();
     }
 }
 
@@ -140,6 +142,8 @@ pub struct TransferManager {
     active_count: Arc<AtomicUsize>,
     /// Current configured max concurrent (can be changed at runtime)
     max_concurrent: AtomicUsize,
+    /// Wake blocked acquirers when capacity changes.
+    availability_notify: Arc<Notify>,
     /// Speed limit in bytes per second (0 = unlimited, Arc for sharing with transfer loops)
     speed_limit_bps: Arc<AtomicUsize>,
 }
@@ -151,6 +155,7 @@ impl TransferManager {
             controls: RwLock::new(HashMap::new()),
             active_count: Arc::new(AtomicUsize::new(0)),
             max_concurrent: AtomicUsize::new(DEFAULT_CONCURRENT_TRANSFERS),
+            availability_notify: Arc::new(Notify::new()),
             speed_limit_bps: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -159,6 +164,7 @@ impl TransferManager {
     pub fn set_max_concurrent(&self, max: usize) {
         let clamped = max.clamp(1, MAX_POSSIBLE_CONCURRENT);
         self.max_concurrent.store(clamped, Ordering::Release);
+        self.availability_notify.notify_waiters();
         info!("Max concurrent transfers set to: {}", clamped);
     }
 
@@ -216,15 +222,14 @@ impl TransferManager {
     /// This function will panic if the semaphore is closed, which should never happen
     /// in normal operation as the semaphore lives for the lifetime of the TransferManager.
     pub async fn acquire_permit(&self) -> TransferPermit {
-        // Wait until we're below the configured limit
         loop {
+            let notified = self.availability_notify.notified();
             let current = self.active_count.load(Ordering::Acquire);
             let max = self.max_concurrent.load(Ordering::Acquire);
             if current < max {
                 break;
             }
-            // Wait a bit before checking again
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            notified.await;
         }
 
         let permit = self
@@ -245,6 +250,7 @@ impl TransferManager {
         TransferPermit {
             _permit: permit,
             active_count: self.active_count.clone(),
+            availability_notify: self.availability_notify.clone(),
         }
     }
 
@@ -317,6 +323,7 @@ impl TransferManager {
             Ok(prev) => debug!("Transfer complete, active count: {}", prev - 1),
             Err(_) => warn!("on_transfer_complete called with active_count already 0"),
         }
+        self.availability_notify.notify_one();
     }
 }
 
@@ -477,6 +484,30 @@ mod tests {
             .await
             .expect("second permit should be acquired after the first is dropped");
         assert_eq!(manager.active_count(), 1);
+        drop(second);
+        assert_eq!(manager.active_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_acquire_permit_unblocks_when_limit_increases() {
+        let manager = Arc::new(TransferManager::new());
+        manager.set_max_concurrent(1);
+
+        let first = manager.acquire_permit().await;
+        let blocked_manager = manager.clone();
+        let blocked = tokio::spawn(async move { blocked_manager.acquire_permit().await });
+
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        manager.set_max_concurrent(2);
+
+        let second = timeout(Duration::from_millis(150), blocked)
+            .await
+            .expect("permit waiter should wake after limit increase")
+            .expect("task should complete");
+
+        assert_eq!(manager.active_count(), 2);
+
+        drop(first);
         drop(second);
         assert_eq!(manager.active_count(), 0);
     }

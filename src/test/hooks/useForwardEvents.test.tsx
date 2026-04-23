@@ -1,5 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetRuntimeEventHubForTests } from '@/lib/runtimeEventHub';
 
 const tauriForwardMocks = vi.hoisted(() => {
   const listeners = new Map<string, Set<(event: { payload: unknown }) => void>>();
@@ -60,19 +61,21 @@ vi.mock('@tauri-apps/api/event', () => ({
 import { useForwardEvents } from '@/hooks/useForwardEvents';
 
 describe('useForwardEvents', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     tauriForwardMocks.clear();
+    await resetRuntimeEventHubForTests();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await resetRuntimeEventHubForTests();
     tauriForwardMocks.clear();
   });
 
   it('registers the backend listener and unsubscribes on unmount', async () => {
     const { unmount } = renderHook(() => useForwardEvents({}));
 
-    await waitFor(() => expect(tauriForwardMocks.listen).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(tauriForwardMocks.listen).toHaveBeenCalledTimes(5));
     expect(tauriForwardMocks.count('forward-event')).toBe(1);
 
     unmount();
@@ -94,7 +97,7 @@ describe('useForwardEvents', () => {
       }),
     );
 
-    await waitFor(() => expect(tauriForwardMocks.listen).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(tauriForwardMocks.listen).toHaveBeenCalledTimes(5));
 
     tauriForwardMocks.emit('forward-event', {
       type: 'statusChanged',
@@ -143,12 +146,10 @@ describe('useForwardEvents', () => {
     tauriForwardMocks.setDeferred(true);
     const { unmount } = renderHook(() => useForwardEvents({}));
 
-    expect(tauriForwardMocks.listen).toHaveBeenCalledTimes(1);
+    expect(tauriForwardMocks.listen).toHaveBeenCalledTimes(5);
     unmount();
     tauriForwardMocks.resolvePending();
-    await Promise.resolve();
-
-    expect(tauriForwardMocks.count('forward-event')).toBe(0);
+    await waitFor(() => expect(tauriForwardMocks.count('forward-event')).toBe(0));
   });
 
   it('does not register a listener while disabled', () => {

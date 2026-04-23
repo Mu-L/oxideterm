@@ -13,8 +13,8 @@
  */
 
 import { create } from 'zustand';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { api } from '../lib/api';
+import { runtimeEventHub, type ProfilerUpdateEvent } from '../lib/runtimeEventHub';
 import type { ResourceMetrics } from '../types';
 
 const MAX_HISTORY = 60;
@@ -31,9 +31,6 @@ interface ConnectionProfilerState {
 interface ProfilerStore {
   /** Per-connection profiler data */
   connections: Map<string, ConnectionProfilerState>;
-
-  /** Active Tauri event unlisteners (not serialized) */
-  _unlisteners: Map<string, UnlistenFn>;
 
   /** Per-connection generation tokens to detect stale async callbacks */
   _generations: Map<string, number>;
@@ -59,7 +56,6 @@ interface ProfilerStore {
 
 export const useProfilerStore = create<ProfilerStore>((set, get) => ({
   connections: new Map(),
-  _unlisteners: new Map(),
   _generations: new Map(),
 
   startProfiler: async (connectionId: string) => {
@@ -85,23 +81,6 @@ export const useProfilerStore = create<ProfilerStore>((set, get) => ({
         // ignore — history may not exist yet
       }
 
-      // Subscribe to Tauri events
-      const eventName = `profiler:update:${connectionId}`;
-      const unlisten = await listen<ResourceMetrics>(eventName, (event) => {
-        get()._updateMetrics(connectionId, event.payload);
-      });
-
-      // Race guard: if generation changed while we were awaiting,
-      // this start is stale — immediately dispose the listener.
-      if (get()._generations.get(connectionId) !== gen) {
-        unlisten();
-        return;
-      }
-
-      // Store unlisten fn
-      const unlisteners = new Map(get()._unlisteners);
-      unlisteners.set(connectionId, unlisten);
-
       // Update state
       const connections = new Map(get().connections);
       connections.set(connectionId, {
@@ -114,7 +93,7 @@ export const useProfilerStore = create<ProfilerStore>((set, get) => ({
         error: null,
       });
 
-      set({ connections, _unlisteners: unlisteners });
+      set({ connections });
     } catch (e) {
       // Stale check: don't overwrite state if generation moved on
       if (get()._generations.get(connectionId) !== gen) return;
@@ -137,15 +116,6 @@ export const useProfilerStore = create<ProfilerStore>((set, get) => ({
     const generations = new Map(get()._generations);
     generations.set(connectionId, gen);
     set({ _generations: generations });
-
-    // Unlisten events
-    const unlisten = get()._unlisteners.get(connectionId);
-    if (unlisten) {
-      unlisten();
-      const unlisteners = new Map(get()._unlisteners);
-      unlisteners.delete(connectionId);
-      set({ _unlisteners: unlisteners });
-    }
 
     try {
       await api.stopResourceProfiler(connectionId);
@@ -190,17 +160,11 @@ export const useProfilerStore = create<ProfilerStore>((set, get) => ({
     const generations = new Map(get()._generations);
     generations.set(connectionId, gen);
 
-    // Unlisten
-    const unlisten = get()._unlisteners.get(connectionId);
-    if (unlisten) unlisten();
-
     const connections = new Map(get().connections);
     connections.delete(connectionId);
-    const unlisteners = new Map(get()._unlisteners);
-    unlisteners.delete(connectionId);
     // Clean up generation entry to prevent Map growth
     generations.delete(connectionId);
-    set({ connections, _unlisteners: unlisteners, _generations: generations });
+    set({ connections, _generations: generations });
   },
 
   getSparklineHistory: (connectionId: string) => {
@@ -214,3 +178,23 @@ export const useProfilerStore = create<ProfilerStore>((set, get) => ({
     return state?.isEnabled ?? false;
   },
 }));
+
+let profilerBridgeRefCount = 0;
+let profilerBridgeCleanup: (() => void) | null = null;
+
+export function retainProfilerBridge(): () => void {
+  profilerBridgeRefCount += 1;
+  if (profilerBridgeRefCount === 1) {
+    profilerBridgeCleanup = runtimeEventHub.subscribe('profilerUpdate', (payload: ProfilerUpdateEvent) => {
+      useProfilerStore.getState()._updateMetrics(payload.connectionId, payload.metrics);
+    });
+  }
+
+  return () => {
+    profilerBridgeRefCount = Math.max(0, profilerBridgeRefCount - 1);
+    if (profilerBridgeRefCount === 0) {
+      profilerBridgeCleanup?.();
+      profilerBridgeCleanup = null;
+    }
+  };
+}

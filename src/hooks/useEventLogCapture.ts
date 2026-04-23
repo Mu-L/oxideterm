@@ -11,30 +11,11 @@
  */
 
 import { useEffect } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { useEventLogStore } from '../store/eventLogStore';
 import { useReconnectOrchestratorStore, type ReconnectPhase } from '../store/reconnectOrchestratorStore';
+import { runtimeEventHub } from '../lib/runtimeEventHub';
 import { topologyResolver } from '../lib/topologyResolver';
 import type { EventSeverity } from '../store/eventLogStore';
-
-// ============================================================================
-// Backend event payload types (mirrors useConnectionEvents.ts)
-// ============================================================================
-
-interface ConnectionStatusEvent {
-  connection_id: string;
-  status: 'connected' | 'link_down' | 'reconnecting' | 'disconnected';
-  affected_children: string[];
-  timestamp: number;
-}
-
-interface NodeStateEvent {
-  type: string;
-  node_id: string;
-  generation: number;
-  state?: string;
-  reason?: string;
-}
 
 // ============================================================================
 // Helpers
@@ -70,12 +51,8 @@ export function useEventLogCapture(): void {
 
   // ── Listen to connection_status_changed from backend ──
   useEffect(() => {
-    let mounted = true;
-    let unlisten: (() => void) | undefined;
-
-    listen<ConnectionStatusEvent>('connection_status_changed', (event) => {
-      if (!mounted) return;
-      const { connection_id, status, affected_children } = event.payload;
+    const unsubscribe = runtimeEventHub.subscribe('connectionStatusChanged', (payload) => {
+      const { connection_id, status, affected_children } = payload;
       const nodeId = topologyResolver.getNodeId(connection_id) ?? undefined;
 
       addEntry({
@@ -89,42 +66,32 @@ export function useEventLogCapture(): void {
           : undefined,
         source: 'connection_status_changed',
       });
-    }).then((fn) => {
-      if (mounted) { unlisten = fn; } else { fn(); }
     });
 
-    return () => { mounted = false; unlisten?.(); };
+    return unsubscribe;
   }, [addEntry]);
 
   // ── Listen to node:state from backend ──
   useEffect(() => {
-    let mounted = true;
-    let unlisten: (() => void) | undefined;
-
-    listen<NodeStateEvent>('node:state', (event) => {
-      if (!mounted) return;
-      const payload = event.payload;
-      // Only capture ConnectionStateChanged events
-      if (payload.type !== 'ConnectionStateChanged') return;
+    const unsubscribe = runtimeEventHub.subscribe('nodeState', (payload) => {
+      if (payload.type !== 'connectionStateChanged') return;
 
       const severity: EventSeverity =
-        payload.state === 'Error' ? 'error'
-        : payload.state === 'Disconnected' ? 'warn'
+        payload.state === 'error' ? 'error'
+        : payload.state === 'disconnected' ? 'warn'
         : 'info';
 
       addEntry({
         severity,
         category: 'node',
-        nodeId: payload.node_id,
+        nodeId: payload.nodeId,
         title: `event_log.events.node_state_${(payload.state ?? 'unknown').toLowerCase()}`,
         detail: payload.reason ?? undefined,
         source: 'node:state',
       });
-    }).then((fn) => {
-      if (mounted) { unlisten = fn; } else { fn(); }
     });
 
-    return () => { mounted = false; unlisten?.(); };
+    return unsubscribe;
   }, [addEntry]);
 
   // ── Subscribe to reconnect orchestrator phase changes ──

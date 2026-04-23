@@ -14,7 +14,6 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { removeConnectionsById, tabReferencesAnySession, useAppStore } from '../store/appStore';
 import { useTransferStore } from '../store/transferStore';
 import { useSessionTreeStore } from '../store/sessionTreeStore';
@@ -23,26 +22,9 @@ import { useProfilerStore } from '../store/profilerStore';
 import { topologyResolver } from '../lib/topologyResolver';
 import { slog } from '../lib/structuredLog';
 import { resolveConnectionNotifications } from '../lib/notificationCenter';
+import { runtimeEventHub } from '../lib/runtimeEventHub';
 import i18n from '../i18n';
 import type { SshConnectionState } from '../types';
-
-interface ConnectionStatusEvent {
-  connection_id: string;
-  status: 'connected' | 'link_down' | 'reconnecting' | 'disconnected';
-  affected_children: string[];  // 受影响的子连接
-  timestamp: number;            // 时间戳
-}
-
-/** Event payload for env:detected */
-interface EnvDetectedEvent {
-  connectionId: string;
-  osType: string;
-  osVersion?: string;
-  kernel?: string;
-  arch?: string;
-  shell?: string;
-  detectedAt: number;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 主 Hook
@@ -66,20 +48,12 @@ export function useConnectionEvents(): void {
   }, []);
 
   useEffect(() => {
-    let mounted = true;
-    const unlisteners: Array<() => void> = [];
-    
     // 获取 store 方法（避免闭包问题）
     const getTreeStore = () => useSessionTreeStore.getState();
     const getOrchestrator = () => useReconnectOrchestratorStore.getState();
 
-    // Setup all listeners asynchronously
-    const setupListeners = async () => {
-      // Listen for connection status changes from backend
-      try {
-        const unlistenStatus = await listen<ConnectionStatusEvent>('connection_status_changed', (event) => {
-          if (!mounted) return;
-          const { connection_id, status, affected_children } = event.payload;
+    const unlistenStatus = runtimeEventHub.subscribe('connectionStatusChanged', (payload) => {
+          const { connection_id, status, affected_children } = payload;
           const affectedChildren = Array.isArray(affected_children) ? affected_children : [];
           console.log(`[ConnectionEvents] ${connection_id} -> ${status}`, { affected_children: affectedChildren });
 
@@ -207,23 +181,9 @@ export function useConnectionEvents(): void {
             }
           }
         });
-        
-        if (mounted) {
-          unlisteners.push(unlistenStatus);
-        } else {
-          unlistenStatus();
-        }
-      } catch (error) {
-        console.error('[ConnectionEvents] Failed to listen to connection_status_changed:', error);
-      }
 
-      // ═══════════════════════════════════════════════════════════════════════════════
-      // Remote Environment Detection Event
-      // ═══════════════════════════════════════════════════════════════════════════════
-      try {
-        const unlistenEnvDetected = await listen<EnvDetectedEvent>('env:detected', (event) => {
-          if (!mounted) return;
-          const { connectionId, osType, osVersion, kernel, arch, shell, detectedAt } = event.payload;
+    const unlistenEnvDetected = runtimeEventHub.subscribe('envDetected', (payload) => {
+          const { connectionId, osType, osVersion, kernel, arch, shell, detectedAt } = payload;
           console.log(`[ConnectionEvents] env:detected for ${connectionId}: ${osType}`);
           
           updateConnectionRemoteEnv(connectionId, {
@@ -235,33 +195,11 @@ export function useConnectionEvents(): void {
             detectedAt,
           });
         });
-        
-        if (mounted) {
-          unlisteners.push(unlistenEnvDetected);
-        } else {
-          unlistenEnvDetected();
-        }
-      } catch (error) {
-        console.error('[ConnectionEvents] Failed to listen to env:detected:', error);
-      }
-
-      // ═══════════════════════════════════════════════════════════════════════════════
-      // 🛑 已移除的事件监听
-      // ═══════════════════════════════════════════════════════════════════════════════
-      // 
-      // connection_reconnect_progress: 后端重连引擎已物理删除，不再发送此事件
-      // connection_reconnected: 后端不再自主重连，所有重连由前端 reconnectCascade 驱动
-      //
-      // 前端通过 connectingNodeIds 状态跟踪连接进度，无需监听后端事件
-      // ═══════════════════════════════════════════════════════════════════════════════
-    };
-
-    setupListeners();
 
     // Cleanup function with proper async handling
     return () => {
-      mounted = false;
-      unlisteners.forEach((unlisten) => unlisten());
+      unlistenStatus();
+      unlistenEnvDetected();
     };
   // Dependencies are stable: updateConnectionState, updateConnectionRemoteEnv, and interruptTransfersByNode are selectors
   // sessionsRef is updated via subscription, not as a dependency

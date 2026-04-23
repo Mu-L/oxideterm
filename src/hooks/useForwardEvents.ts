@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useCallback } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { runtimeEventHub, type ForwardRuntimeEvent } from '../lib/runtimeEventHub';
 
 /**
  * Forward status from backend
@@ -19,20 +19,7 @@ export type ForwardStatus = 'starting' | 'active' | 'stopped' | 'error' | 'suspe
 /**
  * Forward event types emitted from backend
  */
-export interface ForwardEvent {
-  type: 'statusChanged' | 'statsUpdated' | 'sessionSuspended';
-  forward_id?: string;
-  session_id: string;
-  status?: ForwardStatus;
-  error?: string;
-  stats?: {
-    connection_count: number;
-    active_connections: number;
-    bytes_sent: number;
-    bytes_received: number;
-  };
-  forward_ids?: string[];
-}
+export type ForwardEvent = ForwardRuntimeEvent;
 
 export interface UseForwardEventsOptions {
   /**
@@ -121,37 +108,10 @@ export function useForwardEvents({
       return;
     }
 
-    let mounted = true;
-    let unlisten: (() => void) | null = null;
-    let resolved = false;
-
-    const setupPromise = (async () => {
-      try {
-        const fn = await listen<ForwardEvent>('forward-event', (event) => {
-          if (mounted) {
-            handleEvent(event.payload);
-          }
-        });
-        // 如果在 await 期间组件已卸载，立即清理
-        if (!mounted) {
-          fn();
-          return;
-        }
-        unlisten = fn;
-        resolved = true;
-      } catch (error) {
-        console.error('[useForwardEvents] Failed to setup listener:', error);
-      }
-    })();
+    const unsubscribe = runtimeEventHub.subscribe('forwardEvent', handleEvent);
 
     return () => {
-      mounted = false;
-      if (resolved) {
-        unlisten?.();
-      } else {
-        // listen() 尚未 resolve，等待完成后再清理
-        setupPromise.then(() => unlisten?.());
-      }
+      unsubscribe();
     };
   }, [enabled, handleEvent]);
 }

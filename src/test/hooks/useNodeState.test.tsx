@@ -1,5 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetRuntimeEventHubForTests } from '@/lib/runtimeEventHub';
+import { useSessionTreeStore } from '@/store/sessionTreeStore';
+import { resetNodeStateStoreForTests, retainNodeStateBridge } from '@/store/nodeStateStore';
 
 const nodeStateEventMocks = vi.hoisted(() => {
   const listeners = new Map<string, Set<(event: { payload: unknown }) => void>>();
@@ -66,16 +69,27 @@ vi.mock('@/lib/api', () => ({
 import { useNodeState } from '@/hooks/useNodeState';
 
 describe('useNodeState', () => {
-  beforeEach(() => {
+  let releaseBridge: (() => void) | null = null;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
     nodeStateEventMocks.clear();
+    await resetRuntimeEventHubForTests();
+    resetNodeStateStoreForTests();
     nodeGetStateMock.mockResolvedValue({
       state: { readiness: 'connecting', sftpReady: false },
       generation: 1,
     });
+    useSessionTreeStore.setState({ nodes: [{ id: 'node-1' } as any] });
+    releaseBridge = retainNodeStateBridge();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    releaseBridge?.();
+    releaseBridge = null;
+    resetNodeStateStoreForTests();
+    useSessionTreeStore.setState({ nodes: [] });
+    await resetRuntimeEventHubForTests();
     nodeStateEventMocks.clear();
   });
 
@@ -146,14 +160,16 @@ describe('useNodeState', () => {
     expect(result.current.state).toEqual({ readiness: 'disconnected', sftpReady: false });
   });
 
-  it('cleans up even if the event listener resolves after unmount', async () => {
+  it('keeps state selection pure and leaves cleanup to the app-level bridge', async () => {
     nodeStateEventMocks.setDeferred(true);
+    releaseBridge?.();
+    releaseBridge = retainNodeStateBridge();
     const { unmount } = renderHook(() => useNodeState('node-1'));
 
     unmount();
+    releaseBridge?.();
+    releaseBridge = null;
     nodeStateEventMocks.resolvePending();
-    await Promise.resolve();
-
-    expect(nodeStateEventMocks.count('node:state')).toBe(0);
+    await waitFor(() => expect(nodeStateEventMocks.count('node:state')).toBe(0));
   });
 });

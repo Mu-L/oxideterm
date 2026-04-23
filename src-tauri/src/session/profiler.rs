@@ -1235,6 +1235,15 @@ fn emit_metrics(app_handle: &tauri::AppHandle, connection_id: &str, metrics: &Re
     if let Err(e) = app_handle.emit(&event_name, metrics) {
         warn!("Failed to emit profiler event: {}", e);
     }
+    if let Err(e) = app_handle.emit(
+        "profiler:update",
+        &serde_json::json!({
+            "connectionId": connection_id,
+            "metrics": metrics,
+        }),
+    ) {
+        warn!("Failed to emit generic profiler event: {}", e);
+    }
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────

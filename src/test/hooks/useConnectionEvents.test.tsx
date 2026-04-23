@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSelectorStore } from '@/test/helpers/mockStore';
+import { resetRuntimeEventHubForTests } from '@/lib/runtimeEventHub';
 
 const tauriEventMocks = vi.hoisted(() => {
   const listeners = new Map<string, Set<(event: { payload: unknown }) => void>>();
@@ -152,9 +153,10 @@ function resetAppStore() {
 }
 
 describe('useConnectionEvents', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     tauriEventMocks.clear();
+    await resetRuntimeEventHubForTests();
     resetAppStore();
     topologyResolverMock.getNodeId.mockReturnValue('node-1');
     topologyResolverMock.handleLinkDown.mockReturnValue(['node-1', 'node-child']);
@@ -165,14 +167,15 @@ describe('useConnectionEvents', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await resetRuntimeEventHubForTests();
     tauriEventMocks.clear();
   });
 
   it('registers both backend listeners and unsubscribes on unmount', async () => {
     const { unmount } = renderHook(() => useConnectionEvents());
 
-    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(5));
     expect(tauriEventMocks.count('connection_status_changed')).toBe(1);
     expect(tauriEventMocks.count('env:detected')).toBe(1);
 
@@ -185,7 +188,7 @@ describe('useConnectionEvents', () => {
   it('handles link_down by updating state, marking nodes, scheduling reconnect, and interrupting transfers', async () => {
     renderHook(() => useConnectionEvents());
 
-    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(5));
 
     tauriEventMocks.emit('connection_status_changed', {
       connection_id: 'conn-1',
@@ -207,7 +210,7 @@ describe('useConnectionEvents', () => {
   it('handles connected and env:detected events through appStore and session tree side effects', async () => {
     renderHook(() => useConnectionEvents());
 
-    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(5));
 
     tauriEventMocks.emit('connection_status_changed', {
       connection_id: 'conn-1',
@@ -243,7 +246,7 @@ describe('useConnectionEvents', () => {
   it('handles reconnecting status without scheduling a new reconnect job', async () => {
     renderHook(() => useConnectionEvents());
 
-    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(5));
 
     tauriEventMocks.emit('connection_status_changed', {
       connection_id: 'conn-1',
@@ -271,7 +274,7 @@ describe('useConnectionEvents', () => {
 
     renderHook(() => useConnectionEvents());
 
-    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(5));
 
     tauriEventMocks.emit('connection_status_changed', {
       connection_id: 'conn-1',
@@ -335,7 +338,7 @@ describe('useConnectionEvents', () => {
 
     renderHook(() => useConnectionEvents());
 
-    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(tauriEventMocks.listen).toHaveBeenCalledTimes(5));
 
     tauriEventMocks.emit('connection_status_changed', {
       connection_id: 'conn-1',

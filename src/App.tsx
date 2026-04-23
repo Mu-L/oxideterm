@@ -15,6 +15,8 @@ import { useEventLogCapture } from './hooks/useEventLogCapture';
 import { setupTreeStoreSubscriptions, cleanupTreeStoreSubscriptions } from './store/sessionTreeStore';
 import { useLocalTerminalStore } from './store/localTerminalStore';
 import { useAppStore } from './store/appStore';
+import { retainNodeStateBridge } from './store/nodeStateStore';
+import { retainProfilerBridge } from './store/profilerStore';
 import { useSettingsStore } from './store/settingsStore';
 import { useSplitPaneActions } from './hooks/useSplitPaneShortcuts';
 import { useKeybindingDispatcher } from './hooks/useKeybindingDispatcher';
@@ -22,6 +24,7 @@ import type { ActionId } from './lib/keybindingRegistry';
 import { preloadTerminalFonts } from './lib/fontLoader';
 import { initializePluginSystem } from './lib/plugin/pluginLoader';
 import { setupConnectionBridge, setupNodeStateBridge, setupTransferBridge, pluginEventBridge } from './lib/plugin/pluginEventBridge';
+import { initializeRuntimeEventHub } from './lib/runtimeEventHub';
 import { useToastStore } from './hooks/useToast';
 import { useUpdateStore } from './store/updateStore';
 import { PluginConfirmDialog } from './components/plugin/PluginConfirmDialog';
@@ -95,8 +98,12 @@ function AppContent({ updatesEnabled }: AppContentProps) {
 
   // Initialize plugin system (discover + load enabled plugins)
   useEffect(() => {
+    void initializeRuntimeEventHub();
+
     const bridgeCleanup = setupConnectionBridge(useAppStore);
     const transferBridgeCleanup = setupTransferBridge();
+    const nodeStateStoreCleanup = retainNodeStateBridge();
+    const profilerBridgeCleanup = retainProfilerBridge();
     let nodeStateBridgeCleanup: (() => void) | undefined;
     let nodeStateBridgeResolved = false;
 
@@ -125,6 +132,8 @@ function AppContent({ updatesEnabled }: AppContentProps) {
     return () => {
       bridgeCleanup();
       transferBridgeCleanup();
+      nodeStateStoreCleanup();
+      profilerBridgeCleanup();
       if (nodeStateBridgeResolved) {
         nodeStateBridgeCleanup?.();
       } else {

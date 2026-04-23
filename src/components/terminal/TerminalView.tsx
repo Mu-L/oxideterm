@@ -14,6 +14,7 @@ import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { triggerGitRefresh } from '../../store/ideStore';
 import { api } from '../../lib/api';
+import { runtimeEventHub } from '../../lib/runtimeEventHub';
 import { getTerminalTheme } from '../../lib/themes';
 import { getFontFamily } from '../../lib/fontFamily';
 import { linuxBackdropBlurClass } from '../../lib/linuxWebviewProfile';
@@ -876,18 +877,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // === Listen for connection status changes (Standby mode trigger) ===
   useEffect(() => {
-    let mounted = true;
-    let unlistenFn: (() => void) | null = null;
-    
-    interface ConnectionStatusEvent {
-      connection_id: string;
-      status: 'connected' | 'link_down' | 'reconnecting' | 'disconnected';
-    }
-
-    listen<ConnectionStatusEvent>('connection_status_changed', (event) => {
-      if (!mounted) return;
-      
-      const { connection_id, status } = event.payload;
+    const unsubscribe = runtimeEventHub.subscribe('connectionStatusChanged', (payload) => {
+      const { connection_id, status } = payload;
       
       const currentConnectionId = connectionIdRef.current;
       if (!currentConnectionId) return;
@@ -938,17 +929,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         cleanupWebSocket(ws, 'Disconnected');
         lastWsUrlRef.current = null;
       }
-    }).then((fn) => {
-      if (mounted) {
-        unlistenFn = fn;
-      } else {
-        fn(); // Component unmounted, clean up immediately
-      }
     });
 
     return () => {
-      mounted = false;
-      unlistenFn?.();
+      unsubscribe();
     };
   }, [sessionId]);
 

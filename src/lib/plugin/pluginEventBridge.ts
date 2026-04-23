@@ -10,9 +10,8 @@
  */
 
 import { toSnapshot } from './pluginUtils';
-import { listen } from '@tauri-apps/api/event';
-import type { NodeStateEvent } from '../../types';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
+import { runtimeEventHub } from '../runtimeEventHub';
 
 type EventHandler = (data: unknown) => void;
 
@@ -149,8 +148,7 @@ export async function setupNodeStateBridge(): Promise<() => void> {
   // Track per-node generation to drop out-of-order events
   const nodeGeneration = new Map<string, number>();
 
-  const unlisten = await listen<NodeStateEvent>('node:state', (event) => {
-    const payload = event.payload;
+  const unlisten = runtimeEventHub.subscribe('nodeState', (payload) => {
     if (payload.type !== 'connectionStateChanged') return;
 
     const { nodeId, generation, state: newState } = payload;

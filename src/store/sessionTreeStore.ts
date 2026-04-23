@@ -14,7 +14,6 @@
 
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { listen } from '@tauri-apps/api/event';
 import { api, nodeSftpInit } from '../lib/api';
 import { useReconnectOrchestratorStore } from './reconnectOrchestratorStore';
 import { topologyResolver } from '../lib/topologyResolver';
@@ -26,6 +25,7 @@ import {
   upsertSyntheticConnection,
   useAppStore,
 } from './appStore';
+import { runtimeEventHub } from '../lib/runtimeEventHub';
 import type { 
   FlatNode, 
   SessionTreeSummary,
@@ -2174,15 +2174,13 @@ export function setupTreeStoreSubscriptions() {
   // 监听 connection_status_changed 事件，实时同步后端状态变更
   // appStore.connections 由 useConnectionEvents 和本地增量写入维护，这里只负责树状态自愈
   let unlistenStatus: (() => void) | null = null;
-  listen<unknown>('connection_status_changed', () => {
+  unlistenStatus = runtimeEventHub.subscribe('connectionStatusChanged', () => {
     // 后端连接状态发生变化时，立即同步 sessionTree
     store.syncFromBackend().then(report => {
       if (report.driftCount > 0) {
         console.info(`[SessionTree] Event-driven sync fixed ${report.driftCount} drift(s)`);
       }
     });
-  }).then(fn => {
-    unlistenStatus = fn;
   });
 
   // 存储 unlisten 函数以便 cleanup 时调用

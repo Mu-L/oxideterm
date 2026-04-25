@@ -62,6 +62,18 @@ export type {
 } from './terminalRun';
 export { terminalRunRemote } from './terminalRun';
 export type {
+  FileDiffSummary,
+  FileReadData,
+  FileWriteData,
+  FileWriteRequest,
+} from './fileSafety';
+export {
+  buildFileDiffSummary,
+  byteLengthOfText,
+  hashTextContent,
+  parseFileWriteRequest,
+} from './fileSafety';
+export type {
   TargetDiscoveryState,
   ToolCapabilityStatus,
 } from './targetDiscovery';

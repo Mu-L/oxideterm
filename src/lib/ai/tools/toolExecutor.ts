@@ -42,10 +42,15 @@ import { compressOutput } from './outputCompressor';
 import { sanitizeConnectionInfo } from '../contextSanitizer';
 import { MAX_OUTPUT_BYTES } from '../agentConfig';
 import {
+  buildFileDiffSummary,
   createTerminalOutputSubscription,
   buildCapabilityStatuses,
   buildToolTargets,
+  byteLengthOfText,
+  createToolResultEnvelope,
   formatScreenSnapshot,
+  hashTextContent,
+  parseFileWriteRequest,
   readBufferLineCount,
   readBufferTail,
   readRenderedBufferLines,
@@ -57,7 +62,11 @@ import {
   searchRenderedBuffer,
   terminalRunRemote,
   terminalSend,
+  toLegacyToolResult,
   waitForTerminalOutput as waitForTerminalOutputV2,
+  type FileReadData,
+  type FileWriteData,
+  type FileWriteRequest,
   type TerminalOutputSubscription,
   type TerminalWaitResult,
   type ToolTarget,
@@ -69,6 +78,7 @@ const MAX_GREP_RESULTS = 200;
 const MAX_PATTERN_LENGTH = 200;
 const AUTO_AWAIT_TIMEOUT_SECS = 30;
 const AUTO_AWAIT_STABLE_SECS = 3;
+const UNCONDITIONAL_OVERWRITE_WARNING = 'unconditional overwrite: provide expectedHash from a prior read_file/sftp_read_file/ide_get_file_content result to enable optimistic locking';
 
 /**
  * Shell prompt patterns for detecting command completion.
@@ -120,6 +130,71 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw makeAbortError();
   }
+}
+
+function envelopeResult<TData>(
+  toolCallId: string,
+  input: Parameters<typeof createToolResultEnvelope<TData>>[0],
+): AiToolResult {
+  return toLegacyToolResult(createToolResultEnvelope(input), toolCallId);
+}
+
+function recoverableFileError(
+  toolCallId: string,
+  toolName: string,
+  startTime: number,
+  code: string,
+  message: string,
+  output = '',
+): AiToolResult {
+  return envelopeResult(toolCallId, {
+    ok: false,
+    toolName,
+    capability: 'filesystem.write',
+    summary: message,
+    output,
+    error: {
+      code,
+      message,
+      recoverable: true,
+    },
+    durationMs: Date.now() - startTime,
+  });
+}
+
+function isNotFoundError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /not\s+found|no\s+such\s+file|does\s+not\s+exist|不存在|找不到/i.test(message);
+}
+
+function validateExistingFile(
+  toolCallId: string,
+  toolName: string,
+  request: FileWriteRequest,
+  existing: { hash?: string; mtime?: number | null },
+  startTime: number,
+): AiToolResult | undefined {
+  if (request.expectedHash && existing.hash && existing.hash !== request.expectedHash) {
+    return recoverableFileError(
+      toolCallId,
+      toolName,
+      startTime,
+      'expected_hash_mismatch',
+      `File changed before writing: expected hash ${request.expectedHash}, current hash ${existing.hash}.`,
+    );
+  }
+
+  if (request.expectedMtime !== undefined && existing.mtime != null && existing.mtime !== request.expectedMtime) {
+    return recoverableFileError(
+      toolCallId,
+      toolName,
+      startTime,
+      'expected_mtime_mismatch',
+      `File changed before writing: expected mtime ${request.expectedMtime}, current mtime ${existing.mtime}.`,
+    );
+  }
+
+  return undefined;
 }
 
 async function waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
@@ -230,7 +305,7 @@ export async function executeTool(
         case 'ide_get_open_files':
           return execIdeGetOpenFiles(startTime, toolCallId);
         case 'ide_get_file_content':
-          return execIdeGetFileContent(args, startTime, toolCallId);
+          return await execIdeGetFileContent(args, startTime, toolCallId);
         case 'ide_get_project_info':
           return execIdeGetProjectInfo(startTime, toolCallId);
         case 'ide_replace_string':
@@ -570,12 +645,32 @@ async function execReadFile(
   if (resolved.agentAvailable) {
     const result = await nodeAgentReadFile(resolved.nodeId, path);
     const { text, truncated } = truncateOutput(result.content);
-    return { toolCallId, toolName: 'read_file', success: true, output: text, truncated, durationMs: Date.now() - startTime };
+    const data: FileReadData = {
+      path,
+      content: text,
+      encoding: result.encoding ?? 'utf-8',
+      size: result.size,
+      mtime: result.mtime,
+      contentHash: result.hash,
+      ...(truncated ? { truncated: true } : {}),
+    };
+    return envelopeResult<FileReadData>(toolCallId, {
+      ok: true,
+      toolName: 'read_file',
+      capability: 'filesystem.read',
+      targetId: `ssh-node:${resolved.nodeId}`,
+      summary: `Read ${path} (${result.size} bytes, hash: ${result.hash})`,
+      output: text,
+      data,
+      truncated,
+      durationMs: Date.now() - startTime,
+    });
   }
 
   // Fallback: exec cat via SSH
   const result = await nodeIdeExecCommand(resolved.nodeId, `cat ${shellEscape(path)}`, undefined, 10);
   const { text, truncated } = truncateOutput(result.stdout);
+  const contentHash = await hashTextContent(result.stdout);
   return {
     toolCallId,
     toolName: 'read_file',
@@ -584,6 +679,28 @@ async function execReadFile(
     error: result.exitCode !== 0 ? result.stderr : undefined,
     truncated,
     durationMs: Date.now() - startTime,
+    ...(result.exitCode === 0
+      ? {
+          envelope: createToolResultEnvelope<FileReadData>({
+            ok: true,
+            toolName: 'read_file',
+            capability: 'filesystem.read',
+            targetId: `ssh-node:${resolved.nodeId}`,
+            summary: `Read ${path} (${byteLengthOfText(result.stdout)} bytes, hash: ${contentHash})`,
+            output: text,
+            data: {
+              path,
+              content: text,
+              encoding: 'utf-8',
+              size: byteLengthOfText(result.stdout),
+              contentHash,
+              ...(truncated ? { truncated: true } : {}),
+            },
+            truncated,
+            durationMs: Date.now() - startTime,
+          }),
+        }
+      : {}),
   };
 }
 
@@ -593,15 +710,92 @@ async function execWriteFile(
   startTime: number,
   toolCallId: string,
 ): Promise<AiToolResult> {
-  const path = args.path as string;
-  const content = args.content as string;
+  const request = parseFileWriteRequest(args);
+  const path = request.path;
+  const content = typeof args.content === 'string' ? request.content : undefined;
   if (!path || content === undefined) {
     return { toolCallId, toolName: 'write_file', success: false, output: '', error: 'Missing required arguments: path, content', durationMs: Date.now() - startTime };
   }
 
   if (resolved.agentAvailable) {
-    const result = await nodeAgentWriteFile(resolved.nodeId, path, content);
-    return { toolCallId, toolName: 'write_file', success: true, output: `Written ${result.size} bytes to ${path} (hash: ${result.hash})`, durationMs: Date.now() - startTime };
+    let existing: { content?: string; hash?: string; mtime?: number | null; size?: number | null } | undefined;
+    if (request.createOnly || request.dryRun || request.append || request.expectedHash || request.expectedMtime !== undefined) {
+      try {
+        const current = await nodeAgentReadFile(resolved.nodeId, path);
+        existing = {
+          content: current.content,
+          hash: current.hash,
+          mtime: current.mtime,
+          size: current.size,
+        };
+        if (request.createOnly) {
+          return recoverableFileError(toolCallId, 'write_file', startTime, 'file_exists', `Refusing to create ${path}: file already exists.`);
+        }
+        const validationError = validateExistingFile(toolCallId, 'write_file', request, existing, startTime);
+        if (validationError) return validationError;
+      } catch (e) {
+        if (isNotFoundError(e)) {
+          if (request.expectedHash || request.expectedMtime !== undefined) {
+            return recoverableFileError(toolCallId, 'write_file', startTime, 'expected_file_missing', `Cannot verify write precondition for ${path}: file does not exist.`);
+          }
+        } else if (request.expectedHash || request.expectedMtime !== undefined || request.dryRun) {
+          throw e;
+        }
+      }
+    }
+
+    const nextContent = request.append && existing?.content !== undefined ? existing.content + content : content;
+    const afterHash = await hashTextContent(nextContent);
+    const diffSummary = buildFileDiffSummary({
+      beforeContent: existing?.content,
+      beforeSize: existing?.size,
+      beforeHash: existing?.hash,
+      afterContent: nextContent,
+      afterHash,
+    });
+
+    if (request.dryRun) {
+      return envelopeResult<FileWriteData>(toolCallId, {
+        ok: true,
+        toolName: 'write_file',
+        capability: 'filesystem.write',
+        targetId: `ssh-node:${resolved.nodeId}`,
+        summary: `Dry run: would write ${diffSummary.afterSize} bytes to ${path}`,
+        output: JSON.stringify({ path, dryRun: true, diffSummary }, null, 2),
+        data: {
+          path,
+          size: diffSummary.afterSize,
+          contentHash: afterHash,
+          dryRun: true,
+          diffSummary,
+        },
+        durationMs: Date.now() - startTime,
+      });
+    }
+
+    const result = await nodeAgentWriteFile(resolved.nodeId, path, nextContent, request.expectedHash);
+    const warnings = request.expectedHash || request.createOnly ? [] : [UNCONDITIONAL_OVERWRITE_WARNING];
+    return envelopeResult<FileWriteData>(toolCallId, {
+      ok: true,
+      toolName: 'write_file',
+      capability: 'filesystem.write',
+      targetId: `ssh-node:${resolved.nodeId}`,
+      summary: `Written ${result.size} bytes to ${path} (hash: ${result.hash})`,
+      output: `Written ${result.size} bytes to ${path} (hash: ${result.hash})`,
+      data: {
+        path,
+        size: result.size,
+        mtime: result.mtime,
+        contentHash: result.hash,
+        atomic: result.atomic,
+        diffSummary: {
+          ...diffSummary,
+          afterHash: result.hash,
+        },
+      },
+      warnings,
+      durationMs: Date.now() - startTime,
+    });
   }
 
   return {
@@ -2137,7 +2331,28 @@ async function execSftpReadFile(
     if ('Text' in preview) {
       const { data, language, encoding } = preview.Text;
       const { text } = truncateOutput(data);
-      return { toolCallId, toolName: 'sftp_read_file', success: true, output: `Language: ${language ?? 'unknown'}\nEncoding: ${encoding ?? 'utf-8'}\n\n${text}`, durationMs: Date.now() - startTime };
+      const info = await nodeSftpStat(resolved.nodeId, path).catch(() => undefined);
+      const contentHash = await hashTextContent(data, encoding ?? 'utf-8');
+      const output = `Language: ${language ?? 'unknown'}\nEncoding: ${encoding ?? 'utf-8'}\nHash: ${contentHash}\n\n${text}`;
+      return envelopeResult<FileReadData>(toolCallId, {
+        ok: true,
+        toolName: 'sftp_read_file',
+        capability: 'filesystem.read',
+        targetId: `ssh-node:${resolved.nodeId}`,
+        summary: `Read ${path} (${info?.size ?? byteLengthOfText(data)} bytes, hash: ${contentHash})`,
+        output,
+        data: {
+          path,
+          content: text,
+          encoding: encoding ?? 'utf-8',
+          size: info?.size ?? byteLengthOfText(data),
+          mtime: info?.modified ?? null,
+          contentHash,
+          ...(text !== data ? { truncated: true } : {}),
+        },
+        truncated: text !== data,
+        durationMs: Date.now() - startTime,
+      });
     } else if ('TooLarge' in preview) {
       return { toolCallId, toolName: 'sftp_read_file', success: false, output: '', error: `File too large to preview (${preview.TooLarge.size} bytes, max ${preview.TooLarge.max_size})`, durationMs: Date.now() - startTime };
     } else {
@@ -2197,16 +2412,101 @@ async function execSftpWriteFile(
   toolCallId: string,
 ): Promise<AiToolResult> {
   const toolName = 'sftp_write_file';
-  const path = typeof args.path === 'string' ? args.path.trim() : '';
-  const content = typeof args.content === 'string' ? args.content : undefined;
-  const encoding = typeof args.encoding === 'string' ? args.encoding : undefined;
+  const request = parseFileWriteRequest(args);
+  const path = request.path;
+  const content = typeof args.content === 'string' ? request.content : undefined;
+  const encoding = request.encoding;
 
   if (!path) return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: path', durationMs: Date.now() - startTime };
   if (content === undefined) return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: content', durationMs: Date.now() - startTime };
 
   try {
-    const result = await nodeSftpWrite(resolved.nodeId, path, content, encoding);
-    return { toolCallId, toolName, success: true, output: JSON.stringify({ path, size: result.size, mtime: result.mtime, encoding_used: result.encodingUsed, atomic_write: result.atomicWrite }, null, 2), durationMs: Date.now() - startTime };
+    let existing: { content?: string; hash?: string; mtime?: number | null; size?: number | null } | undefined;
+    if (request.createOnly || request.dryRun || request.append || request.expectedHash || request.expectedMtime !== undefined) {
+      try {
+        const info = await nodeSftpStat(resolved.nodeId, path);
+        if (request.createOnly) {
+          return recoverableFileError(toolCallId, toolName, startTime, 'file_exists', `Refusing to create ${path}: file already exists.`);
+        }
+        existing = {
+          size: info.size,
+          mtime: info.modified,
+        };
+
+        if (request.expectedHash || request.dryRun || request.append) {
+          const preview = await nodeSftpPreview(resolved.nodeId, path);
+          if (!('Text' in preview)) {
+            return recoverableFileError(toolCallId, toolName, startTime, 'existing_file_not_text', `Cannot safely verify existing file ${path}: preview is not text.`);
+          }
+          existing.content = preview.Text.data;
+          existing.hash = await hashTextContent(preview.Text.data, preview.Text.encoding ?? 'utf-8');
+        }
+
+        const validationError = validateExistingFile(toolCallId, toolName, request, existing, startTime);
+        if (validationError) return validationError;
+      } catch (e) {
+        if (isNotFoundError(e)) {
+          if (request.expectedHash || request.expectedMtime !== undefined) {
+            return recoverableFileError(toolCallId, toolName, startTime, 'expected_file_missing', `Cannot verify write precondition for ${path}: file does not exist.`);
+          }
+        } else if (request.expectedHash || request.expectedMtime !== undefined || request.dryRun) {
+          throw e;
+        }
+      }
+    }
+
+    const nextContent = request.append && existing?.content !== undefined ? existing.content + content : content;
+    const afterHash = await hashTextContent(nextContent, encoding ?? 'utf-8');
+    const diffSummary = buildFileDiffSummary({
+      beforeContent: existing?.content,
+      beforeSize: existing?.size,
+      beforeHash: existing?.hash,
+      afterContent: nextContent,
+      afterHash,
+    });
+
+    if (request.dryRun) {
+      return envelopeResult<FileWriteData>(toolCallId, {
+        ok: true,
+        toolName,
+        capability: 'filesystem.write',
+        targetId: `ssh-node:${resolved.nodeId}`,
+        summary: `Dry run: would write ${diffSummary.afterSize} bytes to ${path}`,
+        output: JSON.stringify({ path, dryRun: true, diffSummary }, null, 2),
+        data: {
+          path,
+          size: diffSummary.afterSize,
+          contentHash: afterHash,
+          encoding: encoding ?? 'utf-8',
+          dryRun: true,
+          diffSummary,
+        },
+        durationMs: Date.now() - startTime,
+      });
+    }
+
+    const result = await nodeSftpWrite(resolved.nodeId, path, nextContent, encoding);
+    const output = JSON.stringify({ path, size: result.size, mtime: result.mtime, encoding_used: result.encodingUsed, atomic_write: result.atomicWrite, contentHash: afterHash }, null, 2);
+    const warnings = request.expectedHash || request.createOnly ? [] : [UNCONDITIONAL_OVERWRITE_WARNING];
+    return envelopeResult<FileWriteData>(toolCallId, {
+      ok: true,
+      toolName,
+      capability: 'filesystem.write',
+      targetId: `ssh-node:${resolved.nodeId}`,
+      summary: `Written ${result.size ?? byteLengthOfText(nextContent)} bytes to ${path} (hash: ${afterHash})`,
+      output,
+      data: {
+        path,
+        size: result.size,
+        mtime: result.mtime,
+        contentHash: afterHash,
+        encoding: result.encodingUsed,
+        atomic: result.atomicWrite,
+        diffSummary,
+      },
+      warnings,
+      durationMs: Date.now() - startTime,
+    });
   } catch (e) {
     return { toolCallId, toolName, success: false, output: '', error: e instanceof Error ? e.message : String(e), durationMs: Date.now() - startTime };
   }
@@ -2233,11 +2533,11 @@ function execIdeGetOpenFiles(
   return { toolCallId, toolName: 'ide_get_open_files', success: true, output, durationMs: Date.now() - startTime };
 }
 
-function execIdeGetFileContent(
+async function execIdeGetFileContent(
   args: Record<string, unknown>,
   startTime: number,
   toolCallId: string,
-): AiToolResult {
+): Promise<AiToolResult> {
   const tabId = typeof args.tab_id === 'string' ? args.tab_id : '';
   if (!tabId) {
     return { toolCallId, toolName: 'ide_get_file_content', success: false, output: '', error: 'Missing required argument: tab_id. Use ide_get_open_files to find tab IDs.', durationMs: Date.now() - startTime };
@@ -2254,14 +2554,33 @@ function execIdeGetFileContent(
   }
 
   const { text } = truncateOutput(tab.content);
+  const contentHash = await hashTextContent(tab.content);
   const output = JSON.stringify({
     path: tab.path,
     language: tab.language,
     is_dirty: tab.isDirty,
     cursor: tab.cursor ?? null,
+    contentHash,
+    size: byteLengthOfText(tab.content),
     content: text,
   }, null, 2);
-  return { toolCallId, toolName: 'ide_get_file_content', success: true, output, durationMs: Date.now() - startTime };
+  return envelopeResult<FileReadData>(toolCallId, {
+    ok: true,
+    toolName: 'ide_get_file_content',
+    capability: 'filesystem.read',
+    summary: `Read ${tab.path} (${byteLengthOfText(tab.content)} bytes, hash: ${contentHash})`,
+    output,
+    data: {
+      path: tab.path,
+      content: text,
+      encoding: 'utf-8',
+      size: byteLengthOfText(tab.content),
+      contentHash,
+      ...(text !== tab.content ? { truncated: true } : {}),
+    },
+    truncated: text !== tab.content,
+    durationMs: Date.now() - startTime,
+  });
 }
 
 function execIdeGetProjectInfo(
@@ -2292,11 +2611,67 @@ async function execIdeReplaceString(
   const oldStr = typeof args.old_string === 'string' ? args.old_string : '';
   const newStr = typeof args.new_string === 'string' ? args.new_string : '';
   const shouldSave = args.save === true;
+  const expectedHash = typeof args.expectedHash === 'string'
+    ? args.expectedHash
+    : typeof args.expected_hash === 'string'
+      ? args.expected_hash
+      : '';
+  const dryRun = args.dryRun === true || args.dry_run === true;
 
   if (!tabId) return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: tab_id', durationMs: Date.now() - startTime };
   if (!oldStr) return { toolCallId, toolName, success: false, output: '', error: 'Missing required argument: old_string', durationMs: Date.now() - startTime };
 
   const ideStore = useIdeStore.getState();
+  const beforeTab = ideStore.tabs.find(t => t.id === tabId);
+  if (!beforeTab || beforeTab.content === null) {
+    return { toolCallId, toolName, success: false, output: '', error: `File content not yet loaded for tab: ${tabId}`, durationMs: Date.now() - startTime };
+  }
+
+  const beforeHash = await hashTextContent(beforeTab.content);
+  if (expectedHash && expectedHash !== beforeHash) {
+    return recoverableFileError(toolCallId, toolName, startTime, 'expected_hash_mismatch', `File changed before replacing: expected hash ${expectedHash}, current hash ${beforeHash}.`);
+  }
+
+  const matchCount = beforeTab.content.split(oldStr).length - 1;
+  if (matchCount !== 1) {
+    return recoverableFileError(
+      toolCallId,
+      toolName,
+      startTime,
+      matchCount === 0 ? 'replace_string_not_found' : 'replace_string_not_unique',
+      matchCount === 0
+        ? 'Replacement target was not found.'
+        : `Replacement target is not unique (${matchCount} matches). Include more surrounding context in old_string.`,
+    );
+  }
+
+  const afterContent = beforeTab.content.replace(oldStr, newStr);
+  const afterHash = await hashTextContent(afterContent);
+  const diffSummary = buildFileDiffSummary({
+    beforeContent: beforeTab.content,
+    beforeHash,
+    afterContent,
+    afterHash,
+  });
+
+  if (dryRun) {
+    return envelopeResult<FileWriteData>(toolCallId, {
+      ok: true,
+      toolName,
+      capability: 'filesystem.write',
+      summary: `Dry run: would replace text in ${beforeTab.path}`,
+      output: JSON.stringify({ tab_id: tabId, path: beforeTab.path, dryRun: true, diffSummary }, null, 2),
+      data: {
+        path: beforeTab.path,
+        size: diffSummary.afterSize,
+        contentHash: afterHash,
+        dryRun: true,
+        diffSummary,
+      },
+      durationMs: Date.now() - startTime,
+    });
+  }
+
   const result = ideStore.replaceStringInTab(tabId, oldStr, newStr);
   if (!result.success) {
     return { toolCallId, toolName, success: false, output: '', error: result.error ?? 'Replace failed', durationMs: Date.now() - startTime };
@@ -2309,7 +2684,21 @@ async function execIdeReplaceString(
   }
 
   const tab = useIdeStore.getState().tabs.find(t => t.id === tabId);
-  return { toolCallId, toolName, success: true, output: `Replaced in ${tab?.name ?? tabId}${shouldSave ? ' (saved)' : ' (unsaved)'}`, durationMs: Date.now() - startTime };
+  return envelopeResult<FileWriteData>(toolCallId, {
+    ok: true,
+    toolName,
+    capability: 'filesystem.write',
+    summary: `Replaced in ${tab?.name ?? tabId}${shouldSave ? ' (saved)' : ' (unsaved)'}`,
+    output: `Replaced in ${tab?.name ?? tabId}${shouldSave ? ' (saved)' : ' (unsaved)'}`,
+    data: {
+      path: tab?.path ?? beforeTab.path,
+      size: diffSummary.afterSize,
+      contentHash: afterHash,
+      diffSummary,
+    },
+    warnings: expectedHash ? [] : [UNCONDITIONAL_OVERWRITE_WARNING],
+    durationMs: Date.now() - startTime,
+  });
 }
 
 async function execIdeInsertText(

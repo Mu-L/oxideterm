@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCapabilityStatuses,
+  buildFileDiffSummary,
   buildToolTargets,
+  byteLengthOfText,
   createToolResultEnvelope,
   createToolTarget,
   detectTerminalPrompt,
   fromLegacyToolResult,
   hasTargetCapability,
   inferToolRisk,
+  parseFileWriteRequest,
   toLegacyToolResult,
 } from '@/lib/ai/tools/protocol';
 import type { AiToolResult } from '@/types';
@@ -254,6 +257,43 @@ describe('terminal protocol helpers', () => {
     expect(detectTerminalPrompt('Enter passphrase for key /tmp/id_ed25519:')).toEqual({
       kind: 'passphrase',
       text: 'Enter passphrase for key /tmp/id_ed25519:',
+    });
+  });
+});
+
+describe('file safety protocol helpers', () => {
+  it('normalizes safe write request aliases', () => {
+    expect(parseFileWriteRequest({
+      path: ' /tmp/a.txt ',
+      content: 'hello',
+      expected_hash: 'hash-1',
+      expected_mtime: 123,
+      create_only: true,
+      dry_run: true,
+    })).toMatchObject({
+      path: '/tmp/a.txt',
+      content: 'hello',
+      expectedHash: 'hash-1',
+      expectedMtime: 123,
+      createOnly: true,
+      dryRun: true,
+    });
+  });
+
+  it('builds lightweight diff summaries without retaining extra copies', () => {
+    const summary = buildFileDiffSummary({
+      beforeContent: 'old',
+      beforeHash: 'hash-old',
+      afterContent: 'new',
+      afterHash: 'hash-new',
+    });
+
+    expect(summary).toEqual({
+      beforeSize: byteLengthOfText('old'),
+      afterSize: byteLengthOfText('new'),
+      beforeHash: 'hash-old',
+      afterHash: 'hash-new',
+      changed: true,
     });
   });
 });

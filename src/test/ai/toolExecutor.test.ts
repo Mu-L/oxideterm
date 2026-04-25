@@ -57,6 +57,11 @@ const localExecCommandMock = vi.hoisted(() => vi.fn());
 const nodeIdeExecCommandMock = vi.hoisted(() => vi.fn());
 const nodeGetStateMock = vi.hoisted(() => vi.fn());
 const nodeAgentStatusMock = vi.hoisted(() => vi.fn());
+const nodeAgentReadFileMock = vi.hoisted(() => vi.fn());
+const nodeAgentWriteFileMock = vi.hoisted(() => vi.fn());
+const nodeSftpPreviewMock = vi.hoisted(() => vi.fn());
+const nodeSftpStatMock = vi.hoisted(() => vi.fn());
+const nodeSftpWriteMock = vi.hoisted(() => vi.fn());
 const sshSetPoolConfigMock = vi.hoisted(() => vi.fn());
 const getAllBufferLinesMock = vi.hoisted(() => vi.fn());
 const getBufferStatsMock = vi.hoisted(() => vi.fn());
@@ -112,15 +117,15 @@ vi.mock('@/lib/api', () => ({
   nodeIdeExecCommand: nodeIdeExecCommandMock,
   nodeGetState: nodeGetStateMock,
   nodeAgentStatus: nodeAgentStatusMock,
-  nodeAgentReadFile: vi.fn(),
-  nodeAgentWriteFile: vi.fn(),
+  nodeAgentReadFile: nodeAgentReadFileMock,
+  nodeAgentWriteFile: nodeAgentWriteFileMock,
   nodeAgentListTree: vi.fn(),
   nodeAgentGrep: vi.fn(),
   nodeAgentGitStatus: vi.fn(),
   nodeSftpListDir: vi.fn(),
-  nodeSftpPreview: vi.fn(),
-  nodeSftpStat: vi.fn(),
-  nodeSftpWrite: vi.fn(),
+  nodeSftpPreview: nodeSftpPreviewMock,
+  nodeSftpStat: nodeSftpStatMock,
+  nodeSftpWrite: nodeSftpWriteMock,
 }));
 
 vi.mock('@/store/settingsStore', () => ({
@@ -222,6 +227,11 @@ describe('toolExecutor get_settings sanitization', () => {
     nodeGetStateMock.mockResolvedValue({ state: { readiness: 'ready', sftpCwd: '/' } });
     nodeAgentStatusMock.mockReset();
     nodeAgentStatusMock.mockResolvedValue({ type: 'error' });
+    nodeAgentReadFileMock.mockReset();
+    nodeAgentWriteFileMock.mockReset();
+    nodeSftpPreviewMock.mockReset();
+    nodeSftpStatMock.mockReset();
+    nodeSftpWriteMock.mockReset();
     sshSetPoolConfigMock.mockReset();
     sshSetPoolConfigMock.mockResolvedValue(undefined);
     getAllBufferLinesMock.mockReset();
@@ -511,6 +521,178 @@ describe('toolExecutor get_settings sanitization', () => {
       expect.objectContaining({ targetId: 'ssh-node:node-1', capability: 'command.run' }),
       expect.objectContaining({ targetId: 'ssh-node:node-1', capability: 'filesystem.read' }),
     ]));
+  });
+
+  it('returns file read metadata in the structured envelope', async () => {
+    nodeAgentReadFileMock.mockResolvedValue({
+      content: 'hello\n',
+      hash: 'agent-hash-1',
+      size: 6,
+      mtime: 123,
+      encoding: 'utf-8',
+    });
+
+    const result = await executeTool(
+      'read_file',
+      { path: '/tmp/a.txt' },
+      { activeNodeId: 'node-1', activeAgentAvailable: true },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toBe('hello\n');
+    expect(result.envelope?.data).toMatchObject({
+      path: '/tmp/a.txt',
+      contentHash: 'agent-hash-1',
+      size: 6,
+      mtime: 123,
+    });
+  });
+
+  it('rejects write_file when expected hash no longer matches', async () => {
+    nodeAgentReadFileMock.mockResolvedValue({
+      content: 'old',
+      hash: 'current-hash',
+      size: 3,
+      mtime: 10,
+      encoding: 'utf-8',
+    });
+
+    const result = await executeTool(
+      'write_file',
+      { path: '/tmp/a.txt', content: 'new', expected_hash: 'stale-hash' },
+      { activeNodeId: 'node-1', activeAgentAvailable: true },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('expected hash stale-hash');
+    expect(result.envelope?.error).toMatchObject({
+      code: 'expected_hash_mismatch',
+      recoverable: true,
+    });
+    expect(nodeAgentWriteFileMock).not.toHaveBeenCalled();
+  });
+
+  it('supports write_file dry run without writing', async () => {
+    nodeAgentReadFileMock.mockResolvedValue({
+      content: 'old',
+      hash: 'old-hash',
+      size: 3,
+      mtime: 10,
+      encoding: 'utf-8',
+    });
+
+    const result = await executeTool(
+      'write_file',
+      { path: '/tmp/a.txt', content: 'new content', expected_hash: 'old-hash', dry_run: true },
+      { activeNodeId: 'node-1', activeAgentAvailable: true },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('"dryRun": true');
+    expect(result.envelope?.data).toMatchObject({
+      path: '/tmp/a.txt',
+      dryRun: true,
+    });
+    expect(nodeAgentWriteFileMock).not.toHaveBeenCalled();
+  });
+
+  it('marks legacy write_file without expected hash as an unconditional overwrite', async () => {
+    nodeAgentWriteFileMock.mockResolvedValue({
+      hash: 'new-hash',
+      size: 3,
+      mtime: 11,
+      atomic: true,
+    });
+
+    const result = await executeTool(
+      'write_file',
+      { path: '/tmp/a.txt', content: 'new' },
+      { activeNodeId: 'node-1', activeAgentAvailable: true },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('new-hash');
+    expect(result.envelope?.warnings?.[0]).toContain('unconditional overwrite');
+    expect(nodeAgentWriteFileMock).toHaveBeenCalledWith('node-1', '/tmp/a.txt', 'new', undefined);
+  });
+
+  it('appends write_file content by reading the existing text first', async () => {
+    nodeAgentReadFileMock.mockResolvedValue({
+      content: 'old',
+      hash: 'old-hash',
+      size: 3,
+      mtime: 10,
+      encoding: 'utf-8',
+    });
+    nodeAgentWriteFileMock.mockResolvedValue({
+      hash: 'new-hash',
+      size: 7,
+      mtime: 11,
+      atomic: true,
+    });
+
+    const result = await executeTool(
+      'write_file',
+      { path: '/tmp/a.txt', content: '\nnew', append: true },
+      { activeNodeId: 'node-1', activeAgentAvailable: true },
+    );
+
+    expect(result.success).toBe(true);
+    expect(nodeAgentWriteFileMock).toHaveBeenCalledWith('node-1', '/tmp/a.txt', 'old\nnew', undefined);
+    expect(result.envelope?.data).toMatchObject({
+      path: '/tmp/a.txt',
+      size: 7,
+    });
+  });
+
+  it('rejects sftp_write_file create_only when the target already exists', async () => {
+    nodeSftpStatMock.mockResolvedValue({
+      name: 'a.txt',
+      path: '/tmp/a.txt',
+      file_type: 'File',
+      size: 3,
+      modified: 10,
+      permissions: null,
+    });
+
+    const result = await executeTool(
+      'sftp_write_file',
+      { path: '/tmp/a.txt', content: 'new', create_only: true },
+      { activeNodeId: 'node-1', activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.envelope?.error).toMatchObject({
+      code: 'file_exists',
+      recoverable: true,
+    });
+    expect(nodeSftpWriteMock).not.toHaveBeenCalled();
+  });
+
+  it('requires ide_replace_string to match exactly once', async () => {
+    ideStoreState.tabs = [
+      {
+        id: 'tab-1',
+        path: '/repo/a.ts',
+        name: 'a.ts',
+        language: 'typescript',
+        isDirty: false,
+        content: 'const a = 1;\nconst a = 1;\n',
+      },
+    ];
+
+    const result = await executeTool(
+      'ide_replace_string',
+      { tab_id: 'tab-1', old_string: 'const a = 1;', new_string: 'const a = 2;' },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.envelope?.error).toMatchObject({
+      code: 'replace_string_not_unique',
+      recoverable: true,
+    });
+    expect(ideStoreState.replaceStringInTab).not.toHaveBeenCalled();
   });
 });
 

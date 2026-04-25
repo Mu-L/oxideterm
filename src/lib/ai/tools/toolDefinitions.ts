@@ -59,7 +59,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
   {
     name: 'read_file',
     description:
-      'Read the contents of a file on the remote server. Returns the file content as text. Best for source code, config files, and other text files.',
+      'Read the contents of a file on the remote server. Returns text plus a content hash, size, and mtime in the structured tool envelope for safe follow-up writes.',
     parameters: {
       type: 'object',
       properties: {
@@ -78,7 +78,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
   {
     name: 'write_file',
     description:
-      'Write content to a file on the remote server. Creates the file if it does not exist, overwrites if it does.',
+      'Write content to a file on the remote server. Creates the file if it does not exist, overwrites if it does. For safe edits, pass expected_hash from a prior read_file result.',
     parameters: {
       type: 'object',
       properties: {
@@ -93,6 +93,26 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
         node_id: {
           type: 'string',
           description: 'Target node ID. If omitted, uses the active terminal.',
+        },
+        expected_hash: {
+          type: 'string',
+          description: 'Optional content hash from a prior read_file result. If the remote file changed, the write fails with a recoverable error.',
+        },
+        expected_mtime: {
+          type: 'number',
+          description: 'Optional mtime from a prior read_file result. If the remote file changed, the write fails with a recoverable error.',
+        },
+        create_only: {
+          type: 'boolean',
+          description: 'If true, fail when the target path already exists.',
+        },
+        append: {
+          type: 'boolean',
+          description: 'If true, append content to the existing text file instead of replacing it.',
+        },
+        dry_run: {
+          type: 'boolean',
+          description: 'If true, validate and return a diff summary without writing.',
         },
       },
       required: ['path', 'content'],
@@ -583,7 +603,7 @@ export const SFTP_TOOL_DEFS: AiToolDefinition[] = [
   {
     name: 'sftp_read_file',
     description:
-      'Read the contents of a remote file via SFTP. Returns text content with detected encoding and language. Best for text files, config files, and source code.',
+      'Read the contents of a remote file via SFTP. Returns text content plus detected encoding, size, mtime, and content hash in the structured tool envelope.',
     parameters: {
       type: 'object',
       properties: {
@@ -639,7 +659,7 @@ export const SFTP_TOOL_DEFS: AiToolDefinition[] = [
   {
     name: 'sftp_write_file',
     description:
-      'Write content to a file on the remote server via SFTP. Creates the file if it does not exist, overwrites if it does. Use for creating or updating remote files when no IDE tab is needed.',
+      'Write content to a file on the remote server via SFTP. Creates the file if it does not exist, overwrites if it does. For safe edits, pass expected_hash from a prior sftp_read_file result.',
     parameters: {
       type: 'object',
       properties: {
@@ -658,6 +678,26 @@ export const SFTP_TOOL_DEFS: AiToolDefinition[] = [
         node_id: {
           type: 'string',
           description: 'Target node ID. If omitted, uses the active SFTP tab\'s node.',
+        },
+        expected_hash: {
+          type: 'string',
+          description: 'Optional content hash from a prior sftp_read_file result. If the remote file changed, the write fails with a recoverable error.',
+        },
+        expected_mtime: {
+          type: 'number',
+          description: 'Optional mtime from a prior sftp_read_file or sftp_stat result. If the remote file changed, the write fails with a recoverable error.',
+        },
+        create_only: {
+          type: 'boolean',
+          description: 'If true, fail when the target path already exists.',
+        },
+        append: {
+          type: 'boolean',
+          description: 'If true, append content to the existing text file instead of replacing it.',
+        },
+        dry_run: {
+          type: 'boolean',
+          description: 'If true, validate and return a diff summary without writing.',
         },
       },
       required: ['path', 'content'],
@@ -682,7 +722,7 @@ export const IDE_TOOL_DEFS: AiToolDefinition[] = [
   {
     name: 'ide_get_file_content',
     description:
-      'Get the current content of a file open in the IDE editor. Returns the content, language, dirty status, and cursor position.',
+      'Get the current content of a file open in the IDE editor. Returns content, language, dirty status, cursor position, and a content hash for safe edits.',
     parameters: {
       type: 'object',
       properties: {
@@ -725,6 +765,14 @@ export const IDE_TOOL_DEFS: AiToolDefinition[] = [
         save: {
           type: 'boolean',
           description: 'Whether to save the file after editing. Default: false.',
+        },
+        expected_hash: {
+          type: 'string',
+          description: 'Optional content hash from ide_get_file_content. If the editor buffer changed, the replace fails with a recoverable error.',
+        },
+        dry_run: {
+          type: 'boolean',
+          description: 'If true, validate uniqueness and return a diff summary without editing.',
         },
       },
       required: ['tab_id', 'old_string', 'new_string'],

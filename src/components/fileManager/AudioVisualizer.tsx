@@ -84,6 +84,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const playRequestTokenRef = useRef(0);
+  const sourceReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // State
   const [playing, setPlaying] = useState(false);
@@ -175,6 +176,11 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   // ── Audio events ──────────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (sourceReleaseTimerRef.current) {
+      clearTimeout(sourceReleaseTimerRef.current);
+      sourceReleaseTimerRef.current = null;
+    }
+
     const el = audioRef.current;
     if (!el) return;
     el.volume = volume;
@@ -215,9 +221,16 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
       el.removeEventListener('pause', onPause);
       el.removeEventListener('ended', onEnd);
       el.removeEventListener('error', onError);
-      // Release browser-buffered decoded audio data to prevent memory leaks
-      el.removeAttribute('src');
-      el.load();
+      // React StrictMode replays effects without remounting DOM. Delay source
+      // teardown so the next setup can cancel it and keep playback working.
+      sourceReleaseTimerRef.current = setTimeout(() => {
+        sourceReleaseTimerRef.current = null;
+        for (const sourceEl of Array.from(el.querySelectorAll('source'))) {
+          sourceEl.removeAttribute('src');
+        }
+        el.removeAttribute('src');
+        el.load();
+      }, 0);
     };
   }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
 

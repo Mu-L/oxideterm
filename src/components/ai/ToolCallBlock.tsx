@@ -6,8 +6,9 @@ import { ChevronDown, ChevronRight, Terminal, FileText, FolderOpen, Search, GitB
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/utils';
 import { useAiChatStore } from '../../store/aiChatStore';
-import { hasDeniedCommands, sanitizeToolArguments } from '../../lib/ai/tools';
+import { fromLegacyToolResult, hasDeniedCommands, inferToolRisk, sanitizeToolArguments } from '../../lib/ai/tools';
 import type { AiToolCall, AiToolResult } from '../../types';
+import type { ToolRisk } from '../../lib/ai/tools';
 import type { AiToolRound, AiTurnPart, AiTurnToolCall } from '../../lib/ai/turnModel/types';
 
 interface ToolCallBlockProps {
@@ -42,6 +43,7 @@ function collectToolResults(turnParts?: AiTurnPart[]): Map<string, AiToolResult>
       error: part.error,
       durationMs: part.durationMs,
       truncated: part.truncated,
+      envelope: part.envelope,
     });
   }
 
@@ -153,6 +155,19 @@ const TOOL_ICONS: Record<string, React.ElementType> = {
   send_mouse: MousePointer2,
 };
 
+const LONG_OUTPUT_PREVIEW_CHARS = 1200;
+
+const RISK_CLASS: Record<ToolRisk, string> = {
+  read: 'border-sky-500/25 text-sky-300 bg-sky-500/10',
+  'write-file': 'border-amber-500/30 text-amber-300 bg-amber-500/10',
+  'execute-command': 'border-blue-500/30 text-blue-300 bg-blue-500/10',
+  'interactive-input': 'border-violet-500/30 text-violet-300 bg-violet-500/10',
+  destructive: 'border-red-500/40 text-red-300 bg-red-500/10',
+  'network-expose': 'border-orange-500/40 text-orange-300 bg-orange-500/10',
+  'settings-change': 'border-yellow-500/35 text-yellow-300 bg-yellow-500/10',
+  'credential-sensitive': 'border-red-500/40 text-red-300 bg-red-500/10',
+};
+
 function StatusIcon({ status }: { status: AiToolCall['status'] }) {
   switch (status) {
     case 'pending':
@@ -207,17 +222,68 @@ function getLatestRoundMarker(toolRounds?: AiToolRound[]): string | undefined {
   return undefined;
 }
 
+function parseArgs(argsJson: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(argsJson);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function formatJson(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
+
+function toolResultEnvelope(call: AiToolCall) {
+  return call.result ? fromLegacyToolResult(call.result) : undefined;
+}
+
+function toolRisk(call: AiToolCall): ToolRisk {
+  const envelope = toolResultEnvelope(call);
+  return inferToolRisk(call.name, parseArgs(call.arguments), envelope?.meta.capability);
+}
+
+function Badge({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={cn(
+      'inline-flex items-center rounded border px-1 py-0.5 text-[9px] leading-none font-medium',
+      className,
+    )}>
+      {children}
+    </span>
+  );
+}
+
 const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const [showRawOutput, setShowRawOutput] = useState(false);
   const resolveToolApproval = useAiChatStore((s) => s.resolveToolApproval);
   const Icon = TOOL_ICONS[call.name] || Terminal;
 
   const toggleExpand = useCallback(() => setExpanded((v) => !v), []);
 
-  const summary = formatArgs(call.arguments);
+  const envelope = toolResultEnvelope(call);
+  const risk = toolRisk(call);
+  const summary = envelope?.summary || formatArgs(call.arguments);
+  const capability = envelope?.meta.capability;
+  const targetId = envelope?.meta.targetId;
+  const warnings = envelope?.warnings ?? [];
+  const structuredData = envelope?.data;
   const hasOutput = call.result && (call.result.output || call.result.error);
   const isPendingApproval = call.status === 'pending_user_approval';
+  const rawOutput = call.result?.output ?? '';
+  const isLongOutput = rawOutput.length > LONG_OUTPUT_PREVIEW_CHARS;
+  const displayedOutput = isLongOutput && !showRawOutput
+    ? `${rawOutput.slice(0, LONG_OUTPUT_PREVIEW_CHARS)}\n…`
+    : rawOutput;
+  const sessionId = (() => {
+    const args = parseArgs(call.arguments);
+    return typeof args.session_id === 'string' ? args.session_id : undefined;
+  })();
 
   // Check if this is a deny-listed command for showing a stronger warning
   const isDenyListCommand = isPendingApproval && (() => {
@@ -254,7 +320,15 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
         <span className="font-medium text-theme-text-muted/70 shrink-0">
           {t(`ai.tool_use.tool_names.${call.name}`, { defaultValue: call.name })}
         </span>
-        <span className="text-theme-text-muted/40 truncate flex-1 ml-1 font-mono text-[10px]">
+        <Badge className={cn('shrink-0', RISK_CLASS[risk])}>
+          {risk}
+        </Badge>
+        {capability && (
+          <Badge className="shrink-0 border-theme-border/30 text-theme-text-muted/60 bg-theme-bg/30">
+            {capability}
+          </Badge>
+        )}
+        <span className="text-theme-text-muted/50 truncate flex-1 ml-1 text-[10px]">
           {summary.length > 80 ? summary.slice(0, 80) + '…' : summary}
         </span>
         {call.result?.durationMs != null && (
@@ -303,6 +377,50 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
       {/* Expanded details */}
       {expanded && (
         <div className="border-t border-theme-border/15 px-2 py-1.5 space-y-1.5">
+          {(targetId || envelope?.summary) && (
+            <div className="rounded-md border border-theme-border/15 bg-theme-bg/35 px-1.5 py-1 space-y-1">
+              {envelope?.summary && (
+                <div>
+                  <span className="text-[9px] text-theme-text-muted/40 uppercase tracking-wider mr-1">{t('ai.tool_use.summary')}</span>
+                  <span className="text-[10px] text-theme-text-muted/75">{envelope.summary}</span>
+                </div>
+              )}
+              {targetId && (
+                <div>
+                  <span className="text-[9px] text-theme-text-muted/40 uppercase tracking-wider mr-1">{t('ai.tool_use.target')}</span>
+                  <span className="text-[10px] text-theme-text-muted/65 font-mono">{targetId}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {warnings.length > 0 && (
+            <div>
+              <div className="text-[9px] text-amber-400/70 font-medium uppercase tracking-wider mb-0.5">
+                {t('ai.tool_use.warnings')}
+              </div>
+              <div className="space-y-1">
+                {warnings.map((warning, index) => (
+                  <div key={`${warning}-${index}`} className="flex items-start gap-1 rounded-md bg-amber-500/10 border border-amber-500/20 px-1.5 py-1 text-[10px] text-amber-200/80">
+                    <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                    <span>{warning}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {structuredData !== undefined && (
+            <div>
+              <div className="text-[9px] text-theme-text-muted/40 font-medium uppercase tracking-wider mb-0.5">
+                {t('ai.tool_use.structured_data')}
+              </div>
+              <pre className="text-[10px] text-theme-text-muted/60 font-[family-name:var(--terminal-font-family)] bg-theme-bg/50 rounded-md px-1.5 py-1 overflow-x-auto max-h-[160px] overflow-y-auto whitespace-pre-wrap break-all">
+                {formatJson(structuredData)}
+              </pre>
+            </div>
+          )}
+
           {/* Arguments */}
           <div>
             <div className="text-[9px] text-theme-text-muted/40 font-medium uppercase tracking-wider mb-0.5">
@@ -317,7 +435,7 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
           {hasOutput && (
             <div>
               <div className="text-[9px] text-theme-text-muted/40 font-medium uppercase tracking-wider mb-0.5">
-                {t('ai.tool_use.output')}
+                {t('ai.tool_use.raw_output')}
               </div>
               {call.result!.error && (
                 <div className="text-[10px] text-red-400/80 font-[family-name:var(--terminal-font-family)] bg-red-500/5 rounded-md px-1.5 py-1 mb-1">
@@ -326,14 +444,47 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
               )}
               {call.result!.output && (
                 <pre className="text-[10px] text-theme-text-muted/60 font-[family-name:var(--terminal-font-family)] bg-theme-bg/50 rounded-md px-1.5 py-1 overflow-x-auto max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all">
-                  {call.result!.output}
+                  {displayedOutput}
                 </pre>
+              )}
+              {isLongOutput && (
+                <button
+                  type="button"
+                  onClick={() => setShowRawOutput((value) => !value)}
+                  className="text-[9px] text-theme-accent hover:text-theme-accent/80 mt-0.5"
+                >
+                  {showRawOutput ? t('ai.tool_use.hide_raw_output') : t('ai.tool_use.show_raw_output')}
+                </button>
               )}
               {call.result!.truncated && (
                 <div className="text-[9px] text-yellow-500/60 mt-0.5">
                   {t('ai.tool_use.output_truncated')}
                 </div>
               )}
+            </div>
+          )}
+
+          {(sessionId || envelope?.error?.recoverable) && (
+            <div>
+              <div className="text-[9px] text-theme-text-muted/40 font-medium uppercase tracking-wider mb-0.5">
+                {t('ai.tool_use.recovery_actions')}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {sessionId && (
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard?.writeText(sessionId)}
+                    className="rounded border border-theme-border/30 bg-theme-bg/40 px-1.5 py-0.5 text-[10px] text-theme-text-muted/70 hover:text-theme-text"
+                  >
+                    {t('ai.tool_use.copy_session_id')}
+                  </button>
+                )}
+                {envelope?.error?.recoverable && (
+                  <span className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200/75">
+                    {t('ai.tool_use.recoverable_error')}
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -1,6 +1,8 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
+import type { ToolResultEnvelope } from '../tools/protocol/types';
+
 export type AiConversationTurnStatus = 'streaming' | 'complete' | 'error';
 
 export type AiSummarySource = 'foreground' | 'background';
@@ -61,7 +63,7 @@ export type AiTurnPart =
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string; streaming?: boolean }
   | { type: 'tool_call'; id: string; name: string; argumentsText: string; status: 'partial' | 'complete' }
-  | { type: 'tool_result'; toolCallId: string; toolName: string; success: boolean; output: string; error?: string; durationMs?: number; truncated?: boolean }
+  | { type: 'tool_result'; toolCallId: string; toolName: string; success: boolean; output: string; error?: string; durationMs?: number; truncated?: boolean; envelope?: ToolResultEnvelope }
   | { type: 'guardrail'; code: AiGuardrailCode; message: string; rawText?: string }
   | { type: 'warning'; code: string; message: string }
   | { type: 'error'; message: string };

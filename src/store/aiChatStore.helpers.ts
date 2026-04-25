@@ -1,6 +1,6 @@
 import { parseSuggestions } from '../lib/ai/suggestionParser';
 import type { ChatMessage as ProviderChatMessage } from '../lib/ai/providers';
-import type { AiConversation, AiChatMessage, AiToolCall } from '../types';
+import type { AiConversation, AiChatMessage, AiToolCall, ToolResultEnvelope } from '../types';
 import type {
   AiAssistantTurn,
   AiConversationSessionMetadata,
@@ -87,6 +87,11 @@ function getNumberField(payload: Record<string, unknown>, key: string): number |
 function getBooleanField(payload: Record<string, unknown>, key: string): boolean | undefined {
   const value = payload[key];
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function getEnvelopeField(payload: Record<string, unknown>): ToolResultEnvelope | undefined {
+  const envelope = payload.envelope;
+  return envelope && typeof envelope === 'object' ? envelope as ToolResultEnvelope : undefined;
 }
 
 function isSummaryReferenceKind(value: unknown): value is NonNullable<AiSummaryReference['kind']> {
@@ -617,6 +622,7 @@ export function rebuildConversationFromTranscript(
           error: getStringField(payload, 'error'),
           durationMs: getNumberField(payload, 'durationMs'),
           truncated: getBooleanField(payload, 'truncated'),
+          envelope: getEnvelopeField(payload),
         });
         break;
       }

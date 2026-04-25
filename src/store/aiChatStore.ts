@@ -2316,6 +2316,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
               success: tc.result.success,
               output: tc.result.output,
               error: tc.result.error,
+              envelope: tc.result.envelope,
               roundId: currentRound.id,
             }, {
               turnId: assistantMessage.id,
@@ -2396,6 +2397,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
                   success: tc.result.success,
                   output: tc.result.output,
                   error: tc.result.error,
+                  envelope: tc.result.envelope,
                   roundId: currentRound.id,
                 }, {
                   turnId: assistantMessage.id,
@@ -2436,6 +2438,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
                     success: tc.result.success,
                     output: tc.result.output,
                     error: tc.result.error,
+                    envelope: tc.result.envelope,
                     roundId: currentRound.id,
                   }, {
                     turnId: assistantMessage.id,
@@ -2496,6 +2499,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
               success: tc.result.success,
               output: tc.result.output,
               error: tc.result.error,
+              envelope: tc.result.envelope,
               roundId: currentRound.id,
             }, {
               turnId: assistantMessage.id,
@@ -2538,6 +2542,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
               success: tc.result.success,
               output: tc.result.output,
               error: tc.result.error,
+              envelope: tc.result.envelope,
               roundId: currentRound.id,
             }, {
               turnId: assistantMessage.id,
@@ -2578,6 +2583,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
             error: result.error,
             durationMs: result.durationMs,
             truncated: result.truncated,
+            envelope: result.envelope,
             roundId: currentRound.id,
           }, {
             turnId: assistantMessage.id,

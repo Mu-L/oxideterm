@@ -261,6 +261,7 @@ export function createTurnAccumulator(options: CreateTurnAccumulatorOptions): Tu
         error: result.error,
         durationMs: result.durationMs,
         truncated: result.truncated,
+        envelope: result.envelope,
       };
 
       if (existingIndex !== undefined) {

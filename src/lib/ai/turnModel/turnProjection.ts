@@ -106,6 +106,7 @@ export function projectLegacyMessageToTurn(
         error: toolCall.result.error,
         durationMs: toolCall.result.durationMs,
         truncated: toolCall.result.truncated,
+        envelope: toolCall.result.envelope,
       });
     }
   }

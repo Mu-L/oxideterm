@@ -7,6 +7,12 @@ vi.mock('react-i18next', () => ({
       if (key === 'ai.tool_use.heading') return 'Tool Calls';
       if (key === 'ai.tool_use.arguments') return 'Arguments';
       if (key === 'ai.tool_use.output') return 'Output';
+      if (key === 'ai.tool_use.summary') return 'Summary';
+      if (key === 'ai.tool_use.target') return 'Target';
+      if (key === 'ai.tool_use.warnings') return 'Warnings';
+      if (key === 'ai.tool_use.structured_data') return 'Structured Data';
+      if (key === 'ai.tool_use.raw_output') return 'Output';
+      if (key === 'ai.tool_use.show_raw_output') return 'Show full output';
       if (key === 'ai.tool_use.approval_required') return 'Requires approval';
       if (key === 'ai.tool_use.condensed') return `condensed ${String(options?.count ?? 0)}`;
       if (key === 'ai.tool_use.condensed_label') return 'Earlier calls';
@@ -25,6 +31,25 @@ vi.mock('@/store/aiChatStore', () => ({
 vi.mock('@/lib/ai/tools', () => ({
   hasDeniedCommands: vi.fn(() => false),
   sanitizeToolArguments: (value: unknown) => value,
+  inferToolRisk: () => 'read',
+  fromLegacyToolResult: (result: {
+    success: boolean;
+    toolName: string;
+    output: string;
+    error?: string;
+    envelope?: unknown;
+    durationMs?: number;
+    truncated?: boolean;
+  }) => result.envelope ?? ({
+    ok: result.success,
+    summary: result.error ?? result.output.split('\n')[0] ?? result.toolName,
+    output: result.output,
+    meta: {
+      toolName: result.toolName,
+      durationMs: result.durationMs ?? 0,
+      truncated: result.truncated,
+    },
+  }),
 }));
 
 import { ToolCallBlock } from '@/components/ai/ToolCallBlock';
@@ -65,9 +90,55 @@ describe('ToolCallBlock', () => {
     fireEvent.click(screen.getByRole('button', { name: /read_file/i }));
 
     expect(screen.getByText('Arguments')).toBeInTheDocument();
-    expect(screen.getByText(/"path":\s*"\/tmp\/demo\.txt"/)).toBeInTheDocument();
+    expect(screen.getAllByText(/"path":\s*"\/tmp\/demo\.txt"/).length).toBeGreaterThan(0);
     expect(screen.getByText('Output')).toBeInTheDocument();
-    expect(screen.getByText('file body')).toBeInTheDocument();
+    expect(screen.getAllByText('file body').length).toBeGreaterThan(0);
+  });
+
+  it('renders envelope summary, badges, warnings, and structured data', () => {
+    render(
+      <ToolCallBlock
+        toolCalls={[
+          {
+            id: 'tool-envelope',
+            name: 'write_file',
+            arguments: '{"path":"/tmp/demo.txt","content":"new"}',
+            status: 'completed',
+            result: {
+              toolCallId: 'tool-envelope',
+              toolName: 'write_file',
+              success: true,
+              output: 'raw output'.repeat(200),
+              durationMs: 25,
+              envelope: {
+                ok: true,
+                summary: 'Written 3 bytes to /tmp/demo.txt',
+                output: 'raw output'.repeat(200),
+                warnings: ['unconditional overwrite'],
+                data: { path: '/tmp/demo.txt', size: 3, contentHash: 'hash-1' },
+                meta: {
+                  toolName: 'write_file',
+                  capability: 'filesystem.write',
+                  targetId: 'ssh-node:node-1',
+                  durationMs: 25,
+                },
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('filesystem.write')).toBeInTheDocument();
+    expect(screen.getByText(/Written 3 bytes/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /write_file/i }));
+
+    expect(screen.getByText('Warnings')).toBeInTheDocument();
+    expect(screen.getByText('unconditional overwrite')).toBeInTheDocument();
+    expect(screen.getByText('Structured Data')).toBeInTheDocument();
+    expect(screen.getByText(/"contentHash":\s*"hash-1"/)).toBeInTheDocument();
+    expect(screen.getByText('Show full output')).toBeInTheDocument();
   });
 
   it('renders part-level tool calls when rounds are not available yet', () => {

@@ -11,7 +11,7 @@ import { Slider } from '@/components/ui/slider';
 import { getFontFamily } from '@/lib/fontFamily';
 import { platform } from '@/lib/platform';
 import { TerminalHighlightRulesSection } from '@/components/settings/TerminalHighlightRulesSection';
-import type { AdaptiveRendererMode, CursorStyle, FontFamily, RendererType, TerminalSettings } from '@/store/settingsStore';
+import type { AdaptiveRendererMode, CursorStyle, FontFamily, RendererType, TerminalEncoding, TerminalSettings } from '@/store/settingsStore';
 
 type TerminalTabProps = {
     terminal: TerminalSettings;
@@ -138,6 +138,30 @@ export const TerminalTab = ({ terminal, updateTerminal }: TerminalTabProps) => {
                             onChange={(event) => updateTerminal('lineHeight', parseFloat(event.target.value))}
                             className="w-20"
                         />
+                    </div>
+
+                    <Separator className="opacity-50" />
+
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <Label className="text-theme-text">{t('settings_view.terminal.encoding')}</Label>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.encoding_hint')}</p>
+                        </div>
+                        <Select value={terminal.terminalEncoding ?? 'utf-8'} onValueChange={(value) => updateTerminal('terminalEncoding', value as TerminalEncoding)}>
+                            <SelectTrigger className="w-[200px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="utf-8">UTF-8</SelectItem>
+                                <SelectItem value="gbk">GBK</SelectItem>
+                                <SelectItem value="gb18030">GB18030</SelectItem>
+                                <SelectItem value="big5">Big5</SelectItem>
+                                <SelectItem value="shift_jis">Shift_JIS</SelectItem>
+                                <SelectItem value="euc-jp">EUC-JP</SelectItem>
+                                <SelectItem value="euc-kr">EUC-KR</SelectItem>
+                                <SelectItem value="windows-1252">Windows-1252</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <Separator className="opacity-50" />

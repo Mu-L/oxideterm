@@ -195,6 +195,11 @@
         "dimensions": "{{cols}}×{{rows}}",
         "close": "关闭播放器"
       }
+    },
+    "encoding_hint": {
+      "title": "终端输出可能不是 UTF-8 编码",
+      "description": "OxideTerm 检测到当前 UTF-8 输出疑似乱码。可以尝试 {{encodings}}；不会自动切换，除非你手动选择。",
+      "use_encoding": "使用 {{encoding}}"
     }
   }
 }

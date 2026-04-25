@@ -182,9 +182,9 @@
       "buffer": "Buffer",
       "scrollback": "Linee Scrollback",
       "scrollback_hint": "Numero di linee mantenute in memoria per lo scorrimento",
-        "backend_buffer_lines": "Linee del buffer della sessione SSH",
-        "backend_buffer_lines_hint": "Linee mantenute nel backend per ogni terminale SSH per riconnessione e ricerca",
-        "backend_buffer_recommended": "Intervallo consigliato: 5.000-8.000 righe.",
+      "backend_buffer_lines": "Linee del buffer della sessione SSH",
+      "backend_buffer_lines_hint": "Linee mantenute nel backend per ogni terminale SSH per riconnessione e ricerca",
+      "backend_buffer_recommended": "Intervallo consigliato: 5.000-8.000 righe.",
       "bg_title": "Immagine di sfondo",
       "bg_enabled": "Attiva sfondo",
       "bg_enabled_hint": "Interruttore principale — disattiva senza eliminare le immagini",
@@ -299,7 +299,9 @@
           "unsupported-regex-syntax": "Questa regex usa una sintassi non supportata da RE2.",
           "empty-match": "La regex non può corrispondere a un testo vuoto."
         }
-      }
+      },
+      "encoding": "Terminal Encoding",
+      "encoding_hint": "Text encoding for terminal input/output. Keep UTF-8 unless the remote host uses a legacy locale."
     },
     "appearance": {
       "title": "Aspetto",

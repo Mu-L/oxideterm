@@ -88,6 +88,15 @@ import { HistorySearchMatch, TerminalHistorySearchProgress, type HighlightRule }
 import { notifyTrzszTransferEvent } from '../../lib/terminal/trzsz/notifications';
 import { TrzszController } from '../../lib/terminal/trzsz/controller';
 import { createRemoteTerminalTransport, type RemoteTerminalTransport } from '../../lib/terminal/trzsz/transport';
+import { formatTerminalTextInput } from '../../lib/terminalInput';
+import {
+  encodeTerminalInput,
+  formatTerminalEncodingLabel,
+  normalizeTerminalEncoding,
+  TerminalEncodingMismatchDetector,
+  TerminalOutputDecoder,
+  type TerminalEncoding,
+} from '../../lib/terminalEncoding';
 
 const PREFILL_REPLAY_LINE_COUNT = 50; // Keep aligned with backend replay count
 const TRZSZ_MAGIC_PREFIX = '::TRZSZ:TRANSFER:';
@@ -335,8 +344,23 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const adaptiveRendererRef = useRef(adaptiveRenderer);
   adaptiveRendererRef.current = adaptiveRenderer;
   const outputTextDecoderRef = useRef<TextDecoder | null>(null);
+  const terminalEncoding = normalizeTerminalEncoding(terminalSettings.terminalEncoding);
+  const terminalEncodingRef = useRef<TerminalEncoding>(terminalEncoding);
+  const terminalOutputDecoderRef = useRef(new TerminalOutputDecoder(terminalEncoding));
+  const encodingMismatchDetectorRef = useRef(new TerminalEncodingMismatchDetector());
+  const encodingHintToastShownRef = useRef(false);
+  const encodedInputQueueRef = useRef<Promise<void>>(Promise.resolve());
   const hasOutputProcessors = usePluginStore((state) => state.outputProcessors.length > 0);
   const hasOutputProcessorsRef = useRef(hasOutputProcessors);
+
+  useEffect(() => {
+    terminalEncodingRef.current = terminalEncoding;
+    terminalOutputDecoderRef.current.reset();
+    terminalOutputDecoderRef.current = new TerminalOutputDecoder(terminalEncoding);
+    encodingMismatchDetectorRef.current.reset();
+    encodingHintToastShownRef.current = false;
+    outputTextDecoderRef.current = null;
+  }, [terminalEncoding]);
 
   useEffect(() => {
     hasOutputProcessorsRef.current = hasOutputProcessors;
@@ -482,11 +506,65 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     adaptiveRendererRef.current.scheduleWrite(payload);
   }, []);
 
+  const transformTerminalOutput = useCallback((payload: Uint8Array) => {
+    return terminalOutputDecoderRef.current.transform(payload);
+  }, []);
+
   const decodeTerminalBytes = useCallback((payload: Uint8Array) => {
+    if (terminalEncodingRef.current !== 'utf-8') {
+      return terminalOutputDecoderRef.current.decodeText(payload);
+    }
     if (!outputTextDecoderRef.current) {
       outputTextDecoderRef.current = new TextDecoder();
     }
     return outputTextDecoderRef.current.decode(payload);
+  }, []);
+
+  const maybeSuggestTerminalEncoding = useCallback((payload: Uint8Array) => {
+    if (terminalEncodingRef.current !== 'utf-8' || encodingHintToastShownRef.current) {
+      return;
+    }
+
+    const detection = encodingMismatchDetectorRef.current.observe(payload);
+    if (!detection || detection.suggestions.length === 0) {
+      return;
+    }
+
+    encodingHintToastShownRef.current = true;
+    const suggestions = detection.suggestions.slice(0, 3);
+    const labels = suggestions.map(formatTerminalEncodingLabel);
+    useToastStore.getState().addToast({
+      title: t('terminal.encoding_hint.title'),
+      description: t('terminal.encoding_hint.description', { encodings: labels.join(' / ') }),
+      variant: 'warning',
+      duration: 15000,
+      actions: suggestions.map((encoding) => ({
+        label: t('terminal.encoding_hint.use_encoding', { encoding: formatTerminalEncodingLabel(encoding) }),
+        onClick: () => {
+          useSettingsStore.getState().updateTerminal('terminalEncoding', encoding);
+        },
+      })),
+    });
+  }, [t]);
+
+  const sendEncodedTerminalInput = useCallback((input: string) => {
+    const send = (bytes: Uint8Array) => {
+      transportRef.current?.sendEncodedPayload(bytes);
+    };
+    const encoded = encodeTerminalInput(input, terminalEncodingRef.current);
+    if (encoded instanceof Uint8Array) {
+      send(encoded);
+      return;
+    }
+
+    encodedInputQueueRef.current = encodedInputQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        send(await encoded);
+      })
+      .catch((error) => {
+        console.error('[TerminalView] Failed to encode terminal input:', error);
+      });
   }, []);
 
   const focusTerminal = useCallback((mode: 'soft' | 'strong' = 'soft') => {
@@ -648,7 +726,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           && !shouldCheckTrzszDisabled
           && !controllerRuntimePending
           && !activeController
+          && terminalEncodingRef.current === 'utf-8'
         ) {
+          maybeSuggestTerminalEncoding(payloadCopy);
           writeServerOutputToTerminal(payloadCopy);
           break;
         }
@@ -668,8 +748,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         if (activeController) {
           activeController.processServerOutput(payloadCopy);
         } else if (!controllerRuntimePending) {
+          maybeSuggestTerminalEncoding(payloadCopy);
+          const transformed = transformTerminalOutput(payloadCopy);
           if (shouldCheckTrzszDisabled) {
-            const text = decodeTerminalBytes(payloadCopy);
+            const text = transformed.text ?? decodeTerminalBytes(payloadCopy);
             const detection = detectChunkedMarker(
               trzszDisabledDetectTailRef.current,
               text,
@@ -687,7 +769,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               trzszDisabledDetectTailRef.current = detection.tail;
             }
           }
-          writeServerOutputToTerminal(payloadCopy);
+          writeServerOutputToTerminal(transformed.bytes);
         }
         break;
       }
@@ -704,7 +786,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         break;
       }
     }
-  }, [decodeTerminalBytes, feedOutput, maybeLoadImageAddon, nodeId, recorderRef, sessionId, writeServerOutputToTerminal]);
+  }, [decodeTerminalBytes, feedOutput, maybeLoadImageAddon, maybeSuggestTerminalEncoding, nodeId, recorderRef, sessionId, transformTerminalOutput, writeServerOutputToTerminal]);
 
   // Keep a stable ref to handleWsMessage so WebSocket onmessage handlers
   // (bound once in the init effect) always call the latest version.
@@ -1617,7 +1699,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         if (controller && !controller.isDisposed()) {
           controller.processTerminalInput(data);
         } else if (!controllerRuntimePendingRef.current) {
-          transportRef.current?.sendRawInput(data);
+          sendEncodedTerminalInput(data);
         }
       },
       getScreenSnapshot,  // Screen reader for TUI interaction
@@ -1857,7 +1939,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         if (controller && !controller.isDisposed()) {
             controller.processTerminalInput(processed);
         } else if (!controllerRuntimePendingRef.current) {
-            transportRef.current?.sendRawInput(processed);
+            sendEncodedTerminalInput(processed);
         }
 
         // Broadcast input to targets (empty target set = all other terminals)
@@ -2132,7 +2214,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         term.dispose();
         terminalRef.current = null;
     };
-  }, [fontOpenReady, sessionId, syncRemotePtySize, syncTrzszController, disposeTrzszController]); // Only remount on session change — bg image is handled dynamically
+  }, [fontOpenReady, sessionId, syncRemotePtySize, syncTrzszController, disposeTrzszController, sendEncodedTerminalInput]); // Only remount on session change — bg image is handled dynamically
 
   useEffect(() => {
     selectionGestureRef.current?.refresh();
@@ -2150,15 +2232,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return false;
     }
 
-    const transport = transportRef.current;
-    if (!transport) {
+    if (!transportRef.current) {
       return false;
     }
 
-    return mode === 'execute'
-      ? transport.sendExecuteInput(input)
-      : transport.sendTextInput(input);
-  }, []);
+    const formatted = mode === 'execute'
+      ? `${formatTerminalTextInput(input)}\n`
+      : formatTerminalTextInput(input);
+    sendEncodedTerminalInput(formatted);
+    return true;
+  }, [sendEncodedTerminalInput]);
 
   // Listen for AI insert command events (only when this terminal is active and connected)
   useEffect(() => {

@@ -182,9 +182,9 @@
       "buffer": "Puffer",
       "scrollback": "Scrollback-Zeilen",
       "scrollback_hint": "Anzahl der im Speicher für Scrollen gehaltenen Zeilen",
-        "backend_buffer_lines": "Pufferzeilen der SSH-Sitzung",
-        "backend_buffer_lines_hint": "Im Backend pro SSH-Terminal gehaltene Zeilen für Wiederverbindung und Suche",
-        "backend_buffer_recommended": "Empfohlener Bereich: 5.000-8.000 Zeilen.",
+      "backend_buffer_lines": "Pufferzeilen der SSH-Sitzung",
+      "backend_buffer_lines_hint": "Im Backend pro SSH-Terminal gehaltene Zeilen für Wiederverbindung und Suche",
+      "backend_buffer_recommended": "Empfohlener Bereich: 5.000-8.000 Zeilen.",
       "bg_title": "Hintergrundbild",
       "bg_enabled": "Hintergrund aktivieren",
       "bg_enabled_hint": "Hauptschalter — Hintergrund deaktivieren, ohne Bilder zu löschen",
@@ -299,7 +299,9 @@
           "unsupported-regex-syntax": "Diese Regex verwendet Syntax, die RE2 nicht unterstützt.",
           "empty-match": "Die Regex darf keinen leeren Text treffen."
         }
-      }
+      },
+      "encoding": "Terminal Encoding",
+      "encoding_hint": "Text encoding for terminal input/output. Keep UTF-8 unless the remote host uses a legacy locale."
     },
     "appearance": {
       "title": "Erscheinungsbild",

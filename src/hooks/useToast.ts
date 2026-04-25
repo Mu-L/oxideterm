@@ -11,6 +11,12 @@ export interface ToastData {
   description?: string;
   variant?: ToastVariant;
   duration?: number;
+  actions?: ToastActionData[];
+}
+
+export interface ToastActionData {
+  label: string;
+  onClick: () => void;
 }
 
 interface ToastStore {

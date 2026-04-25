@@ -134,6 +134,8 @@
       "font_size_hint": "Size of terminal characters",
       "line_height": "Line Height",
       "line_height_hint": "Spacing between lines",
+      "encoding": "Terminal Encoding",
+      "encoding_hint": "Text encoding for terminal input/output. Keep UTF-8 unless the remote host uses a legacy locale.",
       "renderer": "Renderer",
       "renderer_hint": "Choose WebGL or Canvas rendering. On Linux, Auto prefers WebGL but falls back to Canvas when software WebGL or unsafe WebKitGTK paths are detected.",
       "renderer_auto": "Auto (WebGL preferred)",

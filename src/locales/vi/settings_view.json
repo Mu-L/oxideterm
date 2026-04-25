@@ -182,9 +182,9 @@
       "buffer": "Buffer",
       "scrollback": "Dòng cuộn lại",
       "scrollback_hint": "Số dòng được giữ trong bộ nhớ để cuộn",
-        "backend_buffer_lines": "Số dòng buffer phiên SSH",
-        "backend_buffer_lines_hint": "Số dòng được giữ ở backend cho mỗi terminal SSH để tái kết nối và tìm kiếm",
-        "backend_buffer_recommended": "Phạm vi khuyến nghị: 5.000-8.000 dòng.",
+      "backend_buffer_lines": "Số dòng buffer phiên SSH",
+      "backend_buffer_lines_hint": "Số dòng được giữ ở backend cho mỗi terminal SSH để tái kết nối và tìm kiếm",
+      "backend_buffer_recommended": "Phạm vi khuyến nghị: 5.000-8.000 dòng.",
       "bg_title": "Hình nền",
       "bg_enabled": "Bật hình nền",
       "bg_enabled_hint": "Công tắc chính — tắt mà không xóa hình ảnh",
@@ -299,7 +299,9 @@
           "unsupported-regex-syntax": "Regex này dùng cú pháp mà RE2 không hỗ trợ.",
           "empty-match": "Regex không thể khớp với văn bản rỗng."
         }
-      }
+      },
+      "encoding": "Terminal Encoding",
+      "encoding_hint": "Text encoding for terminal input/output. Keep UTF-8 unless the remote host uses a legacy locale."
     },
     "appearance": {
       "title": "Giao diện",

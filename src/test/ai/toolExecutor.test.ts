@@ -368,6 +368,23 @@ describe('toolExecutor get_settings sanitization', () => {
     expect(getAllBufferLinesMock).not.toHaveBeenCalled();
   });
 
+  it('prefers rendered terminal buffer for open sessions', async () => {
+    findPaneBySessionIdMock.mockReturnValue('pane-1');
+    getTerminalBufferMock.mockReturnValue('decoded line 1\ndecoded line 2');
+    getBufferStatsMock.mockResolvedValue({ current_lines: 1200, total_lines: 1200, max_lines: 100000, memory_usage_mb: 2 });
+
+    const result = await executeTool(
+      'get_terminal_buffer',
+      { session_id: 'session-1', max_lines: 1 },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('decoded line 2');
+    expect(result.output).not.toContain('decoded line 1');
+    expect(getBufferStatsMock).not.toHaveBeenCalled();
+  });
+
   it('uses activeSessionId fallback for get_terminal_buffer when session_id is omitted', async () => {
     getBufferStatsMock.mockResolvedValue({ current_lines: 1000, total_lines: 1000, max_lines: 100000, memory_usage_mb: 2 });
     getScrollBufferMock.mockResolvedValue([
@@ -466,6 +483,54 @@ describe('toolExecutor regressions', () => {
     expect(result.output).toContain('/Users/dominical');
     expect(result.output).toContain('Shell: /bin/zsh');
     expect(subscribeTerminalOutputMock.mock.invocationCallOrder[0]).toBeLessThan(writeToTerminalMock.mock.invocationCallOrder[0]);
+  });
+
+  it('returns rendered terminal_exec output when backend buffer text is mojibake', async () => {
+    findPaneBySessionIdMock.mockReturnValue('pane-1');
+
+    let currentLines = 1;
+    let renderedBuffer = 'prompt %';
+    const backendLines = [
+      { text: 'prompt %' },
+      { text: '�������' },
+      { text: 'prompt %' },
+    ];
+
+    let outputListener: (() => void) | undefined;
+    subscribeTerminalOutputMock.mockImplementation((_sessionId: string, listener: () => void) => {
+      outputListener = listener;
+      return () => {
+        outputListener = undefined;
+      };
+    });
+
+    getTerminalBufferMock.mockImplementation(() => renderedBuffer);
+    getBufferStatsMock.mockImplementation(async () => ({
+      current_lines: currentLines,
+      total_lines: currentLines,
+      max_lines: 100000,
+      memory_usage_mb: 1,
+    }));
+    getScrollBufferMock.mockImplementation(async (_sessionId: string, startLine: number, count: number) => (
+      backendLines.slice(startLine, startLine + count)
+    ));
+
+    writeToTerminalMock.mockImplementation(() => {
+      currentLines = backendLines.length;
+      renderedBuffer = 'prompt %\n中文输出\nprompt %';
+      outputListener?.();
+      return true;
+    });
+
+    const result = await executeTool(
+      'terminal_exec',
+      { session_id: 'session-1', command: 'echo 中文' },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('中文输出');
+    expect(result.output).not.toContain('�������');
   });
 
   it('encodes terminal shortcut combos in send_keys instead of sending literal text', async () => {

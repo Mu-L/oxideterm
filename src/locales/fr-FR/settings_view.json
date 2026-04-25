@@ -182,9 +182,9 @@
       "buffer": "Tampon",
       "scrollback": "Lignes de défilement",
       "scrollback_hint": "Nombre de lignes conservées en mémoire pour le défilement",
-        "backend_buffer_lines": "Lignes du tampon de session SSH",
-        "backend_buffer_lines_hint": "Lignes conservées dans le backend pour chaque terminal SSH afin de gérer la reconnexion et la recherche",
-        "backend_buffer_recommended": "Plage recommandée : 5 000 à 8 000 lignes.",
+      "backend_buffer_lines": "Lignes du tampon de session SSH",
+      "backend_buffer_lines_hint": "Lignes conservées dans le backend pour chaque terminal SSH afin de gérer la reconnexion et la recherche",
+      "backend_buffer_recommended": "Plage recommandée : 5 000 à 8 000 lignes.",
       "bg_title": "Image d'arrière-plan",
       "bg_enabled": "Activer l'arrière-plan",
       "bg_enabled_hint": "Interrupteur principal — désactiver sans supprimer les images",
@@ -299,7 +299,9 @@
           "unsupported-regex-syntax": "Cette regex utilise une syntaxe non prise en charge par RE2.",
           "empty-match": "La regex ne peut pas correspondre à un texte vide."
         }
-      }
+      },
+      "encoding": "Terminal Encoding",
+      "encoding_hint": "Text encoding for terminal input/output. Keep UTF-8 unless the remote host uses a legacy locale."
     },
     "appearance": {
       "title": "Apparence",

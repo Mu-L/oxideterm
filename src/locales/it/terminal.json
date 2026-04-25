@@ -195,6 +195,11 @@
         "dimensions": "{{cols}}×{{rows}}",
         "close": "Chiudi lettore"
       }
+    },
+    "encoding_hint": {
+      "title": "Terminal output may use another encoding",
+      "description": "OxideTerm detected garbled text while using UTF-8. You can try {{encodings}}; nothing will change unless you choose one.",
+      "use_encoding": "Use {{encoding}}"
     }
   }
 }

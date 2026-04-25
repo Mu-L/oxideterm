@@ -37,7 +37,7 @@ import {
   shouldAutoFocusTerminal,
   shouldFocusTerminalFromClick,
 } from '../../lib/terminalHelpers';
-import { encodeTerminalExecuteInput, encodeTerminalTextInput } from '../../lib/terminalInput';
+import { formatTerminalTextInput } from '../../lib/terminalInput';
 import { 
   registerTerminalBuffer, 
   unregisterTerminalBuffer,
@@ -71,6 +71,14 @@ import { installShiftSelectionGuard, type SelectionGestureController } from '../
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
 import type { HighlightRule } from '../../types';
+import {
+  encodeTerminalInput,
+  formatTerminalEncodingLabel,
+  normalizeTerminalEncoding,
+  TerminalEncodingMismatchDetector,
+  TerminalOutputDecoder,
+  type TerminalEncoding,
+} from '../../lib/terminalEncoding';
 
 interface LocalTerminalViewProps {
   sessionId: string;
@@ -156,7 +164,21 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
 
   // Get terminal settings (read early for adaptive renderer)
   const terminalSettings = useSettingsStore((state) => state.settings.terminal);
+  const terminalEncoding = normalizeTerminalEncoding(terminalSettings.terminalEncoding);
+  const terminalEncodingRef = useRef<TerminalEncoding>(terminalEncoding);
+  const terminalOutputDecoderRef = useRef(new TerminalOutputDecoder(terminalEncoding));
+  const encodingMismatchDetectorRef = useRef(new TerminalEncodingMismatchDetector());
+  const encodingHintToastShownRef = useRef(false);
+  const encodedInputQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [fontOpenReady, setFontOpenReady] = useState(false);
+
+  useEffect(() => {
+    terminalEncodingRef.current = terminalEncoding;
+    terminalOutputDecoderRef.current.reset();
+    terminalOutputDecoderRef.current = new TerminalOutputDecoder(terminalEncoding);
+    encodingMismatchDetectorRef.current.reset();
+    encodingHintToastShownRef.current = false;
+  }, [terminalEncoding]);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,6 +228,53 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
 
   const { writeTerminal, resizeTerminal, getTerminal, updateTerminalState } = useLocalTerminalStore();
   const terminalInfo = getTerminal(sessionId);
+
+  const writeEncodedTerminalInput = useCallback((input: string) => {
+    const write = (bytes: Uint8Array) => {
+      void writeTerminal(sessionId, bytes);
+    };
+    const encoded = encodeTerminalInput(input, terminalEncodingRef.current);
+    if (encoded instanceof Uint8Array) {
+      write(encoded);
+      return;
+    }
+
+    encodedInputQueueRef.current = encodedInputQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        write(await encoded);
+      })
+      .catch((error) => {
+        console.error('[LocalTerminalView] Failed to encode terminal input:', error);
+      });
+  }, [sessionId, writeTerminal]);
+
+  const maybeSuggestTerminalEncoding = useCallback((payload: Uint8Array) => {
+    if (terminalEncodingRef.current !== 'utf-8' || encodingHintToastShownRef.current) {
+      return;
+    }
+
+    const detection = encodingMismatchDetectorRef.current.observe(payload);
+    if (!detection || detection.suggestions.length === 0) {
+      return;
+    }
+
+    encodingHintToastShownRef.current = true;
+    const suggestions = detection.suggestions.slice(0, 3);
+    const labels = suggestions.map(formatTerminalEncodingLabel);
+    useToastStore.getState().addToast({
+      title: t('terminal.encoding_hint.title'),
+      description: t('terminal.encoding_hint.description', { encodings: labels.join(' / ') }),
+      variant: 'warning',
+      duration: 15000,
+      actions: suggestions.map((encoding) => ({
+        label: t('terminal.encoding_hint.use_encoding', { encoding: formatTerminalEncodingLabel(encoding) }),
+        onClick: () => {
+          useSettingsStore.getState().updateTerminal('terminalEncoding', encoding);
+        },
+      })),
+    });
+  }, [t]);
 
   const syncLocalPtySize = useCallback(() => {
     const dims = resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current);
@@ -833,10 +902,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       getSelectionContent,  // Include selection getter
       // Writer function: send data to local PTY via Tauri command
       (data: string) => {
-        const encoder = new TextEncoder();
-        writeTerminal(sessionId, encoder.encode(data)).catch((err: unknown) => {
-          console.error('[LocalTerminalView] Failed to write to PTY:', err);
-        });
+        writeEncodedTerminalInput(data);
       },
       getScreenSnapshot,  // Screen reader for TUI interaction
     );
@@ -858,9 +924,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       adaptiveRendererRef.current.notifyUserInput();
       // Feed recording (user input)
       feedInput(data);
-      const encoder = new TextEncoder();
-      const bytes = encoder.encode(data);
-      writeTerminal(sessionId, bytes);
+      writeEncodedTerminalInput(data);
 
       // Broadcast input to targets (empty target set = all other terminals)
       const bc = useBroadcastStore.getState();
@@ -1025,7 +1089,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       // PTY cleanup is handled ONLY by appStore.closeTab() when the tab is closed.
       console.debug(`[LocalTerminalView] Unmount cleanup for ${sessionId} (PTY kept alive)`);
     };
-  }, [fontOpenReady, sessionId]); // Only remount on session change — bg image is handled dynamically
+  }, [fontOpenReady, sessionId, writeEncodedTerminalInput]); // Only remount on session change — bg image is handled dynamically
 
   useEffect(() => {
     selectionGestureRef.current?.refresh();
@@ -1050,12 +1114,14 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       const data = new Uint8Array(event.payload.data);
       
       maybeLoadImageAddon(data);
+      maybeSuggestTerminalEncoding(data);
+      const displayData = terminalOutputDecoderRef.current.transform(data).bytes;
       if (recorderRef.current) {
         // Feed recording (terminal output)
-        feedOutput(data);
+        feedOutput(displayData);
       }
       // Delegate batching + tier management to adaptive renderer
-      adaptiveRendererRef.current.scheduleWrite(data);
+      adaptiveRendererRef.current.scheduleWrite(displayData);
 
       // Pause search updates during high-frequency output
       // Resume after 150ms of quiet, then re-run search to get accurate results
@@ -1122,7 +1188,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       unlistenDataFn?.();
       unlistenClosedFn?.();
     };
-  }, [feedOutput, maybeLoadImageAddon, recorderRef, sessionId, updateTerminalState]);
+  }, [feedOutput, maybeLoadImageAddon, maybeSuggestTerminalEncoding, recorderRef, sessionId, updateTerminalState]);
 
   // Listen for AI insert command events (only when this terminal is active)
   useEffect(() => {
@@ -1135,8 +1201,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       if (!mounted || !isMountedRef.current || !isRunning) return;
       
       const { command } = event.payload;
-      const bytes = encodeTerminalTextInput(command);
-      writeTerminal(sessionId, bytes);
+      writeEncodedTerminalInput(formatTerminalTextInput(command));
     }).then((fn) => {
       if (mounted) {
         unlistenFn = fn;
@@ -1149,7 +1214,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       mounted = false;
       unlistenFn?.();
     };
-  }, [sessionId, isActive, isRunning, writeTerminal]);
+  }, [isActive, isRunning, writeEncodedTerminalInput]);
 
   // Resize handling with 50ms debounce to reduce PTY backend pressure
   useEffect(() => {
@@ -1341,28 +1406,25 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   // Handle AI insert (paste text into terminal)
   const handleAiInsert = useCallback((text: string) => {
     if (!terminalRef.current || !isRunning) return;
-    const bytes = encodeTerminalTextInput(text);
-    writeTerminal(sessionId, bytes);
-  }, [sessionId, isRunning, writeTerminal]);
+    writeEncodedTerminalInput(formatTerminalTextInput(text));
+  }, [isRunning, writeEncodedTerminalInput]);
 
   // Handle AI execute (paste and send enter)
   const handleAiExecute = useCallback((command: string) => {
     if (!terminalRef.current || !isRunning) return;
-    const bytes = encodeTerminalExecuteInput(command);
-    writeTerminal(sessionId, bytes);
-  }, [sessionId, isRunning, writeTerminal]);
+    writeEncodedTerminalInput(`${formatTerminalTextInput(command)}\n`);
+  }, [isRunning, writeEncodedTerminalInput]);
 
   // Paste protection: handle pending paste confirm
   const handlePasteConfirm = useCallback(() => {
     if (pendingPaste && isRunning) {
-      const bytes = encodeTerminalTextInput(pendingPaste);
-      writeTerminal(sessionId, bytes);
+      writeEncodedTerminalInput(formatTerminalTextInput(pendingPaste));
     }
     setPendingPaste(null);
     requestAnimationFrame(() => {
       focusTerminal('strong');
     });
-  }, [focusTerminal, pendingPaste, sessionId, isRunning, writeTerminal]);
+  }, [focusTerminal, pendingPaste, isRunning, writeEncodedTerminalInput]);
 
   const handlePasteCancel = useCallback(() => {
     setPendingPaste(null);
@@ -1395,10 +1457,9 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       return true;
     }
 
-    const bytes = encodeTerminalTextInput(text);
-    writeTerminal(sessionId, bytes);
+    writeEncodedTerminalInput(formatTerminalTextInput(text));
     return true;
-  }, [sessionId, writeTerminal]);
+  }, [writeEncodedTerminalInput]);
 
   const handlePasteShortcut = useCallback(() => {
     armTerminalPasteShortcutSuppression(pasteShortcutSuppressionRef);

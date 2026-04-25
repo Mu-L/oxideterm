@@ -2077,6 +2077,11 @@ export const api = {
     return invoke('local_write_terminal', { sessionId, data });
   },
 
+  terminalEncodeText: async (text: string, encoding: string): Promise<number[]> => {
+    if (USE_MOCK) return Array.from(new TextEncoder().encode(text));
+    return invoke('terminal_encode_text', { text, encoding });
+  },
+
   /**
    * List all active local terminal sessions
    */

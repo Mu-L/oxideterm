@@ -356,6 +356,20 @@ pub async fn local_write_terminal(
         .map_err(|e| format!("Failed to write to session: {}", e))
 }
 
+#[tauri::command]
+pub fn terminal_encode_text(text: String, encoding: String) -> Result<Vec<u8>, String> {
+    let Some(encoding) = encoding_rs::Encoding::for_label(encoding.as_bytes()) else {
+        return Err(format!("Unsupported terminal encoding: {}", encoding));
+    };
+
+    if encoding == encoding_rs::UTF_8 {
+        return Ok(text.into_bytes());
+    }
+
+    let (bytes, _, _) = encoding.encode(&text);
+    Ok(bytes.into_owned())
+}
+
 /// Get session info for a specific terminal
 #[tauri::command]
 pub async fn local_get_terminal_info(

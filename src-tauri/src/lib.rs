@@ -525,6 +525,7 @@ pub fn run() {
         commands::local_resize_terminal,
         commands::local_list_terminals,
         commands::local_write_terminal,
+        commands::terminal_encode_text,
         commands::local_get_terminal_info,
         commands::local_cleanup_dead_sessions,
         commands::local_detach_terminal,

@@ -3,6 +3,7 @@
 
 import {
   Toast,
+  ToastAction,
   ToastClose,
   ToastDescription,
   ToastProvider,
@@ -30,6 +31,22 @@ export const Toaster = () => {
               <ToastDescription>{toast.description}</ToastDescription>
             )}
           </div>
+          {toast.actions && toast.actions.length > 0 && (
+            <div className="flex shrink-0 gap-2">
+              {toast.actions.map((action) => (
+                <ToastAction
+                  key={action.label}
+                  altText={action.label}
+                  onClick={() => {
+                    action.onClick();
+                    removeToast(toast.id);
+                  }}
+                >
+                  {action.label}
+                </ToastAction>
+              ))}
+            </div>
+          )}
           <ToastClose />
         </Toast>
       ))}

@@ -182,9 +182,9 @@
       "buffer": "緩衝區",
       "scrollback": "捲動緩衝區行數",
       "scrollback_hint": "保存在記憶體中供捲動的行數",
-        "backend_buffer_lines": "SSH 工作階段緩衝區行數",
-        "backend_buffer_lines_hint": "每個 SSH 終端在後端保留的行數，用於重連和搜尋",
-        "backend_buffer_recommended": "建議範圍：5,000-8,000 行。",
+      "backend_buffer_lines": "SSH 工作階段緩衝區行數",
+      "backend_buffer_lines_hint": "每個 SSH 終端在後端保留的行數，用於重連和搜尋",
+      "backend_buffer_recommended": "建議範圍：5,000-8,000 行。",
       "bg_title": "背景圖片",
       "bg_enabled": "啟用背景",
       "bg_enabled_hint": "總開關 — 關閉後不顯示背景圖片，但不會刪除已上傳的圖片",
@@ -299,7 +299,9 @@
           "unsupported-regex-syntax": "此正則使用了 RE2 不支援的語法。",
           "empty-match": "正則不能匹配空文字。"
         }
-      }
+      },
+      "encoding": "Terminal Encoding",
+      "encoding_hint": "Text encoding for terminal input/output. Keep UTF-8 unless the remote host uses a legacy locale."
     },
     "appearance": {
       "title": "外觀",

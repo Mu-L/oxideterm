@@ -182,9 +182,9 @@
       "buffer": "버퍼",
       "scrollback": "스크롤백 줄",
       "scrollback_hint": "스크롤을 위해 메모리에 유지되는 줄 수",
-        "backend_buffer_lines": "SSH 세션 버퍼 줄 수",
-        "backend_buffer_lines_hint": "각 SSH 터미널마다 백엔드에 유지되는 줄 수로, 재연결과 검색에 사용됩니다",
-        "backend_buffer_recommended": "권장 범위: 5,000-8,000줄.",
+      "backend_buffer_lines": "SSH 세션 버퍼 줄 수",
+      "backend_buffer_lines_hint": "각 SSH 터미널마다 백엔드에 유지되는 줄 수로, 재연결과 검색에 사용됩니다",
+      "backend_buffer_recommended": "권장 범위: 5,000-8,000줄.",
       "bg_title": "배경 이미지",
       "bg_enabled": "배경 활성화",
       "bg_enabled_hint": "마스터 스위치 — 이미지를 삭제하지 않고 배경을 비활성화합니다",
@@ -299,7 +299,9 @@
           "unsupported-regex-syntax": "이 정규식은 RE2가 지원하지 않는 문법을 사용합니다.",
           "empty-match": "정규식은 빈 텍스트와 일치할 수 없습니다."
         }
-      }
+      },
+      "encoding": "Terminal Encoding",
+      "encoding_hint": "Text encoding for terminal input/output. Keep UTF-8 unless the remote host uses a legacy locale."
     },
     "appearance": {
       "title": "외관",

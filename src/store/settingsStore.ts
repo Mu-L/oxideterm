@@ -81,6 +81,25 @@ function clampFiniteInteger(value: unknown, fallback: number, min: number, max: 
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+function normalizeTerminalEncoding(value: unknown): TerminalEncoding {
+  if (typeof value !== 'string') return 'utf-8';
+  const normalized = value.toLowerCase().replace(/_/g, '-');
+  switch (normalized) {
+    case 'utf-8':
+    case 'gbk':
+    case 'gb18030':
+    case 'big5':
+    case 'shift-jis':
+    case 'shift_jis':
+    case 'euc-jp':
+    case 'euc-kr':
+    case 'windows-1252':
+      return normalized === 'shift-jis' ? 'shift_jis' : normalized as TerminalEncoding;
+    default:
+      return 'utf-8';
+  }
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -90,6 +109,16 @@ export type RendererType = 'auto' | 'webgl' | 'canvas';
 
 /** Adaptive renderer mode (Dynamic Refresh Rate) */
 export type AdaptiveRendererMode = 'auto' | 'always-60' | 'off';
+
+export type TerminalEncoding =
+  | 'utf-8'
+  | 'gbk'
+  | 'gb18030'
+  | 'big5'
+  | 'shift_jis'
+  | 'euc-jp'
+  | 'euc-kr'
+  | 'windows-1252';
 
 /** 
  * Font family options - "双轨制" (Dual-Track System)
@@ -158,6 +187,7 @@ export interface TerminalSettings {
   cursorBlink: boolean;
   scrollback: number;      // xterm scrollback lines
   renderer: RendererType;
+  terminalEncoding: TerminalEncoding;
   adaptiveRenderer: AdaptiveRendererMode; // Dynamic refresh rate: auto/always-60/off
   showFpsOverlay: boolean;               // Show FPS/tier debug overlay on terminal
   pasteProtection: boolean; // Confirm before pasting multi-line content
@@ -397,6 +427,7 @@ const defaultTerminalSettings: TerminalSettings = {
   cursorBlink: true,
   scrollback: DEFAULT_TERMINAL_SCROLLBACK,
   renderer: isWindows ? 'canvas' : 'auto',
+  terminalEncoding: 'utf-8',
   adaptiveRenderer: 'auto',  // Dynamic refresh rate: auto = three-tier adaptive
   showFpsOverlay: false,      // Hidden by default; user enables for diagnostics
   pasteProtection: true,  // Default enabled for safety
@@ -622,6 +653,7 @@ function normalizeTerminalSettings(settings: TerminalSettings): TerminalSettings
   return {
     ...settings,
     scrollback: clampTerminalScrollback(settings.scrollback),
+    terminalEncoding: normalizeTerminalEncoding(settings.terminalEncoding),
     highlightRules: sanitizeHighlightRules(settings.highlightRules),
     inBandTransfer: {
       enabled: inBandTransfer?.enabled === true,

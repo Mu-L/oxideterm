@@ -493,6 +493,7 @@ async function execTerminalCommandToSession(
   if (preSnapshotLineCount !== null) {
     console.debug(`[AI:ToolExec] pre-command snapshot: ${preSnapshotLineCount} lines`);
   }
+  const preRenderedLineCount = readRenderedBufferLines(sessionId)?.length ?? null;
 
   const outputSubscription = createTerminalOutputSubscription(sessionId);
   try {
@@ -542,13 +543,15 @@ async function execTerminalCommandToSession(
       };
     }
 
+    const renderedWaitResult = renderedDeltaFromLineCount(sessionId, preRenderedLineCount, waitResult);
+
     return {
       toolCallId,
       toolName: 'terminal_exec',
-      success: waitResult.success,
-      output: waitResult.output,
-      error: waitResult.error,
-      truncated: waitResult.truncated,
+      success: renderedWaitResult?.success ?? waitResult.success,
+      output: renderedWaitResult?.output ?? waitResult.output,
+      error: renderedWaitResult?.error ?? waitResult.error,
+      truncated: renderedWaitResult?.truncated ?? waitResult.truncated,
       durationMs: Date.now() - startTime,
     };
   } finally {
@@ -971,21 +974,19 @@ async function execGetTerminalBuffer(
   }
   const maxLines = clamp(Number(args.max_lines) || 200, 1, 500);
 
+  // Prefer the rendered xterm buffer when the pane is open: it has already
+  // passed through the terminal encoding decoder, while backend history is
+  // still byte-oriented for legacy encodings.
+  const renderedSnapshot = readRenderedBufferTail(sessionId, maxLines);
+  if (renderedSnapshot) {
+    const { text, truncated } = truncateOutput(renderedSnapshot.lines.join('\n'));
+    return { toolCallId, toolName: 'get_terminal_buffer', success: true, output: text || '(empty buffer)', truncated, durationMs: Date.now() - startTime };
+  }
+
   const snapshot = await readBufferTail(sessionId, maxLines);
   if (snapshot) {
     const { text, truncated } = truncateOutput(snapshot.lines.join('\n'));
     return { toolCallId, toolName: 'get_terminal_buffer', success: true, output: text || '(empty buffer)', truncated, durationMs: Date.now() - startTime };
-  }
-
-  // Path 2: Frontend terminalRegistry fallback (local terminals + rendered terminals)
-  const paneId = findPaneBySessionId(sessionId);
-  if (paneId) {
-    const buffer = getTerminalBuffer(paneId);
-    if (buffer) {
-      const tailLines = buffer.split('\n').slice(-maxLines);
-      const { text, truncated } = truncateOutput(tailLines.join('\n'));
-      return { toolCallId, toolName: 'get_terminal_buffer', success: true, output: text || '(empty buffer)', truncated, durationMs: Date.now() - startTime };
-    }
   }
 
   return { toolCallId, toolName: 'get_terminal_buffer', success: false, output: '', error: 'Session not found or buffer unavailable. Use list_sessions to see available sessions.', durationMs: Date.now() - startTime };
@@ -1003,6 +1004,19 @@ async function execSearchTerminal(
   }
 
   const maxResults = clamp(Number(args.max_results) || 50, 1, 100);
+  const renderedMatches = searchRenderedBuffer(sessionId, query, {
+    caseSensitive: (args.case_sensitive as boolean) ?? false,
+    regex: (args.regex as boolean) ?? false,
+    maxResults,
+  });
+  if (renderedMatches?.error) {
+    return { toolCallId, toolName: 'search_terminal', success: false, output: '', error: renderedMatches.error, durationMs: Date.now() - startTime };
+  }
+  if (renderedMatches && renderedMatches.lines.length > 0) {
+    const { text, truncated } = truncateOutput(renderedMatches.lines.join('\n') + `\n${renderedMatches.lines.length} rendered match(es)`);
+    return { toolCallId, toolName: 'search_terminal', success: true, output: text, truncated, durationMs: Date.now() - startTime };
+  }
+
   const result = await api.searchTerminalLayered(sessionId, {
     query,
     case_sensitive: (args.case_sensitive as boolean) ?? false,
@@ -1300,6 +1314,109 @@ type BufferSnapshot = {
   lines: string[];
 };
 
+function readRenderedBufferLines(sessionId: string): string[] | null {
+  const paneId = findPaneBySessionId(sessionId);
+  if (!paneId) {
+    return null;
+  }
+
+  const buffer = getTerminalBuffer(paneId);
+  if (typeof buffer !== 'string') {
+    return null;
+  }
+
+  return buffer.split('\n');
+}
+
+function readRenderedBufferTail(sessionId: string, maxLines: number): BufferSnapshot | null {
+  const lines = readRenderedBufferLines(sessionId);
+  if (!lines) {
+    return null;
+  }
+  return {
+    totalLines: lines.length,
+    lines: maxLines > 0 ? lines.slice(-maxLines) : [],
+  };
+}
+
+function renderedDeltaFromLineCount(
+  sessionId: string,
+  initialLineCount: number | null | undefined,
+  fallback: WaitResult,
+): WaitResult | null {
+  if (!fallback.success || initialLineCount == null) {
+    return null;
+  }
+
+  const lines = readRenderedBufferLines(sessionId);
+  if (!lines) {
+    return null;
+  }
+
+  if (lines.length < initialLineCount) {
+    const { text, truncated } = truncateOutput(lines.join('\n'));
+    return { success: true, output: `⚠ Buffer was cleared or reset during command execution. Showing current buffer content:\n${text}`, truncated };
+  }
+
+  let newLines = lines.slice(initialLineCount);
+  if (newLines.length === 0) {
+    return null;
+  }
+  const lastLine = newLines[newLines.length - 1];
+  if (COMPLETION_PROMPT_RE.test(lastLine)) {
+    newLines = newLines.slice(0, -1);
+  }
+  if (newLines.length === 0) {
+    return null;
+  }
+
+  const { text, truncated } = truncateOutput(newLines.join('\n'));
+  return { success: true, output: text, truncated };
+}
+
+function searchRenderedBuffer(
+  sessionId: string,
+  query: string,
+  options: { caseSensitive: boolean; regex: boolean; maxResults: number },
+): { lines: string[]; error?: string } | null {
+  const bufferLines = readRenderedBufferLines(sessionId);
+  if (!bufferLines) {
+    return null;
+  }
+
+  let matcher: (line: string) => number;
+  if (options.regex) {
+    let pattern: RegExp;
+    try {
+      pattern = new RegExp(query, options.caseSensitive ? '' : 'i');
+    } catch {
+      return { lines: [], error: `Invalid regex pattern: ${query}` };
+    }
+    matcher = (line) => {
+      const match = pattern.exec(line);
+      pattern.lastIndex = 0;
+      return match?.index ?? -1;
+    };
+  } else {
+    const needle = options.caseSensitive ? query : query.toLowerCase();
+    matcher = (line) => {
+      const haystack = options.caseSensitive ? line : line.toLowerCase();
+      return haystack.indexOf(needle);
+    };
+  }
+
+  const matches: string[] = [];
+  for (let index = 0; index < bufferLines.length && matches.length < options.maxResults; index += 1) {
+    const line = bufferLines[index];
+    const column = matcher(line);
+    if (column >= 0) {
+      matches.push(`[rendered] L${index + 1}:${column + 1}: ${line}`);
+    }
+  }
+
+  return { lines: matches };
+}
+
 async function readBufferStats(sessionId: string, tailLines: number): Promise<BufferSnapshot | null> {
   try {
     const stats = await api.getBufferStats(sessionId);
@@ -1319,7 +1436,7 @@ async function readBufferStats(sessionId: string, tailLines: number): Promise<Bu
   }
 
   const buffer = getTerminalBuffer(paneId);
-  if (buffer === null) {
+  if (typeof buffer !== 'string') {
     return null;
   }
 
@@ -1357,7 +1474,7 @@ async function readBufferRange(sessionId: string, startLine: number, count: numb
   }
 
   const buffer = getTerminalBuffer(paneId);
-  if (buffer === null) {
+  if (typeof buffer !== 'string') {
     return null;
   }
 

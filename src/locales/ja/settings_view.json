@@ -182,9 +182,9 @@
       "buffer": "バッファ",
       "scrollback": "スクロールバック行数",
       "scrollback_hint": "スクロール用にメモリに保持される行数",
-        "backend_buffer_lines": "SSH セッションバッファ行数",
-        "backend_buffer_lines_hint": "各 SSH ターミナルでバックエンドに保持する行数。再接続と検索に使用します",
-        "backend_buffer_recommended": "推奨範囲: 5,000〜8,000 行。",
+      "backend_buffer_lines": "SSH セッションバッファ行数",
+      "backend_buffer_lines_hint": "各 SSH ターミナルでバックエンドに保持する行数。再接続と検索に使用します",
+      "backend_buffer_recommended": "推奨範囲: 5,000〜8,000 行。",
       "bg_title": "背景画像",
       "bg_enabled": "背景を有効化",
       "bg_enabled_hint": "マスタースイッチ — オフにすると画像を削除せずに背景を無効化します",
@@ -299,7 +299,9 @@
           "unsupported-regex-syntax": "この正規表現は RE2 がサポートしていない構文を使っています。",
           "empty-match": "正規表現は空文字列に一致できません。"
         }
-      }
+      },
+      "encoding": "Terminal Encoding",
+      "encoding_hint": "Text encoding for terminal input/output. Keep UTF-8 unless the remote host uses a legacy locale."
     },
     "appearance": {
       "title": "外観",

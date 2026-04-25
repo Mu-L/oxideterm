@@ -18,6 +18,7 @@ import { useAppStore } from '../../store/appStore';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { getProvider, getProviderReasoningProtocol } from './providerRegistry';
+import { resolveAiReasoningEffort } from './reasoningSettings';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
 import { buildPlannerSystemPrompt, parsePlanResponse } from './agentPlanner';
 import { buildReviewerSystemPrompt, buildReviewPrompt, formatReviewFeedback, parseReview, shouldRunReviewerForRound } from './agentReviewer';
@@ -394,7 +395,7 @@ async function resolveRoleConfig(
       baseUrl: roleProvider.baseUrl,
       model: roleConfig.model,
       apiKey: roleApiKey,
-      reasoningEffort: settings.ai.reasoningEffort,
+      reasoningEffort: resolveAiReasoningEffort(settings.ai, roleProvider.id, roleConfig.model),
       reasoningProtocol: getProviderReasoningProtocol(roleProvider.type),
     };
   } catch {
@@ -555,7 +556,7 @@ async function executeTask(task: AgentTask, signal: AbortSignal): Promise<{ next
     baseUrl: provider.baseUrl,
     model: task.model,
     apiKey,
-    reasoningEffort: settings.ai.reasoningEffort,
+    reasoningEffort: resolveAiReasoningEffort(settings.ai, provider.id, task.model),
     reasoningProtocol: getProviderReasoningProtocol(provider.type),
   };
   const plannerConfig = await resolveRoleConfig(agentRoles?.planner, executorConfig);

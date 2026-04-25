@@ -11,6 +11,7 @@ import { useSessionTreeStore } from './sessionTreeStore';
 import { useAppStore } from './appStore';
 import { gatherSidebarContext, buildContextReminder, type SidebarContext } from '../lib/sidebarContextProvider';
 import { getProvider, getProviderReasoningProtocol } from '../lib/ai/providerRegistry';
+import { resolveAiReasoningEffort } from '../lib/ai/reasoningSettings';
 import { estimateTokens, estimateToolDefinitionsTokens, trimHistoryToTokenBudget, getModelContextWindow, responseReserve } from '../lib/ai/tokenUtils';
 import type { ChatMessage as ProviderChatMessage } from '../lib/ai/providers';
 import type { AiChatMessage, AiConversation, AiToolCall } from '../types';
@@ -946,6 +947,7 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
     const providerBaseUrl = activeProvider?.baseUrl || aiSettings.baseUrl;
     const providerModel = aiSettings.activeModel || activeProvider?.defaultModel || aiSettings.model;
     const providerId = activeProvider?.id;
+    const reasoningEffort = resolveAiReasoningEffort(aiSettings, providerId, providerModel);
 
     if (!providerModel) {
       set({ error: 'No model selected. Please refresh models or select one in Settings > AI.' });
@@ -1918,7 +1920,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
             model: providerModel,
             apiKey: apiKey || '',
             maxResponseTokens,
-            reasoningEffort: aiSettings.reasoningEffort,
+            reasoningEffort,
             reasoningProtocol: getProviderReasoningProtocol(providerType),
             tools: toolDefs,
           },
@@ -3344,6 +3346,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
     const providerBaseUrl = activeProvider?.baseUrl || aiSettings.baseUrl;
     const providerModel = aiSettings.activeModel || activeProvider?.defaultModel || aiSettings.model;
     const providerId = activeProvider?.id;
+    const reasoningEffort = resolveAiReasoningEffort(aiSettings, providerId, providerModel);
 
     if (!providerModel) return;
 
@@ -3388,7 +3391,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           baseUrl: providerBaseUrl,
           model: providerModel,
           apiKey: apiKey || '',
-          reasoningEffort: aiSettings.reasoningEffort,
+          reasoningEffort,
           reasoningProtocol: getProviderReasoningProtocol(providerType),
         },
         summaryPrompt,
@@ -3531,6 +3534,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
     const providerBaseUrl = activeProvider?.baseUrl || aiSettings.baseUrl;
     const providerModel = aiSettings.activeModel || activeProvider?.defaultModel || aiSettings.model;
     const providerId = activeProvider?.id;
+    const reasoningEffort = resolveAiReasoningEffort(aiSettings, providerId, providerModel);
 
     if (!providerModel) return;
 
@@ -3670,7 +3674,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
           model: providerModel,
           apiKey: apiKey || '',
           maxResponseTokens: compactMaxResponseTokens,
-          reasoningEffort: aiSettings.reasoningEffort,
+          reasoningEffort,
           reasoningProtocol: getProviderReasoningProtocol(providerType),
         },
         summaryPrompt,

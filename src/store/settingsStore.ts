@@ -285,6 +285,10 @@ export interface AiSettings {
   thinkingStyle: AiThinkingStyle;
   /** Request-level reasoning/thinking effort. Provider adapters map or ignore unsupported values. */
   reasoningEffort: AiReasoningEffort;
+  /** Per-provider reasoning/thinking overrides. Missing value inherits `reasoningEffort`. */
+  reasoningProviderOverrides?: Record<string, AiReasoningEffort>;
+  /** Per-model reasoning/thinking overrides. Shape: { [providerId]: { [modelId]: effort } } */
+  reasoningModelOverrides?: Record<string, Record<string, AiReasoningEffort>>;
   /** Whether thinking blocks are expanded by default */
   thinkingDefaultExpanded: boolean;
   /** Cached model context window sizes from provider APIs.
@@ -510,6 +514,8 @@ const defaultAiSettings: AiSettings = {
   contextVisibleLines: 120,
   thinkingStyle: 'detailed',         // Default: show full thinking content
   reasoningEffort: 'auto',
+  reasoningProviderOverrides: {},
+  reasoningModelOverrides: {},
   thinkingDefaultExpanded: false,    // Default: collapsed for less noise
   customSystemPrompt: '',            // Default: use built-in prompt
   memory: {
@@ -954,6 +960,8 @@ interface SettingsStore {
   setActiveProvider: (providerId: string, model?: string) => void;
   refreshProviderModels: (providerId: string) => Promise<string[]>;
   setUserContextWindow: (providerId: string, modelId: string, tokens: number | null) => void;
+  setProviderReasoningEffort: (providerId: string, effort: AiReasoningEffort | null) => void;
+  setModelReasoningEffort: (providerId: string, modelId: string, effort: AiReasoningEffort | null) => void;
   updateLocalTerminal: <K extends keyof LocalTerminalSettings>(key: K, value: LocalTerminalSettings[K]) => void;
   updateSftp: <K extends keyof SftpSettings>(key: K, value: SftpSettings[K]) => void;
   updateIde: <K extends keyof IdeSettings>(key: K, value: IdeSettings[K]) => void;
@@ -1422,6 +1430,26 @@ export const useSettingsStore = create<SettingsStore>()(
             providers: newProviders,
             activeProviderId: needsNewActive ? (newProviders[0]?.id ?? null) : ai.activeProviderId,
             activeModel: needsNewActive ? (newProviders[0]?.defaultModel ?? null) : ai.activeModel,
+            reasoningProviderOverrides: (() => {
+              const updated = { ...(ai.reasoningProviderOverrides ?? {}) };
+              delete updated[providerId];
+              return updated;
+            })(),
+            reasoningModelOverrides: (() => {
+              const updated = { ...(ai.reasoningModelOverrides ?? {}) };
+              delete updated[providerId];
+              return updated;
+            })(),
+            userContextWindows: (() => {
+              const updated = { ...(ai.userContextWindows ?? {}) };
+              delete updated[providerId];
+              return updated;
+            })(),
+            modelMaxResponseTokens: (() => {
+              const updated = { ...(ai.modelMaxResponseTokens ?? {}) };
+              delete updated[providerId];
+              return updated;
+            })(),
           },
         };
         persistSettings(newSettings);
@@ -1545,6 +1573,51 @@ export const useSettingsStore = create<SettingsStore>()(
         const newSettings: PersistedSettingsV2 = {
           ...state.settings,
           ai: { ...ai, userContextWindows: updated },
+        };
+        persistSettings(newSettings);
+        return { settings: newSettings };
+      });
+    },
+
+    setProviderReasoningEffort: (providerId, effort) => {
+      if (!providerId) return;
+      set((state) => {
+        const ai = state.settings.ai;
+        const updated = { ...(ai.reasoningProviderOverrides ?? {}) };
+        if (effort) {
+          updated[providerId] = effort;
+        } else {
+          delete updated[providerId];
+        }
+        const newSettings: PersistedSettingsV2 = {
+          ...state.settings,
+          ai: { ...ai, reasoningProviderOverrides: updated },
+        };
+        persistSettings(newSettings);
+        return { settings: newSettings };
+      });
+    },
+
+    setModelReasoningEffort: (providerId, modelId, effort) => {
+      if (!providerId || !modelId) return;
+      set((state) => {
+        const ai = state.settings.ai;
+        const existing = ai.reasoningModelOverrides ?? {};
+        const providerOverrides = { ...(existing[providerId] ?? {}) };
+        if (effort) {
+          providerOverrides[modelId] = effort;
+        } else {
+          delete providerOverrides[modelId];
+        }
+        const updated = { ...existing };
+        if (Object.keys(providerOverrides).length > 0) {
+          updated[providerId] = providerOverrides;
+        } else {
+          delete updated[providerId];
+        }
+        const newSettings: PersistedSettingsV2 = {
+          ...state.settings,
+          ai: { ...ai, reasoningModelOverrides: updated },
         };
         persistSettings(newSettings);
         return { settings: newSettings };
@@ -1693,6 +1766,8 @@ const AI_KEYS: Array<keyof AiSettings> = [
   'contextVisibleLines',
   'thinkingStyle',
   'reasoningEffort',
+  'reasoningProviderOverrides',
+  'reasoningModelOverrides',
   'thinkingDefaultExpanded',
   'modelContextWindows',
   'userContextWindows',

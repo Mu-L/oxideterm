@@ -9,6 +9,7 @@ import { api } from '../../lib/api';
 import { useTranslation } from 'react-i18next';
 import { platform } from '../../lib/platform';
 import { getProvider, getProviderReasoningProtocol } from '../../lib/ai/providerRegistry';
+import { resolveAiReasoningEffort } from '../../lib/ai/reasoningSettings';
 import { ModelSelector } from '../ai/ModelSelector';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -351,7 +352,7 @@ export const AiInlinePanel: React.FC<AiInlinePanelProps> = ({
         baseUrl: activeProvider.baseUrl,
         model,
         apiKey,
-        reasoningEffort: aiSettings.reasoningEffort,
+        reasoningEffort: resolveAiReasoningEffort(aiSettings, activeProvider.id, model),
         reasoningProtocol: getProviderReasoningProtocol(activeProvider.type),
       };
 

@@ -560,6 +560,25 @@ describe('settingsStore', () => {
     expect(persisted.ai.userContextWindows?.[providerId]).toBeUndefined();
   });
 
+  it('persists provider and model reasoning overrides', async () => {
+    const useSettingsStore = await loadSettingsStore();
+    const providerId = useSettingsStore.getState().settings.ai.providers[0].id;
+
+    useSettingsStore.getState().setProviderReasoningEffort(providerId, 'high');
+    useSettingsStore.getState().setModelReasoningEffort(providerId, 'model-a', 'max');
+
+    expect(useSettingsStore.getState().settings.ai.reasoningProviderOverrides?.[providerId]).toBe('high');
+    expect(useSettingsStore.getState().settings.ai.reasoningModelOverrides?.[providerId]).toEqual({
+      'model-a': 'max',
+    });
+
+    useSettingsStore.getState().setProviderReasoningEffort(providerId, null);
+    useSettingsStore.getState().setModelReasoningEffort(providerId, 'model-a', null);
+
+    expect(useSettingsStore.getState().settings.ai.reasoningProviderOverrides?.[providerId]).toBeUndefined();
+    expect(useSettingsStore.getState().settings.ai.reasoningModelOverrides?.[providerId]).toBeUndefined();
+  });
+
   it('exports only selected .oxide app settings sections and excludes local env vars by default', async () => {
     const mod = await import('@/store/settingsStore');
     const useSettingsStore = mod.useSettingsStore;

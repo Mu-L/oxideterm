@@ -43,7 +43,7 @@ export const SettingsView = () => {
     const [activeTab, setActiveTab] = useState('general');
     const [portableStatus, setPortableStatus] = useState<PortableStatusResponse | null | undefined>(undefined);
 
-    const { settings, updateTerminal, updateAppearance, updateConnectionDefaults, updateAi, updateSftp, updateIde, updateReconnect, updateConnectionPool, setLanguage, addProvider, removeProvider, updateProvider, setActiveProvider, refreshProviderModels, setUserContextWindow } = useSettingsStore();
+    const { settings, updateTerminal, updateAppearance, updateConnectionDefaults, updateAi, updateSftp, updateIde, updateReconnect, updateConnectionPool, setLanguage, addProvider, removeProvider, updateProvider, setActiveProvider, refreshProviderModels, setUserContextWindow, setProviderReasoningEffort, setModelReasoningEffort } = useSettingsStore();
     const { general, terminal, appearance, connectionDefaults, ai, sftp, ide, reconnect } = settings;
     const [showAiConfirm, setShowAiConfirm] = useState(false);
     const [refreshingModels, setRefreshingModels] = useState<string | null>(null);
@@ -235,6 +235,8 @@ export const SettingsView = () => {
                             setActiveProvider={setActiveProvider}
                             refreshProviderModels={refreshProviderModels}
                             setUserContextWindow={setUserContextWindow}
+                            setProviderReasoningEffort={setProviderReasoningEffort}
+                            setModelReasoningEffort={setModelReasoningEffort}
                             refreshingModels={refreshingModels}
                             setRefreshingModels={setRefreshingModels}
                             onRequestEnableAiConfirm={() => setShowAiConfirm(true)}

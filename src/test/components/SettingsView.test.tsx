@@ -64,6 +64,8 @@ const settingsStoreState = vi.hoisted(() => ({
   setActiveProvider: vi.fn(),
   refreshProviderModels: vi.fn(),
   setUserContextWindow: vi.fn(),
+  setProviderReasoningEffort: vi.fn(),
+  setModelReasoningEffort: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({

@@ -89,6 +89,8 @@ type AiTabProps = {
     setActiveProvider: (providerId: string) => void;
     refreshProviderModels: (providerId: string) => Promise<string[]>;
     setUserContextWindow: (providerId: string, model: string, value: number | null) => void;
+    setProviderReasoningEffort: (providerId: string, value: AiReasoningEffort | null) => void;
+    setModelReasoningEffort: (providerId: string, model: string, value: AiReasoningEffort | null) => void;
     refreshingModels: string | null;
     setRefreshingModels: (providerId: string | null) => void;
     onRequestEnableAiConfirm: () => void;
@@ -141,6 +143,13 @@ const PROVIDER_TEMPLATES: ProviderTemplate[] = [
 ];
 
 const REASONING_EFFORTS: AiReasoningEffort[] = ['auto', 'off', 'low', 'medium', 'high', 'max'];
+const INHERIT_REASONING = '__inherit__';
+
+type ReasoningSelectValue = AiReasoningEffort | typeof INHERIT_REASONING;
+
+function reasoningValueOrNull(value: string): AiReasoningEffort | null {
+    return value === INHERIT_REASONING ? null : value as AiReasoningEffort;
+}
 
 export const AiTab = ({
     ai,
@@ -151,6 +160,8 @@ export const AiTab = ({
     setActiveProvider,
     refreshProviderModels,
     setUserContextWindow,
+    setProviderReasoningEffort,
+    setModelReasoningEffort,
     refreshingModels,
     setRefreshingModels,
     onRequestEnableAiConfirm,
@@ -375,6 +386,29 @@ export const AiTab = ({
                                                         onChange={(event) => updateProvider(provider.id, { defaultModel: event.target.value })}
                                                         className="bg-theme-bg h-8 text-xs"
                                                     />
+                                                </div>
+                                                <div className="grid gap-1">
+                                                    <Label className="text-xs text-theme-text-muted">{t('settings_view.ai.reasoning_provider_default')}</Label>
+                                                    <Select
+                                                        value={(ai.reasoningProviderOverrides?.[provider.id] ?? INHERIT_REASONING) as ReasoningSelectValue}
+                                                        onValueChange={(value) => setProviderReasoningEffort(provider.id, reasoningValueOrNull(value))}
+                                                    >
+                                                        <SelectTrigger className="bg-theme-bg h-8 text-xs">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value={INHERIT_REASONING}>
+                                                                {t('settings_view.ai.reasoning_inherit_global', {
+                                                                    value: t(`settings_view.ai.reasoning_${ai.reasoningEffort ?? 'auto'}`),
+                                                                })}
+                                                            </SelectItem>
+                                                            {REASONING_EFFORTS.map((effort) => (
+                                                                <SelectItem key={effort} value={effort}>
+                                                                    {t(`settings_view.ai.reasoning_${effort}`)}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
                                                 </div>
                                             </div>
 
@@ -746,6 +780,22 @@ export const AiTab = ({
                                                             >
                                                                 {t(`settings_view.ai.ctx_source_${info.source}`)}
                                                             </span>
+                                                            <Select
+                                                                value={(ai.reasoningModelOverrides?.[provider.id]?.[model] ?? INHERIT_REASONING) as ReasoningSelectValue}
+                                                                onValueChange={(value) => setModelReasoningEffort(provider.id, model, reasoningValueOrNull(value))}
+                                                            >
+                                                                <SelectTrigger className="w-32 h-7 bg-theme-bg border-theme-border text-[10px] shrink-0">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value={INHERIT_REASONING}>{t('settings_view.ai.reasoning_inherit_provider')}</SelectItem>
+                                                                    {REASONING_EFFORTS.map((effort) => (
+                                                                        <SelectItem key={effort} value={effort}>
+                                                                            {t(`settings_view.ai.reasoning_${effort}`)}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
                                                             <Input
                                                                 type="number"
                                                                 min={1024}

@@ -225,4 +225,45 @@ describe('turnProjection', () => {
       { kind: 'text', text: 'after' },
     ]);
   });
+
+  it('filters repeated tool segments to the calls that belong to that segment', () => {
+    const turn: AiAssistantTurn = {
+      id: 'turn-split-round',
+      status: 'streaming',
+      plainTextSummary: 'running next',
+      parts: [
+        { type: 'tool_call', id: 'open-terminal', name: 'open_local_terminal', argumentsText: '{}', status: 'complete' },
+        { type: 'tool_result', toolCallId: 'open-terminal', toolName: 'open_local_terminal', success: true, output: 'opened' },
+        { type: 'text', text: 'running next' },
+        { type: 'tool_call', id: 'exec-command', name: 'terminal_exec', argumentsText: '{"command":"sudo fastfetch"}', status: 'complete' },
+      ],
+      toolRounds: [
+        {
+          id: 'round-1',
+          round: 1,
+          toolCalls: [
+            { id: 'open-terminal', name: 'open_local_terminal', argumentsText: '{}', executionState: 'completed' },
+            { id: 'exec-command', name: 'terminal_exec', argumentsText: '{"command":"sudo fastfetch"}', executionState: 'running' },
+          ],
+        },
+      ],
+    };
+
+    const segments = buildAssistantDisplaySegments(turn);
+    const toolSegments = segments.filter((segment) => segment.kind === 'tool');
+
+    expect(toolSegments).toHaveLength(2);
+    expect(toolSegments[0]).toEqual(expect.objectContaining({
+      toolRounds: [expect.objectContaining({
+        id: 'round-1',
+        toolCalls: [expect.objectContaining({ id: 'open-terminal' })],
+      })],
+    }));
+    expect(toolSegments[1]).toEqual(expect.objectContaining({
+      toolRounds: [expect.objectContaining({
+        id: 'round-1',
+        toolCalls: [expect.objectContaining({ id: 'exec-command' })],
+      })],
+    }));
+  });
 });

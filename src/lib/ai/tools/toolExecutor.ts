@@ -56,6 +56,8 @@ const AUTO_AWAIT_STABLE_SECS = 3;
  * Only fires when the prompt-like text is at the very end of output (trailing whitespace allowed).
  */
 const COMPLETION_PROMPT_RE = /(?:^|\n)[\w@.\-~:\/\[\]\(\) ]*[\$#>%]\s*$/;
+/** Interactive prompts that wait for hidden input and often do not emit a newline. */
+const INTERACTIVE_INPUT_PROMPT_RE = /(?:^|\n).*(?:\[sudo\]\s*)?(?:password|passphrase|密码|口令)(?:\s+for\s+[^\n:]+)?\s*:\s*$/i;
 /** Short grace period after prompt detection to catch trailing output */
 const PROMPT_GRACE_MS = 200;
 /** Maximum stability window when output keeps growing */
@@ -494,6 +496,7 @@ async function execTerminalCommandToSession(
     console.debug(`[AI:ToolExec] pre-command snapshot: ${preSnapshotLineCount} lines`);
   }
   const preRenderedLineCount = readRenderedBufferLines(sessionId)?.length ?? null;
+  const preRenderedText = readRenderedBufferText(sessionId);
 
   const outputSubscription = createTerminalOutputSubscription(sessionId);
   try {
@@ -530,6 +533,7 @@ async function execTerminalCommandToSession(
       preSnapshotLineCount,
       abortSignal,
       outputSubscription,
+      preRenderedText,
     );
 
     if (waitResult.error === 'Generation was stopped.') {
@@ -543,7 +547,8 @@ async function execTerminalCommandToSession(
       };
     }
 
-    const renderedWaitResult = renderedDeltaFromLineCount(sessionId, preRenderedLineCount, waitResult);
+    const renderedWaitResult = renderedDeltaFromLineCount(sessionId, preRenderedLineCount, waitResult)
+      ?? renderedDeltaFromTextSnapshot(sessionId, preRenderedText, waitResult);
 
     return {
       toolCallId,
@@ -1079,6 +1084,7 @@ async function waitForTerminalOutput(
   preSnapshotLineCount?: number | null,
   abortSignal?: AbortSignal,
   existingSubscription?: TerminalOutputSubscription,
+  initialRenderedText?: string | null,
 ): Promise<WaitResult> {
   // Use pre-command snapshot if provided (avoids race condition),
   // otherwise take a fresh snapshot now.
@@ -1108,6 +1114,7 @@ async function waitForTerminalOutput(
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let settled = false;
     let lastCheckedCounter = 0;  // Tracks which notifications have been processed
+    let lastRenderedDelta = '';
     let checking = false;        // Prevents overlapping async checks
     let outputBursts = 0;        // Count of new-output detections for adaptive stability
 
@@ -1171,6 +1178,8 @@ async function waitForTerminalOutput(
       }
 
       const delta = (currentLineCount ?? initialLineCount) - initialLineCount;
+      const renderedDelta = getRenderedTextDelta(sessionId, initialRenderedText);
+      const hasRenderedDelta = Boolean(renderedDelta && renderedDelta.trim().length > 0 && renderedDelta !== lastRenderedDelta);
 
       // Check explicit pattern match on new lines
       if (patternRe && delta > 0) {
@@ -1181,8 +1190,20 @@ async function waitForTerminalOutput(
         }
       }
 
+      if (patternRe && hasRenderedDelta && renderedDelta) {
+        patternRe.lastIndex = 0;
+        if (patternRe.test(renderedDelta)) {
+          done('pattern');
+          checking = false;
+          return;
+        }
+      }
+
       // Reset stability timer on each new output (adaptive: grows with output bursts)
-      if (delta > 0) {
+      if (delta > 0 || hasRenderedDelta) {
+        if (hasRenderedDelta && renderedDelta) {
+          lastRenderedDelta = renderedDelta;
+        }
         outputBursts++;
         if (stableTimer) clearTimeout(stableTimer);
         // Cancel prompt grace from a PREVIOUS iteration if new output arrived
@@ -1195,8 +1216,8 @@ async function waitForTerminalOutput(
 
         // Check shell prompt pattern AFTER stability reset — grace timer survives until next poll
         if (!promptGraceTimer) {
-          const tail = currentLines.slice(-3).join('\n');
-          if (COMPLETION_PROMPT_RE.test(tail)) {
+          const tail = delta > 0 ? currentLines.slice(-3).join('\n') : renderedDelta ?? '';
+          if (COMPLETION_PROMPT_RE.test(tail) || INTERACTIVE_INPUT_PROMPT_RE.test(tail)) {
             promptGraceTimer = setTimeout(() => {
               if (!settled) done('prompt');
             }, PROMPT_GRACE_MS);
@@ -1242,6 +1263,11 @@ async function waitForTerminalOutput(
   }
 
   if (newLines.length === 0) {
+    const renderedDelta = renderedDeltaFromTextSnapshot(sessionId, initialRenderedText, { success: true, output: '' });
+    if (renderedDelta) {
+      return renderedDelta;
+    }
+
     // Fallback: provide buffer tail so the AI always gets useful context
     if (result !== 'timeout') {
       const tail = finalSnapshot.lines.slice(-EMPTY_OUTPUT_TAIL_LINES);
@@ -1315,6 +1341,11 @@ type BufferSnapshot = {
 };
 
 function readRenderedBufferLines(sessionId: string): string[] | null {
+  const buffer = readRenderedBufferText(sessionId);
+  return typeof buffer === 'string' ? buffer.split('\n') : null;
+}
+
+function readRenderedBufferText(sessionId: string): string | null {
   const paneId = findPaneBySessionId(sessionId);
   if (!paneId) {
     return null;
@@ -1325,7 +1356,24 @@ function readRenderedBufferLines(sessionId: string): string[] | null {
     return null;
   }
 
-  return buffer.split('\n');
+  return buffer;
+}
+
+function getRenderedTextDelta(sessionId: string, initialText: string | null | undefined): string | null {
+  if (initialText == null) {
+    return null;
+  }
+
+  const currentText = readRenderedBufferText(sessionId);
+  if (currentText == null || currentText === initialText) {
+    return null;
+  }
+
+  if (currentText.startsWith(initialText)) {
+    return currentText.slice(initialText.length);
+  }
+
+  return currentText.split('\n').slice(-EMPTY_OUTPUT_TAIL_LINES).join('\n');
 }
 
 function readRenderedBufferTail(sessionId: string, maxLines: number): BufferSnapshot | null {
@@ -1371,6 +1419,24 @@ function renderedDeltaFromLineCount(
   }
 
   const { text, truncated } = truncateOutput(newLines.join('\n'));
+  return { success: true, output: text, truncated };
+}
+
+function renderedDeltaFromTextSnapshot(
+  sessionId: string,
+  initialText: string | null | undefined,
+  fallback: WaitResult,
+): WaitResult | null {
+  if (!fallback.success) {
+    return null;
+  }
+
+  const delta = getRenderedTextDelta(sessionId, initialText);
+  if (!delta || delta.trim().length === 0) {
+    return null;
+  }
+
+  const { text, truncated } = truncateOutput(delta);
   return { success: true, output: text, truncated };
 }
 

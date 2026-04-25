@@ -193,6 +193,30 @@ function getToolPartRound(part: Extract<AiTurnPart, { type: 'tool_call' | 'tool_
   return toolRounds.find((round) => round.toolCalls.some((toolCall) => toolCall.id === toolCallId));
 }
 
+function getToolPartId(part: Extract<AiTurnPart, { type: 'tool_call' | 'tool_result' }>): string {
+  return part.type === 'tool_call' ? part.id : part.toolCallId;
+}
+
+function filterRoundToToolParts(
+  round: AiToolRound | undefined,
+  parts: Array<Extract<AiTurnPart, { type: 'tool_call' | 'tool_result' }>>,
+): AiToolRound | undefined {
+  if (!round) {
+    return undefined;
+  }
+
+  const ids = new Set(parts.map(getToolPartId));
+  const toolCalls = round.toolCalls.filter((toolCall) => ids.has(toolCall.id));
+  if (toolCalls.length === 0) {
+    return undefined;
+  }
+
+  return {
+    ...round,
+    toolCalls,
+  };
+}
+
 export function buildAssistantDisplaySegments(turn: AiAssistantTurn): AiAssistantDisplaySegment[] {
   const segments: AiAssistantDisplaySegment[] = [];
   let bufferedToolParts: Array<Extract<AiTurnPart, { type: 'tool_call' | 'tool_result' }>> = [];
@@ -206,7 +230,10 @@ export function buildAssistantDisplaySegments(turn: AiAssistantTurn): AiAssistan
     segments.push({
       kind: 'tool',
       toolParts: bufferedToolParts,
-      toolRounds: bufferedToolRound ? [bufferedToolRound] : undefined,
+      toolRounds: (() => {
+        const filteredRound = filterRoundToToolParts(bufferedToolRound, bufferedToolParts);
+        return filteredRound ? [filteredRound] : undefined;
+      })(),
     });
     bufferedToolParts = [];
     bufferedToolRound = undefined;

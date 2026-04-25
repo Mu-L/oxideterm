@@ -534,6 +534,44 @@ describe('toolExecutor regressions', () => {
     expect(result.output).not.toContain('�������');
   });
 
+  it('returns rendered current-line output when terminal_exec waits for sudo password', async () => {
+    findPaneBySessionIdMock.mockReturnValue('pane-1');
+
+    let renderedBuffer = 'dominical@macbook %';
+    let outputListener: (() => void) | undefined;
+    subscribeTerminalOutputMock.mockImplementation((_sessionId: string, listener: () => void) => {
+      outputListener = listener;
+      return () => {
+        outputListener = undefined;
+      };
+    });
+
+    getTerminalBufferMock.mockImplementation(() => renderedBuffer);
+    getBufferStatsMock.mockResolvedValue({
+      current_lines: 1,
+      total_lines: 1,
+      max_lines: 100000,
+      memory_usage_mb: 1,
+    });
+    getScrollBufferMock.mockResolvedValue([{ text: 'dominical@macbook %' }]);
+
+    writeToTerminalMock.mockImplementation(() => {
+      renderedBuffer = 'dominical@macbook % sudo fastfetch [sudo] password for dominical:';
+      outputListener?.();
+      return true;
+    });
+
+    const result = await executeTool(
+      'terminal_exec',
+      { session_id: 'session-1', command: 'sudo fastfetch' },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('[sudo] password for dominical:');
+    expect(result.output).not.toContain('No new output after');
+  });
+
   it('encodes terminal shortcut combos in send_keys instead of sending literal text', async () => {
     findPaneBySessionIdMock.mockReturnValue('pane-1');
 

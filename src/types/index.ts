@@ -1,6 +1,8 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
+import type { ToolResultEnvelope } from '../lib/ai/tools/protocol/types';
+
 export type {
   AiAssistantTurn,
   AiConversationSessionMetadata,
@@ -17,6 +19,7 @@ export type {
   AiTurnPart,
   AiTurnSummaryMetadata,
 } from '../lib/ai/turnModel/types';
+export type { ToolResultEnvelope } from '../lib/ai/tools/protocol/types';
 
 // Session Types
 export type SessionState = 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting';
@@ -1718,6 +1721,8 @@ export type AiToolResult = {
   truncated?: boolean;
   /** Execution duration in ms */
   durationMs?: number;
+  /** Structured v2 result envelope for agent/UI consumers. Legacy fields remain canonical. */
+  envelope?: ToolResultEnvelope;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

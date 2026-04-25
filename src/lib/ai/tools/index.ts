@@ -34,3 +34,20 @@ export {
   hasDeniedCommands,
 } from './toolDefinitions';
 export { executeTool, type ToolExecutionContext } from './toolExecutor';
+export type {
+  ToolCapability,
+  ToolResultEnvelope,
+  ToolResultError,
+  ToolResultMeta,
+  ToolRisk,
+  ToolTarget,
+  ToolTargetKind,
+} from './protocol';
+export {
+  createToolResultEnvelope,
+  createToolTarget,
+  fromLegacyToolResult,
+  hasTargetCapability,
+  inferToolRisk,
+  toLegacyToolResult,
+} from './protocol';

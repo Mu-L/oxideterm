@@ -149,11 +149,14 @@ describe('settingsStore', () => {
     expect(settings.ai.activeProviderId).toBe(settings.ai.providers[0].id);
     expect(settings.ai.activeModel).toBe('custom-model');
     expect(settings.ai.toolUse?.autoApproveTools.read_file).toBe(true);
+    expect(settings.ai.toolUse?.autoApproveTools.list_targets).toBe(true);
+    expect(settings.ai.toolUse?.autoApproveTools.list_capabilities).toBe(true);
     expect(settings.ai.toolUse?.autoApproveTools.terminal_exec).toBe(false);
 
     const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
     expect(persisted.ai.providers.length).toBeGreaterThan(0);
     expect(persisted.ai.toolUse.autoApproveTools.read_file).toBe(true);
+    expect(persisted.ai.toolUse.autoApproveTools.list_targets).toBe(true);
   });
 
   it('clears legacy localStorage keys when loading defaults', async () => {

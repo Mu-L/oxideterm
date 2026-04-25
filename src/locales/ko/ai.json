@@ -139,6 +139,8 @@
         "git_status": "Git 상태",
         "list_tabs": "탭 목록",
         "list_sessions": "세션 목록",
+        "list_targets": "대상 목록",
+        "list_capabilities": "기능 목록",
         "get_terminal_buffer": "버퍼 읽기",
         "search_terminal": "터미널 검색",
         "await_terminal_output": "출력 대기",

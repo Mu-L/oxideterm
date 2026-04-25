@@ -22,6 +22,8 @@ const READ_TOOLS = new Set([
   'ide_get_project_info',
   'list_tabs',
   'list_sessions',
+  'list_targets',
+  'list_capabilities',
   'list_connections',
   'get_connection_health',
   'get_detected_ports',

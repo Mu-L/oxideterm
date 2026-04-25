@@ -139,6 +139,8 @@
         "git_status": "Statut Git",
         "list_tabs": "Lister les onglets",
         "list_sessions": "Lister sessions",
+        "list_targets": "Lister les cibles",
+        "list_capabilities": "Lister capacités",
         "get_terminal_buffer": "Lire tampon",
         "search_terminal": "Rechercher terminal",
         "await_terminal_output": "Attendre la sortie",

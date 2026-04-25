@@ -139,6 +139,8 @@
         "git_status": "Git 狀態",
         "list_tabs": "列出分頁",
         "list_sessions": "列出工作階段",
+        "list_targets": "列出目標",
+        "list_capabilities": "列出能力",
         "get_terminal_buffer": "讀取緩衝區",
         "search_terminal": "搜尋終端",
         "await_terminal_output": "等待輸出",

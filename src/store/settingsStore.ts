@@ -533,6 +533,8 @@ const defaultAiSettings: AiSettings = {
       git_status: true,
       list_tabs: true,
       list_sessions: true,
+      list_targets: true,
+      list_capabilities: true,
       get_terminal_buffer: true,
       search_terminal: true,
       await_terminal_output: true,

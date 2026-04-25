@@ -48,6 +48,7 @@ export const PARTICIPANTS: ParticipantDef[] = [
     icon: 'Terminal',
     includeTools: [
       // Session tools are global, but emphasise terminal context
+      'list_targets', 'list_capabilities', 'list_sessions', 'list_tabs',
       'terminal_exec', 'get_terminal_buffer', 'search_terminal',
       'await_terminal_output', 'send_control_sequence', 'batch_exec',
       'read_screen', 'send_keys', 'send_mouse',
@@ -62,6 +63,7 @@ export const PARTICIPANTS: ParticipantDef[] = [
     descriptionKey: 'ai.participant.sftp_desc',
     icon: 'FolderOpen',
     includeTools: [
+      'list_targets', 'list_capabilities',
       'sftp_list_dir', 'sftp_read_file', 'sftp_stat', 'sftp_get_cwd',
     ],
     systemPromptModifier:
@@ -74,6 +76,7 @@ export const PARTICIPANTS: ParticipantDef[] = [
     descriptionKey: 'ai.participant.ide_desc',
     icon: 'Code2',
     includeTools: [
+      'list_targets', 'list_capabilities',
       'ide_get_open_files', 'ide_get_file_content', 'ide_get_project_info', 'ide_apply_edit',
     ],
     systemPromptModifier:
@@ -86,6 +89,7 @@ export const PARTICIPANTS: ParticipantDef[] = [
     descriptionKey: 'ai.participant.connection_desc',
     icon: 'Link',
     includeTools: [
+      'list_targets', 'list_capabilities', 'list_sessions', 'list_tabs',
       'list_saved_connections', 'search_saved_connections', 'get_session_tree',
       'get_pool_stats', 'set_pool_config',
       'list_connections', 'get_connection_health',
@@ -100,6 +104,7 @@ export const PARTICIPANTS: ParticipantDef[] = [
     descriptionKey: 'ai.participant.system_desc',
     icon: 'Activity',
     includeTools: [
+      'list_targets', 'list_capabilities',
       'get_all_health', 'get_resource_metrics',
       'get_event_log', 'get_transfer_status', 'get_recording_status',
       'get_broadcast_status', 'get_app_status', 'get_app_stats',
@@ -113,6 +118,7 @@ export const PARTICIPANTS: ParticipantDef[] = [
     descriptionKey: 'ai.participant.local_desc',
     icon: 'Monitor',
     includeTools: [
+      'list_targets', 'list_capabilities', 'list_sessions', 'list_tabs',
       'local_list_shells', 'local_get_terminal_info', 'local_exec', 'local_get_drives',
     ],
     systemPromptModifier:

@@ -1137,7 +1137,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
 - **Act, don't guess**: Use tools to get real data about system state, files, or connections.
 - **One-shot execution**: \`terminal_exec\` with session_id auto-captures output. No need to chain \`await_terminal_output\` unless you passed \`await_output: false\`.
 - **Prefer node_id**: For non-interactive commands, \`node_id\` provides more reliable output capture (direct stdout/stderr) than \`session_id\` (terminal scraping). Use \`session_id\` only when you need to interact with an existing terminal session.
-- **Discover first**: Use \`list_sessions\` / \`list_tabs\` to find targets before operating.
+- **Discover first**: Use \`list_targets\` to find the right target and \`list_capabilities\` when you need to know which operations are available. \`list_sessions\` / \`list_tabs\` are legacy summaries.
 
 ### Error Recovery
 - **If output is empty or incomplete**: Use \`get_terminal_buffer\` to read the full terminal content, or retry the command.
@@ -1147,7 +1147,7 @@ You have tools to interact with the user's terminal sessions and workspace. **Us
 ### Routing
 - \`node_id\`: direct remote execution (captured stdout/stderr, more reliable).
 - \`session_id\`: send into an open terminal (visible to user, output auto-captured from screen).
-- Context-free tools (\`list_sessions\`, \`list_tabs\`, etc.) need no node or session.
+- Context-free tools (\`list_targets\`, \`list_capabilities\`, \`list_sessions\`, \`list_tabs\`, etc.) need no node or session.
 
 ### Connecting to Servers
 - To connect to a server: first use \`list_saved_connections\` or \`search_saved_connections\` to find the connection ID, then use \`connect_saved_session\` to establish the SSH connection and open a terminal.

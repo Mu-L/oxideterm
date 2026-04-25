@@ -139,6 +139,8 @@
         "git_status": "Git ステータス",
         "list_tabs": "タブ一覧",
         "list_sessions": "セッション一覧",
+        "list_targets": "ターゲット一覧",
+        "list_capabilities": "機能一覧",
         "get_terminal_buffer": "バッファ読取",
         "search_terminal": "ターミナル検索",
         "await_terminal_output": "出力待機",

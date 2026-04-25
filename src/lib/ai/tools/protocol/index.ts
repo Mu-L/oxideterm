@@ -61,3 +61,11 @@ export type {
   TerminalRunRequest,
 } from './terminalRun';
 export { terminalRunRemote } from './terminalRun';
+export type {
+  TargetDiscoveryState,
+  ToolCapabilityStatus,
+} from './targetDiscovery';
+export {
+  buildCapabilityStatuses,
+  buildToolTargets,
+} from './targetDiscovery';

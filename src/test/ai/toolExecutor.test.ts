@@ -78,7 +78,13 @@ const sessionTreeState = vi.hoisted(() => ({
 const appStoreState = vi.hoisted(() => ({
   sessions: new Map(),
   tabs: [] as Array<Record<string, unknown>>,
+  activeTabId: null as string | null,
   createTab: createTabMock,
+}));
+
+const localTerminalState = vi.hoisted(() => ({
+  terminals: new Map<string, Record<string, unknown>>(),
+  createTerminal: vi.fn(),
 }));
 
 const ideStoreState = vi.hoisted(() => ({
@@ -137,7 +143,7 @@ vi.mock('@/store/appStore', () => ({
 
 vi.mock('@/store/localTerminalStore', () => ({
   useLocalTerminalStore: {
-    getState: () => ({ terminals: new Map(), createTerminal: vi.fn() }),
+    getState: () => localTerminalState,
   },
 }));
 
@@ -236,6 +242,9 @@ describe('toolExecutor get_settings sanitization', () => {
     sessionTreeState.getNode.mockReset();
     sessionTreeState.getNodeByTerminalId.mockReset();
     appStoreState.tabs = [];
+    appStoreState.activeTabId = null;
+    localTerminalState.terminals = new Map();
+    localTerminalState.createTerminal.mockReset();
     ideStoreState.tabs = [];
     ideStoreState.activeTabId = null;
     ideStoreState.activeFileId = null;
@@ -422,6 +431,86 @@ describe('toolExecutor get_settings sanitization', () => {
 
     writeToTerminalMock.mockClear();
     findPaneBySessionIdMock.mockClear();
+  });
+
+  it('lists unified targets for SSH, local terminal, and tab routing', async () => {
+    sessionTreeState.nodes = [
+      {
+        id: 'node-1',
+        host: 'example.com',
+        username: 'root',
+        port: 22,
+        runtime: {
+          status: 'connected',
+          connectionId: 'conn-1',
+          terminalIds: ['term-1'],
+          sftpSessionId: 'sftp-1',
+        },
+      },
+    ];
+    localTerminalState.terminals = new Map([
+      ['local-1', { running: true, shell: { label: 'Zsh' } }],
+    ]);
+    appStoreState.activeTabId = 'tab-ssh';
+    appStoreState.tabs = [
+      {
+        id: 'tab-ssh',
+        type: 'terminal',
+        title: 'SSH',
+        nodeId: 'node-1',
+        sessionId: 'term-1',
+      },
+    ];
+
+    const result = await executeTool(
+      'list_targets',
+      {},
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('ssh-node:node-1');
+    expect(result.output).toContain('terminal-session:term-1');
+    expect(result.output).toContain('terminal-session:local-1');
+
+    const payload = JSON.parse(result.output.slice(result.output.indexOf('JSON:') + 'JSON:'.length));
+    expect(payload.targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'ssh-node:node-1', kind: 'ssh-node' }),
+      expect.objectContaining({ id: 'terminal-session:term-1', kind: 'terminal-session' }),
+      expect.objectContaining({ id: 'tab:tab-ssh', kind: 'app-tab', active: true }),
+    ]));
+  });
+
+  it('lists capabilities for a selected discovered target', async () => {
+    sessionTreeState.nodes = [
+      {
+        id: 'node-1',
+        host: 'example.com',
+        username: 'root',
+        port: 22,
+        runtime: {
+          status: 'connected',
+          connectionId: 'conn-1',
+          terminalIds: ['term-1'],
+        },
+      },
+    ];
+
+    const result = await executeTool(
+      'list_capabilities',
+      { target_id: 'ssh-node:node-1' },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('command.run on ssh-node:node-1');
+    expect(result.output).toContain('filesystem.read on ssh-node:node-1');
+
+    const payload = JSON.parse(result.output.slice(result.output.indexOf('JSON:') + 'JSON:'.length));
+    expect(payload.capabilities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ targetId: 'ssh-node:node-1', capability: 'command.run' }),
+      expect.objectContaining({ targetId: 'ssh-node:node-1', capability: 'filesystem.read' }),
+    ]));
   });
 });
 

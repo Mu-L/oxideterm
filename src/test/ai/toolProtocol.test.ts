@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildCapabilityStatuses,
+  buildToolTargets,
   createToolResultEnvelope,
   createToolTarget,
   detectTerminalPrompt,
@@ -144,6 +146,98 @@ describe('tool protocol risk and target helpers', () => {
     });
     expect(hasTargetCapability(target, 'terminal.observe')).toBe(true);
     expect(hasTargetCapability(target, 'filesystem.read')).toBe(false);
+  });
+});
+
+describe('tool target discovery helpers', () => {
+  it('builds unified targets for local shell, SSH nodes, terminal sessions, and tabs', () => {
+    const targets = buildToolTargets({
+      activeTabId: 'tab-ssh',
+      localTerminals: new Map([
+        ['local-1', { running: true, shell: { label: 'Zsh' } }],
+      ]),
+      sshNodes: [
+        {
+          id: 'node-1',
+          host: 'example.com',
+          username: 'root',
+          port: 22,
+          runtime: {
+            status: 'connected',
+            connectionId: 'conn-1',
+            terminalIds: ['term-1'],
+            sftpSessionId: 'sftp-1',
+          },
+        },
+      ],
+      tabs: [
+        {
+          id: 'tab-ssh',
+          type: 'terminal',
+          title: 'SSH',
+          nodeId: 'node-1',
+          sessionId: 'term-1',
+        } as never,
+        {
+          id: 'tab-sftp',
+          type: 'sftp',
+          title: 'SFTP',
+          nodeId: 'node-1',
+        } as never,
+      ],
+    });
+
+    expect(targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'local-shell:default',
+        kind: 'local-shell',
+        capabilities: expect.arrayContaining(['command.run']),
+      }),
+      expect.objectContaining({
+        id: 'ssh-node:node-1',
+        kind: 'ssh-node',
+        nodeId: 'node-1',
+        active: true,
+        capabilities: expect.arrayContaining(['command.run', 'filesystem.read', 'network.forward']),
+      }),
+      expect.objectContaining({
+        id: 'terminal-session:term-1',
+        kind: 'terminal-session',
+        sessionId: 'term-1',
+        capabilities: expect.arrayContaining(['terminal.send', 'terminal.observe']),
+      }),
+      expect.objectContaining({
+        id: 'tab:tab-sftp',
+        kind: 'sftp-session',
+        capabilities: expect.arrayContaining(['filesystem.read', 'filesystem.write']),
+      }),
+    ]));
+  });
+
+  it('builds capability rows scoped to active targets', () => {
+    const capabilities = buildCapabilityStatuses([
+      createToolTarget({
+        id: 'ssh-node:node-1',
+        kind: 'ssh-node',
+        label: 'root@example.com',
+        active: true,
+        nodeId: 'node-1',
+        capabilities: ['command.run', 'filesystem.read'],
+      }),
+    ]);
+
+    expect(capabilities).toEqual([
+      expect.objectContaining({
+        targetId: 'ssh-node:node-1',
+        capability: 'command.run',
+        notes: 'active target',
+      }),
+      expect.objectContaining({
+        targetId: 'ssh-node:node-1',
+        capability: 'filesystem.read',
+        notes: 'active target',
+      }),
+    ]);
   });
 });
 

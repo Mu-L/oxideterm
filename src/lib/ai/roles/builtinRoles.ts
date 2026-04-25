@@ -123,7 +123,7 @@ When the task is complete (or cannot be completed), respond with a summary:
 {{sessions}}
 
 ## Tool Use
-Use tools proactively — act on real data, don't guess. Use list_sessions and list_tabs first if you need to discover targets.
+Use tools proactively — act on real data, don't guess. Use list_targets first if you need to discover targets, then list_capabilities when the available operations are unclear.
 For remote execution: use terminal_exec with session_id or node_id.
 For file operations: use read_file, write_file, list_directory.
 For infrastructure: use list_port_forwards, create_port_forward.

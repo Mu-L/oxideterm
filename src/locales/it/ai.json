@@ -139,6 +139,8 @@
         "git_status": "Stato Git",
         "list_tabs": "Elenco schede",
         "list_sessions": "Elenco sessioni",
+        "list_targets": "Elenco destinazioni",
+        "list_capabilities": "Elenco capacità",
         "get_terminal_buffer": "Leggi buffer",
         "search_terminal": "Cerca terminale",
         "await_terminal_output": "Attendi output",

@@ -202,6 +202,35 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
     },
   },
   {
+    name: 'list_targets',
+    description:
+      'List all currently actionable targets for AI tools: local shell, SSH nodes, terminal sessions, SFTP/IDE workspaces, and app tabs. Prefer this before choosing node_id, session_id, or tab-specific tools.',
+    parameters: {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['all', 'local-shell', 'ssh-node', 'terminal-session', 'sftp-session', 'ide-workspace', 'app-tab', 'mcp-server', 'rag-index'],
+          description: 'Optional target kind filter. Default: "all".',
+        },
+      },
+    },
+  },
+  {
+    name: 'list_capabilities',
+    description:
+      'List tool capabilities available on current targets, such as command.run, terminal.observe, filesystem.read/write, network.forward, and navigation.open. Use this to pick the safest tool path.',
+    parameters: {
+      type: 'object',
+      properties: {
+        target_id: {
+          type: 'string',
+          description: 'Optional target ID from list_targets. If omitted, returns capabilities for all targets.',
+        },
+      },
+    },
+  },
+  {
     name: 'get_terminal_buffer',
     description:
       'Read the terminal buffer (scrollback history) of a specific session. Returns recent output lines. Use list_sessions first to find session IDs.',
@@ -1137,6 +1166,8 @@ export const READ_ONLY_TOOLS = new Set([
   'git_status',
   'list_tabs',
   'list_sessions',
+  'list_targets',
+  'list_capabilities',
   'get_terminal_buffer',
   'search_terminal',
   'list_connections',
@@ -1229,6 +1260,8 @@ export const WRITE_TOOLS = new Set([
 export const CONTEXT_FREE_TOOLS = new Set([
   'list_tabs',
   'list_sessions',
+  'list_targets',
+  'list_capabilities',
   'list_connections',
   'get_connection_health',
   // IDE tools read from local Zustand store, no node resolution needed
@@ -1386,7 +1419,7 @@ export const TOOL_GROUPS: { groupKey: string; readOnly: string[]; write: string[
   },
   {
     groupKey: 'session',
-    readOnly: ['list_tabs', 'list_sessions', 'get_terminal_buffer', 'search_terminal', 'await_terminal_output'],
+    readOnly: ['list_tabs', 'list_sessions', 'list_targets', 'list_capabilities', 'get_terminal_buffer', 'search_terminal', 'await_terminal_output'],
     write: ['send_control_sequence', 'batch_exec'],
   },
   {

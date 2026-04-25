@@ -139,6 +139,8 @@
         "git_status": "Git Status",
         "list_tabs": "List Tabs",
         "list_sessions": "List Sessions",
+        "list_targets": "List Targets",
+        "list_capabilities": "List Capabilities",
         "get_terminal_buffer": "Read Buffer",
         "search_terminal": "Search Terminal",
         "await_terminal_output": "Await Output",

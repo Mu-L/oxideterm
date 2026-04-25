@@ -139,6 +139,8 @@
         "git_status": "Trạng thái Git",
         "list_tabs": "Danh sách tab",
         "list_sessions": "Danh sách phiên",
+        "list_targets": "Danh sách mục tiêu",
+        "list_capabilities": "Danh sách khả năng",
         "get_terminal_buffer": "Đọc bộ đệm",
         "search_terminal": "Tìm kiếm terminal",
         "await_terminal_output": "Chờ đầu ra",

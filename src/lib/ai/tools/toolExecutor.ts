@@ -43,6 +43,8 @@ import { sanitizeConnectionInfo } from '../contextSanitizer';
 import { MAX_OUTPUT_BYTES } from '../agentConfig';
 import {
   createTerminalOutputSubscription,
+  buildCapabilityStatuses,
+  buildToolTargets,
   formatScreenSnapshot,
   readBufferLineCount,
   readBufferTail,
@@ -58,6 +60,7 @@ import {
   waitForTerminalOutput as waitForTerminalOutputV2,
   type TerminalOutputSubscription,
   type TerminalWaitResult,
+  type ToolTarget,
 } from './protocol';
 
 const MAX_COMMAND_TIMEOUT_SECS = 60;
@@ -216,6 +219,10 @@ export async function executeTool(
           return execListTabs(startTime, toolCallId);
         case 'list_sessions':
           return await execListSessions(args, startTime, toolCallId);
+        case 'list_targets':
+          return execListTargets(args, startTime, toolCallId);
+        case 'list_capabilities':
+          return execListCapabilities(args, startTime, toolCallId);
         case 'list_connections':
           return await execListConnections(startTime, toolCallId);
         case 'get_connection_health':
@@ -830,6 +837,81 @@ async function execListSessions(
 
   const output = lines.join('\n');
   return { toolCallId, toolName: 'list_sessions', success: true, output, durationMs: Date.now() - startTime };
+}
+
+function collectToolTargets(): ToolTarget[] {
+  const appState = useAppStore.getState();
+  return buildToolTargets({
+    tabs: appState.tabs,
+    activeTabId: appState.activeTabId,
+    sshNodes: useSessionTreeStore.getState().nodes,
+    localTerminals: useLocalTerminalStore.getState().terminals,
+  });
+}
+
+function formatTarget(target: ToolTarget, index: number): string {
+  const active = target.active ? ' ★' : '';
+  const ids = [
+    target.nodeId ? `node_id=${target.nodeId}` : undefined,
+    target.sessionId ? `session_id=${target.sessionId}` : undefined,
+    target.tabId ? `tab_id=${target.tabId}` : undefined,
+  ].filter(Boolean).join(' ');
+  const idSuffix = ids ? ` ${ids}` : '';
+  return `${index + 1}. [${target.kind}] id=${target.id}${idSuffix} "${target.label}" capabilities=${target.capabilities.join(',')}${active}`;
+}
+
+function execListTargets(
+  args: Record<string, unknown>,
+  startTime: number,
+  toolCallId: string,
+): AiToolResult {
+  const kind = typeof args.kind === 'string' ? args.kind : 'all';
+  const targets = collectToolTargets().filter((target) => kind === 'all' || target.kind === kind);
+  if (targets.length === 0) {
+    return { toolCallId, toolName: 'list_targets', success: true, output: `No targets found${kind === 'all' ? '' : ` for kind "${kind}"`}.`, durationMs: Date.now() - startTime };
+  }
+
+  const lines = [
+    `Targets (${targets.length})`,
+    ...targets.map(formatTarget),
+    '',
+    'JSON:',
+    JSON.stringify({ targets }, null, 2),
+  ];
+
+  const { text, truncated } = truncateOutput(lines.join('\n'));
+  return { toolCallId, toolName: 'list_targets', success: true, output: text, truncated, durationMs: Date.now() - startTime };
+}
+
+function execListCapabilities(
+  args: Record<string, unknown>,
+  startTime: number,
+  toolCallId: string,
+): AiToolResult {
+  const targetId = typeof args.target_id === 'string' ? args.target_id.trim() : '';
+  const targets = collectToolTargets();
+  const scopedTargets = targetId ? targets.filter((target) => target.id === targetId) : targets;
+  if (targetId && scopedTargets.length === 0) {
+    return { toolCallId, toolName: 'list_capabilities', success: false, output: '', error: `Target not found: ${targetId}. Use list_targets first.`, durationMs: Date.now() - startTime };
+  }
+
+  const capabilities = buildCapabilityStatuses(scopedTargets);
+  if (capabilities.length === 0) {
+    return { toolCallId, toolName: 'list_capabilities', success: true, output: 'No capabilities available.', durationMs: Date.now() - startTime };
+  }
+
+  const lines = [
+    `Capabilities (${capabilities.length})`,
+    ...capabilities.map((capability) => (
+      `- ${capability.capability} on ${capability.targetId} "${capability.targetLabel}"${capability.notes ? ` (${capability.notes})` : ''}`
+    )),
+    '',
+    'JSON:',
+    JSON.stringify({ capabilities }, null, 2),
+  ];
+
+  const { text, truncated } = truncateOutput(lines.join('\n'));
+  return { toolCallId, toolName: 'list_capabilities', success: true, output: text, truncated, durationMs: Date.now() - startTime };
 }
 
 async function execListConnections(

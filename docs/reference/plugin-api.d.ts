@@ -54,6 +54,52 @@ export type ConnectionHookType = 'onConnect' | 'onDisconnect' | 'onReconnect' | 
 
 export type PluginTerminalTransportType = 'telnet';
 
+export type PluginToolCapability =
+  | 'command.run'
+  | 'terminal.send'
+  | 'terminal.observe'
+  | 'terminal.wait'
+  | 'filesystem.read'
+  | 'filesystem.write'
+  | 'filesystem.search'
+  | 'navigation.open'
+  | 'state.list'
+  | 'network.forward'
+  | 'settings.read'
+  | 'settings.write'
+  | 'plugin.invoke'
+  | 'mcp.invoke';
+
+export type PluginToolTargetKind =
+  | 'local-shell'
+  | 'ssh-node'
+  | 'terminal-session'
+  | 'sftp-session'
+  | 'ide-workspace'
+  | 'app-tab'
+  | 'mcp-server'
+  | 'rag-index';
+
+export type PluginToolRisk =
+  | 'read'
+  | 'write-file'
+  | 'execute-command'
+  | 'interactive-input'
+  | 'destructive'
+  | 'network-expose'
+  | 'settings-change'
+  | 'credential-sensitive';
+
+export type PluginAiToolDef = {
+  name: string;
+  description: string;
+  parameters?: Record<string, unknown>;
+  capabilities?: PluginToolCapability[];
+  risk?: PluginToolRisk;
+  targetKinds?: PluginToolTargetKind[];
+  resultSchema?: Record<string, unknown>;
+};
+
 /** The plugin.json manifest */
 export type PluginManifest = {
   id: string;
@@ -77,6 +123,7 @@ export type PluginManifest = {
     terminalHooks?: PluginTerminalHooksDef;
     terminalTransports?: PluginTerminalTransportType[];
     connectionHooks?: ConnectionHookType[];
+    aiTools?: PluginAiToolDef[];
     /** Tauri backend commands this plugin may invoke via ctx.api.invoke() */
     apiCommands?: string[];
   };

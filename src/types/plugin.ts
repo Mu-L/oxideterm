@@ -60,6 +60,63 @@ export type ConnectionHookType = 'onConnect' | 'onDisconnect' | 'onReconnect' | 
 
 export type PluginTerminalTransportType = 'telnet';
 
+/** AI tool capability metadata declared in plugin.json. */
+export type PluginToolCapability =
+  | 'command.run'
+  | 'terminal.send'
+  | 'terminal.observe'
+  | 'terminal.wait'
+  | 'filesystem.read'
+  | 'filesystem.write'
+  | 'filesystem.search'
+  | 'navigation.open'
+  | 'state.list'
+  | 'network.forward'
+  | 'settings.read'
+  | 'settings.write'
+  | 'plugin.invoke'
+  | 'mcp.invoke';
+
+/** Target kinds a declared AI tool can operate on. */
+export type PluginToolTargetKind =
+  | 'local-shell'
+  | 'ssh-node'
+  | 'terminal-session'
+  | 'sftp-session'
+  | 'ide-workspace'
+  | 'app-tab'
+  | 'mcp-server'
+  | 'rag-index';
+
+/** Risk class used by OxideSens approval and tool-call UI. */
+export type PluginToolRisk =
+  | 'read'
+  | 'write-file'
+  | 'execute-command'
+  | 'interactive-input'
+  | 'destructive'
+  | 'network-expose'
+  | 'settings-change'
+  | 'credential-sensitive';
+
+/** Optional Tool Protocol v2 metadata for plugin-provided AI tools. */
+export type PluginAiToolDef = {
+  /** Tool name inside the plugin namespace. */
+  name: string;
+  /** Short model-facing description of what the tool does. */
+  description: string;
+  /** JSON Schema object for function-call arguments. */
+  parameters?: Record<string, unknown>;
+  /** Semantic capabilities used by approval and display layers. */
+  capabilities?: PluginToolCapability[];
+  /** Explicit risk class. If omitted, the host falls back to legacy inference. */
+  risk?: PluginToolRisk;
+  /** Target kinds this tool can operate on. */
+  targetKinds?: PluginToolTargetKind[];
+  /** Optional JSON Schema for the structured `envelope.data` payload. */
+  resultSchema?: Record<string, unknown>;
+};
+
 /** The plugin.json manifest loaded from disk */
 export type PluginManifest = {
   id: string;
@@ -93,6 +150,8 @@ export type PluginManifest = {
     terminalHooks?: PluginTerminalHooksDef;
     terminalTransports?: PluginTerminalTransportType[];
     connectionHooks?: ConnectionHookType[];
+    /** Optional metadata for plugin AI tools. Declaration only; legacy plugins may omit it. */
+    aiTools?: PluginAiToolDef[];
     apiCommands?: string[];               // Tauri command whitelist
   };
 

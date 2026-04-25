@@ -8,6 +8,7 @@
 //! Plugin config: config_dir()/plugin-config.json
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -85,7 +86,26 @@ pub struct PluginContributes {
     #[serde(default)]
     pub connection_hooks: Option<Vec<String>>,
     #[serde(default)]
+    pub ai_tools: Option<Vec<PluginAiToolDef>>,
+    #[serde(default)]
     pub api_commands: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginAiToolDef {
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub parameters: Option<Value>,
+    #[serde(default)]
+    pub capabilities: Option<Vec<String>>,
+    #[serde(default)]
+    pub risk: Option<String>,
+    #[serde(default)]
+    pub target_kinds: Option<Vec<String>>,
+    #[serde(default)]
+    pub result_schema: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -635,4 +655,54 @@ export function deactivate() {
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse manifest: {}", e))?;
 
     Ok(manifest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_manifest_preserves_ai_tool_metadata() {
+        let manifest: PluginManifest = serde_json::from_str(
+            r#"
+        {
+          "id": "com.example.tools",
+          "name": "Tool Plugin",
+          "version": "0.1.0",
+          "main": "./main.js",
+          "contributes": {
+            "aiTools": [
+              {
+                "name": "backup_config",
+                "description": "Back up a device config",
+                "parameters": { "type": "object" },
+                "capabilities": ["terminal.send", "filesystem.write"],
+                "risk": "write-file",
+                "targetKinds": ["terminal-session", "ssh-node"],
+                "resultSchema": { "type": "object" }
+              }
+            ]
+          }
+        }
+        "#,
+        )
+        .expect("manifest should parse");
+
+        let ai_tools = manifest
+            .contributes
+            .and_then(|contributes| contributes.ai_tools)
+            .expect("aiTools should be preserved");
+        assert_eq!(ai_tools.len(), 1);
+        assert_eq!(ai_tools[0].name, "backup_config");
+        assert_eq!(
+            ai_tools[0].capabilities.as_deref(),
+            Some(&["terminal.send".to_string(), "filesystem.write".to_string()][..])
+        );
+        assert_eq!(
+            ai_tools[0].target_kinds.as_deref(),
+            Some(&["terminal-session".to_string(), "ssh-node".to_string()][..])
+        );
+        assert!(ai_tools[0].parameters.is_some());
+        assert!(ai_tools[0].result_schema.is_some());
+    }
 }

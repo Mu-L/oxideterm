@@ -692,6 +692,18 @@ function normalizeTerminalSettings(settings: TerminalSettings): TerminalSettings
   };
 }
 
+function areInBandTransferSettingsEqual(
+  a: InBandTransferSettings | undefined,
+  b: InBandTransferSettings | undefined,
+): boolean {
+  return a?.enabled === b?.enabled
+    && a?.provider === b?.provider
+    && a?.allowDirectory === b?.allowDirectory
+    && a?.maxChunkBytes === b?.maxChunkBytes
+    && a?.maxFileCount === b?.maxFileCount
+    && a?.maxTotalBytes === b?.maxTotalBytes;
+}
+
 function normalizeHistorySettings(settings: PersistedSettingsV2): PersistedSettingsV2 {
   const terminal = normalizeTerminalSettings(settings.terminal);
   const scrollback = terminal.scrollback;
@@ -1031,6 +1043,15 @@ export const useSettingsStore = create<SettingsStore>()(
       set((state) => {
         const nextTerminal = { ...state.settings.terminal, [key]: value };
         const normalizedTerminal = normalizeTerminalSettings(nextTerminal);
+        if (
+          key !== 'inBandTransfer'
+          && areInBandTransferSettingsEqual(
+            state.settings.terminal.inBandTransfer,
+            normalizedTerminal.inBandTransfer,
+          )
+        ) {
+          normalizedTerminal.inBandTransfer = state.settings.terminal.inBandTransfer;
+        }
         const newSettings: PersistedSettingsV2 = {
           ...state.settings,
           terminal: normalizedTerminal,

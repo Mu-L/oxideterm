@@ -302,6 +302,16 @@ describe('settingsStore', () => {
     });
   });
 
+  it('keeps in-band transfer identity stable for unrelated terminal updates', async () => {
+    const useSettingsStore = await loadSettingsStore();
+    const initialTransferSettings = useSettingsStore.getState().settings.terminal.inBandTransfer;
+
+    useSettingsStore.getState().updateTerminal('theme', 'azurite');
+
+    expect(useSettingsStore.getState().settings.terminal.theme).toBe('azurite');
+    expect(useSettingsStore.getState().settings.terminal.inBandTransfer).toBe(initialTransferSettings);
+  });
+
   it('preserves explicit copyOnSelect and middleClickPaste settings on load and update', async () => {
     localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
       terminal: {

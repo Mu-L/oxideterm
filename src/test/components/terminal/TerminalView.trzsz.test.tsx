@@ -397,6 +397,7 @@ vi.mock('@/lib/terminalRegistry', () => ({
 vi.mock('@/lib/fontLoader', () => ({
   onMapleRegularLoaded: vi.fn(() => () => undefined),
   ensureCJKFallback: vi.fn(),
+  prepareTerminalFontForOpen: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/lib/plugin/pluginTerminalHooks', () => ({

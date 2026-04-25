@@ -311,6 +311,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // Get terminal settings from unified store (read early for adaptive renderer)
   const terminalSettings = useSettingsStore((state) => state.settings.terminal);
   const inBandTransferSettings = terminalSettings.inBandTransfer;
+  const inBandTransferSettingsRef = useRef(inBandTransferSettings);
+  inBandTransferSettingsRef.current = inBandTransferSettings;
   const [fontOpenReady, setFontOpenReady] = useState(false);
 
   useEffect(() => {
@@ -610,6 +612,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   }, []);
 
   const syncTrzszController = useCallback(() => {
+    const transferSettings = inBandTransferSettingsRef.current;
     const term = terminalRef.current;
     const currentSession = sessionRef.current;
     const connectionId = currentSession?.connectionId ?? null;
@@ -618,7 +621,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const activeWsUrl = activeWs?.url ? normalizeWebSocketUrl(activeWs.url) : null;
 
     if (
-      !inBandTransferSettings.enabled
+      !transferSettings.enabled
       || !term
       || !connectionId
       || !wsUrl
@@ -639,7 +642,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       && !currentController.isDraining()
       && currentController.matchesRuntime(connectionId, wsUrl)
     ) {
-      currentController.updateTransferSettings(inBandTransferSettings);
+      currentController.updateTransferSettings(transferSettings);
       currentController.setTerminalColumns(term.cols);
       controllerRuntimePendingRef.current = false;
       blockedRuntimeWebSocketRef.current = null;
@@ -668,14 +671,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       cleanupOwner: async () => {
         await api.cleanupTrzszOwner(ownerId);
       },
-      transferSettings: inBandTransferSettings,
+      transferSettings,
     });
     controller.setTerminalColumns(term.cols);
     trzszControllerRef.current = controller;
     controllerRuntimePendingRef.current = false;
     blockedRuntimeWebSocketRef.current = null;
     unlockRuntimeGateIfReady();
-  }, [disposeTrzszController, inBandTransferSettings, sessionId, unlockRuntimeGateIfReady, writeServerOutputToTerminal]);
+  }, [disposeTrzszController, sessionId, unlockRuntimeGateIfReady, writeServerOutputToTerminal]);
 
   const syncRemotePtySize = useCallback(() => {
     const dims = resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current);

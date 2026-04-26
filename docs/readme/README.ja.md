@@ -14,9 +14,11 @@
 
 
 <p align="center">
+  <strong>ターミナル、ファイル、ポート、リモートコンテキストのための AI ネイティブ SSH ワークスペース。</strong>
+  <br>
   <strong>Electron ゼロ。OpenSSL ゼロ。テレメトリゼロ。サブスクゼロ。純粋な Rust SSH。</strong>
   <br>
-  <em>ネイティブバイナリひとつで — ローカルシェル、SSH、SFTP、リモート IDE、AI、ポートフォワーディング、プラグイン、30 以上のテーマ、11 言語。</em>
+  <em>ローカルシェル、SSH、SFTP、ポートフォワーディング、リモート編集、プラグイン、OxideSens AI を 1 つのネイティブバイナリに。</em>
 </p>
 
 <p align="center">
@@ -48,16 +50,13 @@
 > [!NOTE]
 > **ライセンス変更：** v1.0.0 より、OxideTerm のライセンスは **PolyForm Noncommercial 1.0.0** から **GPL-3.0（GNU General Public License v3.0）** に変更されました。OxideTerm は完全なオープンソースとなり、GPL-3.0 ライセンスの条件の下で自由に使用、変更、配布できます。詳しくは [LICENSE](../../LICENSE) ファイルをご覧ください。
 
-> [!WARNING]
-> **メンテナンスに関するお知らせ：** OxideTerm は個人開発者により**ベストエフォート**で維持されています。**バグ修正が優先されます。機能リクエストには対応できない場合があります。** Issue の提出はメンテナーに実装義務を課すものではありません。ご理解とご支援に感謝いたします。
-
 ---
 
 <div align="center">
 
 https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
-*🤖 OxideSens AI —「ローカルターミナルを開いて echo hello, world! を実行して」*
+*🤖 OxideSens AI — ライブターミナルとワークスペースツールを 1 つのアシスタントから操作。*
 
 </div>
 
@@ -108,26 +107,6 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **CLI** | `oxt` コンパニオン：JSON-RPC 2.0 over Unix Socket / Named Pipe、status/health/list/forward/config/connect/focus/attach/SFTP/import/AI、ヒューマン & JSON 出力 |
 | **セキュリティ** | .oxide 暗号化エクスポート（ChaCha20-Poly1305 + Argon2id 256 MB）、ローカル設定の保存時暗号化、OS キーチェーン、Touch ID（macOS）、ポータブル暗号化キーストア、ホストキー TOFU、`zeroize` メモリクリア |
 | **i18n** | 11 言語：EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
-
----
-
-<div align="center">
-
-### 📊 コード統計
-
-<table>
-<tr>
-<td align="center"><strong>271K+</strong><br/><sub>コード行数</sub></td>
-<td align="center"><strong>83%</strong><br/><sub>コード密度</sub></td>
-<td align="center"><strong>24K+</strong><br/><sub>テストコード行</sub></td>
-<td align="center"><strong>84</strong><br/><sub>テストファイル</sub></td>
-<td align="center"><strong>910</strong><br/><sub>ソースファイル</sub></td>
-</tr>
-</table>
-
-<sub>TypeScript 102K · Rust 62K · テスト/コード比 9.1% · 外部テストフレームワーク不使用</sub>
-
-</div>
 
 ---
 
@@ -442,6 +421,21 @@ pnpm run tauri build
 
 ---
 
+## プロジェクト規模
+
+依存関係とビルド成果物を除外して `tokei` で計測しています。
+
+| 指標 | 現在の規模 |
+|---|---:|
+| 総コード量 | 286K+ |
+| TypeScript / TSX | 130K+ |
+| Rust | 100K+ |
+| フロントエンドテストコード | 24K+ |
+| フロントエンドテストファイル | 128 |
+| ソースファイル（`src` + `src-tauri/src`） | 664 |
+
+---
+
 ## セキュリティ
 
 | 項目 | 実装 |
@@ -465,6 +459,14 @@ pnpm run tauri build
 - [ ] Agent 機能強化
 - [ ] クイックコマンド
 - [ ] セッション検索とクイック切替
+
+---
+
+## サポートとメンテナンス
+
+OxideTerm は個人開発者により**ベストエフォート**でメンテナンスされています。バグ報告と再現可能なリグレッションを優先して対応します。機能リクエストは歓迎しますが、必ず実装されるとは限りません。
+
+OxideTerm があなたのワークフローに役立ったなら、GitHub スター、再現手順、翻訳修正、プラグイン、Pull Request のいずれもプロジェクトを前に進める助けになります。
 
 ---
 

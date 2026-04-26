@@ -14,9 +14,11 @@
 
 
 <p align="center">
+  <strong>Một workspace SSH AI-native cho terminal, tệp, cổng và ngữ cảnh từ xa.</strong>
+  <br>
   <strong>Không Electron. Không OpenSSL. Không thu thập dữ liệu. Không đăng ký trả phí. SSH thuần Rust.</strong>
   <br>
-  <em>Một tệp nhị phân gốc duy nhất — shell cục bộ, SSH, SFTP, IDE từ xa, AI, chuyển tiếp cổng, plugin, 30+ giao diện, 11 ngôn ngữ.</em>
+  <em>Một tệp nhị phân gốc cho shell cục bộ, SSH, SFTP, chuyển tiếp cổng, chỉnh sửa từ xa, plugin và OxideSens AI.</em>
 </p>
 
 <p align="center">
@@ -48,16 +50,13 @@
 > [!NOTE]
 > **Thay đổi giấy phép:** Từ phiên bản v1.0.0, OxideTerm đã thay đổi giấy phép từ **PolyForm Noncommercial 1.0.0** sang **GPL-3.0 (GNU General Public License v3.0)**. OxideTerm hiện là mã nguồn mở hoàn toàn — bạn có thể tự do sử dụng, sửa đổi và phân phối theo các điều khoản của giấy phép GPL-3.0. Xem tệp [LICENSE](../../LICENSE) để biết chi tiết.
 
-> [!WARNING]
-> **Thông báo bảo trì:** OxideTerm được duy trì bởi một nhà phát triển độc lập theo nguyên tắc **nỗ lực tối đa**. **Sửa lỗi được ưu tiên; yêu cầu tính năng có thể không được thực hiện.** Việc tạo issue không bắt buộc người bảo trì phải thực hiện. Cảm ơn sự kiên nhẫn và ủng hộ của bạn.
-
 ---
 
 <div align="center">
 
 https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
-*🤖 OxideSens AI — "Mở terminal cục bộ và chạy echo hello, world!"*
+*🤖 OxideSens AI — điều khiển terminal đang chạy và công cụ workspace từ một trợ lý duy nhất.*
 
 </div>
 
@@ -108,26 +107,6 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **CLI** | Công cụ đồng hành `oxt`: JSON-RPC 2.0 qua Unix Socket / Named Pipe, status/health/list/forward/config/connect/focus/attach/SFTP/import/AI, đầu ra dạng người đọc + JSON |
 | **Bảo mật** | Xuất .oxide được mã hóa (ChaCha20-Poly1305 + Argon2id 256 MB), cấu hình cục bộ được mã hóa khi lưu trữ, chuỗi khóa hệ điều hành, Touch ID (macOS), kho khóa mã hóa di động, TOFU khóa máy chủ, xóa bộ nhớ `zeroize` |
 | **i18n** | 11 ngôn ngữ: EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
-
----
-
-<div align="center">
-
-### 📊 Thống kê mã nguồn
-
-<table>
-<tr>
-<td align="center"><strong>271K+</strong><br/><sub>Dòng mã</sub></td>
-<td align="center"><strong>83%</strong><br/><sub>Mật độ mã</sub></td>
-<td align="center"><strong>24K+</strong><br/><sub>Dòng mã test</sub></td>
-<td align="center"><strong>84</strong><br/><sub>Tệp test</sub></td>
-<td align="center"><strong>910</strong><br/><sub>Tệp nguồn</sub></td>
-</tr>
-</table>
-
-<sub>TypeScript 102K · Rust 62K · tỷ lệ test/mã 9,1% · không dùng framework test bên ngoài</sub>
-
-</div>
 
 ---
 
@@ -442,6 +421,21 @@ pnpm run tauri build
 
 ---
 
+## Quy mô dự án
+
+Được đo bằng `tokei`, không tính dependency và artifact build.
+
+| Chỉ số | Quy mô hiện tại |
+|---|---:|
+| Tổng mã nguồn | 286K+ |
+| TypeScript / TSX | 130K+ |
+| Rust | 100K+ |
+| Mã test frontend | 24K+ |
+| Tệp test frontend | 128 |
+| Tệp nguồn (`src` + `src-tauri/src`) | 664 |
+
+---
+
 ## Bảo mật
 
 | Mối quan tâm | Triển khai |
@@ -465,6 +459,14 @@ pnpm run tauri build
 - [ ] Nâng cao Agent
 - [ ] Lệnh nhanh
 - [ ] Tìm kiếm phiên & chuyển đổi nhanh
+
+---
+
+## Hỗ trợ và bảo trì
+
+OxideTerm được duy trì bởi một nhà phát triển độc lập theo nguyên tắc **nỗ lực tối đa**. Báo cáo lỗi và hồi quy có thể tái hiện được ưu tiên; yêu cầu tính năng luôn được hoan nghênh, nhưng không phải lúc nào cũng được triển khai.
+
+Nếu OxideTerm giúp ích cho workflow của bạn, một GitHub star, bản tái hiện issue, sửa bản dịch, plugin hoặc pull request đều giúp dự án tiếp tục tiến lên.
 
 ---
 

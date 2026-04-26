@@ -14,9 +14,11 @@
 
 
 <p align="center">
+  <strong>Ein KI-nativer SSH-Workspace für Terminals, Dateien, Ports und Remote-Kontext.</strong>
+  <br>
   <strong>Kein Electron. Kein OpenSSL. Kein Telemetrie. Kein Abo. Reines Rust-SSH.</strong>
   <br>
-  <em>Eine einzige native Binärdatei — lokale Shells, SSH, SFTP, Remote-IDE, KI, Portweiterleitung, Plugins, 30+ Designs, 11 Sprachen.</em>
+  <em>Eine native Binärdatei für lokale Shells, SSH, SFTP, Portweiterleitung, Remote-Bearbeitung, Plugins und OxideSens AI.</em>
 </p>
 
 <p align="center">
@@ -48,16 +50,13 @@
 > [!NOTE]
 > **Lizenzänderung:** Ab v1.0.0 hat OxideTerm seine Lizenz von **PolyForm Noncommercial 1.0.0** auf **GPL-3.0 (GNU General Public License v3.0)** geändert. OxideTerm ist jetzt vollständig Open Source — Sie können es unter den Bedingungen der GPL-3.0-Lizenz frei verwenden, modifizieren und verbreiten. Siehe die [LICENSE](../../LICENSE)-Datei für Details.
 
-> [!WARNING]
-> **Wartungshinweis:** OxideTerm wird von einem einzelnen Entwickler nach dem **Best-Effort-Prinzip** gepflegt. **Fehlerbehebungen haben Priorität; Feature-Anfragen werden möglicherweise nicht umgesetzt.** Das Einreichen eines Issues verpflichtet den Maintainer nicht zur Umsetzung. Vielen Dank für Ihr Verständnis und Ihre Unterstützung.
-
 ---
 
 <div align="center">
 
 https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
-*🤖 OxideSens AI — „Öffne ein lokales Terminal und führe echo hello, world! aus"*
+*🤖 OxideSens AI — steuern Sie Live-Terminals und Workspace-Werkzeuge über einen Assistenten.*
 
 </div>
 
@@ -108,26 +107,6 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **CLI** | `oxt`-Companion: JSON-RPC 2.0 über Unix Socket / Named Pipe, status/health/list/forward/config/connect/focus/attach/SFTP/import/AI, menschenlesbare + JSON-Ausgabe |
 | **Sicherheit** | .oxide-verschlüsselter Export (ChaCha20-Poly1305 + Argon2id 256 MB), lokal verschlüsselte Konfiguration im Ruhezustand, Betriebssystem-Schlüsselbund, Touch ID (macOS), portabler verschlüsselter Schlüsselspeicher, Host-Key-TOFU, `zeroize`-Speicherbereinigung |
 | **i18n** | 11 Sprachen: EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
-
----
-
-<div align="center">
-
-### 📊 Code-Statistiken
-
-<table>
-<tr>
-<td align="center"><strong>271K+</strong><br/><sub>Codezeilen</sub></td>
-<td align="center"><strong>83%</strong><br/><sub>Codedichte</sub></td>
-<td align="center"><strong>24K+</strong><br/><sub>Test-Codezeilen</sub></td>
-<td align="center"><strong>84</strong><br/><sub>Testdateien</sub></td>
-<td align="center"><strong>910</strong><br/><sub>Quelldateien</sub></td>
-</tr>
-</table>
-
-<sub>TypeScript 102K · Rust 62K · Test-/Code-Verhältnis 9,1% · keine externen Testframeworks</sub>
-
-</div>
 
 ---
 
@@ -442,6 +421,21 @@ pnpm run tauri build
 
 ---
 
+## Projektgröße
+
+Gemessen mit `tokei`, ohne Abhängigkeiten und Build-Artefakte.
+
+| Metrik | Aktuelle Größe |
+|---|---:|
+| Gesamter Code | 286K+ |
+| TypeScript / TSX | 130K+ |
+| Rust | 100K+ |
+| Frontend-Testcode | 24K+ |
+| Frontend-Testdateien | 128 |
+| Quelldateien (`src` + `src-tauri/src`) | 664 |
+
+---
+
 ## Sicherheit
 
 | Bereich | Implementierung |
@@ -465,6 +459,14 @@ pnpm run tauri build
 - [ ] Agent-Verbesserungen
 - [ ] Schnellbefehle
 - [ ] Sitzungssuche & Schnellwechsel
+
+---
+
+## Support und Wartung
+
+OxideTerm wird von einem einzelnen Entwickler nach dem **Best-Effort-Prinzip** gepflegt. Fehlerberichte und reproduzierbare Regressionen haben Priorität; Feature-Anfragen sind willkommen, werden aber nicht immer umgesetzt.
+
+Wenn OxideTerm Ihren Workflow verbessert, helfen ein GitHub-Stern, eine Issue-Reproduktion, eine Übersetzungskorrektur, ein Plugin oder ein Pull Request dabei, das Projekt voranzubringen.
 
 ---
 

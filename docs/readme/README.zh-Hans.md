@@ -14,9 +14,11 @@
 
 
 <p align="center">
+  <strong>面向终端、文件、端口与远程上下文的 AI 原生 SSH 工作区。</strong>
+  <br>
   <strong>零 Electron。零 OpenSSL。零遥测。零订阅。纯 Rust SSH。</strong>
   <br>
-  <em>一个原生二进制——本地 Shell、SSH、SFTP、远程 IDE、AI、端口转发、插件、30+ 主题、11 种语言。</em>
+  <em>一个原生二进制，集成本地 Shell、SSH、SFTP、端口转发、远程编辑、插件与 OxideSens AI。</em>
 </p>
 
 <p align="center">
@@ -48,16 +50,13 @@
 > [!NOTE]
 > **许可证变更：** 从 v1.0.0 起，OxideTerm 已将许可证从 **PolyForm Noncommercial 1.0.0** 变更为 **GPL-3.0（GNU 通用公共许可证 v3.0）**。这意味着 OxideTerm 现在是完全开源的——您可以在 GPL-3.0 许可证条款下自由使用、修改和分发。详见 [LICENSE](../../LICENSE) 文件。
 
-> [!WARNING]
-> **维护声明：** OxideTerm 由独立开发者以**尽力而为**的方式维护。**Bug 修复优先处理；功能请求可能不会被实现。** 提交 Issue 并不意味着维护者有义务实现它。感谢您的理解与支持。
-
 ---
 
 <div align="center">
 
 https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
-*🤖 OxideSens AI —「打开一个本地终端并运行 echo hello, world!」*
+*🤖 OxideSens AI —— 从一个助手控制实时终端与工作区工具。*
 
 </div>
 
@@ -108,26 +107,6 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 | **CLI** | `oxt` 伴侣工具：JSON-RPC 2.0 基于 Unix Socket / Named Pipe、status/health/list/forward/config/connect/focus/attach/SFTP/import/AI、人类可读 + JSON 输出 |
 | **安全** | .oxide 加密导出（ChaCha20-Poly1305 + Argon2id 256 MB）、本地配置静态加密、OS 密钥链、Touch ID（macOS）、便携式加密密钥库、主机密钥 TOFU、`zeroize` 内存清除 |
 | **国际化** | 11 种语言：EN、简体中文、繁體中文、日本語、한국어、FR、DE、ES、IT、PT-BR、VI |
-
----
-
-<div align="center">
-
-### 📊 代码统计
-
-<table>
-<tr>
-<td align="center"><strong>271K+</strong><br/><sub>代码行数</sub></td>
-<td align="center"><strong>83%</strong><br/><sub>代码密度</sub></td>
-<td align="center"><strong>24K+</strong><br/><sub>测试代码行</sub></td>
-<td align="center"><strong>84</strong><br/><sub>测试文件</sub></td>
-<td align="center"><strong>910</strong><br/><sub>源文件</sub></td>
-</tr>
-</table>
-
-<sub>TypeScript 102K · Rust 62K · 9.1% 测试代码比 · 零外部测试框架</sub>
-
-</div>
 
 ---
 
@@ -442,6 +421,21 @@ pnpm run tauri build
 
 ---
 
+## 项目规模
+
+使用 `tokei` 统计，已排除依赖和构建产物。
+
+| 指标 | 当前规模 |
+|---|---:|
+| 总代码量 | 286K+ |
+| TypeScript / TSX | 130K+ |
+| Rust | 100K+ |
+| 前端测试代码 | 24K+ |
+| 前端测试文件 | 128 |
+| 源文件（`src` + `src-tauri/src`） | 664 |
+
+---
+
 ## 安全
 
 | 关注点 | 实现方式 |
@@ -465,6 +459,14 @@ pnpm run tauri build
 - [ ] Agent 增强
 - [ ] 快捷命令
 - [ ] 会话搜索与快速切换
+
+---
+
+## 支持与维护
+
+OxideTerm 由独立开发者以**尽力而为**的方式维护。Bug 报告和可复现的回归问题会优先处理；功能请求欢迎提出，但不一定都会实现。
+
+如果 OxideTerm 帮到了你的工作流，GitHub Star、问题复现、翻译修正、插件或 Pull Request 都能让项目更容易继续前进。
 
 ---
 

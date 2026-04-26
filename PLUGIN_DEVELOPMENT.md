@@ -131,9 +131,13 @@ OxideTerm 插件系统遵循以下设计原则：
 
 当插件一次操作需要读取多个 secret 时，应优先使用 `ctx.secrets.getMany(keys)`，而不是连续多次调用 `ctx.secrets.get()`。宿主会尽量把多项读取合并为一次 keychain 解锁流程，避免在 macOS 上重复弹出 Touch ID / 系统鉴权。
 
-`ctx.sync.importOxide()` 现在支持 `rename`、`skip`、`replace`、`merge` 四种策略。其中 `merge` 适合多端同步场景：宿主会保留现有连接 ID 与本地元数据，导入侧更新主连接字段，`tags` 做并集，本地已保存但导入缺失的 password / key passphrase / certificate passphrase 会继续复用；`.oxide` 中的端口转发规则会以 owner-bound saved forward 的形式一并导入导出，但导入时不会直接创建活跃转发。除了连接本身，`.oxide` 现在还可以携带全局 OxideTerm settings 快照和声明式 plugin settings 偏好快照；插件在导出时可通过 `ctx.sync.exportOxide({ includeAppSettings: true, selectedAppSettingsSections: ['general', 'appearance'], includePluginSettings: true, includeLocalTerminalEnvVars: false })` 精确控制要打包的宿主 settings section，并决定是否携带本地终端环境变量。对应地，`ctx.sync.importOxide()` 也支持 `selectedAppSettingsSections`，可以只导入快照中的部分 settings section；`ctx.sync.previewImport()` 会返回 `hasAppSettings`、`appSettingsSections`、`pluginSettingsCount`、`pluginSettingsByPlugin`、`forwardDetails` 以及记录级 `records`，插件可以直接渲染“为什么会重命名 / 跳过 / 替换 / 合并”，也可以提前提示用户这份快照会恢复哪些全局设置、插件偏好和保存转发。
+`ctx.sync.importOxide()` 现在支持 `rename`、`skip`、`replace`、`merge` 四种策略。其中 `merge` 适合多端同步场景：宿主会保留现有连接 ID 与本地元数据，导入侧更新主连接字段，`tags` 做并集，本地已保存但导入缺失的 password / key passphrase / certificate passphrase 会继续复用；`.oxide` 中的端口转发规则现在会以 owner-bound saved forward 的形式一并导入导出，但导入时不会直接创建活跃转发。除了连接本身，`.oxide` 现在还可以携带全局 OxideTerm settings 快照和声明式 plugin settings 偏好快照；插件在导出时可通过 `ctx.sync.exportOxide({ includeAppSettings: true, selectedAppSettingsSections: ['general', 'appearance'], includePluginSettings: true, includeLocalTerminalEnvVars: false })` 显式控制要打包的宿主 settings section，并决定是否携带本地终端环境变量。对应地，`ctx.sync.importOxide()` 现在也支持 `selectedAppSettingsSections`，可以只导入快照中的部分 settings section；`ctx.sync.previewImport()` 会返回 `hasAppSettings`、`appSettingsSections`、`pluginSettingsCount`、`pluginSettingsByPlugin`、`forwardDetails` 以及记录级 `records`，插件可以直接渲染“为什么会重命名 / 跳过 / 替换 / 合并”，也可以提前提示用户这份快照会恢复哪些全局设置、插件偏好和保存转发。
 
 `ctx.sync.getLocalSyncMetadata()` 现在除了整体的 `savedConnectionsRevision`、`savedForwardsRevision`、`settingsRevision` 之外，还会返回 `appSettingsSectionRevisions` 和 `pluginSettingsRevisions`。同步插件可以基于这些 revision map 做 per-section / per-plugin 的脏检查与增量上传，而不必直接读取宿主内部 store 或 localStorage。
+
+对于需要长期维护同步状态的插件，宿主侧还补齐了两条相关原语：`ctx.forward.listSavedForwards()` / `exportSavedForwardsSnapshot()` / `applySavedForwardsSnapshot()` 可独立同步保存转发；`ctx.settings.exportSyncableSettings()` / `applySyncableSettings()` 可对白名单设置做宿主校验、归一化并返回 `warnings`。
+
+当前 `reasonCode` 的稳定取值为：`new-connection`、`name-conflict`、`name-conflict-skipped`、`replace-existing`、`merge-existing`。`SyncableSettingsWarning.code` 的稳定取值为：`unsupported-language`、`invalid-ui-density`、`font-size-clamped`、`invalid-font-size`、`missing-theme`、`invalid-auto-reconnect`。
 
 ### 1.2 架构模型
 
@@ -1727,6 +1731,55 @@ ctx.settings.onChange('greeting', (newVal) => {
 
 **存储键格式**：`oxide-plugin-{pluginId}-setting-{settingId}`
 
+#### `exportSyncableSettings()`
+
+```typescript
+settings.exportSyncableSettings(): Promise<{
+  revision: string;
+  exportedAt: string;
+  payload: SyncableSettingsPayload;
+  warnings: ReadonlyArray<SyncableSettingsWarning>;
+}>
+```
+
+导出宿主允许跨设备同步的稳定设置白名单。目前包含语言、UI density、终端字体大小、主题和自动重连开关。
+
+```javascript
+const exported = await ctx.settings.exportSyncableSettings();
+console.log(exported.revision, exported.payload, exported.warnings);
+```
+
+#### `applySyncableSettings(payload)`
+
+```typescript
+settings.applySyncableSettings(payload: SyncableSettingsPayload): Promise<{
+  revision: string;
+  appliedPayload: SyncableSettingsPayload;
+  warnings: ReadonlyArray<SyncableSettingsWarning>;
+}>
+```
+
+应用白名单设置。宿主会做字段级校验和归一化；非法字段会出现在 `warnings` 中，而不是让整次应用失败。
+
+```javascript
+const result = await ctx.settings.applySyncableSettings({
+  terminal: { fontSize: 100.4 },
+  reconnect: { autoReconnect: false },
+});
+
+console.log(result.appliedPayload); // { terminal: { fontSize: 32 }, reconnect: { autoReconnect: false } }
+console.log(result.warnings);       // 含 font-size-clamped 等告警
+```
+
+`warnings` 中的 `code` 当前稳定取值如下：
+
+- `unsupported-language`
+- `invalid-ui-density`
+- `font-size-clamped`
+- `invalid-font-size`
+- `missing-theme`
+- `invalid-auto-reconnect`
+
 ---
 
 ### 6.7 ctx.i18n
@@ -2070,6 +2123,41 @@ forward.getStats(sessionId: string, forwardId: string): Promise<{
 ```
 
 获取端口转发的流量统计信息。
+
+#### `listSavedForwards()`
+
+```typescript
+forward.listSavedForwards(): ReadonlyArray<SavedForwardSnapshot>
+```
+
+返回可同步的保存转发快照。这些记录是 owner-bound 的持久化规则，不等同于当前会话里的活跃转发。
+
+#### `onSavedForwardsChange(handler)`
+
+```typescript
+forward.onSavedForwardsChange(handler: (items: ReadonlyArray<SavedForwardSnapshot>) => void): Disposable
+```
+
+监听保存转发变化，适合同步插件刷新本地缓存。
+
+#### `exportSavedForwardsSnapshot()`
+
+```typescript
+forward.exportSavedForwardsSnapshot(): Promise<SavedForwardsSyncSnapshot>
+```
+
+导出带 revision / updatedAt / tombstone 语义的结构化保存转发快照。
+
+#### `applySavedForwardsSnapshot(snapshot)`
+
+```typescript
+forward.applySavedForwardsSnapshot(snapshot: SavedForwardsSyncSnapshot): Promise<{
+  applied: number;
+  skipped: number;
+}>
+```
+
+应用保存转发快照。宿主会过滤 owner 丢失的孤儿记录，并通过标准刷新链路触发前端更新。
 
 #### 相关类型
 
@@ -2724,7 +2812,7 @@ type SavedConnectionSnapshot = Readonly<{
 }>;
 ```
 
-This snapshot is intentionally metadata-only. Passwords and key or certificate passphrases are never exposed to plugins, but key paths, certificate paths, and proxy-chain topology are available so sync or inventory plugins can reason about certificate-auth hops without re-reading private secrets.
+这个快照刻意只暴露非 secret 元数据。插件拿不到 password，也拿不到 key / certificate 的 passphrase；但会拿到 key_path、cert_path 和 proxy_chain 拓扑，便于同步类或审计类插件识别证书认证跳板，而不需要接触私密凭据。
 
 #### `onSavedConnectionsChange(handler)`
 

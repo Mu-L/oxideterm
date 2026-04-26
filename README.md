@@ -48,7 +48,7 @@
 </p>
 
 > [!NOTE]
-> **License Change:** Starting from v1.0.0, OxideTerm has changed its license from **PolyForm Noncommercial 1.0.0** to **GPL-3.0 (GNU General Public License v3.0)**. This means OxideTerm is now fully open source — you are free to use, modify, and distribute it under the terms of the GPL-3.0 license. See the [LICENSE](LICENSE) file for details.
+> **License Change:** Starting from v1.0.0, OxideTerm has changed its license from **PolyForm Noncommercial 1.0.0** to **GPL-3.0 (GNU General Public License v3.0)**. This means OxideTerm is now fully open source — you are free to use, modify, and distribute it under the terms of the GPL-3.0 license. We made this switch deliberately: no "open source" cosplay with noncommercial traps or no-competition riders, just clear copyleft freedom for users, forks, redistributors, and commercial operators. See the [LICENSE](LICENSE) file for details.
 
 ---
 
@@ -481,6 +481,8 @@ If OxideTerm helps your workflow, a GitHub star, issue reproduction, translation
 **GPL-3.0** — this software is free software licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
 You are free to use, modify, and distribute this software under the terms of the GPL-3.0. Any derivative work must also be distributed under the same license.
+
+Public code is not automatically open source. If a project advertises a familiar license while adding riders like "no redistribution", "no repackaging", "no competing products", or "no unauthorized distribution platforms", that is source-available branding, not the freedom users expect from open source. OxideTerm does not add no-compete or anti-redistribution riders: the GPL-3.0 terms are the terms.
 
 Full text: [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 

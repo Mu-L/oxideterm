@@ -48,7 +48,7 @@
 </p>
 
 > [!NOTE]
-> **Changement de licence :** À partir de la v1.0.0, OxideTerm a changé sa licence de **PolyForm Noncommercial 1.0.0** à **GPL-3.0 (GNU General Public License v3.0)**. OxideTerm est désormais entièrement open source — vous êtes libre de l'utiliser, le modifier et le distribuer selon les termes de la licence GPL-3.0. Voir le fichier [LICENSE](../../LICENSE) pour plus de détails.
+> **Changement de licence :** À partir de la v1.0.0, OxideTerm a changé sa licence de **PolyForm Noncommercial 1.0.0** à **GPL-3.0 (GNU General Public License v3.0)**. OxideTerm est désormais entièrement open source — vous êtes libre de l'utiliser, le modifier et le distribuer selon les termes de la licence GPL-3.0. Ce choix est volontaire : pas de cosplay « open source » avec pièges non commerciaux ou clauses de non-concurrence, mais une liberté copyleft claire pour les utilisateurs, forks, redistributeurs et opérateurs commerciaux. Voir le fichier [LICENSE](../../LICENSE) pour plus de détails.
 
 ---
 
@@ -481,6 +481,8 @@ Si OxideTerm améliore votre workflow, une étoile GitHub, une reproduction d'is
 **GPL-3.0** — ce logiciel est un logiciel libre distribué sous la [Licence Publique Générale GNU v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
 Vous êtes libre d'utiliser, de modifier et de distribuer ce logiciel selon les termes de la GPL-3.0. Tout travail dérivé doit également être distribué sous la même licence.
+
+Du code public n'est pas automatiquement open source. Si un projet affiche une licence open source connue tout en ajoutant des clauses comme « pas de redistribution », « pas de reconditionnement », « pas de produits concurrents » ou « pas de plateformes de distribution non autorisées », cela ressemble davantage à du marketing source-available qu'à la liberté attendue de l'open source. OxideTerm n'ajoute aucune clause de non-concurrence ou anti-redistribution : les termes de la GPL-3.0 sont les seuls termes.
 
 Texte intégral : [Licence Publique Générale GNU v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 

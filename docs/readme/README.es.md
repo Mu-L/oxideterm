@@ -48,7 +48,7 @@
 </p>
 
 > [!NOTE]
-> **Cambio de licencia:** A partir de la v1.0.0, OxideTerm ha cambiado su licencia de **PolyForm Noncommercial 1.0.0** a **GPL-3.0 (GNU General Public License v3.0)**. OxideTerm es ahora completamente código abierto — puede usarlo, modificarlo y distribuirlo libremente bajo los términos de la licencia GPL-3.0. Consulte el archivo [LICENSE](../../LICENSE) para más detalles.
+> **Cambio de licencia:** A partir de la v1.0.0, OxideTerm ha cambiado su licencia de **PolyForm Noncommercial 1.0.0** a **GPL-3.0 (GNU General Public License v3.0)**. OxideTerm es ahora completamente código abierto — puede usarlo, modificarlo y distribuirlo libremente bajo los términos de la licencia GPL-3.0. Hicimos este cambio deliberadamente: nada de cosplay de "open source" con trampas no comerciales o cláusulas de no competencia, sino libertad copyleft clara para usuarios, forks, redistribuidores y operadores comerciales. Consulte el archivo [LICENSE](../../LICENSE) para más detalles.
 
 ---
 
@@ -481,6 +481,8 @@ Si OxideTerm ayuda a su flujo de trabajo, una estrella en GitHub, una reproducci
 **GPL-3.0** — este software es software libre licenciado bajo la [Licencia Pública General de GNU v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
 Puede usar, modificar y distribuir libremente este software bajo los términos de la GPL-3.0. Cualquier trabajo derivado también debe distribuirse bajo la misma licencia.
+
+Publicar el código no lo convierte automáticamente en open source. Si un proyecto muestra una licencia conocida de código abierto pero añade cláusulas como "sin redistribución", "sin reempaquetado", "sin productos competidores" o "sin plataformas de distribución no autorizadas", eso se parece más a marketing source-available que a la libertad que los usuarios esperan del open source. OxideTerm no añade cláusulas de no competencia ni contra la redistribución: los términos de GPL-3.0 son todos los términos.
 
 Texto completo: [Licencia Pública General de GNU v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 

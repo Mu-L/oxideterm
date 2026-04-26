@@ -3063,65 +3063,6 @@ pub async fn get_saved_connection_for_connect(
     })
 }
 
-// ============ AI API Key Commands (Legacy compat → routes to ai_keychain) ============
-
-/// Legacy provider ID used when the old single-key API is called.
-/// Maps to the built-in OpenAI provider ("builtin-openai").
-const LEGACY_PROVIDER_ID: &str = "builtin-openai";
-
-/// Set AI API key — legacy compat, routes to OS keychain under `builtin-openai`.
-#[tauri::command]
-pub async fn set_ai_api_key(
-    api_key: String,
-    state: State<'_, Arc<ConfigState>>,
-) -> Result<(), String> {
-    if api_key.is_empty() {
-        tracing::info!("[legacy] Deleting AI API key for {}", LEGACY_PROVIDER_ID);
-        if let Err(e) = state.ai_keychain.delete(LEGACY_PROVIDER_ID) {
-            tracing::debug!("[legacy] Keychain delete (may not exist): {}", e);
-        }
-    } else {
-        tracing::info!(
-            "[legacy] Storing AI API key in keychain for {} (length: {})",
-            LEGACY_PROVIDER_ID,
-            api_key.len()
-        );
-        state
-            .ai_keychain
-            .store(LEGACY_PROVIDER_ID, &api_key)
-            .map_err(|e| format!("Failed to store API key: {}", e))?;
-    }
-    Ok(())
-}
-
-/// Get AI API key — legacy compat, reads from OS keychain under `builtin-openai`.
-#[tauri::command]
-pub async fn get_ai_api_key(state: State<'_, Arc<ConfigState>>) -> Result<Option<String>, String> {
-    match state.ai_keychain.get(LEGACY_PROVIDER_ID) {
-        Ok(key) => Ok(Some(key)),
-        Err(_) => Ok(None),
-    }
-}
-
-/// Check if AI API key exists — legacy compat.
-#[tauri::command]
-pub async fn has_ai_api_key(state: State<'_, Arc<ConfigState>>) -> Result<bool, String> {
-    Ok(state
-        .ai_keychain
-        .exists(LEGACY_PROVIDER_ID)
-        .unwrap_or(false))
-}
-
-/// Delete AI API key — legacy compat.
-#[tauri::command]
-pub async fn delete_ai_api_key(state: State<'_, Arc<ConfigState>>) -> Result<(), String> {
-    if let Err(e) = state.ai_keychain.delete(LEGACY_PROVIDER_ID) {
-        tracing::debug!("[legacy] Keychain delete (may not exist): {}", e);
-    }
-    tracing::info!("[legacy] AI API key deleted for {}", LEGACY_PROVIDER_ID);
-    Ok(())
-}
-
 // ============ AI Multi-Provider API Key Commands (OS Keychain) ============
 
 /// Attempt to migrate a provider key from legacy XOR vault to OS keychain.

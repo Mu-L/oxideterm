@@ -3,7 +3,6 @@
 
 //! Shared SSH authentication helpers.
 
-use std::fmt::Display;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -153,7 +152,8 @@ pub(crate) fn should_retry_password_auth(result: &client::AuthResult) -> bool {
     )
 }
 
-pub(crate) async fn authenticate_password_with<F, Fut, E>(
+#[cfg(test)]
+async fn authenticate_password_with<F, Fut, E>(
     mut attempt: F,
     timeout_secs: u64,
     timeout_message: &str,
@@ -163,7 +163,7 @@ pub(crate) async fn authenticate_password_with<F, Fut, E>(
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<client::AuthResult, E>>,
-    E: Display,
+    E: std::fmt::Display,
 {
     let result = tokio::time::timeout(Duration::from_secs(timeout_secs), attempt())
         .await

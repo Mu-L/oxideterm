@@ -1897,40 +1897,6 @@ export const api = {
     return invoke('destroy_node_sessions', { nodeId });
   },
 
-  // ============ AI API Key Commands (Legacy compat → routes to builtin-openai keychain) ============
-
-  /**
-   * @deprecated Use setAiProviderApiKey instead. Routes to builtin-openai in OS keychain.
-   */
-  setAiApiKey: async (apiKey: string): Promise<void> => {
-    if (USE_MOCK) return;
-    return invoke('set_ai_api_key', { apiKey });
-  },
-
-  /**
-   * @deprecated Use getAiProviderApiKey instead. Routes to builtin-openai in OS keychain.
-   */
-  getAiApiKey: async (): Promise<string | null> => {
-    if (USE_MOCK) return null;
-    return invoke('get_ai_api_key');
-  },
-
-  /**
-   * @deprecated Use hasAiProviderApiKey instead. Routes to builtin-openai in OS keychain.
-   */
-  hasAiApiKey: async (): Promise<boolean> => {
-    if (USE_MOCK) return false;
-    return invoke('has_ai_api_key');
-  },
-
-  /**
-   * @deprecated Use deleteAiProviderApiKey instead. Routes to builtin-openai in OS keychain.
-   */
-  deleteAiApiKey: async (): Promise<void> => {
-    if (USE_MOCK) return;
-    return invoke('delete_ai_api_key');
-  },
-
   // ============ AI Provider API Key Commands (OS Keychain) ============
 
   /**

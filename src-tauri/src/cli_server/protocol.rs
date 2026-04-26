@@ -70,4 +70,3 @@ pub const ERR_INTERNAL: i32 = -32603;
 
 // Application error codes
 pub const ERR_NOT_CONNECTED: i32 = 1001;
-pub const ERR_TIMEOUT: i32 = 1003;

@@ -93,6 +93,12 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
 ---
 
+## 下载
+
+从 [GitHub Releases](https://github.com/AnalyseDeCircuit/oxideterm/releases/latest) 下载最新版本。
+
+---
+
 ## 功能概览
 
 | 分类 | 功能 |
@@ -311,9 +317,9 @@ impl Signer for AgentSigner { /* challenge-response via Agent IPC */ }
 
 ---
 
-## 安装
+## 运行时要求
 
-从 [GitHub Releases](https://github.com/AnalyseDeCircuit/oxideterm/releases/latest) 下载最新版本。
+OxideTerm 使用操作系统提供的原生 WebView 运行时。大多数用户的系统已经预装；只有在应用无法启动或处于离线/内网环境时，才需要手动安装。
 
 | 平台 | 运行时依赖 |
 |---|---|

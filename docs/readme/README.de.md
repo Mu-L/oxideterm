@@ -93,6 +93,12 @@ https://github.com/user-attachments/assets/4ba033aa-94b5-4ed4-980c-5c3f9f21db7e
 
 ---
 
+## Download
+
+Laden Sie die neueste Version von [GitHub Releases](https://github.com/AnalyseDeCircuit/oxideterm/releases/latest) herunter.
+
+---
+
 ## Funktionsübersicht
 
 | Kategorie | Funktionen |
@@ -311,9 +317,9 @@ Plattformübergreifende lokale Shell über `portable-pty 0.8`, Feature-gated hin
 
 ---
 
-## Installation
+## Laufzeitanforderungen
 
-Laden Sie die neueste Version von [GitHub Releases](https://github.com/AnalyseDeCircuit/oxideterm/releases/latest) herunter.
+OxideTerm verwendet die native WebView-Laufzeit des Betriebssystems. Die meisten Nutzer haben sie bereits installiert; installieren Sie sie manuell nur, wenn die App nicht startet oder Ihre Umgebung air-gapped ist.
 
 | Plattform | Laufzeitabhängigkeit |
 |---|---|

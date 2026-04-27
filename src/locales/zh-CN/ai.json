@@ -237,6 +237,12 @@
       "disable_group": "禁用分组",
       "active_summary": "{{active}}/{{total}} 个工具已启用"
     },
+    "tool_status": {
+      "enabled": "工具调用开启",
+      "disabled": "工具调用关闭",
+      "disabled_count": "已禁用 {{count}} 个",
+      "open_settings": "打开 AI 工具设置"
+    },
     "slash": {
       "explain": "解释",
       "explain_desc": "解释命令、输出或概念",

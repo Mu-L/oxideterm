@@ -606,6 +606,50 @@ describe('toolExecutor get_settings sanitization', () => {
 
     expect(result.success).toBe(true);
     expect(result.output).toContain('saved-connection:saved-1');
+    expect(result.envelope?.targets?.[0]).toMatchObject({
+      id: 'saved-connection:saved-1',
+      kind: 'saved-connection',
+    });
+    expect(result.envelope?.nextActions?.[0]).toMatchObject({
+      tool: 'connect_saved_session',
+      args: { connection_id: 'saved-1' },
+    });
+  });
+
+  it('rejects broad connection discovery through resolve_target with list guidance', async () => {
+    const result = await executeTool(
+      'resolve_target',
+      { query: '看看现在有哪些远程主机可供链接', intent: 'connection' },
+      { activeNodeId: null, activeAgentAvailable: false, activeSessionId: 'local-1', activeTerminalType: 'local_terminal', requireExplicitTarget: true },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.envelope?.error?.code).toBe('target_query_too_broad');
+    expect(result.envelope?.nextActions?.[0]?.tool).toBe('list_saved_connections');
+    expect(searchConnectionsMock).not.toHaveBeenCalled();
+  });
+
+  it('lists capabilities for a resolved saved-connection target', async () => {
+    const result = await executeTool(
+      'list_capabilities',
+      { target_id: 'saved-connection:saved-1' },
+      { activeNodeId: null, activeAgentAvailable: false, requireExplicitTarget: true },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain('navigation.open on saved-connection:saved-1');
+    expect(result.output).toContain('state.list on saved-connection:saved-1');
+  });
+
+  it('rejects terminal_exec on saved-connection targets with connect guidance', async () => {
+    const result = await executeTool(
+      'terminal_exec',
+      { target_id: 'saved-connection:saved-1', command: 'docker ps' },
+      { activeNodeId: null, activeAgentAvailable: false, requireExplicitTarget: true },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.envelope?.error?.code).toBe('saved_connection_not_connected');
     expect(result.envelope?.nextActions?.[0]).toMatchObject({
       tool: 'connect_saved_session',
       args: { connection_id: 'saved-1' },

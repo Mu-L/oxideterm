@@ -185,6 +185,7 @@ export const AiTab = ({
     const memory = ai.memory ?? { enabled: true, content: '' };
     const toolUse = ai.toolUse ?? { enabled: false, autoApproveTools: {}, disabledTools: [], maxRounds: DEFAULT_AI_TOOL_MAX_ROUNDS };
     const toolUseMaxRounds = normalizeAiToolMaxRounds(toolUse.maxRounds);
+    const disabledToolCount = toolUse.disabledTools?.length ?? 0;
     const allToolNames = TOOL_GROUPS.flatMap((group) => [...group.readOnly, ...group.write]);
     const approvedToolCount = allToolNames.filter((name) => toolUse.autoApproveTools?.[name] === true).length;
     const selectedProviderTemplate = PROVIDER_TEMPLATES.find((template) => template.type === newProviderType) ?? PROVIDER_TEMPLATES[0];
@@ -949,6 +950,26 @@ export const AiTab = ({
                             className={toolUse.enabled ? 'space-y-5 ml-4 pl-4 border-l border-theme-border/30' : 'opacity-40 pointer-events-none space-y-5 ml-4 pl-4 border-l border-theme-border/30'}
                         >
                             <p className="text-xs text-theme-text-muted">{t('settings_view.ai.tool_use_approve_hint')}</p>
+
+                            {disabledToolCount > 0 && (
+                                <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-medium text-amber-300">
+                                            {t('settings_view.ai.tool_use_disabled_tools_title', { count: disabledToolCount })}
+                                        </p>
+                                        <p className="mt-0.5 text-xs text-amber-200/75">
+                                            {t('settings_view.ai.tool_use_disabled_tools_hint')}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateAi('toolUse', { ...toolUse, disabledTools: [] })}
+                                        className="shrink-0 rounded border border-amber-400/40 px-3 py-1 text-xs text-amber-200 transition-colors hover:bg-amber-400/10"
+                                    >
+                                        {t('settings_view.ai.tool_use_restore_disabled_tools')}
+                                    </button>
+                                </div>
+                            )}
 
                             <div className="rounded-lg border border-theme-border/60 bg-theme-bg-panel/30 p-3">
                                 <div className="flex items-center justify-between gap-4">

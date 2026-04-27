@@ -6,6 +6,7 @@ describe('toolUsePrompt', () => {
     const prompt = buildToolOperationStrategyPrompt();
 
     expect(prompt).toContain('First identify the task type');
+    expect(prompt).toContain('Do not use `resolve_target` for broad list/discovery questions');
     expect(prompt).toContain('resolve the target with `resolve_target`');
     expect(prompt).toContain('Treat the current UI/tab as a hint only');
     expect(prompt).toContain('`terminal_exec` + `target_id` for an `ssh-node`');

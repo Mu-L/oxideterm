@@ -179,8 +179,45 @@ function plainStringArg(args: Record<string, unknown>, key: string): string {
   return typeof args[key] === 'string' ? args[key].trim() : '';
 }
 
+function savedConnectionIdFromTargetId(targetId: string): string | null {
+  return targetId.startsWith('saved-connection:')
+    ? targetId.slice('saved-connection:'.length).trim() || null
+    : null;
+}
+
+function createSavedConnectionTarget(connectionId: string): ToolTarget {
+  return {
+    id: `saved-connection:${connectionId}`,
+    kind: 'saved-connection',
+    label: `Saved connection ${connectionId}`,
+    capabilities: ['navigation.open', 'state.list'],
+    metadata: {
+      savedConnection: true,
+      connectionId,
+    },
+  };
+}
+
+function isBroadConnectionDiscoveryQuery(query: string, intent: string): boolean {
+  const text = query.trim();
+  if (intent !== 'connection') return false;
+  if (!text) return true;
+  return [
+    /\b(?:list|show|what|which|available|saved)\b.*\b(?:hosts?|servers?|connections?|sessions?)\b/i,
+    /\b(?:hosts?|servers?|connections?|sessions?)\b.*\b(?:available|saved|configured)\b/i,
+    /(?:有哪些|有什么|列出|查看|显示|可用|保存的|已保存).*(?:远程主机|主机|服务器|连接|SSH|ssh|会话)/i,
+    /(?:远程主机|主机|服务器|保存连接|已保存连接|连接配置|SSH|ssh|会话).*(?:有哪些|有什么|列表|列出|查看|显示|可用)/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 function resolveTargetById(targetId: string): ResolvedTarget | null {
   if (!targetId) return null;
+  const savedConnectionId = savedConnectionIdFromTargetId(targetId);
+  if (savedConnectionId) {
+    return {
+      target: createSavedConnectionTarget(savedConnectionId),
+    };
+  }
   const target = collectToolTargets().find((candidate) => candidate.id === targetId);
   if (!target) return null;
   const terminalSessionIds = Array.isArray(target.metadata?.terminalSessionIds)
@@ -442,6 +479,33 @@ export async function executeTool(
         return await execTerminalCommandToSession({ ...args, session_id: sessionId }, sessionId, startTime, toolCallId, options.abortSignal);
       }
       return missingExplicitTargetResult(toolCallId, toolName, startTime);
+    }
+
+    if (toolName === 'terminal_exec' && explicitTarget?.target.kind === 'saved-connection') {
+      const connectionId = typeof explicitTarget.target.metadata?.connectionId === 'string'
+        ? explicitTarget.target.metadata.connectionId
+        : savedConnectionIdFromTargetId(explicitTarget.target.id);
+      return envelopeResult(toolCallId, {
+        ok: false,
+        toolName,
+        summary: 'Connect the saved SSH target before running commands.',
+        output: `target_id=${explicitTarget.target.id} is a saved connection, not a live SSH node. Use connect_saved_session first; then run terminal_exec against the returned ssh-node target_id.`,
+        error: {
+          code: 'saved_connection_not_connected',
+          message: 'Saved connection target must be connected before command execution.',
+          recoverable: true,
+        },
+        recoverable: true,
+        durationMs: Date.now() - startTime,
+        targets: [{ id: explicitTarget.target.id, kind: 'saved-connection', label: explicitTarget.target.label, metadata: explicitTarget.target.metadata }],
+        nextActions: connectionId
+          ? [
+              { tool: 'connect_saved_session', args: { connection_id: connectionId }, reason: 'Open the saved SSH connection and get a live ssh-node target.', priority: 'recommended' },
+            ]
+          : [
+              { tool: 'resolve_target', reason: 'Resolve the saved connection again before connecting.', priority: 'recommended' },
+            ],
+      });
     }
 
     if (toolName === 'terminal_exec' && explicitNodeId.length === 0) {
@@ -799,8 +863,8 @@ async function detectSavedConnectionSshMisuse(
       recoverable: true,
       durationMs: Date.now() - startTime,
       targets: matches.map((connection) => ({
-        id: connection.id,
-        kind: 'ssh-node',
+        id: `saved-connection:${connection.id}`,
+        kind: 'saved-connection',
         label: `${connection.name || connection.host} (${connection.username}@${connection.host}:${connection.port})`,
         metadata: connection,
       })),
@@ -1441,9 +1505,13 @@ function capabilityScoreForIntent(target: ToolTarget, intent: string): number {
     case 'command':
       return caps.includes('command.run') ? 8 : caps.includes('terminal.send') ? 5 : 0;
     case 'terminal_interaction':
-      return caps.includes('terminal.send') || caps.includes('terminal.observe') ? 8 : 0;
+      return caps.includes('terminal.send') || caps.includes('terminal.observe')
+        ? 8
+        : target.kind === 'saved-connection'
+          ? 4
+          : 0;
     case 'connection':
-      return target.kind === 'ssh-node' ? 8 : caps.includes('navigation.open') ? 3 : 0;
+      return target.kind === 'saved-connection' ? 10 : target.kind === 'ssh-node' ? 8 : caps.includes('navigation.open') ? 3 : 0;
     case 'settings':
       return caps.includes('settings.write') || caps.includes('settings.read') ? 10 : 0;
     case 'remote_file':
@@ -1482,7 +1550,7 @@ async function collectSavedConnectionTargets(query: string): Promise<ToolTarget[
     const connections = await api.searchConnections(query);
     return connections.map((connection) => ({
       id: `saved-connection:${connection.id}`,
-      kind: 'ssh-node' as const,
+      kind: 'saved-connection' as const,
       label: `${connection.name || connection.host} (${connection.username}@${connection.host}:${connection.port})`,
       capabilities: ['navigation.open', 'state.list'] as ToolTarget['capabilities'],
       metadata: {
@@ -1509,6 +1577,24 @@ async function execResolveTarget(
   const query = plainStringArg(args, 'query');
   const intent = plainStringArg(args, 'intent');
   const kind = plainStringArg(args, 'kind') || 'all';
+  if (isBroadConnectionDiscoveryQuery(query, intent)) {
+    return envelopeResult(toolCallId, {
+      ok: false,
+      toolName,
+      summary: 'This is a connection listing request, not a single-target resolution.',
+      output: 'Use list_saved_connections to list available saved SSH hosts. Use search_saved_connections only when the user provides a specific host/name keyword.',
+      error: {
+        code: 'target_query_too_broad',
+        message: 'resolve_target needs one intended target; broad connection discovery should use list_saved_connections.',
+        recoverable: true,
+      },
+      recoverable: true,
+      durationMs: Date.now() - startTime,
+      nextActions: [
+        { tool: 'list_saved_connections', reason: 'List available saved SSH hosts for the user.', priority: 'recommended' },
+      ],
+    });
+  }
   const runtimeTargets = collectToolTargets();
   const savedConnectionTargets = intent === 'connection' || query
     ? await collectSavedConnectionTargets(query)
@@ -1637,8 +1723,9 @@ function execListCapabilities(
   toolCallId: string,
 ): AiToolResult {
   const targetId = typeof args.target_id === 'string' ? args.target_id.trim() : '';
+  const resolvedTarget = targetId ? resolveTargetById(targetId)?.target ?? null : null;
   const targets = collectToolTargets();
-  const scopedTargets = targetId ? targets.filter((target) => target.id === targetId) : targets;
+  const scopedTargets = targetId ? (resolvedTarget ? [resolvedTarget] : []) : targets;
   if (targetId && scopedTargets.length === 0) {
     return { toolCallId, toolName: 'list_capabilities', success: false, output: '', error: `Target not found: ${targetId}. Use list_targets first.`, durationMs: Date.now() - startTime };
   }
@@ -3636,6 +3723,11 @@ function execOpenSettingsSection(args: Record<string, unknown>, startTime: numbe
   }
 
   useAppStore.getState().createTab('settings', undefined, skipFocus ? { skipFocus } : undefined);
+  if (!skipFocus && typeof window !== 'undefined') {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('oxideterm:open-settings-tab', { detail: { tab: section } }));
+    }, 0);
+  }
   const keys = SETTINGS_SECTION_KEYS[section];
   const output = `Opened settings section: ${section}\nCommon keys: ${keys.join(', ')}\nUse get_settings with section="${section}" before update_setting if you need the current value.`;
   return envelopeResult(toolCallId, {
@@ -3938,8 +4030,8 @@ async function execListSavedConnections(startTime: number, toolCallId: string): 
       capability: 'state.list',
       durationMs: Date.now() - startTime,
       targets: safe.map((connection) => ({
-        id: connection.id,
-        kind: 'ssh-node',
+        id: `saved-connection:${connection.id}`,
+        kind: 'saved-connection',
         label: `${connection.name || connection.host} (${connection.username}@${connection.host}:${connection.port})`,
         metadata: connection,
       })),
@@ -3983,8 +4075,8 @@ async function execSearchSavedConnections(args: Record<string, unknown>, startTi
       capability: 'state.list',
       durationMs: Date.now() - startTime,
       targets: safe.map((connection) => ({
-        id: connection.id,
-        kind: 'ssh-node',
+        id: `saved-connection:${connection.id}`,
+        kind: 'saved-connection',
         label: `${connection.name || connection.host} (${connection.username}@${connection.host}:${connection.port})`,
         metadata: connection,
       })),
@@ -4189,8 +4281,8 @@ async function execConnectSavedConnectionByQuery(args: Record<string, unknown>, 
       capability: 'state.list',
       durationMs: Date.now() - startTime,
       targets: safe.map((connection) => ({
-        id: connection.id,
-        kind: 'ssh-node',
+        id: `saved-connection:${connection.id}`,
+        kind: 'saved-connection',
         label: `${connection.name || connection.host} (${connection.username}@${connection.host}:${connection.port})`,
         metadata: connection,
       })),

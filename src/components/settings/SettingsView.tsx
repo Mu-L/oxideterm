@@ -49,6 +49,17 @@ export const SettingsView = () => {
     const [refreshingModels, setRefreshingModels] = useState<string | null>(null);
 
     useEffect(() => {
+        const handleOpenSettingsTab = (event: Event) => {
+            const detail = (event as CustomEvent<{ tab?: string }>).detail;
+            if (detail?.tab) {
+                setActiveTab(detail.tab);
+            }
+        };
+        window.addEventListener('oxideterm:open-settings-tab', handleOpenSettingsTab);
+        return () => window.removeEventListener('oxideterm:open-settings-tab', handleOpenSettingsTab);
+    }, []);
+
+    useEffect(() => {
         if (activeTab !== 'help') {
             return;
         }

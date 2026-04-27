@@ -237,6 +237,12 @@
       "disable_group": "그룹 비활성화",
       "active_summary": "{{active}}/{{total}} 도구 활성화"
     },
+    "tool_status": {
+      "enabled": "도구 켜짐",
+      "disabled": "도구 꺼짐",
+      "disabled_count": "{{count}}개 비활성화",
+      "open_settings": "AI 도구 설정 열기"
+    },
     "slash": {
       "explain": "설명",
       "explain_desc": "명령어, 출력 또는 개념 설명",

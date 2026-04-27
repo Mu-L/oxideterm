@@ -248,13 +248,13 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
   {
     name: 'resolve_target',
     description:
-      'Resolve the user-requested target before executing, editing, navigating, or connecting. Use this first when the target is named naturally (host, connection name, session, tab, settings, local shell). Returns one exact target or disambiguation options; do not guess when multiple targets match.',
+      'Resolve one user-requested target before executing, editing, navigating, or connecting. Use this when the user named a specific host, connection, session, tab, settings area, or local shell. Do not use it for broad questions like "which remote hosts are available"; use list_saved_connections or search_saved_connections instead. The query is the target selector, not the command text. Saved connections resolve as saved-connection targets and must be opened with connect_saved_session before command.run is available. Returns one exact target or disambiguation options; do not guess when multiple targets match.',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Natural-language target query, such as a connection name, hostname, username, tab title, setting area, or "local shell".',
+          description: 'Natural-language target query, such as a connection name, hostname, username, tab title, setting area, or "local shell". Do not put the command to run here.',
         },
         intent: {
           type: 'string',
@@ -263,7 +263,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
         },
         kind: {
           type: 'string',
-          enum: ['all', 'local-shell', 'ssh-node', 'terminal-session', 'sftp-session', 'ide-workspace', 'app-tab', 'mcp-server', 'rag-index'],
+          enum: ['all', 'local-shell', 'saved-connection', 'ssh-node', 'terminal-session', 'sftp-session', 'ide-workspace', 'app-tab', 'mcp-server', 'rag-index'],
           description: 'Optional target kind filter. Default: "all".',
         },
       },
@@ -278,7 +278,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
       properties: {
         kind: {
           type: 'string',
-          enum: ['all', 'local-shell', 'ssh-node', 'terminal-session', 'sftp-session', 'ide-workspace', 'app-tab', 'mcp-server', 'rag-index'],
+          enum: ['all', 'local-shell', 'saved-connection', 'ssh-node', 'terminal-session', 'sftp-session', 'ide-workspace', 'app-tab', 'mcp-server', 'rag-index'],
           description: 'Optional target kind filter. Default: "all".',
         },
       },
@@ -287,7 +287,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
   {
     name: 'list_capabilities',
     description:
-      'List tool capabilities available on current targets, such as command.run, terminal.observe, filesystem.read/write, network.forward, and navigation.open. Use this to pick the safest tool path.',
+      'List tool capabilities available on current targets, such as command.run, terminal.observe, filesystem.read/write, network.forward, and navigation.open. saved-connection targets only support navigation.open/state.list until connect_saved_session returns a live ssh-node target. Use this to pick the safest tool path.',
     parameters: {
       type: 'object',
       properties: {

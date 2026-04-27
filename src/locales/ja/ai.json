@@ -237,6 +237,12 @@
       "disable_group": "グループを無効化",
       "active_summary": "{{active}}/{{total}} ツール有効"
     },
+    "tool_status": {
+      "enabled": "ツール有効",
+      "disabled": "ツール無効",
+      "disabled_count": "{{count}} 個無効",
+      "open_settings": "AIツール設定を開く"
+    },
     "slash": {
       "explain": "説明",
       "explain_desc": "コマンド、出力、概念を説明",

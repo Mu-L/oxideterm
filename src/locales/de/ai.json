@@ -237,6 +237,12 @@
       "disable_group": "Gruppe deaktivieren",
       "active_summary": "{{active}}/{{total}} Werkzeuge aktiv"
     },
+    "tool_status": {
+      "enabled": "Tools an",
+      "disabled": "Tools aus",
+      "disabled_count": "{{count}} deaktiviert",
+      "open_settings": "KI-Tool-Einstellungen öffnen"
+    },
     "slash": {
       "explain": "Erklären",
       "explain_desc": "Befehl, Ausgabe oder Konzept erklären",

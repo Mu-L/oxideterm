@@ -237,6 +237,12 @@
       "disable_group": "Disable group",
       "active_summary": "{{active}}/{{total}} tools active"
     },
+    "tool_status": {
+      "enabled": "Tools on",
+      "disabled": "Tools off",
+      "disabled_count": "{{count}} disabled",
+      "open_settings": "Open AI tool settings"
+    },
     "slash": {
       "explain": "Explain",
       "explain_desc": "Explain a command, output, or concept",

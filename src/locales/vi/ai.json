@@ -237,6 +237,12 @@
       "disable_group": "Tắt nhóm",
       "active_summary": "{{active}}/{{total}} công cụ đang hoạt động"
     },
+    "tool_status": {
+      "enabled": "Công cụ bật",
+      "disabled": "Công cụ tắt",
+      "disabled_count": "{{count}} đã tắt",
+      "open_settings": "Mở cài đặt công cụ AI"
+    },
     "slash": {
       "explain": "Giải thích",
       "explain_desc": "Giải thích lệnh, đầu ra hoặc khái niệm",

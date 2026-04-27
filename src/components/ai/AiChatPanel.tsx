@@ -7,7 +7,6 @@ import { Plus, Trash2, MessageSquare, MoreVertical, Settings, Terminal, HelpCirc
 import { useAiChatStore } from '../../store/aiChatStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAppStore } from '../../store/appStore';
-import { useSessionTreeStore } from '../../store/sessionTreeStore';
 import { useConfirm } from '../../hooks/useConfirm';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
@@ -50,13 +49,6 @@ export function AiChatPanel() {
 
   const aiEnabled = useSettingsStore((state) => state.settings.ai.enabled);
   const createTab = useAppStore((state) => state.createTab);
-  const activeTabType = useAppStore((s) => {
-    const tab = s.tabs.find((t) => t.id === s.activeTabId);
-    return tab?.type ?? null;
-  });
-  const hasAnySSHSession = useSessionTreeStore((s) =>
-    s.nodes.some((n) => n.runtime?.status === 'connected' || n.runtime?.status === 'active' || n.runtime?.connectionId),
-  );
   const { confirm, ConfirmDialog } = useConfirm();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -252,10 +244,19 @@ export function AiChatPanel() {
     setShowMenu(false);
   }, [clearAllConversations, t, confirm]);
 
-  const handleOpenSettings = useCallback(() => {
+  const openSettingsTab = useCallback((tab?: string) => {
     createTab('settings');
     setShowMenu(false);
+    if (tab) {
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('oxideterm:open-settings-tab', { detail: { tab } }));
+      }, 0);
+    }
   }, [createTab]);
+
+  const handleOpenSettings = useCallback(() => {
+    openSettingsTab();
+  }, [openSettingsTab]);
 
   // Handle regenerate last response
   const handleRegenerate = useCallback(async () => {
@@ -612,7 +613,7 @@ export function AiChatPanel() {
       {/* Model Selector + Tool Indicator - bottom position like VS Code */}
       <div className="flex-shrink-0 px-3 py-1.5 border-t border-theme-border/20 bg-theme-bg flex items-center gap-2">
         <ModelSelector onOpenSettings={handleOpenSettings} />
-        <ToolIndicator activeTabType={activeTabType} hasAnySSHSession={hasAnySSHSession} />
+        <ToolIndicator onOpenSettings={() => openSettingsTab('ai')} />
       </div>
 
       {/* Input */}

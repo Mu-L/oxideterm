@@ -237,6 +237,12 @@
       "disable_group": "Desativar grupo",
       "active_summary": "{{active}}/{{total}} ferramentas ativas"
     },
+    "tool_status": {
+      "enabled": "Ferramentas ativas",
+      "disabled": "Ferramentas desativadas",
+      "disabled_count": "{{count}} desativadas",
+      "open_settings": "Abrir configurações de ferramentas de IA"
+    },
     "slash": {
       "explain": "Explicar",
       "explain_desc": "Explicar um comando, saída ou conceito",

@@ -237,6 +237,12 @@
       "disable_group": "停用群組",
       "active_summary": "{{active}}/{{total}} 個工具已啟用"
     },
+    "tool_status": {
+      "enabled": "工具呼叫開啟",
+      "disabled": "工具呼叫關閉",
+      "disabled_count": "已停用 {{count}} 個",
+      "open_settings": "開啟 AI 工具設定"
+    },
     "slash": {
       "explain": "解釋",
       "explain_desc": "解釋命令、輸出或概念",

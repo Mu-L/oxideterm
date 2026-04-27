@@ -19,6 +19,7 @@ export type ToolCapability =
 
 export type ToolTargetKind =
   | 'local-shell'
+  | 'saved-connection'
   | 'ssh-node'
   | 'terminal-session'
   | 'sftp-session'

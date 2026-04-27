@@ -40,6 +40,14 @@ const CONNECTION_INTENT_TOOL_NAMES = [
   'get_topology',
 ] as const;
 
+const CONNECTION_DISCOVERY_TOOL_NAMES = [
+  'list_saved_connections',
+  'search_saved_connections',
+  'get_session_tree',
+  'get_topology',
+  'list_connections',
+] as const;
+
 const SETTINGS_INTENT_TOOL_NAMES = [
   'open_tab',
   'open_settings_section',
@@ -157,6 +165,13 @@ const CONNECTION_PATTERNS = [
   /(?:连接|打开|进入|登录|登陆|ssh).*(?:主机|服务器|保存连接|已保存连接|连接配置|会话|跳板机|堡垒机|内网机器|家里|公司)/i,
 ];
 
+const CONNECTION_DISCOVERY_PATTERNS = [
+  /\b(?:list|show|what|which|available|saved)\b.*\b(?:hosts?|servers?|connections?|sessions?)\b/i,
+  /\b(?:hosts?|servers?|connections?|sessions?)\b.*\b(?:available|saved|configured)\b/i,
+  /(?:有哪些|有什么|列出|查看|显示|可用|保存的|已保存).*(?:远程主机|主机|服务器|连接|SSH|ssh|会话)/i,
+  /(?:远程主机|主机|服务器|保存连接|已保存连接|连接配置|SSH|ssh|会话).*(?:有哪些|有什么|列表|列出|查看|显示|可用)/i,
+];
+
 const SETTINGS_PATTERNS = [
   /\bsettings?\b/i,
   /\bpreferences?\b/i,
@@ -237,13 +252,17 @@ function matchesAny(text: string, patterns: readonly RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+export function isConnectionDiscoveryRequest(text: string): boolean {
+  return matchesAny(text.trim(), CONNECTION_DISCOVERY_PATTERNS);
+}
+
 export function inferToolIntents(input: ToolIntentInferenceInput | string): ToolIntent[] {
   const text = typeof input === 'string' ? input : input.text;
   const activeTabType = typeof input === 'string' ? null : input.activeTabType;
   const normalized = text.trim();
   const intents = new Set<ToolIntent>();
 
-  if (matchesAny(normalized, CONNECTION_PATTERNS)) {
+  if (matchesAny(normalized, CONNECTION_PATTERNS) || isConnectionDiscoveryRequest(normalized)) {
     intents.add('connection');
   }
 
@@ -336,6 +355,8 @@ export type ToolScore = {
 
 export function scoreToolsForRequest(input: ToolPlanInput): ToolScore[] {
   const text = (input.userMessage ?? '').toLowerCase();
+  const rawText = input.userMessage ?? '';
+  const connectionDiscovery = isConnectionDiscoveryRequest(rawText);
   const intents = input.intents
     ? [...input.intents]
     : input.userMessage
@@ -360,8 +381,8 @@ export function scoreToolsForRequest(input: ToolPlanInput): ToolScore[] {
       }
 
       if (spec.name === 'resolve_target') {
-        score += 10;
-        reasons.push('target-first');
+        score += connectionDiscovery ? 1 : 10;
+        reasons.push(connectionDiscovery ? 'target-first-not-for-listing' : 'target-first');
       }
 
       if (spec.name === 'list_targets' || spec.name === 'list_capabilities') {
@@ -374,9 +395,14 @@ export function scoreToolsForRequest(input: ToolPlanInput): ToolScore[] {
         reasons.push('name-match');
       }
 
-      if (intentSet.has('connection') && ['search_saved_connections', 'connect_saved_connection_by_query', 'connect_saved_session'].includes(spec.name)) {
+      if (intentSet.has('connection') && ['list_saved_connections', 'search_saved_connections', 'connect_saved_connection_by_query', 'connect_saved_session'].includes(spec.name)) {
         score += 8;
         reasons.push('connection-workflow');
+      }
+
+      if (connectionDiscovery && CONNECTION_DISCOVERY_TOOL_NAMES.includes(spec.name as typeof CONNECTION_DISCOVERY_TOOL_NAMES[number])) {
+        score += 18;
+        reasons.push('connection-discovery');
       }
 
       if (intentSet.has('settings') && ['get_settings', 'open_settings_section', 'update_setting'].includes(spec.name)) {

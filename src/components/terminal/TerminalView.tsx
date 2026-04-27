@@ -13,7 +13,7 @@ import '@xterm/xterm/css/xterm.css';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { triggerGitRefresh } from '../../store/ideStore';
-import { api } from '../../lib/api';
+import { api, nodeTerminalUrl } from '../../lib/api';
 import { runtimeEventHub } from '../../lib/runtimeEventHub';
 import { getTerminalTheme } from '../../lib/themes';
 import { getFontFamily } from '../../lib/fontFamily';
@@ -85,7 +85,7 @@ import {
 import { installShiftSelectionGuard, type SelectionGestureController } from '../../lib/terminalSelectionGesture';
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { broadcastToTargets } from '../../lib/terminalRegistry';
-import { HistorySearchMatch, TerminalHistorySearchProgress, type HighlightRule } from '../../types';
+import { HistorySearchMatch, TerminalHistorySearchProgress, type HighlightRule, type UnifiedFlatNode } from '../../types';
 import { notifyTrzszTransferEvent } from '../../lib/terminal/trzsz/notifications';
 import { TrzszController } from '../../lib/terminal/trzsz/controller';
 import { createRemoteTerminalTransport, type RemoteTerminalTransport } from '../../lib/terminal/trzsz/transport';
@@ -492,6 +492,105 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const session = useAppStore((state) => state.sessions.get(sessionId));
   const sessionRef = useRef<SessionInfo | undefined>(session);
   const connectionIdRef = useRef<string | null>(session?.connectionId ?? null);
+  const terminalSessionRehydrateRef = useRef<string | null>(null);
+
+  const resolveNodeForTerminalSession = useCallback((targetSessionId: string): UnifiedFlatNode | undefined => {
+    const treeState = useSessionTreeStore.getState();
+    return treeState.getNodeByTerminalId(targetSessionId)
+      ?? treeState.nodes.find((node) => (
+        node.terminalSessionId === targetSessionId
+        || node.runtime.terminalIds.includes(targetSessionId)
+      ));
+  }, []);
+
+  const rehydrateTerminalSession = useCallback(async () => {
+    if (sessionRef.current?.ws_url) return;
+    if (terminalSessionRehydrateRef.current === sessionId) return;
+    terminalSessionRehydrateRef.current = sessionId;
+
+    let node = resolveNodeForTerminalSession(sessionId);
+    if (!node) {
+      try {
+        await useSessionTreeStore.getState().fetchTree();
+      } catch (error) {
+        console.warn(`[TerminalView ${sessionId}] Failed to refresh session tree before terminal rehydrate:`, error);
+      }
+      node = resolveNodeForTerminalSession(sessionId);
+    }
+
+    if (!node) return;
+
+    try {
+      const endpoint = await nodeTerminalUrl(node.id);
+      if (!isMountedRef.current) return;
+
+      const backendSession = await api.getSession(endpoint.sessionId).catch(() => null);
+      if (!isMountedRef.current) return;
+
+      const wsUrl = backendSession?.ws_url ?? `ws://localhost:${endpoint.wsPort}`;
+      const connectionId = backendSession?.connectionId ?? node.runtime.connectionId ?? node.sshConnectionId ?? undefined;
+      const fallbackSession: SessionInfo = {
+        id: endpoint.sessionId,
+        name: node.displayName || `${node.username}@${node.host}`,
+        host: node.host,
+        port: node.port,
+        username: node.username,
+        state: 'connected',
+        ws_url: wsUrl,
+        ws_token: endpoint.wsToken,
+        color: '#3b82f6',
+        uptime_secs: 0,
+        order: 0,
+        connectionId,
+        auth_type: 'password',
+      };
+
+      useAppStore.setState((state) => {
+        const existing = state.sessions.get(endpoint.sessionId) ?? state.sessions.get(sessionId);
+        const newSessions = new Map(state.sessions);
+        newSessions.set(endpoint.sessionId, {
+          ...fallbackSession,
+          ...(existing ?? {}),
+          ...(backendSession ?? {}),
+          id: endpoint.sessionId,
+          ws_url: wsUrl,
+          ws_token: endpoint.wsToken,
+          connectionId,
+        });
+        return { sessions: newSessions };
+      });
+
+      const treeState = useSessionTreeStore.getState();
+      const currentTerminalIds = treeState.nodeTerminalMap.get(node.id) ?? [];
+      if (!currentTerminalIds.includes(endpoint.sessionId) || treeState.terminalNodeMap.get(endpoint.sessionId) !== node.id) {
+        useSessionTreeStore.setState((state) => {
+          const nextNodeMap = new Map(state.nodeTerminalMap);
+          const ids = nextNodeMap.get(node.id) ?? [];
+          nextNodeMap.set(node.id, ids.includes(endpoint.sessionId) ? ids : [...ids, endpoint.sessionId]);
+
+          const nextTerminalMap = new Map(state.terminalNodeMap);
+          nextTerminalMap.set(endpoint.sessionId, node.id);
+          return {
+            nodeTerminalMap: nextNodeMap,
+            terminalNodeMap: nextTerminalMap,
+          };
+        });
+        useSessionTreeStore.getState().rebuildUnifiedNodes();
+      }
+
+      if (endpoint.sessionId !== sessionId) {
+        useAppStore.getState().updatePaneSessionId(sessionId, endpoint.sessionId);
+      }
+
+      if (import.meta.env.DEV) {
+        console.info(`[TerminalView ${sessionId}] Rehydrated terminal session from node ${node.id}`);
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn(`[TerminalView ${sessionId}] Terminal session rehydrate failed:`, error);
+      }
+    }
+  }, [resolveNodeForTerminalSession, sessionId]);
 
   const cleanupWebSocket = useCallback((ws: WebSocket | null, reason?: string) => {
     if (!ws) return;
@@ -810,7 +909,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   useEffect(() => {
     sessionRef.current = session;
+    if (session?.ws_url) {
+      terminalSessionRehydrateRef.current = null;
+    }
   }, [session]);
+
+  useEffect(() => {
+    if (session?.ws_url) return;
+    void rehydrateTerminalSession();
+  }, [rehydrateTerminalSession, session?.ws_url]);
 
   useEffect(() => {
     connectionIdRef.current = session?.connectionId ?? null;
@@ -1959,7 +2066,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             await Promise.race([connectPromise, fontsPromise.then(() => connectPromise)]);
         }, 100); // 100ms delay to let StrictMode unmount/remount complete
     } else {
-         term.writeln(`\x1b[33m${i18n.t('terminal.ssh.no_ws_url')}\x1b[0m`);
+        if (!resolveNodeForTerminalSession(sessionId)) {
+          term.writeln(`\x1b[33m${i18n.t('terminal.ssh.no_ws_url')}\x1b[0m`);
+        }
     }
 
     // IME composition event listeners (for Windows input method compatibility)
@@ -2281,7 +2390,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         term.dispose();
         terminalRef.current = null;
     };
-  }, [fontOpenReady, sessionId, syncRemotePtySize, syncTrzszController, disposeTrzszController, sendEncodedTerminalInput, writeConnectionNotice]); // Only remount on session change — bg image is handled dynamically
+  }, [fontOpenReady, sessionId, syncRemotePtySize, syncTrzszController, disposeTrzszController, sendEncodedTerminalInput, writeConnectionNotice, resolveNodeForTerminalSession]); // Only remount on session change — bg image is handled dynamically
 
   useEffect(() => {
     selectionGestureRef.current?.refresh();

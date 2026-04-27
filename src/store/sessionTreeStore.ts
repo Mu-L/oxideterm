@@ -114,6 +114,62 @@ function getNodeTerminalIds(node: FlatNode, nodeTerminalMap: Map<string, string[
   return Array.from(terminalIdSet);
 }
 
+function rebuildTerminalMapsFromNodes(
+  nodes: FlatNode[],
+  currentNodeTerminalMap: Map<string, string[]>,
+): {
+  nodeTerminalMap: Map<string, string[]>;
+  terminalNodeMap: Map<string, string>;
+} {
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const validNodeIds = new Set(nodesById.keys());
+  const nodeTerminalMap = new Map<string, string[]>();
+
+  for (const [nodeId, terminalIds] of currentNodeTerminalMap) {
+    if (!validNodeIds.has(nodeId)) continue;
+    // Preserve explicit empty arrays as local tombstones. closeTerminalForNode()
+    // uses this to avoid resurrecting a backend terminalSessionId while the
+    // async clearTreeNodeTerminal request is still in flight.
+    if (terminalIds.length === 0 && !nodesById.get(nodeId)?.terminalSessionId) {
+      continue;
+    }
+    nodeTerminalMap.set(nodeId, Array.from(new Set(terminalIds)));
+  }
+
+  for (const node of nodes) {
+    if (!node.terminalSessionId) continue;
+    if (nodeTerminalMap.has(node.id)) {
+      const current = nodeTerminalMap.get(node.id) ?? [];
+      if (current.length > 0 && !current.includes(node.terminalSessionId)) {
+        nodeTerminalMap.set(node.id, [...current, node.terminalSessionId]);
+      }
+      continue;
+    }
+    nodeTerminalMap.set(node.id, [node.terminalSessionId]);
+  }
+
+  const terminalNodeMap = new Map<string, string>();
+  for (const [nodeId, terminalIds] of nodeTerminalMap) {
+    for (const terminalId of terminalIds) {
+      terminalNodeMap.set(terminalId, nodeId);
+    }
+  }
+
+  return { nodeTerminalMap, terminalNodeMap };
+}
+
+function terminalMapsEqual(left: Map<string, string[]>, right: Map<string, string[]>): boolean {
+  if (left.size !== right.size) return false;
+  for (const [nodeId, leftIds] of left) {
+    const rightIds = right.get(nodeId);
+    if (!rightIds || leftIds.length !== rightIds.length) return false;
+    for (let index = 0; index < leftIds.length; index += 1) {
+      if (leftIds[index] !== rightIds[index]) return false;
+    }
+  }
+  return true;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -369,6 +425,7 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
       set({ isLoading: true, error: null });
       try {
         const rawNodes = await api.getSessionTree();
+        const terminalMaps = rebuildTerminalMapsFromNodes(rawNodes, get().nodeTerminalMap);
         
         // 获取当前 expandedIds（从 settingsStore）
         const settingsStore = useSettingsStore.getState();
@@ -380,7 +437,12 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
           settingsStore.setTreeExpanded(defaultExpanded);
         }
         
-        set({ rawNodes, isLoading: false });
+        set({
+          rawNodes,
+          isLoading: false,
+          nodeTerminalMap: terminalMaps.nodeTerminalMap,
+          terminalNodeMap: terminalMaps.terminalNodeMap,
+        });
         
         // 清理孤儿 ID（移除不存在的 expandedIds/focusedNodeId）
         pruneOrphanedTreeUIState(rawNodes);
@@ -1804,16 +1866,10 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
             [...linkDownNodeIds].filter(id => validNodeIds.has(id))
           );
           
-          // 清理孤儿节点的终端映射（同时过滤空数组防止积累）
-          const newTerminalMap = new Map(
-            [...nodeTerminalMap].filter(([nodeId, terminals]) => validNodeIds.has(nodeId) && terminals.length > 0)
-          );
-          const newNodeMap = new Map<string, string>();
-          for (const [nodeId, terminals] of newTerminalMap) {
-            for (const termId of terminals) {
-              newNodeMap.set(termId, nodeId);
-            }
-          }
+          const {
+            nodeTerminalMap: newTerminalMap,
+            terminalNodeMap: newNodeMap,
+          } = rebuildTerminalMapsFromNodes(backendNodes, nodeTerminalMap);
           
           set({
             rawNodes: backendNodes,
@@ -1894,6 +1950,18 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
             });
           } catch (e) {
             console.warn('[StateDrift] Failed to sync sessions connectionId:', e);
+          }
+        } else {
+          const {
+            nodeTerminalMap: rebuiltTerminalMap,
+            terminalNodeMap: rebuiltNodeMap,
+          } = rebuildTerminalMapsFromNodes(backendNodes, nodeTerminalMap);
+          if (!terminalMapsEqual(nodeTerminalMap, rebuiltTerminalMap)) {
+            set({
+              nodeTerminalMap: rebuiltTerminalMap,
+              terminalNodeMap: rebuiltNodeMap,
+            });
+            get().rebuildUnifiedNodes();
           }
         }
         

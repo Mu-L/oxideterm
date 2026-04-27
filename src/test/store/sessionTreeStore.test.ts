@@ -341,6 +341,47 @@ describe('sessionTreeStore', () => {
     expect(appStoreMock.state.sessions.get('term-1')?.connectionId).toBe('conn-new');
   });
 
+  it('rehydrates terminal mappings from backend terminalSessionId after frontend state reset', async () => {
+    const backendNode = makeNode({
+      id: 'node-1',
+      state: { status: 'connected' },
+      terminalSessionId: 'term-backend',
+      sshConnectionId: 'conn-1',
+    });
+
+    apiMocks.getSessionTree.mockResolvedValue([backendNode]);
+
+    await useSessionTreeStore.getState().fetchTree();
+
+    expect(useSessionTreeStore.getState().nodeTerminalMap).toEqual(new Map([['node-1', ['term-backend']]]));
+    expect(useSessionTreeStore.getState().terminalNodeMap).toEqual(new Map([['term-backend', 'node-1']]));
+    expect(useSessionTreeStore.getState().getNodeByTerminalId('term-backend')?.id).toBe('node-1');
+    expect(useSessionTreeStore.getState().getNode('node-1')?.runtime.status).toBe('active');
+  });
+
+  it('repairs missing terminal mappings during backend sync even when node state did not drift', async () => {
+    const backendNode = makeNode({
+      id: 'node-1',
+      state: { status: 'connected' },
+      terminalSessionId: 'term-backend',
+      sshConnectionId: 'conn-1',
+    });
+
+    useSessionTreeStore.setState({
+      rawNodes: [backendNode],
+      nodeTerminalMap: new Map(),
+      terminalNodeMap: new Map(),
+    });
+    useSessionTreeStore.getState().rebuildUnifiedNodes();
+    apiMocks.getSessionTree.mockResolvedValue([backendNode]);
+
+    const report = await useSessionTreeStore.getState().syncFromBackend();
+
+    expect(report.driftCount).toBe(0);
+    expect(useSessionTreeStore.getState().nodeTerminalMap).toEqual(new Map([['node-1', ['term-backend']]]));
+    expect(useSessionTreeStore.getState().terminalNodeMap).toEqual(new Map([['term-backend', 'node-1']]));
+  });
+
   it('resetNodeState only performs local cleanup and does not close terminals via backend', async () => {
     const node = makeNode({
       id: 'node-1',

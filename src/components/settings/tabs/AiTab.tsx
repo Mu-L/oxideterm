@@ -846,9 +846,7 @@ export const AiTab = ({
                         {!toolUseExpanded && (
                             <div className="ml-4 border-l border-theme-border/30 pl-4">
                                 <p className="text-xs text-theme-text-muted">
-                                    {t('settings_view.ai.tool_use_policy_summary', {
-                                        defaultValue: 'Read-only actions are automatic; execution, writes, settings changes, and transfers follow the approval policy below.',
-                                    })}
+                                    {t('settings_view.ai.tool_use_policy_summary')}
                                 </p>
                             </div>
                         )}
@@ -859,9 +857,7 @@ export const AiTab = ({
                             className={toolUse.enabled ? 'space-y-5 ml-4 pl-4 border-l border-theme-border/30' : 'opacity-40 pointer-events-none space-y-5 ml-4 pl-4 border-l border-theme-border/30'}
                         >
                             <p className="text-xs text-theme-text-muted">
-                                {t('settings_view.ai.tool_use_approve_hint', {
-                                    defaultValue: 'OxideSens now exposes task-level tools to the model. These controls decide when a real capability needs your approval.',
-                                })}
+                                {t('settings_view.ai.tool_use_approve_hint')}
                             </p>
 
                             <div className="rounded-lg border border-theme-border/60 bg-theme-bg-panel/30 p-3">
@@ -893,26 +889,26 @@ export const AiTab = ({
                             <div className="grid gap-3 md:grid-cols-2">
                                 {[
                                     {
-                                        title: t('settings_view.ai.tool_policy_read_title', { defaultValue: 'Read-only discovery' }),
-                                        description: t('settings_view.ai.tool_policy_read_desc', { defaultValue: 'Targets, terminal observation, settings reads, and preference recall are always allowed automatically.' }),
+                                        title: t('settings_view.ai.tool_policy_read_title'),
+                                        description: t('settings_view.ai.tool_policy_read_desc'),
                                         value: true,
                                         locked: true,
                                     },
                                     {
-                                        title: t('settings_view.ai.tool_policy_execute_title', { defaultValue: 'Run commands' }),
-                                        description: t('settings_view.ai.tool_policy_execute_desc', { defaultValue: 'Allow run_command without asking each time. Destructive commands still require confirmation.' }),
+                                        title: t('settings_view.ai.tool_policy_execute_title'),
+                                        description: t('settings_view.ai.tool_policy_execute_desc'),
                                         value: approveTools.run_command === true,
                                         onChange: (checked: boolean) => setToolApproval('run_command', checked),
                                     },
                                     {
-                                        title: t('settings_view.ai.tool_policy_interactive_title', { defaultValue: 'Terminal input' }),
-                                        description: t('settings_view.ai.tool_policy_interactive_desc', { defaultValue: 'Allow sending input to visible terminals, including Enter and control sequences.' }),
+                                        title: t('settings_view.ai.tool_policy_interactive_title'),
+                                        description: t('settings_view.ai.tool_policy_interactive_desc'),
                                         value: approveTools.send_terminal_input === true,
                                         onChange: (checked: boolean) => setToolApproval('send_terminal_input', checked),
                                     },
                                     {
-                                        title: t('settings_view.ai.tool_policy_write_title', { defaultValue: 'Files and settings writes' }),
-                                        description: t('settings_view.ai.tool_policy_write_desc', { defaultValue: 'Allow write_resource and transfer_resource without asking each time.' }),
+                                        title: t('settings_view.ai.tool_policy_write_title'),
+                                        description: t('settings_view.ai.tool_policy_write_desc'),
                                         value: approveTools.write_resource === true && approveTools.transfer_resource === true,
                                         onChange: (checked: boolean) => {
                                             updateAi('toolUse', {
@@ -927,8 +923,8 @@ export const AiTab = ({
                                         },
                                     },
                                     {
-                                        title: t('settings_view.ai.tool_policy_navigation_title', { defaultValue: 'Open app surfaces' }),
-                                        description: t('settings_view.ai.tool_policy_navigation_desc', { defaultValue: 'Allow opening tabs such as Settings, SFTP, IDE, or local terminal.' }),
+                                        title: t('settings_view.ai.tool_policy_navigation_title'),
+                                        description: t('settings_view.ai.tool_policy_navigation_desc'),
                                         value: approveTools.open_app_surface === true || approveTools.connect_target === true,
                                         onChange: (checked: boolean) => {
                                             updateAi('toolUse', {
@@ -960,9 +956,7 @@ export const AiTab = ({
 
                             <div className="p-3 rounded bg-amber-500/10 border border-amber-500/20">
                                 <p className="text-xs text-amber-400 leading-relaxed">
-                                    {t('settings_view.ai.tool_policy_warning', {
-                                        defaultValue: 'Dangerous commands are never silently approved. Passwords, sudo prompts, passphrases, and credentials must always be handled by the user.',
-                                    })}
+                                    {t('settings_view.ai.tool_policy_warning')}
                                 </p>
                             </div>
                         </div>

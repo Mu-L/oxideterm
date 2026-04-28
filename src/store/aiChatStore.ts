@@ -9,6 +9,7 @@ import { useSettingsStore, type AiMemorySettings } from './settingsStore';
 import { useAppStore } from './appStore';
 import { gatherSidebarContext, buildContextReminder, type SidebarContext } from '../lib/sidebarContextProvider';
 import { getProvider, getProviderReasoningProtocol } from '../lib/ai/providerRegistry';
+import { resolveEmbeddingProvider } from '../lib/ai/embeddingConfig';
 import { resolveAiReasoningEffort } from '../lib/ai/reasoningSettings';
 import { estimateTokens, estimateToolDefinitionsTokens, trimHistoryToTokenBudget, getModelContextWindow, responseReserve } from '../lib/ai/tokenUtils';
 import type { AiToolChoice, ChatMessage as ProviderChatMessage } from '../lib/ai/providers';
@@ -1094,24 +1095,30 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
 
         // Optionally embed query for hybrid search
         let queryVector: number[] | undefined;
-        const embCfg = aiSettings.embeddingConfig;
-        const embProviderId = embCfg?.providerId || aiSettings.activeProviderId;
-        const embProviderConfig = aiSettings.providers.find(p => p.id === embProviderId);
-        const embModel = embCfg?.model || embProviderConfig?.defaultModel;
-        if (embProviderConfig && embModel) {
-          const embProvider = getProvider(embProviderConfig.type);
-          if (embProvider?.embedTexts) {
-            try {
-              let embApiKey = '';
-              try { embApiKey = (await api.getAiProviderApiKey(embProviderConfig.id)) ?? ''; } catch { /* Ollama */ }
-              const vectors = await Promise.race([
-                embProvider.embedTexts({ baseUrl: embProviderConfig.baseUrl, apiKey: embApiKey, model: embModel }, [cleanContent.slice(0, 500)]),
-                makeTimeout(),
-              ]);
-              if (vectors.length > 0) queryVector = vectors[0];
-            } catch {
-              // Embedding failed — fall back to BM25 only
-            }
+        const resolvedEmbedding = resolveEmbeddingProvider(aiSettings);
+        if (
+          resolvedEmbedding.reason === 'ready'
+          && resolvedEmbedding.providerConfig
+          && resolvedEmbedding.provider?.embedTexts
+          && resolvedEmbedding.model
+        ) {
+          try {
+            let embApiKey = '';
+            try { embApiKey = (await api.getAiProviderApiKey(resolvedEmbedding.providerConfig.id)) ?? ''; } catch { /* Ollama */ }
+            const vectors = await Promise.race([
+              resolvedEmbedding.provider.embedTexts(
+                {
+                  baseUrl: resolvedEmbedding.providerConfig.baseUrl,
+                  apiKey: embApiKey,
+                  model: resolvedEmbedding.model,
+                },
+                [cleanContent.slice(0, 500)],
+              ),
+              makeTimeout(),
+            ]);
+            if (vectors.length > 0) queryVector = vectors[0];
+          } catch {
+            // Embedding failed — fall back to BM25 only
           }
         }
 

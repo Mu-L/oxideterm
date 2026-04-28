@@ -1665,7 +1665,7 @@ export interface AiProvider {
  * Separate from chat provider so users can pick a dedicated embedding model.
  */
 export type EmbeddingConfig = {
-  /** Provider ID to use for embeddings (null = use active chat provider) */
+  /** Provider ID to use for embeddings (null = auto-select an embedding-capable provider) */
   providerId: string | null;
   /** Embedding model name (e.g. "text-embedding-3-small") */
   model: string;

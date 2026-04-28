@@ -32,7 +32,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useLocalTerminalStore } from '../../../store/localTerminalStore';
 import { useIdeStore } from '../../../store/ideStore';
 import { useSettingsStore } from '../../../store/settingsStore';
-import { getProvider } from '../providerRegistry';
+import { resolveEmbeddingProvider } from '../embeddingConfig';
 import { usePluginStore } from '../../../store/pluginStore';
 import { useEventLogStore } from '../../../store/eventLogStore';
 import { useTransferStore } from '../../../store/transferStore';
@@ -4709,21 +4709,27 @@ async function execSearchDocs(args: Record<string, unknown>, startTime: number, 
   let queryVector: number[] | undefined;
   try {
     const aiSettings = useSettingsStore.getState().settings.ai;
-    const embCfg = aiSettings.embeddingConfig;
-    const embProviderId = embCfg?.providerId || aiSettings.activeProviderId;
-    const embProviderConfig = aiSettings.providers.find((p: { id: string }) => p.id === embProviderId);
-    const embModel = embCfg?.model || embProviderConfig?.defaultModel;
-    if (embProviderConfig && embModel) {
-      const embProvider = getProvider(embProviderConfig.type);
-      if (embProvider?.embedTexts) {
-        let embApiKey = '';
-        try { embApiKey = (await api.getAiProviderApiKey(embProviderConfig.id)) ?? ''; } catch { /* Ollama */ }
-        const vectors = await Promise.race([
-          embProvider.embedTexts({ baseUrl: embProviderConfig.baseUrl, apiKey: embApiKey, model: embModel }, [query]),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('embed timeout')), 3000)),
-        ]);
-        if (vectors.length > 0) queryVector = vectors[0];
-      }
+    const resolvedEmbedding = resolveEmbeddingProvider(aiSettings);
+    if (
+      resolvedEmbedding.reason === 'ready'
+      && resolvedEmbedding.providerConfig
+      && resolvedEmbedding.provider?.embedTexts
+      && resolvedEmbedding.model
+    ) {
+      let embApiKey = '';
+      try { embApiKey = (await api.getAiProviderApiKey(resolvedEmbedding.providerConfig.id)) ?? ''; } catch { /* Ollama */ }
+      const vectors = await Promise.race([
+        resolvedEmbedding.provider.embedTexts(
+          {
+            baseUrl: resolvedEmbedding.providerConfig.baseUrl,
+            apiKey: embApiKey,
+            model: resolvedEmbedding.model,
+          },
+          [query],
+        ),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('embed timeout')), 3000)),
+      ]);
+      if (vectors.length > 0) queryVector = vectors[0];
     }
   } catch {
     // Embedding failed — fall back to BM25 only

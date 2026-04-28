@@ -48,6 +48,7 @@ export const SettingsView = () => {
     const { general, terminal, appearance, connectionDefaults, ai, sftp, ide, reconnect } = settings;
     const [showAiConfirm, setShowAiConfirm] = useState(false);
     const [refreshingModels, setRefreshingModels] = useState<string | null>(null);
+    const [embeddingConfigExpanded, setEmbeddingConfigExpanded] = useState(false);
 
     useEffect(() => {
         const handleOpenSettingsTab = (event: Event) => {
@@ -257,7 +258,15 @@ export const SettingsView = () => {
 
                     {activeTab === 'knowledge' && (
                         <DocumentManager
-                            embeddingConfigSection={<EmbeddingConfigSection ai={ai} updateAi={updateAi} />}
+                            embeddingConfigSection={(
+                                <EmbeddingConfigSection
+                                    ai={ai}
+                                    updateAi={updateAi}
+                                    expanded={embeddingConfigExpanded}
+                                    onExpandedChange={setEmbeddingConfigExpanded}
+                                />
+                            )}
+                            onEmbeddingConfigRequired={() => setEmbeddingConfigExpanded(true)}
                         />
                     )}
 

@@ -28,6 +28,30 @@ function convertTools(tools: AiToolDefinition[]): Array<{ type: 'function'; func
 /**
  * Convert ChatMessage[] to OpenAI API message format (handles tool role).
  */
+function mergeSystemMessages(messages: ChatMessage[]): ChatMessage[] {
+  const systemContents: string[] = [];
+  const nonSystemMessages: ChatMessage[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      if (msg.content) {
+        systemContents.push(msg.content);
+      }
+      continue;
+    }
+    nonSystemMessages.push(msg);
+  }
+
+  if (systemContents.length === 0) {
+    return messages;
+  }
+
+  return [
+    { role: 'system', content: systemContents.join('\n\n') },
+    ...nonSystemMessages,
+  ];
+}
+
 function shouldPreserveReasoningContent(messages: ChatMessage[], index: number, config: AiRequestConfig): boolean {
   if (config.reasoningProtocol !== 'deepseek') {
     return true;
@@ -45,7 +69,8 @@ function shouldPreserveReasoningContent(messages: ChatMessage[], index: number, 
 }
 
 function convertMessages(messages: ChatMessage[], config: AiRequestConfig): Array<Record<string, unknown>> {
-  return messages.map((msg, index) => {
+  const normalizedMessages = mergeSystemMessages(messages);
+  return normalizedMessages.map((msg, index) => {
     if (msg.role === 'tool') {
       return {
         role: 'tool',
@@ -64,7 +89,7 @@ function convertMessages(messages: ChatMessage[], config: AiRequestConfig): Arra
         })),
       };
       // Preserve reasoning_content for thinking models (Kimi K2.5, DeepSeek-R1)
-      if (msg.reasoning_content !== undefined && shouldPreserveReasoningContent(messages, index, config)) {
+      if (msg.reasoning_content !== undefined && shouldPreserveReasoningContent(normalizedMessages, index, config)) {
         assistantMsg.reasoning_content = msg.reasoning_content;
       }
       return assistantMsg;

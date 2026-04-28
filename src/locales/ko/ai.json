@@ -269,30 +269,24 @@
       "sftp_desc": "파일 브라우저 및 전송",
       "ide": "IDE",
       "ide_desc": "코드 편집 및 프로젝트 도구",
-      "connection": "연결",
-      "connection_desc": "SSH 연결 및 인프라",
-      "system": "시스템",
-      "system_desc": "시스템 모니터링 및 상태",
       "local": "로컬",
-      "local_desc": "로컬 터미널 및 셸"
+      "local_desc": "로컬 터미널 및 셸",
+      "settings": "설정",
+      "settings_desc": "앱 설정 및 기본 설정",
+      "knowledge": "지식",
+      "knowledge_desc": "지식 베이스 및 문서 검색"
     },
     "reference": {
       "buffer": "버퍼",
       "buffer_desc": "활성 터미널 버퍼 내용",
       "selection": "선택",
       "selection_desc": "현재 터미널 선택 텍스트",
-      "file": "파일",
-      "file_desc": "경로로 원격 파일 읽기",
       "error": "오류",
       "error_desc": "터미널 출력의 마지막 오류",
       "pane": "패널",
       "pane_desc": "특정 패널의 내용",
       "cwd": "작업 디렉터리",
-      "cwd_desc": "현재 작업 디렉터리",
-      "env": "환경 변수",
-      "env_desc": "환경 변수",
-      "history": "기록",
-      "history_desc": "최근 명령어 기록"
+      "cwd_desc": "현재 작업 디렉터리"
     },
     "sidebar": {
       "not_enabled_hint": "OxideSens가 활성화되지 않았습니다. 설정 → AI에서 활성화해 주세요."

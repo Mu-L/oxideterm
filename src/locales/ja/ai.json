@@ -269,30 +269,24 @@
       "sftp_desc": "ファイルブラウザと転送",
       "ide": "IDE",
       "ide_desc": "コード編集とプロジェクトツール",
-      "connection": "接続",
-      "connection_desc": "SSH接続とインフラストラクチャ",
-      "system": "システム",
-      "system_desc": "システム監視とヘルス",
       "local": "ローカル",
-      "local_desc": "ローカルターミナルとシェル"
+      "local_desc": "ローカルターミナルとシェル",
+      "settings": "設定",
+      "settings_desc": "アプリ設定と環境設定",
+      "knowledge": "ナレッジ",
+      "knowledge_desc": "ナレッジベースとドキュメント検索"
     },
     "reference": {
       "buffer": "バッファ",
       "buffer_desc": "アクティブなターミナルバッファの内容",
       "selection": "選択",
       "selection_desc": "現在のターミナルの選択テキスト",
-      "file": "ファイル",
-      "file_desc": "パスでリモートファイルを読み取り",
       "error": "エラー",
       "error_desc": "ターミナル出力の最後のエラー",
       "pane": "ペイン",
       "pane_desc": "特定のペインの内容",
       "cwd": "作業ディレクトリ",
-      "cwd_desc": "現在の作業ディレクトリ",
-      "env": "環境変数",
-      "env_desc": "環境変数",
-      "history": "履歴",
-      "history_desc": "最近のコマンド履歴"
+      "cwd_desc": "現在の作業ディレクトリ"
     },
     "sidebar": {
       "not_enabled_hint": "OxideSens が有効になっていません。設定 → AI から有効にしてください。"

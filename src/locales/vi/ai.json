@@ -269,30 +269,24 @@
       "sftp_desc": "Trình duyệt tệp và truyền tải",
       "ide": "IDE",
       "ide_desc": "Chỉnh sửa mã và công cụ dự án",
-      "connection": "Kết nối",
-      "connection_desc": "Kết nối SSH và cơ sở hạ tầng",
-      "system": "Hệ thống",
-      "system_desc": "Giám sát hệ thống và tình trạng",
       "local": "Cục bộ",
-      "local_desc": "Terminal cục bộ và shell"
+      "local_desc": "Terminal cục bộ và shell",
+      "settings": "Cài đặt",
+      "settings_desc": "Cài đặt và tùy chọn ứng dụng",
+      "knowledge": "Kiến thức",
+      "knowledge_desc": "Kho kiến thức và tìm kiếm tài liệu"
     },
     "reference": {
       "buffer": "Bộ đệm",
       "buffer_desc": "Nội dung bộ đệm terminal đang hoạt động",
       "selection": "Vùng chọn",
       "selection_desc": "Văn bản đang chọn trong terminal",
-      "file": "Tệp",
-      "file_desc": "Đọc tệp từ xa theo đường dẫn",
       "error": "Lỗi",
       "error_desc": "Lỗi cuối cùng từ đầu ra terminal",
       "pane": "Ngăn",
       "pane_desc": "Nội dung của một ngăn cụ thể",
       "cwd": "Thư mục",
-      "cwd_desc": "Thư mục làm việc hiện tại",
-      "env": "Biến môi trường",
-      "env_desc": "Biến môi trường",
-      "history": "Lịch sử",
-      "history_desc": "Lịch sử lệnh gần đây"
+      "cwd_desc": "Thư mục làm việc hiện tại"
     },
     "sidebar": {
       "not_enabled_hint": "OxideSens chưa được bật. Vui lòng bật trong Cài đặt → AI để bắt đầu."

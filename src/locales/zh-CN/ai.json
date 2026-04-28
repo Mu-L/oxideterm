@@ -269,30 +269,24 @@
       "sftp_desc": "文件浏览和传输",
       "ide": "IDE",
       "ide_desc": "代码编辑和项目工具",
-      "connection": "连接",
-      "connection_desc": "SSH 连接和基础设施",
-      "system": "系统",
-      "system_desc": "系统监控和健康状态",
       "local": "本地",
-      "local_desc": "本地终端和 Shell"
+      "local_desc": "本地终端和 Shell",
+      "settings": "设置",
+      "settings_desc": "应用设置和偏好",
+      "knowledge": "知识库",
+      "knowledge_desc": "知识库和文档检索"
     },
     "reference": {
       "buffer": "缓冲区",
       "buffer_desc": "当前终端缓冲区内容",
       "selection": "选区",
       "selection_desc": "当前终端选中的文本",
-      "file": "文件",
-      "file_desc": "按路径读取远程文件",
       "error": "错误",
       "error_desc": "终端输出中的最后一个错误",
       "pane": "窗格",
       "pane_desc": "指定窗格的内容",
       "cwd": "工作目录",
-      "cwd_desc": "当前工作目录",
-      "env": "环境变量",
-      "env_desc": "环境变量",
-      "history": "历史",
-      "history_desc": "最近的命令历史"
+      "cwd_desc": "当前工作目录"
     },
     "sidebar": {
       "not_enabled_hint": "OxideSens 尚未启用。请前往 设置 → AI 开启后使用。"

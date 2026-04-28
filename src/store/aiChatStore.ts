@@ -933,14 +933,22 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
       }
     }
 
-    // Resolve participants into prompt hints. Built-in OxideSens no longer
-    // exposes participant-specific legacy tool subsets by default.
+    // Resolve participants into domain hints. These do not expose legacy tool
+    // subsets; they only bias the orchestrator toward the intended target view.
     const participantSystemHints: string[] = [];
     if (parsed.participants.length > 0) {
       for (const p of parsed.participants) {
         const def = resolveParticipant(p.name);
         if (def) {
-          participantSystemHints.push(def.systemPromptModifier);
+          const routingHint = [
+            def.intentHint ? `intent=${def.intentHint}` : '',
+            def.preferredTargetView ? `preferred_target_view=${def.preferredTargetView}` : '',
+          ].filter(Boolean).join(', ');
+          participantSystemHints.push(
+            routingHint
+              ? `@${def.name}: ${def.systemPromptModifier} (${routingHint})`
+              : `@${def.name}: ${def.systemPromptModifier}`,
+          );
         }
       }
     }

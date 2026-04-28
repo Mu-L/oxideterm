@@ -10,6 +10,7 @@ const parseUserInputMock = vi.hoisted(() => vi.fn(() => ({
 })));
 const resolveSlashCommandMock = vi.hoisted(() => vi.fn());
 const slashCommandsMock = vi.hoisted(() => [] as Array<{ name: string; descriptionKey: string; clientOnly?: boolean }>);
+const resolveParticipantMock = vi.hoisted(() => vi.fn());
 const getProviderMock = vi.hoisted(() => vi.fn());
 const contextFreeToolsMock = vi.hoisted(() => new Set(['local_exec']));
 const sessionIdToolsMock = vi.hoisted(() => new Set<string>());
@@ -186,7 +187,7 @@ vi.mock('@/lib/ai/slashCommands', () => ({
 
 vi.mock('@/lib/ai/participants', () => ({
   PARTICIPANTS: [],
-  resolveParticipant: vi.fn(),
+  resolveParticipant: resolveParticipantMock,
 }));
 
 vi.mock('@/lib/ai/references', () => ({
@@ -285,6 +286,7 @@ describe('aiChatStore workflows', () => {
     parseUserInputMock.mockReturnValue({ slashCommand: null, participants: [], references: [], cleanText: '' });
     resolveSlashCommandMock.mockReturnValue(undefined);
     slashCommandsMock.splice(0, slashCommandsMock.length);
+    resolveParticipantMock.mockReturnValue(undefined);
     getProviderMock.mockReturnValue({ streamCompletion: providerStreamMock });
     estimateTokensMock.mockImplementation(() => 100);
     trimHistoryMock.mockImplementation((messages) => ({ messages, trimmedCount: 0 }));
@@ -372,6 +374,33 @@ describe('aiChatStore workflows', () => {
       expect(assistantMessage?.content).not.toContain(`/${removed}`);
     }
     expect(providerStreamMock).not.toHaveBeenCalled();
+  });
+
+  it('adds participant intent and target-view hints to the system prompt', async () => {
+    setConversation([]);
+    parseUserInputMock.mockReturnValue({
+      slashCommand: null,
+      participants: [{ name: 'knowledge', raw: '@knowledge' }],
+      references: [],
+      cleanText: '查询插件开发文档',
+    });
+    resolveParticipantMock.mockReturnValue({
+      name: 'knowledge',
+      systemPromptModifier: 'Use the knowledge base.',
+      intentHint: 'knowledge',
+      preferredTargetView: 'files',
+    });
+    streamText('assistant reply');
+
+    await useAiChatStore.getState().sendMessage('@knowledge 查询插件开发文档');
+
+    const [, providerMessages] = providerStreamMock.mock.calls[0];
+    expect(providerMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: 'system',
+        content: expect.stringContaining('@knowledge: Use the knowledge base. (intent=knowledge, preferred_target_view=files)'),
+      }),
+    ]));
   });
 
   it('keeps the newer run state when an older aborted run finishes later', async () => {

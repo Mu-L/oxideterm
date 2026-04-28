@@ -269,30 +269,24 @@
       "sftp_desc": "Navigateur de fichiers et transferts",
       "ide": "IDE",
       "ide_desc": "Édition de code et outils de projet",
-      "connection": "Connexion",
-      "connection_desc": "Connexions SSH et infrastructure",
-      "system": "Système",
-      "system_desc": "Surveillance système et santé",
       "local": "Local",
-      "local_desc": "Terminal local et shell"
+      "local_desc": "Terminal local et shell",
+      "settings": "Paramètres",
+      "settings_desc": "Paramètres et préférences de l'application",
+      "knowledge": "Connaissances",
+      "knowledge_desc": "Base de connaissances et recherche documentaire"
     },
     "reference": {
       "buffer": "Tampon",
       "buffer_desc": "Contenu du tampon terminal actif",
       "selection": "Sélection",
       "selection_desc": "Sélection actuelle du terminal",
-      "file": "Fichier",
-      "file_desc": "Lire un fichier distant par chemin",
       "error": "Erreur",
       "error_desc": "Dernière erreur de la sortie terminal",
       "pane": "Panneau",
       "pane_desc": "Contenu d'un panneau spécifique",
       "cwd": "Rép. courant",
-      "cwd_desc": "Répertoire de travail actuel",
-      "env": "Env.",
-      "env_desc": "Variables d'environnement",
-      "history": "Historique",
-      "history_desc": "Historique récent des commandes"
+      "cwd_desc": "Répertoire de travail actuel"
     },
     "sidebar": {
       "not_enabled_hint": "OxideSens n'est pas activé. Veuillez l'activer dans Paramètres → AI pour commencer."

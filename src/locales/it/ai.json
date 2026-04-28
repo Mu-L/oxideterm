@@ -269,30 +269,24 @@
       "sftp_desc": "Browser file e trasferimenti",
       "ide": "IDE",
       "ide_desc": "Modifica codice e strumenti di progetto",
-      "connection": "Connessione",
-      "connection_desc": "Connessioni SSH e infrastruttura",
-      "system": "Sistema",
-      "system_desc": "Monitoraggio e stato del sistema",
       "local": "Locale",
-      "local_desc": "Terminale locale e shell"
+      "local_desc": "Terminale locale e shell",
+      "settings": "Impostazioni",
+      "settings_desc": "Impostazioni e preferenze dell'app",
+      "knowledge": "Conoscenza",
+      "knowledge_desc": "Base di conoscenza e ricerca documentazione"
     },
     "reference": {
       "buffer": "Buffer",
       "buffer_desc": "Contenuto del buffer del terminale attivo",
       "selection": "Selezione",
       "selection_desc": "Selezione attuale del terminale",
-      "file": "File",
-      "file_desc": "Leggi un file remoto per percorso",
       "error": "Errore",
       "error_desc": "Ultimo errore dall'output del terminale",
       "pane": "Pannello",
       "pane_desc": "Contenuto di un pannello specifico",
       "cwd": "Dir. lavoro",
-      "cwd_desc": "Directory di lavoro attuale",
-      "env": "Ambiente",
-      "env_desc": "Variabili d'ambiente",
-      "history": "Cronologia",
-      "history_desc": "Cronologia dei comandi recente"
+      "cwd_desc": "Directory di lavoro attuale"
     },
     "sidebar": {
       "not_enabled_hint": "OxideSens non è abilitato. Abilitalo in Impostazioni → AI per iniziare."

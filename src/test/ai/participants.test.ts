@@ -8,13 +8,16 @@ import {
   filterParticipants,
 } from '@/lib/ai/participants';
 
+const ACTIVE_PARTICIPANTS = ['terminal', 'sftp', 'ide', 'local', 'settings', 'knowledge'];
+const REMOVED_PARTICIPANTS = ['connection', 'system'];
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Registry Integrity
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('PARTICIPANTS registry', () => {
-  it('has at least 5 participants', () => {
-    expect(PARTICIPANTS.length).toBeGreaterThanOrEqual(5);
+  it('only exposes the supported participant set', () => {
+    expect(PARTICIPANTS.map(p => p.name)).toEqual(ACTIVE_PARTICIPANTS);
   });
 
   it('all participants have unique names', () => {
@@ -29,6 +32,8 @@ describe('PARTICIPANTS registry', () => {
       expect(p.descriptionKey).toBeTruthy();
       expect(p.icon).toBeTruthy();
       expect(p.systemPromptModifier).toBeTruthy();
+      expect(p.intentHint).toBeTruthy();
+      expect(p.preferredTargetView).toBeTruthy();
     }
   });
 });
@@ -46,6 +51,12 @@ describe('resolveParticipant', () => {
 
   it('returns undefined for unknown participant', () => {
     expect(resolveParticipant('nonexistent')).toBeUndefined();
+  });
+
+  it('does not resolve removed broad participants', () => {
+    for (const name of REMOVED_PARTICIPANTS) {
+      expect(resolveParticipant(name)).toBeUndefined();
+    }
   });
 
   it('resolves every participant in registry', () => {

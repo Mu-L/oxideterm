@@ -269,30 +269,24 @@
       "sftp_desc": "檔案瀏覽和傳輸",
       "ide": "IDE",
       "ide_desc": "程式碼編輯和專案工具",
-      "connection": "連線",
-      "connection_desc": "SSH 連線和基礎設施",
-      "system": "系統",
-      "system_desc": "系統監控和健康狀態",
       "local": "本機",
-      "local_desc": "本機終端機和 Shell"
+      "local_desc": "本機終端機和 Shell",
+      "settings": "設定",
+      "settings_desc": "應用程式設定和偏好",
+      "knowledge": "知識庫",
+      "knowledge_desc": "知識庫和文件檢索"
     },
     "reference": {
       "buffer": "緩衝區",
       "buffer_desc": "目前終端機緩衝區內容",
       "selection": "選取範圍",
       "selection_desc": "目前終端機選取的文字",
-      "file": "檔案",
-      "file_desc": "依路徑讀取遠端檔案",
       "error": "錯誤",
       "error_desc": "終端機輸出中的最後一個錯誤",
       "pane": "窗格",
       "pane_desc": "指定窗格的內容",
       "cwd": "工作目錄",
-      "cwd_desc": "目前工作目錄",
-      "env": "環境變數",
-      "env_desc": "環境變數",
-      "history": "歷史",
-      "history_desc": "最近的命令歷史"
+      "cwd_desc": "目前工作目錄"
     },
     "sidebar": {
       "not_enabled_hint": "OxideSens 尚未啟用。請前往 設定 → AI 開啟後使用。"

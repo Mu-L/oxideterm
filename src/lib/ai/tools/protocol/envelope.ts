@@ -30,6 +30,8 @@ export function createToolResultEnvelope<TData = unknown>(input: {
   toolName: string;
   summary: string;
   output?: string;
+  rawOutput?: string;
+  outputPreview?: ToolResultEnvelope['outputPreview'];
   data?: TData;
   warnings?: string[];
   error?: ToolResultEnvelope['error'];
@@ -52,6 +54,8 @@ export function createToolResultEnvelope<TData = unknown>(input: {
     summary: input.summary,
     ...(input.data !== undefined ? { data: input.data } : {}),
     output: input.output ?? input.summary,
+    ...(input.rawOutput !== undefined ? { rawOutput: input.rawOutput } : {}),
+    ...(input.outputPreview ? { outputPreview: input.outputPreview } : {}),
     ...(input.warnings && input.warnings.length > 0 ? { warnings: input.warnings } : {}),
     ...(input.error ? { error: input.error } : {}),
     ...(input.observations && input.observations.length > 0 ? { observations: input.observations } : {}),
@@ -147,6 +151,7 @@ export function formatToolResultForModel(result: AiToolResult): string {
     ...(envelope.targets && envelope.targets.length > 0 ? { targets: envelope.targets } : {}),
     ...(envelope.nextActions && envelope.nextActions.length > 0 ? { nextActions: envelope.nextActions } : {}),
     ...(envelope.disambiguation ? { disambiguation: envelope.disambiguation } : {}),
+    ...(envelope.outputPreview ? { outputPreview: envelope.outputPreview } : {}),
     meta: {
       ...envelope.meta,
       truncated: envelope.meta.truncated === true

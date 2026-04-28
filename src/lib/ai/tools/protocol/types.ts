@@ -67,6 +67,14 @@ export interface ToolResultMeta {
   stateVersion?: string;
 }
 
+export type ToolOutputPreview = {
+  strategy: 'full' | 'head_tail' | 'tail';
+  charCount: number;
+  lineCount: number;
+  omittedChars?: number;
+  rawOutputStored?: boolean;
+};
+
 export type ToolNextAction = {
   tool: string;
   args?: Record<string, unknown>;
@@ -87,7 +95,11 @@ export interface ToolResultEnvelope<TData = unknown> {
   ok: boolean;
   summary: string;
   data?: TData;
+  /** Compact model-safe output preview. */
   output: string;
+  /** UI-only full output when it is small enough to persist. Never send this to the model. */
+  rawOutput?: string;
+  outputPreview?: ToolOutputPreview;
   warnings?: string[];
   error?: ToolResultError;
   observations?: string[];

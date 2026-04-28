@@ -75,6 +75,7 @@ export type AiActionResult<T = unknown> = {
   target?: AiTarget;
   targets?: AiTarget[];
   output?: string;
+  observations?: string[];
   error?: {
     code: string;
     message: string;

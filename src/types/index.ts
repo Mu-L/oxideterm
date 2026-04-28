@@ -1713,7 +1713,7 @@ export type AiToolResult = {
   toolName: string;
   /** Whether execution succeeded */
   success: boolean;
-  /** Output content (truncated to max 8KB) */
+  /** Output content prepared for model/UI preview. Full output may live in envelope.rawOutput. */
   output: string;
   /** Error message if failed */
   error?: string;

@@ -26,6 +26,18 @@ function looksWaitingForInput(value: string): boolean {
   return /(?:password|passphrase|sudo|验证码|口令|密码).*[:：]?\s*$/i.test(tail);
 }
 
+function commandOutput(stdout: string | null | undefined, stderr: string | null | undefined, exitCode: number | null | undefined): string {
+  return [
+    stdout ?? '',
+    stderr ? `[stderr]\n${stderr}` : '',
+    `[exit_code: ${exitCode ?? 'unknown'}]`,
+  ].filter(Boolean).join('\n');
+}
+
+function hasCapturedCommandOutput(stdout: string | null | undefined, stderr: string | null | undefined): boolean {
+  return Boolean(stdout?.trim() || stderr?.trim());
+}
+
 async function waitForTerminalDelta(
   sessionId: string,
   before: string,
@@ -113,15 +125,22 @@ export async function runCommandOnTarget(options: {
     }
     try {
       const result = await nodeIdeExecCommand(nodeId, command, options.cwd, options.timeoutSecs ?? 30);
-      const output = [result.stdout, result.stderr ? `[stderr]\n${result.stderr}` : '', `[exit_code: ${result.exitCode ?? 'unknown'}]`].filter(Boolean).join('\n');
+      const output = commandOutput(result.stdout, result.stderr, result.exitCode);
+      const hasOutput = hasCapturedCommandOutput(result.stdout, result.stderr);
+      const ok = result.exitCode === 0 || (result.exitCode == null && hasOutput);
       return {
-        ok: result.exitCode === 0,
-        summary: result.exitCode === 0 ? 'Remote command completed.' : `Remote command exited with ${result.exitCode ?? 'unknown'}.`,
+        ok,
+        summary: result.exitCode === 0
+          ? 'Remote command completed.'
+          : result.exitCode == null && hasOutput
+            ? 'Remote command output captured; exit code was not reported.'
+            : `Remote command exited with ${result.exitCode ?? 'unknown'}.`,
         output,
         data: { exitCode: result.exitCode ?? null },
+        ...(result.exitCode == null && hasOutput ? { observations: ['The remote command produced output, but the backend did not report an exit code.'] } : {}),
         target,
         risk: 'execute',
-        ...(result.exitCode === 0 ? {} : {
+        ...(ok ? {} : {
           error: { code: 'remote_command_failed', message: `Exit code: ${result.exitCode ?? 'unknown'}`, recoverable: true },
         }),
       };
@@ -133,15 +152,24 @@ export async function runCommandOnTarget(options: {
   if (target.kind === 'local-shell') {
     try {
       const result = await api.localExecCommand(command, options.cwd, options.timeoutSecs ?? 30, options.dangerousCommandApproved);
-      const output = [result.stdout, result.stderr ? `[stderr]\n${result.stderr}` : '', `[exit_code: ${result.exitCode ?? 'unknown'}]`].filter(Boolean).join('\n');
+      const output = commandOutput(result.stdout, result.stderr, result.exitCode);
+      const hasOutput = hasCapturedCommandOutput(result.stdout, result.stderr);
+      const ok = !result.timedOut && (result.exitCode === 0 || (result.exitCode == null && hasOutput));
       return {
-        ok: result.exitCode === 0 && !result.timedOut,
-        summary: result.timedOut ? 'Local command timed out.' : result.exitCode === 0 ? 'Local command completed.' : `Local command exited with ${result.exitCode ?? 'unknown'}.`,
+        ok,
+        summary: result.timedOut
+          ? 'Local command timed out.'
+          : result.exitCode === 0
+            ? 'Local command completed.'
+            : result.exitCode == null && hasOutput
+              ? 'Local command output captured; exit code was not reported.'
+              : `Local command exited with ${result.exitCode ?? 'unknown'}.`,
         output,
         data: { exitCode: result.exitCode ?? null, timedOut: result.timedOut },
+        ...(!result.timedOut && result.exitCode == null && hasOutput ? { observations: ['The local command produced output, but the backend did not report an exit code.'] } : {}),
         target,
         risk: 'execute',
-        ...(!result.timedOut && result.exitCode === 0 ? {} : {
+        ...(ok ? {} : {
           error: { code: result.timedOut ? 'local_command_timeout' : 'local_command_failed', message: result.timedOut ? 'Command timed out.' : `Exit code: ${result.exitCode ?? 'unknown'}`, recoverable: true },
         }),
       };

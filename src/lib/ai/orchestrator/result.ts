@@ -7,7 +7,9 @@ import { createToolResultEnvelope } from '../tools/protocol';
 import type { AiActionResult, AiActionRisk, AiTarget } from './types';
 import { getAiRuntimeEpoch } from './runtimeEpoch';
 
-const MODEL_OUTPUT_MAX_CHARS = 12000;
+const FULL_OUTPUT_MAX_CHARS = 24 * 1024;
+const RAW_OUTPUT_PERSIST_MAX_CHARS = 256 * 1024;
+const MODEL_OUTPUT_PREVIEW_MAX_CHARS = 12000;
 
 function riskToCapability(risk: AiActionRisk): ToolCapability | undefined {
   switch (risk) {
@@ -24,11 +26,50 @@ function riskToCapability(risk: AiActionRisk): ToolCapability | undefined {
   }
 }
 
-function truncate(value: string, maxChars = MODEL_OUTPUT_MAX_CHARS): { value: string; truncated: boolean } {
-  if (value.length <= maxChars) return { value, truncated: false };
+function lineCount(value: string): number {
+  if (!value) return 0;
+  return value.split('\n').length;
+}
+
+function buildHeadTailPreview(value: string, maxChars = MODEL_OUTPUT_PREVIEW_MAX_CHARS): string {
+  if (value.length <= maxChars) return value;
+  const marker = `\n\n[output truncated: ${value.length - maxChars} chars omitted; showing head and tail]\n\n`;
+  const available = Math.max(0, maxChars - marker.length);
+  const headChars = Math.ceil(available * 0.55);
+  const tailChars = Math.max(0, available - headChars);
+  return `${value.slice(0, headChars)}${marker}${value.slice(-tailChars)}`;
+}
+
+function prepareToolOutput(value: string) {
+  const charCount = value.length;
+  const lines = lineCount(value);
+  if (charCount <= FULL_OUTPUT_MAX_CHARS) {
+    return {
+      output: value,
+      truncated: false,
+      rawOutput: undefined,
+      outputPreview: {
+        strategy: 'full' as const,
+        charCount,
+        lineCount: lines,
+        rawOutputStored: false,
+      },
+    };
+  }
+
+  const output = buildHeadTailPreview(value);
+  const rawOutputStored = charCount <= RAW_OUTPUT_PERSIST_MAX_CHARS;
   return {
-    value: `${value.slice(0, maxChars)}\n\n[truncated: ${value.length - maxChars} chars omitted]`,
+    output,
     truncated: true,
+    rawOutput: rawOutputStored ? value : undefined,
+    outputPreview: {
+      strategy: 'head_tail' as const,
+      charCount,
+      lineCount: lines,
+      omittedChars: Math.max(0, charCount - output.length),
+      rawOutputStored,
+    },
   };
 }
 
@@ -53,7 +94,7 @@ export function actionResultToToolResult(
   durationMs: number,
 ): AiToolResult {
   const rawOutput = result.output ?? result.summary;
-  const output = truncate(rawOutput);
+  const preparedOutput = prepareToolOutput(rawOutput);
   const runtimeEpoch = result.runtimeEpoch ?? getAiRuntimeEpoch();
   const verified = result.verified ?? (result.ok && !result.error);
   const targets = [
@@ -64,9 +105,17 @@ export function actionResultToToolResult(
     ok: result.ok,
     toolName,
     summary: result.summary,
-    output: output.value,
+    output: preparedOutput.output,
+    rawOutput: preparedOutput.rawOutput,
+    outputPreview: preparedOutput.outputPreview,
     data: result.data,
+    warnings: [
+      ...(result.output && preparedOutput.truncated && !preparedOutput.rawOutput
+        ? ['Full output exceeded the UI retention limit; showing a head/tail preview. Use a narrower command such as grep, tail -n, or find ... | head for exact data.']
+        : []),
+    ],
     error: result.error,
+    observations: result.observations,
     recoverable: result.error?.recoverable,
     waitingForInput: result.waitingForInput,
     capability: riskToCapability(result.risk),
@@ -79,7 +128,7 @@ export function actionResultToToolResult(
       priority: 'recommended' as const,
     })),
     durationMs,
-    truncated: output.truncated,
+    truncated: preparedOutput.truncated,
     verified,
     runtimeEpoch,
     stateVersion: result.stateVersion,
@@ -89,10 +138,10 @@ export function actionResultToToolResult(
     toolCallId,
     toolName,
     success: result.ok,
-    output: output.value,
+    output: preparedOutput.output,
     ...(result.error ? { error: result.error.message } : {}),
     durationMs,
-    truncated: output.truncated,
+    truncated: preparedOutput.truncated,
     envelope,
   };
 }

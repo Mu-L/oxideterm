@@ -50,6 +50,20 @@ type ProviderTemplate = {
     defaultModel: string;
 };
 
+type ToolPolicyItem = {
+    label: string;
+    checked: boolean;
+    locked?: boolean;
+    onChange?: (checked: boolean) => void;
+};
+
+type ToolPolicyGroup = {
+    title: string;
+    description: string;
+    className?: string;
+    items: ToolPolicyItem[];
+};
+
 const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     {
         type: 'openai_compatible',
@@ -904,68 +918,103 @@ export const AiTab = ({
                             </div>
 
                             <div className="grid gap-3 md:grid-cols-2">
-                                {[
+                                {([
                                     {
                                         title: t('settings_view.ai.tool_policy_read_title'),
                                         description: t('settings_view.ai.tool_policy_read_desc'),
-                                        value: true,
-                                        locked: true,
+                                        items: [
+                                            {
+                                                label: t('settings_view.ai.tool_policy_read_auto'),
+                                                checked: true,
+                                                locked: true,
+                                            },
+                                        ],
                                     },
                                     {
                                         title: t('settings_view.ai.tool_policy_execute_title'),
                                         description: t('settings_view.ai.tool_policy_execute_desc'),
-                                        value: approveTools.run_command === true,
-                                        onChange: (checked: boolean) => setToolApproval('run_command', checked),
+                                        items: [
+                                            {
+                                                label: t('settings_view.ai.tool_policy_execute_run_command'),
+                                                checked: approveTools.run_command === true,
+                                                onChange: (checked: boolean) => setToolApproval('run_command', checked),
+                                            },
+                                        ],
                                     },
                                     {
                                         title: t('settings_view.ai.tool_policy_interactive_title'),
                                         description: t('settings_view.ai.tool_policy_interactive_desc'),
-                                        value: approveTools.send_terminal_input === true,
-                                        onChange: (checked: boolean) => setToolApproval('send_terminal_input', checked),
-                                    },
-                                    {
-                                        title: t('settings_view.ai.tool_policy_write_title'),
-                                        description: t('settings_view.ai.tool_policy_write_desc'),
-                                        value: approveTools.write_resource === true && approveTools.transfer_resource === true,
-                                        onChange: (checked: boolean) => {
-                                            updateAi('toolUse', {
-                                                ...toolUse,
-                                                autoApproveTools: {
-                                                    ...approveTools,
-                                                    write_resource: checked,
-                                                    transfer_resource: checked,
-                                                    remember_preference: checked,
-                                                },
-                                            });
-                                        },
+                                        items: [
+                                            {
+                                                label: t('settings_view.ai.tool_policy_interactive_send_input'),
+                                                checked: approveTools.send_terminal_input === true,
+                                                onChange: (checked: boolean) => setToolApproval('send_terminal_input', checked),
+                                            },
+                                        ],
                                     },
                                     {
                                         title: t('settings_view.ai.tool_policy_navigation_title'),
                                         description: t('settings_view.ai.tool_policy_navigation_desc'),
-                                        value: approveTools.open_app_surface === true || approveTools.connect_target === true,
-                                        onChange: (checked: boolean) => {
-                                            updateAi('toolUse', {
-                                                ...toolUse,
-                                                autoApproveTools: {
-                                                    ...approveTools,
-                                                    open_app_surface: checked,
-                                                    connect_target: checked,
-                                                },
-                                            });
-                                        },
+                                        items: [
+                                            {
+                                                label: t('settings_view.ai.tool_policy_connect_target'),
+                                                checked: approveTools.connect_target === true,
+                                                onChange: (checked: boolean) => setToolApproval('connect_target', checked),
+                                            },
+                                            {
+                                                label: t('settings_view.ai.tool_policy_open_surface'),
+                                                checked: approveTools.open_app_surface === true,
+                                                onChange: (checked: boolean) => setToolApproval('open_app_surface', checked),
+                                            },
+                                        ],
                                     },
-                                ].map((policy) => (
-                                    <div key={policy.title} className="rounded-lg border border-theme-border/60 bg-theme-bg-panel/30 p-3">
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-medium text-theme-text">{policy.title}</p>
-                                                <p className="mt-1 text-xs leading-relaxed text-theme-text-muted">{policy.description}</p>
-                                            </div>
-                                            <Checkbox
-                                                checked={policy.value}
-                                                disabled={policy.locked}
-                                                onCheckedChange={(checked) => policy.onChange?.(!!checked)}
-                                            />
+                                    {
+                                        title: t('settings_view.ai.tool_policy_write_title'),
+                                        description: t('settings_view.ai.tool_policy_write_desc'),
+                                        className: 'md:col-span-2',
+                                        items: [
+                                            {
+                                                label: t('settings_view.ai.tool_policy_write_settings'),
+                                                checked: approveTools['write_resource:settings'] === true,
+                                                onChange: (checked: boolean) => setToolApproval('write_resource:settings', checked),
+                                            },
+                                            {
+                                                label: t('settings_view.ai.tool_policy_write_file'),
+                                                checked: approveTools['write_resource:file'] === true,
+                                                onChange: (checked: boolean) => setToolApproval('write_resource:file', checked),
+                                            },
+                                            {
+                                                label: t('settings_view.ai.tool_policy_transfer_resource'),
+                                                checked: approveTools.transfer_resource === true,
+                                                onChange: (checked: boolean) => setToolApproval('transfer_resource', checked),
+                                            },
+                                            {
+                                                label: t('settings_view.ai.tool_policy_remember_preference'),
+                                                checked: approveTools.remember_preference === true,
+                                                onChange: (checked: boolean) => setToolApproval('remember_preference', checked),
+                                            },
+                                        ],
+                                    },
+                                ] as ToolPolicyGroup[]).map((policy) => (
+                                    <div key={policy.title} className={cn('rounded-lg border border-theme-border/60 bg-theme-bg-panel/30 p-3', policy.className)}>
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium text-theme-text">{policy.title}</p>
+                                            <p className="mt-1 text-xs leading-relaxed text-theme-text-muted">{policy.description}</p>
+                                        </div>
+                                        <div className="mt-3 grid gap-2">
+                                            {policy.items.map((item) => (
+                                                <label
+                                                    key={item.label}
+                                                    className="flex items-center justify-between gap-3 rounded-md border border-theme-border/30 bg-theme-bg/25 px-2.5 py-2 text-xs text-theme-text-muted"
+                                                >
+                                                    <span>{item.label}</span>
+                                                    <Checkbox
+                                                        checked={item.checked}
+                                                        disabled={item.locked}
+                                                        onCheckedChange={(checked) => item.onChange?.(!!checked)}
+                                                    />
+                                                </label>
+                                            ))}
                                         </div>
                                     </div>
                                 ))}

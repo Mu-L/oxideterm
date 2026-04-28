@@ -179,6 +179,30 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().settings.ai.toolUse?.maxRounds).toBe(30);
   });
 
+  it('maps legacy write_resource approval to settings and file only', async () => {
+    const base = buildSavedSettings();
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      ai: {
+        ...base.ai,
+        toolUse: {
+          enabled: true,
+          autoApproveTools: { write_resource: true },
+          disabledTools: [],
+          maxRounds: 10,
+        },
+      },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+    const autoApproveTools = useSettingsStore.getState().settings.ai.toolUse?.autoApproveTools;
+
+    expect(autoApproveTools?.write_resource).toBe(true);
+    expect(autoApproveTools?.['write_resource:settings']).toBe(true);
+    expect(autoApproveTools?.['write_resource:file']).toBe(true);
+    expect(autoApproveTools?.transfer_resource).toBe(false);
+    expect(autoApproveTools?.remember_preference).toBe(false);
+  });
+
   it('clears legacy localStorage keys when loading defaults', async () => {
     localStorage.setItem('oxide-settings', '{"legacy":true}');
     localStorage.setItem('oxide-ui-state', '{"sidebar":false}');

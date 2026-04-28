@@ -553,6 +553,8 @@ const defaultAiSettings: AiSettings = {
       run_command: false,
       send_terminal_input: false,
       write_resource: false,
+      'write_resource:settings': false,
+      'write_resource:file': false,
       transfer_resource: false,
       open_app_surface: false,
       remember_preference: false,
@@ -694,6 +696,27 @@ function normalizeHistorySettings(settings: PersistedSettingsV2): PersistedSetti
   };
 }
 
+function mergeAutoApproveTools(
+  defaults: Record<string, boolean> | undefined,
+  saved: Record<string, boolean> | undefined,
+): Record<string, boolean> {
+  const merged = {
+    ...(defaults ?? {}),
+    ...(saved ?? {}),
+  };
+
+  if (saved?.write_resource === true) {
+    if (!Object.prototype.hasOwnProperty.call(saved, 'write_resource:settings')) {
+      merged['write_resource:settings'] = true;
+    }
+    if (!Object.prototype.hasOwnProperty.call(saved, 'write_resource:file')) {
+      merged['write_resource:file'] = true;
+    }
+  }
+
+  return merged;
+}
+
 // ============================================================================
 // Persistence Helpers
 // ============================================================================
@@ -722,10 +745,7 @@ function mergeWithDefaults(saved: OxidePartialSettingsSnapshot | Partial<Persist
         ? {
             ...defaults.ai.toolUse,
             ...saved.ai.toolUse,
-            autoApproveTools: {
-              ...defaults.ai.toolUse?.autoApproveTools,
-              ...saved.ai.toolUse.autoApproveTools,
-            },
+            autoApproveTools: mergeAutoApproveTools(defaults.ai.toolUse?.autoApproveTools, saved.ai.toolUse.autoApproveTools),
             disabledTools: saved.ai.toolUse.disabledTools ?? [],
             maxRounds: normalizeAiToolMaxRounds(saved.ai.toolUse.maxRounds),
           }

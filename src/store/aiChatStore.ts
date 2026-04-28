@@ -39,6 +39,7 @@ import {
   executeOrchestratorTool,
   getOrchestratorToolDefs,
   isOrchestratorToolName,
+  orchestratorApprovalKeyForTool,
   orchestratorRiskForTool,
   type OrchestratorObligation,
   type OrchestratorToolContext,
@@ -2316,10 +2317,13 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
           const risk = isOrchestratorToolName(tc.name)
             ? orchestratorRiskForTool(tc.name, parsedApprovalArgs)
             : 'write';
+          const approvalKey = isOrchestratorToolName(tc.name)
+            ? orchestratorApprovalKeyForTool(tc.name, parsedApprovalArgs)
+            : tc.name;
           const approvalDecision = {
             requiresApproval: risk === 'destructive'
               ? true
-              : risk !== 'read' && autoApproveTools[tc.name] !== true,
+              : risk !== 'read' && autoApproveTools[approvalKey] !== true,
             risk,
           };
 

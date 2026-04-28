@@ -47,6 +47,18 @@ export function orchestratorRiskForTool(name: string, args: Record<string, unkno
   return 'read';
 }
 
+export function orchestratorApprovalKeyForTool(name: string, args: Record<string, unknown> = {}): string {
+  if (name === 'write_resource') {
+    const resource = typeof args.resource === 'string' ? args.resource : '';
+    if (resource === 'settings' || resource === 'file') {
+      return `write_resource:${resource}`;
+    }
+    return `write_resource:${resource || 'unsupported'}`;
+  }
+
+  return name;
+}
+
 export const ORCHESTRATOR_TOOL_DEFS: AiToolDefinition[] = [
   {
     name: 'list_targets',

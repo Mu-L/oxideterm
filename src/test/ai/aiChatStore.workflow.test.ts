@@ -677,6 +677,74 @@ describe('aiChatStore workflows', () => {
     expect(toolResultPart?.type === 'tool_result' ? toolResultPart.envelope?.meta.approvalMode : undefined).toBe('bypass');
   });
 
+  it('auto-approves settings writes independently from file writes', async () => {
+    settingsStoreMock.state.settings.ai.toolUse.enabled = true;
+    settingsStoreMock.state.settings.ai.toolUse.autoApproveTools = { 'write_resource:settings': true };
+    setConversation([]);
+
+    providerStreamMock
+      .mockImplementationOnce(async function* () {
+        yield {
+          type: 'tool_call_complete',
+          id: 'tool-settings-write',
+          name: 'write_resource',
+          arguments: JSON.stringify({
+            target_id: 'settings:app',
+            resource: 'settings',
+            section: 'ai',
+            key: 'thinkingDefaultExpanded',
+            value: true,
+            dry_run: true,
+          }),
+        };
+        yield { type: 'done' };
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'content', content: 'done' };
+        yield { type: 'done' };
+      });
+
+    await useAiChatStore.getState().sendMessage('dry run settings write');
+
+    const assistant = useAiChatStore.getState().conversations[0]?.messages.find((message) => message.role === 'assistant');
+    expect(assistant?.turn?.toolRounds[0]?.toolCalls[0]).toMatchObject({
+      id: 'tool-settings-write',
+      approvalState: 'approved',
+      executionState: 'completed',
+    });
+  });
+
+  it('does not use settings-write approval for file writes', async () => {
+    settingsStoreMock.state.settings.ai.toolUse.enabled = true;
+    settingsStoreMock.state.settings.ai.toolUse.autoApproveTools = { 'write_resource:settings': true };
+    setConversation([]);
+
+    providerStreamMock.mockImplementationOnce(async function* () {
+      yield {
+        type: 'tool_call_complete',
+        id: 'tool-file-write',
+        name: 'write_resource',
+        arguments: JSON.stringify({
+          target_id: 'ssh-node:node-1',
+          resource: 'file',
+          path: '/tmp/demo.txt',
+          content: 'demo',
+        }),
+      };
+      yield { type: 'done' };
+    });
+
+    const sendPromise = useAiChatStore.getState().sendMessage('write a file');
+
+    await waitFor(() => {
+      const assistant = useAiChatStore.getState().conversations[0]?.messages.find((message) => message.role === 'assistant');
+      return assistant?.turn?.toolRounds[0]?.toolCalls[0]?.approvalState === 'pending';
+    });
+
+    useAiChatStore.getState().stopGeneration();
+    await sendPromise;
+  });
+
   it('stores bypass mode only for the selected conversation', () => {
     setConversation([]);
     useAiChatStore.setState((state) => ({

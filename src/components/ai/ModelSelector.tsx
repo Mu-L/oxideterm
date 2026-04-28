@@ -269,7 +269,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
 
       {open && (
         <div className="absolute left-0 bottom-full mb-0.5 w-64 bg-theme-bg-elevated border border-theme-border rounded-[var(--radius-lg)] shadow-lg z-50 overflow-hidden">
-          <div className="border-b border-theme-border/30 p-2">
+          <div className="px-2 pt-2 pb-1">
             <div className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-theme-border/50 bg-theme-bg/50 px-2 py-1.5">
               <Search className="w-3 h-3 shrink-0 text-theme-text-muted" />
               <input
@@ -296,7 +296,7 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
                 {t('ai.model_selector.no_search_results')}
               </div>
             ) : (
-              visibleProviderGroups.map(({ provider, visibleModels }) => {
+              visibleProviderGroups.map(({ provider, visibleModels }, index) => {
                 const isLocal = provider.type === 'ollama' || (provider.type === 'openai_compatible' && isLocalUrl(provider.baseUrl));
                 const hasKey = isLocal || !!keyStatus[provider.id];
                 const isOnline = !isLocal || providerOnline[provider.id] !== false;
@@ -306,7 +306,10 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
                 return (
                   <div key={provider.id}>
                     {/* Provider header */}
-                    <div className="flex items-center justify-between border-y border-theme-border/20 bg-theme-bg-panel/90 px-3 py-1.5">
+                    <div className="relative flex items-center justify-between border-y border-theme-border/20 bg-theme-bg-elevated px-3 py-1.5">
+                      {index === 0 && (
+                        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-theme-border/50" />
+                      )}
                       <button
                         type="button"
                         onClick={() => toggleProvider(provider.id)}
@@ -362,42 +365,46 @@ export const ModelSelector = ({ onOpenSettings }: ModelSelectorProps) => {
                     </div>
 
                     {/* No API key: show configure hint instead of models */}
-                    {!isExpanded ? null : isLocal && !isOnline ? (
-                      <div className="px-3 py-2 text-[10px] text-theme-text-muted italic">
-                        {t('ai.model_selector.offline')}
-                      </div>
-                    ) : !hasKey ? (
-                      <button
-                        onClick={() => { onOpenSettings?.(); setOpen(false); }}
-                        className="w-full px-3 py-2 text-[10px] text-amber-400/80 italic text-left hover:bg-theme-bg-hover"
-                      >
-                        {t('ai.model_selector.no_key_warning')}
-                      </button>
-                    ) : visibleModels.length === 0 ? (
-                      <div className="px-3 py-2 text-[10px] text-theme-text-muted italic">
-                        {t('ai.model_selector.refresh_models')}
-                      </div>
-                    ) : (
-                      visibleModels.map((model) => {
-                        const isActive = provider.id === aiSettings.activeProviderId && model === activeModel;
-                        return (
+                    {!isExpanded ? null : (
+                      <div className="bg-theme-bg-panel/90">
+                        {isLocal && !isOnline ? (
+                          <div className="px-3 py-2 text-[10px] text-theme-text-muted italic">
+                            {t('ai.model_selector.offline')}
+                          </div>
+                        ) : !hasKey ? (
                           <button
-                            key={`${provider.id}-${model}`}
-                            onClick={() => handleSelect(provider, model)}
-                            className={cn(
-                              "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors",
-                              isActive
-                                ? "bg-theme-bg-hover/50 font-medium text-theme-text/85"
-                                : "text-theme-text-muted/70 hover:bg-theme-bg-hover/40 hover:text-theme-text-muted"
-                            )}
+                            onClick={() => { onOpenSettings?.(); setOpen(false); }}
+                            className="w-full px-3 py-2 text-[10px] text-amber-400/80 italic text-left hover:bg-theme-bg-hover/30"
                           >
-                            {isActive && <Check className="w-3 h-3 flex-shrink-0 text-theme-accent" />}
-                            <span className={cn("truncate", !isActive && "ml-5")}>
-                              {model}
-                            </span>
+                            {t('ai.model_selector.no_key_warning')}
                           </button>
-                        );
-                      })
+                        ) : visibleModels.length === 0 ? (
+                          <div className="px-3 py-2 text-[10px] text-theme-text-muted italic">
+                            {t('ai.model_selector.refresh_models')}
+                          </div>
+                        ) : (
+                          visibleModels.map((model) => {
+                            const isActive = provider.id === aiSettings.activeProviderId && model === activeModel;
+                            return (
+                              <button
+                                key={`${provider.id}-${model}`}
+                                onClick={() => handleSelect(provider, model)}
+                                className={cn(
+                                  "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors",
+                                  isActive
+                                    ? "bg-transparent font-medium text-theme-text/85"
+                                    : "text-theme-text-muted/70 hover:bg-theme-bg-hover/30 hover:text-theme-text-muted"
+                                )}
+                              >
+                                {isActive && <Check className="w-3 h-3 flex-shrink-0 text-theme-accent" />}
+                                <span className={cn("truncate", !isActive && "ml-5")}>
+                                  {model}
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
                     )}
                   </div>
                 );

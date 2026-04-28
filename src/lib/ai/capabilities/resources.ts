@@ -46,6 +46,7 @@ const TARGET_INTENTS: ReadonlySet<string> = new Set([
   'file',
   'sftp',
   'app_surface',
+  'knowledge',
   'status',
   'local',
   'unknown',
@@ -73,6 +74,7 @@ function viewForIntent(intent: AiTargetIntent): AiTargetView {
       return 'app_surfaces';
     case 'file':
     case 'sftp':
+    case 'knowledge':
       return 'files';
     case 'unknown':
     default:
@@ -102,7 +104,7 @@ function resourceFromString(resource: string): AiResourceKind | null {
 export async function selectAiTarget(options: { query: string; kind?: string; intent?: string }): Promise<AiActionResult> {
   const intent = normalizeIntent(options.intent);
   if (!intent) {
-    return failAction('Target intent is required.', 'missing_target_intent', 'select_target requires intent: connection, command, terminal, settings, file, sftp, app_surface, status, local, or unknown.', 'read', {
+    return failAction('Target intent is required.', 'missing_target_intent', 'select_target requires intent: connection, command, terminal, settings, file, sftp, app_surface, knowledge, status, local, or unknown.', 'read', {
       verified: false,
       nextActions: [{ action: 'list_targets', args: { view: 'connections', query: options.query }, reason: 'Inspect the correct target view before selecting.' }],
     });

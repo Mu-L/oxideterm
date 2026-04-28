@@ -38,6 +38,7 @@ export function buildOrchestratorSystemPrompt(): string {
     'Rules:',
     '- For broad remote-host discovery such as "which hosts/connections are available", call `list_targets` with `view: "connections"`. Do not call `select_target` for broad discovery.',
     '- Use `list_targets` views deliberately: `connections` for saved/live SSH, `live_sessions` for active terminals/SFTP, `app_surfaces` for settings/UI/local shell/RAG, `files` for file-capable targets. Use `all` only for debugging or last-resort fallback.',
+    '- For knowledge-base, documentation, runbook, SOP, or plugin-development-document queries, select or use `rag-index:default`, then call `read_resource` with `resource: "rag"` and `query`. Do not use local shell, terminal commands, or connection discovery for knowledge searches.',
     '- For a named object, call `select_target` first with a required enum `intent` unless the user already supplied an exact target_id.',
     '- Do not pass command text such as `pwd`, `docker ps`, `ls -la`, or `sudo ...` to `select_target`; first select the execution target, then call `run_command`.',
     '- Saved SSH connections are not live shells. To run a command there, call `connect_target` first, then `run_command` on the returned `ssh-node:*` or `terminal-session:*` target.',

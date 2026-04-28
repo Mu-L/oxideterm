@@ -107,7 +107,7 @@ describe('orchestrator executor target consistency', () => {
       required: ['query', 'intent'],
     });
     expect((selectTarget.parameters.properties as Record<string, unknown>).intent).toMatchObject({
-      enum: expect.arrayContaining(['connection', 'command', 'settings']),
+      enum: expect.arrayContaining(['connection', 'command', 'settings', 'knowledge']),
     });
     expect((readResource.parameters.properties as Record<string, unknown>).resource).toMatchObject({
       enum: ['settings', 'file', 'directory', 'sftp', 'ide', 'rag'],

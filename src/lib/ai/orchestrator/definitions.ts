@@ -6,7 +6,7 @@ import { ORCHESTRATOR_TOOL_NAMES, type AiActionRisk, type OrchestratorToolName }
 
 const TARGET_KIND_ENUM = ['all', 'saved-connection', 'ssh-node', 'terminal-session', 'local-shell', 'sftp-session', 'ide-workspace', 'settings', 'app-surface', 'rag-index'] as const;
 const TARGET_VIEW_ENUM = ['connections', 'live_sessions', 'app_surfaces', 'files', 'all'] as const;
-const TARGET_INTENT_ENUM = ['connection', 'command', 'terminal', 'settings', 'file', 'sftp', 'app_surface', 'status', 'local', 'unknown'] as const;
+const TARGET_INTENT_ENUM = ['connection', 'command', 'terminal', 'settings', 'file', 'sftp', 'app_surface', 'knowledge', 'status', 'local', 'unknown'] as const;
 const RESOURCE_KIND_ENUM = ['settings', 'file', 'directory', 'sftp', 'ide', 'rag'] as const;
 
 export const ORCHESTRATOR_READ_TOOLS = new Set<OrchestratorToolName>([
@@ -78,7 +78,7 @@ export const ORCHESTRATOR_TOOL_DEFS: AiToolDefinition[] = [
         intent: {
           type: 'string',
           enum: TARGET_INTENT_ENUM,
-          description: 'Required intended operation. This constrains the candidate pool so commands are not mistaken for targets.',
+          description: 'Required intended operation. Use knowledge for RAG/knowledge-base/runbook/documentation queries. This constrains the candidate pool so commands are not mistaken for targets.',
         },
         kind: {
           type: 'string',
@@ -151,7 +151,7 @@ export const ORCHESTRATOR_TOOL_DEFS: AiToolDefinition[] = [
         resource: { type: 'string', enum: RESOURCE_KIND_ENUM, description: 'Resource kind.' },
         path: { type: 'string', description: 'File or directory path when applicable.' },
         section: { type: 'string', description: 'Settings section when resource=settings.' },
-        query: { type: 'string', description: 'Search query for RAG or target-specific searches.' },
+        query: { type: 'string', description: 'Search query for RAG or target-specific searches. For resource=rag, pass target_id="rag-index:default" plus query; path is not required.' },
       },
       required: ['target_id', 'resource'],
     },

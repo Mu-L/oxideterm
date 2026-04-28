@@ -22,6 +22,7 @@ export type AiTargetIntent =
   | 'file'
   | 'sftp'
   | 'app_surface'
+  | 'knowledge'
   | 'status'
   | 'local'
   | 'unknown';

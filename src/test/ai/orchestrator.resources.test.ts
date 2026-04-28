@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const listAiTargetsMock = vi.hoisted(() => vi.fn());
 const getAiTargetMock = vi.hoisted(() => vi.fn());
+const ragSearchMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/ai/capabilities/targets', () => ({
   listAiTargets: listAiTargetsMock,
@@ -9,7 +10,7 @@ vi.mock('@/lib/ai/capabilities/targets', () => ({
 }));
 
 vi.mock('@/lib/api', () => ({
-  ragSearch: vi.fn(),
+  ragSearch: ragSearchMock,
   nodeAgentReadFile: vi.fn(),
   nodeAgentWriteFile: vi.fn(),
   nodeSftpDownload: vi.fn(),
@@ -60,9 +61,72 @@ vi.mock('@/lib/terminalRegistry', () => ({
   getAllEntries: () => [],
 }));
 
-import { getState, selectAiTarget, writeResource } from '@/lib/ai/capabilities/resources';
+import { getState, readResource, selectAiTarget, writeResource } from '@/lib/ai/capabilities/resources';
 
 describe('orchestrator resource capability', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('routes knowledge target selection through file-capable targets, not connections or local shell', async () => {
+    listAiTargetsMock.mockResolvedValue([
+      {
+        id: 'rag-index:default',
+        kind: 'rag-index',
+        label: 'Knowledge base',
+        state: 'available',
+        capabilities: ['state.list', 'filesystem.search'],
+        refs: {},
+      },
+    ]);
+
+    const result = await selectAiTarget({ query: '插件开发文档', intent: 'knowledge' });
+
+    expect(result.ok).toBe(true);
+    expect(listAiTargetsMock).toHaveBeenCalledWith({
+      query: '插件开发文档',
+      kind: undefined,
+      view: 'files',
+    });
+    expect(result.target).toMatchObject({
+      id: 'rag-index:default',
+      kind: 'rag-index',
+    });
+  });
+
+  it('reads RAG resources from rag-index without requiring a path', async () => {
+    ragSearchMock.mockResolvedValue([
+      {
+        docId: 'doc-1',
+        chunkId: 'chunk-1',
+        title: 'Plugin Development',
+        text: 'Use plugin-api.d.ts for OxideTerm plugin APIs.',
+        score: 0.91,
+      },
+    ]);
+
+    const result = await readResource({
+      target: {
+        id: 'rag-index:default',
+        kind: 'rag-index',
+        label: 'Knowledge base',
+        state: 'available',
+        capabilities: ['state.list', 'filesystem.search'],
+        refs: {},
+      },
+      resource: 'rag',
+      query: '插件开发文档',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(ragSearchMock).toHaveBeenCalledWith({
+      query: '插件开发文档',
+      collectionIds: [],
+      topK: 8,
+    });
+    expect(result.output).toContain('Plugin Development');
+  });
+
   it('rejects command-like text as a target query', async () => {
     const result = await selectAiTarget({ query: 'pwd', intent: 'command' });
 

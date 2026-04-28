@@ -907,26 +907,7 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
           const cmdLines = SLASH_COMMANDS.map(c => `- \`/${c.name}\` — ${t(c.descriptionKey)}`).join('\n');
           const partLines = PARTICIPANTS.map(p => `- \`@${p.name}\` — ${t(p.descriptionKey)}`).join('\n');
           const refLines = REFERENCES.map(r => `- \`#${r.type}\` — ${t(r.descriptionKey)}`).join('\n');
-          const body = `### ${t('ai.slash.help')}\n\n**/${t('ai.slash.help')}** — Slash Commands\n${cmdLines}\n\n**@** — Participants\n${partLines}\n\n**#** — References\n${refLines}`;
-          const assistantMsg: AiChatMessage = { id: generateId(), role: 'assistant', content: body, timestamp: Date.now() };
-          await _addMessage(convId, assistantMsg);
-          return;
-        }
-        if (slashDef.name === 'tools') {
-          const convId = activeConversationId || (await createConversation());
-          const userMsg: AiChatMessage = { id: generateId(), role: 'user', content, timestamp: Date.now() };
-          await _addMessage(convId, userMsg);
-
-          const aiSettings = useSettingsStore.getState().settings.ai;
-          const toolUseEnabled = aiSettings.toolUse?.enabled === true;
-          if (!toolUseEnabled) {
-            const assistantMsg: AiChatMessage = { id: generateId(), role: 'assistant', content: '⚠️ Tool Use is disabled. Enable it in Settings → AI → Tool Use.', timestamp: Date.now() };
-            await _addMessage(convId, assistantMsg);
-            return;
-          }
-          const tools = getOrchestratorToolDefs();
-          const toolLines = tools.map(t => `- \`${t.name}\` — ${t.description.slice(0, 80)}`).join('\n');
-          const body = `### /tools\n\n**${tools.length}** tools available:\n\n${toolLines}`;
+          const body = `### /help\n\n**Slash Commands**\n${cmdLines}\n\n**@ Participants**\n${partLines}\n\n**# References**\n${refLines}`;
           const assistantMsg: AiChatMessage = { id: generateId(), role: 'assistant', content: body, timestamp: Date.now() };
           await _addMessage(convId, assistantMsg);
           return;

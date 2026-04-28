@@ -9,6 +9,7 @@ const parseUserInputMock = vi.hoisted(() => vi.fn(() => ({
   cleanText: '',
 })));
 const resolveSlashCommandMock = vi.hoisted(() => vi.fn());
+const slashCommandsMock = vi.hoisted(() => [] as Array<{ name: string; descriptionKey: string; clientOnly?: boolean }>);
 const getProviderMock = vi.hoisted(() => vi.fn());
 const contextFreeToolsMock = vi.hoisted(() => new Set(['local_exec']));
 const sessionIdToolsMock = vi.hoisted(() => new Set<string>());
@@ -180,7 +181,7 @@ vi.mock('@/lib/ai/inputParser', () => ({
 
 vi.mock('@/lib/ai/slashCommands', () => ({
   resolveSlashCommand: resolveSlashCommandMock,
-  SLASH_COMMANDS: [],
+  SLASH_COMMANDS: slashCommandsMock,
 }));
 
 vi.mock('@/lib/ai/participants', () => ({
@@ -283,6 +284,7 @@ describe('aiChatStore workflows', () => {
     settingsStoreMock.state.settings.ai.memory = { enabled: true, content: '' };
     parseUserInputMock.mockReturnValue({ slashCommand: null, participants: [], references: [], cleanText: '' });
     resolveSlashCommandMock.mockReturnValue(undefined);
+    slashCommandsMock.splice(0, slashCommandsMock.length);
     getProviderMock.mockReturnValue({ streamCompletion: providerStreamMock });
     estimateTokensMock.mockImplementation(() => 100);
     trimHistoryMock.mockImplementation((messages) => ({ messages, trimmedCount: 0 }));
@@ -339,6 +341,36 @@ describe('aiChatStore workflows', () => {
     await useAiChatStore.getState().sendMessage('/clear');
 
     expect(createConversation).toHaveBeenCalledTimes(1);
+    expect(providerStreamMock).not.toHaveBeenCalled();
+  });
+
+  it('/help lists only the active slash commands', async () => {
+    setConversation([]);
+    parseUserInputMock.mockReturnValue({
+      slashCommand: { name: 'help', raw: '/help' },
+      participants: [],
+      references: [],
+      cleanText: '',
+    });
+    resolveSlashCommandMock.mockReturnValue({ name: 'help', clientOnly: true });
+    slashCommandsMock.push(
+      { name: 'explain', descriptionKey: 'ai.slash.explain_desc' },
+      { name: 'fix', descriptionKey: 'ai.slash.fix_desc' },
+      { name: 'help', descriptionKey: 'ai.slash.help_desc', clientOnly: true },
+      { name: 'clear', descriptionKey: 'ai.slash.clear_desc', clientOnly: true },
+      { name: 'compact', descriptionKey: 'ai.slash.compact_desc', clientOnly: true },
+    );
+
+    await useAiChatStore.getState().sendMessage('/help');
+
+    const assistantMessage = useAiChatStore.getState().conversations[0]?.messages.find(m => m.role === 'assistant');
+    expect(assistantMessage?.content).toContain('### /help');
+    for (const command of ['explain', 'fix', 'help', 'clear', 'compact']) {
+      expect(assistantMessage?.content).toContain(`/${command}`);
+    }
+    for (const removed of ['tools', 'deploy', 'monitor', 'connect', 'search', 'script', 'optimize']) {
+      expect(assistantMessage?.content).not.toContain(`/${removed}`);
+    }
     expect(providerStreamMock).not.toHaveBeenCalled();
   });
 

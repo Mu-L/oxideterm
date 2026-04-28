@@ -87,6 +87,98 @@ describe('provider streaming EOF handling', () => {
     ]);
   });
 
+  it('openai-compatible model listing falls back to /v1 when root returns HTML', async () => {
+    aiFetchMock
+      .mockResolvedValueOnce({ ok: true, status: 200, body: '<html>not json</html>' })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: JSON.stringify({ data: [{ id: 'model-b' }, { id: 'model-a' }] }) });
+
+    const { openaiCompatibleProvider } = await import('@/lib/ai/providers/openai');
+    const models = await openaiCompatibleProvider.fetchModels?.({
+      baseUrl: 'https://api.kr777.top',
+      apiKey: 'key',
+    });
+
+    expect(models).toEqual(['model-a', 'model-b']);
+    expect(aiFetchMock.mock.calls[0]?.[0]).toBe('https://api.kr777.top/models');
+    expect(aiFetchMock.mock.calls[1]?.[0]).toBe('https://api.kr777.top/v1/models');
+  });
+
+  it('openai-compatible model listing reports HTML responses as base URL errors', async () => {
+    aiFetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: '<html>not json</html>' });
+
+    const { openaiCompatibleProvider } = await import('@/lib/ai/providers/openai');
+    await expect(openaiCompatibleProvider.fetchModels?.({
+      baseUrl: 'https://api.example.test/v1',
+      apiKey: 'key',
+    })).rejects.toThrow(/returned HTML instead of JSON.*Base URL.*\/v1/);
+  });
+
+  it('openai-compatible streaming falls back to /v1 chat completions for root base URLs', async () => {
+    aiFetchStreamingMock
+      .mockReturnValueOnce({
+        response: Promise.resolve({ ok: false, status: 404 }),
+        body: makeStream(['<html>not found</html>']),
+      })
+      .mockReturnValueOnce({
+        response: Promise.resolve({ ok: true, status: 200 }),
+        body: makeStream(['data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n']),
+      });
+
+    const { openaiCompatibleProvider } = await import('@/lib/ai/providers/openai');
+    const events = await collectEvents(openaiCompatibleProvider.streamCompletion({
+      baseUrl: 'https://api.kr777.top',
+      model: 'model-a',
+      apiKey: 'key',
+      tools: [],
+    }, [{ role: 'user', content: 'hi' }], new AbortController().signal));
+
+    expect(events).toContainEqual({ type: 'content', content: 'ok' });
+    expect(aiFetchStreamingMock.mock.calls[0]?.[0]).toBe('https://api.kr777.top/chat/completions');
+    expect(aiFetchStreamingMock.mock.calls[1]?.[0]).toBe('https://api.kr777.top/v1/chat/completions');
+  });
+
+  it('openai-compatible streaming falls back to /v1 when root returns successful HTML', async () => {
+    aiFetchStreamingMock
+      .mockReturnValueOnce({
+        response: Promise.resolve({ ok: true, status: 200 }),
+        body: makeStream(['<html>new-api dashboard</html>']),
+      })
+      .mockReturnValueOnce({
+        response: Promise.resolve({ ok: true, status: 200 }),
+        body: makeStream(['data: {"choices":[{"delta":{"content":"v1 ok"}}]}\n\ndata: [DONE]\n\n']),
+      });
+
+    const { openaiCompatibleProvider } = await import('@/lib/ai/providers/openai');
+    const events = await collectEvents(openaiCompatibleProvider.streamCompletion({
+      baseUrl: 'https://api.kr777.top',
+      model: 'claude-opus-via-new-api',
+      apiKey: 'key',
+      tools: [],
+    }, [{ role: 'user', content: 'hi' }], new AbortController().signal));
+
+    expect(events).toContainEqual({ type: 'content', content: 'v1 ok' });
+    expect(aiFetchStreamingMock.mock.calls[0]?.[0]).toBe('https://api.kr777.top/chat/completions');
+    expect(aiFetchStreamingMock.mock.calls[1]?.[0]).toBe('https://api.kr777.top/v1/chat/completions');
+  });
+
+  it('openai-compatible streaming parses non-SSE JSON responses from gateways', async () => {
+    aiFetchStreamingMock.mockReturnValue({
+      response: Promise.resolve({ ok: true, status: 200 }),
+      body: makeStream([JSON.stringify({ choices: [{ message: { content: 'json ok' } }] })]),
+    });
+
+    const { openaiCompatibleProvider } = await import('@/lib/ai/providers/openai');
+    const events = await collectEvents(openaiCompatibleProvider.streamCompletion({
+      baseUrl: 'https://api.kr777.top/v1',
+      model: 'model-a',
+      apiKey: 'key',
+      tools: [],
+    }, [{ role: 'user', content: 'hi' }], new AbortController().signal));
+
+    expect(events).toContainEqual({ type: 'content', content: 'json ok' });
+    expect(events.at(-1)).toEqual({ type: 'done' });
+  });
+
   it('ollama OpenAI-compatible payload also merges repeated system messages', async () => {
     aiFetchStreamingMock.mockReturnValue({
       response: Promise.resolve({ ok: true, status: 200 }),

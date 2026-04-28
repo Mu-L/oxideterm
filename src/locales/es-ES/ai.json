@@ -224,7 +224,8 @@
         "network-expose": "Exposición de red",
         "settings-change": "Cambio de ajustes",
         "credential-sensitive": "Credenciales sensibles"
-      }
+      },
+      "bypass_badge": "Bypass"
     },
     "guardrail": {
       "tool_disabled_hard_deny_retry": "El uso de herramientas está desactivado para este chat y el modelo emitió una transcripción de herramienta simulada. OxideSens solicitó un nuevo intento en lenguaje natural.",

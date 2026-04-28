@@ -224,7 +224,8 @@
         "network-expose": "Network Exposure",
         "settings-change": "Settings Change",
         "credential-sensitive": "Credential Sensitive"
-      }
+      },
+      "bypass_badge": "Bypass"
     },
     "guardrail": {
       "tool_disabled_hard_deny_retry": "Tool use is disabled for this chat, and the model emitted a pseudo-tool transcript. OxideSens requested a plain-language retry.",

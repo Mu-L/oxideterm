@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import type { AiToolDefinition } from '../providers';
+import { hasDeniedCommands } from '../tools/toolDefinitions';
 import { ORCHESTRATOR_TOOL_NAMES, type AiActionRisk, type OrchestratorToolName } from './types';
 
 const TARGET_KIND_ENUM = ['all', 'saved-connection', 'ssh-node', 'terminal-session', 'local-shell', 'sftp-session', 'ide-workspace', 'settings', 'app-surface', 'rag-index'] as const;
@@ -34,8 +35,7 @@ export function isOrchestratorToolName(name: string): name is OrchestratorToolNa
 
 export function orchestratorRiskForTool(name: string, args: Record<string, unknown> = {}): AiActionRisk {
   if (name === 'run_command') {
-    const command = typeof args.command === 'string' ? args.command : '';
-    if (/\b(?:rm\s+-rf|shutdown|reboot|mkfs|dd\s+if=|chmod\s+-R\s+777|chown\s+-R)\b/i.test(command)) {
+    if (hasDeniedCommands(name, args)) {
       return 'destructive';
     }
     return 'execute';

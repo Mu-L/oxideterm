@@ -300,6 +300,7 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
   const summary = envelope?.summary || formatArgs(call.arguments);
   const capability = envelope?.meta.capability;
   const targetId = envelope?.meta.targetId;
+  const bypassApproval = envelope?.meta.approvalMode === 'bypass';
   const warnings = envelope?.warnings ?? [];
   const structuredData = envelope?.data;
   const hasOutput = call.result && (call.result.output || call.result.error);
@@ -372,6 +373,12 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: AiToolCall }) 
         <Badge className={cn('shrink-0', RISK_CLASS[risk])}>
           {formatRiskLabel(risk, t)}
         </Badge>
+        {bypassApproval && (
+          <Badge className="shrink-0 gap-1 border-amber-400/70 bg-amber-400/20 text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.25)]">
+            <ShieldAlert className="h-2.5 w-2.5" />
+            {t('ai.tool_use.bypass_badge', { defaultValue: 'Bypass' })}
+          </Badge>
+        )}
         {capability && (
           <Badge className="shrink-0 border-theme-border/30 text-theme-text-muted/60 bg-theme-bg/30">
             {capability}

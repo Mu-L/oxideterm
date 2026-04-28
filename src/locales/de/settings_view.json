@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "write_resource und transfer_resource ohne Nachfrage erlauben.",
       "tool_policy_navigation_title": "App-Oberflächen öffnen",
       "tool_policy_navigation_desc": "Öffnen von Tabs wie Einstellungen, SFTP, IDE oder lokalem Terminal erlauben.",
-      "tool_policy_warning": "Gefährliche Befehle werden nie stillschweigend genehmigt. Passwörter, sudo-Abfragen, Passphrasen und Zugangsdaten müssen immer vom Benutzer behandelt werden.",
+      "tool_policy_warning": "Im Default-Modus müssen gefährliche Befehle genehmigt werden. Der Bypass-Modus kann diese Genehmigung nur für den aktuellen Chat nach ausdrücklicher Bestätigung überspringen. Passwörter, sudo-Abfragen, Passphrasen und Zugangsdaten müssen weiterhin von Ihnen behandelt werden.",
       "tool_use_group_terminal": "Terminal & Dateien",
       "tool_use_group_session": "Sitzung",
       "tool_use_group_infrastructure": "Infrastruktur",

@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "允許 write_resource 和 transfer_resource 無需每次詢問。",
       "tool_policy_navigation_title": "開啟應用介面",
       "tool_policy_navigation_desc": "允許開啟設定、SFTP、IDE 或本機終端機等分頁。",
-      "tool_policy_warning": "危險命令永遠不會靜默核准。密碼、sudo 提示、密鑰口令和憑證必須始終由使用者處理。",
+      "tool_policy_warning": "Default 模式下危險命令需要核准。Bypass 模式僅在你確認後對目前對話跳過這項核准。密碼、sudo 提示、密鑰口令和憑證仍必須由你手動處理。",
       "tool_use_group_terminal": "終端機與檔案",
       "tool_use_group_session": "工作階段",
       "tool_use_group_infrastructure": "基礎設施",

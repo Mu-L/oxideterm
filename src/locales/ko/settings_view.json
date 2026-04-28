@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "write_resource와 transfer_resource를 매번 묻지 않고 허용합니다.",
       "tool_policy_navigation_title": "앱 화면 열기",
       "tool_policy_navigation_desc": "설정, SFTP, IDE 또는 로컬 터미널 같은 탭 열기를 허용합니다.",
-      "tool_policy_warning": "위험한 명령은 절대 조용히 승인되지 않습니다. 비밀번호, sudo 프롬프트, 암호 구문, 자격 증명은 항상 사용자가 처리해야 합니다.",
+      "tool_policy_warning": "Default 모드에서는 위험한 명령에 승인이 필요합니다. Bypass 모드는 명시적으로 확인한 뒤 현재 채팅에서만 해당 승인을 건너뜁니다. 비밀번호, sudo 프롬프트, 암호 구문, 자격 증명은 여전히 사용자가 직접 처리해야 합니다.",
       "tool_use_group_terminal": "터미널 & 파일",
       "tool_use_group_session": "세션",
       "tool_use_group_infrastructure": "인프라",

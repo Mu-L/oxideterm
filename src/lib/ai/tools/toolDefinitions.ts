@@ -2069,7 +2069,7 @@ export function isCommandDenied(command: string): boolean {
  * Tools without executable command strings return an empty array.
  */
 export function getDeniedCommands(toolName: string, args: Record<string, unknown>): string[] {
-  if ((toolName === 'terminal_exec' || toolName === 'local_exec') && typeof args.command === 'string') {
+  if ((toolName === 'terminal_exec' || toolName === 'local_exec' || toolName === 'run_command') && typeof args.command === 'string') {
     return isCommandDenied(args.command) ? [args.command] : [];
   }
 

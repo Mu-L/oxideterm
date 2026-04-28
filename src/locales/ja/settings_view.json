@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "write_resource と transfer_resource を毎回確認せずに許可します。",
       "tool_policy_navigation_title": "アプリ画面を開く",
       "tool_policy_navigation_desc": "設定、SFTP、IDE、ローカルターミナルなどのタブを開くことを許可します。",
-      "tool_policy_warning": "危険なコマンドが黙って承認されることはありません。パスワード、sudo プロンプト、パスフレーズ、認証情報は常にユーザーが扱う必要があります。",
+      "tool_policy_warning": "Default モードでは危険なコマンドに承認が必要です。Bypass モードは明示的な確認後、このチャット内だけその承認を省略できます。パスワード、sudo プロンプト、パスフレーズ、認証情報は引き続きユーザーが扱う必要があります。",
       "tool_use_group_terminal": "ターミナルとファイル",
       "tool_use_group_session": "セッション",
       "tool_use_group_infrastructure": "インフラ",

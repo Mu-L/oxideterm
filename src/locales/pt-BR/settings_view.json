@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "Permitir write_resource e transfer_resource sem perguntar a cada vez.",
       "tool_policy_navigation_title": "Abrir superfícies do app",
       "tool_policy_navigation_desc": "Permitir abrir abas como Configurações, SFTP, IDE ou terminal local.",
-      "tool_policy_warning": "Comandos perigosos nunca são aprovados silenciosamente. Senhas, prompts sudo, frases secretas e credenciais devem sempre ser tratados pelo usuário.",
+      "tool_policy_warning": "No modo Default, comandos perigosos exigem aprovação. O modo Bypass pode pular essa aprovação apenas no chat atual após confirmação explícita. Senhas, prompts sudo, frases secretas e credenciais ainda devem ser tratados por você.",
       "tool_use_group_terminal": "Terminal e Arquivos",
       "tool_use_group_session": "Sessão",
       "tool_use_group_infrastructure": "Infraestrutura",

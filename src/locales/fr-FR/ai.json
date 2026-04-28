@@ -224,7 +224,8 @@
         "network-expose": "Exposition réseau",
         "settings-change": "Modification paramètres",
         "credential-sensitive": "Identifiants sensibles"
-      }
+      },
+      "bypass_badge": "Bypass"
     },
     "guardrail": {
       "tool_disabled_hard_deny_retry": "L'utilisation d'outils est désactivée pour ce chat et le modèle a émis une fausse transcription d'outil. OxideSens a demandé une nouvelle tentative en langage naturel.",

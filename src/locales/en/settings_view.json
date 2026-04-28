@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "Allow write_resource and transfer_resource without asking each time.",
       "tool_policy_navigation_title": "Open app surfaces",
       "tool_policy_navigation_desc": "Allow opening tabs such as Settings, SFTP, IDE, or local terminal.",
-      "tool_policy_warning": "Dangerous commands are never silently approved. Passwords, sudo prompts, passphrases, and credentials must always be handled by the user.",
+      "tool_policy_warning": "Default mode requires approval for dangerous commands. Bypass mode can skip that approval only for the current chat after explicit confirmation. Passwords, sudo prompts, passphrases, and credentials must still be handled by you.",
       "tool_use_group_terminal": "Terminal & Files",
       "tool_use_group_session": "Session",
       "tool_use_group_infrastructure": "Infrastructure",

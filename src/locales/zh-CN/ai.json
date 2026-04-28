@@ -224,7 +224,8 @@
         "network-expose": "网络暴露",
         "settings-change": "修改设置",
         "credential-sensitive": "凭据敏感"
-      }
+      },
+      "bypass_badge": "Bypass"
     },
     "guardrail": {
       "tool_disabled_hard_deny_retry": "此聊天已禁用工具使用，但模型输出了伪工具记录。OxideSens 已请求改用自然语言重试。",

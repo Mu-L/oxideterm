@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "允许 write_resource 和 transfer_resource 无需每次询问。",
       "tool_policy_navigation_title": "打开应用界面",
       "tool_policy_navigation_desc": "允许打开设置、SFTP、IDE 或本地终端等标签页。",
-      "tool_policy_warning": "危险命令永远不会静默批准。密码、sudo 提示、密钥口令和凭据必须始终由用户处理。",
+      "tool_policy_warning": "Default 模式下危险命令需要审批。Bypass 模式仅在你确认后对当前对话跳过这项审批。密码、sudo 提示、密钥口令和凭据仍必须由你手动处理。",
       "tool_use_group_terminal": "终端与文件",
       "tool_use_group_session": "会话",
       "tool_use_group_infrastructure": "基础设施",

@@ -224,7 +224,8 @@
         "network-expose": "Netzwerkfreigabe",
         "settings-change": "Einstellung ändern",
         "credential-sensitive": "Zugangsdaten"
-      }
+      },
+      "bypass_badge": "Bypass"
     },
     "guardrail": {
       "tool_disabled_hard_deny_retry": "Die Tool-Nutzung ist für diesen Chat deaktiviert, und das Modell hat ein Pseudo-Tool-Protokoll ausgegeben. OxideSens hat eine Wiederholung in Klartext angefordert.",

@@ -224,7 +224,8 @@
         "network-expose": "Lộ mạng",
         "settings-change": "Đổi cài đặt",
         "credential-sensitive": "Nhạy cảm thông tin đăng nhập"
-      }
+      },
+      "bypass_badge": "Bypass"
     },
     "guardrail": {
       "tool_disabled_hard_deny_retry": "Việc dùng công cụ bị tắt cho cuộc trò chuyện này và mô hình đã tạo ra một bản ghi công cụ giả. OxideSens đã yêu cầu thử lại bằng ngôn ngữ tự nhiên.",

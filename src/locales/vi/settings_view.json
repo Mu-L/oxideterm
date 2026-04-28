@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "Cho phép write_resource và transfer_resource mà không hỏi mỗi lần.",
       "tool_policy_navigation_title": "Mở bề mặt ứng dụng",
       "tool_policy_navigation_desc": "Cho phép mở các tab như Cài đặt, SFTP, IDE hoặc terminal cục bộ.",
-      "tool_policy_warning": "Lệnh nguy hiểm không bao giờ được âm thầm phê duyệt. Mật khẩu, lời nhắc sudo, passphrase và thông tin xác thực luôn phải do người dùng xử lý.",
+      "tool_policy_warning": "Ở chế độ Default, lệnh nguy hiểm cần được phê duyệt. Chế độ Bypass chỉ có thể bỏ qua bước phê duyệt đó cho cuộc trò chuyện hiện tại sau khi bạn xác nhận rõ ràng. Mật khẩu, lời nhắc sudo, passphrase và thông tin xác thực vẫn phải do bạn xử lý.",
       "tool_use_group_terminal": "Terminal & Tệp",
       "tool_use_group_session": "Phiên",
       "tool_use_group_infrastructure": "Hạ tầng",

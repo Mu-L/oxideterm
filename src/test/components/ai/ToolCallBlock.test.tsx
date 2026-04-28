@@ -26,6 +26,7 @@ vi.mock('react-i18next', () => ({
       if (key === 'ai.tool_use.output_truncated_no_full') return 'Output compacted; full too large';
       if (key === 'ai.tool_use.output_stats') return `${String(options?.chars ?? 0)} chars, ${String(options?.lines ?? 0)} lines${String(options?.omitted ?? '')}`;
       if (key === 'ai.tool_use.approval_required') return 'Requires approval';
+      if (key === 'ai.tool_use.bypass_badge') return 'Bypass';
       if (key === 'ai.tool_use.condensed') return `condensed ${String(options?.count ?? 0)}`;
       if (key === 'ai.tool_use.condensed_label') return 'Earlier calls';
       if (key.startsWith('ai.tool_use.tool_names.')) {
@@ -205,6 +206,40 @@ describe('ToolCallBlock', () => {
     fireEvent.click(screen.getByText('Show full output'));
     expect(screen.getByText(/full middle output/)).toBeInTheDocument();
     expect(screen.getByText(/Output compacted; full stored/)).toBeInTheDocument();
+  });
+
+  it('shows a prominent bypass badge for bypass-approved tool results', () => {
+    render(
+      <ToolCallBlock
+        toolCalls={[
+          {
+            id: 'tool-bypass',
+            name: 'terminal_exec',
+            arguments: '{"command":"sudo reboot"}',
+            status: 'completed',
+            result: {
+              toolCallId: 'tool-bypass',
+              toolName: 'terminal_exec',
+              success: true,
+              output: 'ok',
+              durationMs: 1,
+              envelope: {
+                ok: true,
+                summary: 'Command completed',
+                output: 'ok',
+                meta: {
+                  toolName: 'terminal_exec',
+                  approvalMode: 'bypass',
+                  durationMs: 1,
+                },
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Bypass')).toBeInTheDocument();
   });
 
   it('renders part-level tool calls when rounds are not available yet', () => {

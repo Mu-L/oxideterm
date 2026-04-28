@@ -580,7 +580,7 @@
       "tool_policy_write_desc": "Autoriser write_resource et transfer_resource sans demander à chaque fois.",
       "tool_policy_navigation_title": "Ouvrir des surfaces d'application",
       "tool_policy_navigation_desc": "Autoriser l'ouverture d'onglets comme Paramètres, SFTP, IDE ou terminal local.",
-      "tool_policy_warning": "Les commandes dangereuses ne sont jamais approuvées silencieusement. Les mots de passe, invites sudo, phrases secrètes et identifiants doivent toujours être gérés par l'utilisateur.",
+      "tool_policy_warning": "En mode Default, les commandes dangereuses nécessitent une approbation. Le mode Bypass peut ignorer cette approbation uniquement pour la conversation actuelle après confirmation explicite. Les mots de passe, invites sudo, phrases secrètes et identifiants doivent toujours être gérés par vous.",
       "tool_use_group_terminal": "Terminal & Fichiers",
       "tool_use_group_session": "Session",
       "tool_use_group_infrastructure": "Infrastructure",

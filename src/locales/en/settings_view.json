@@ -315,7 +315,7 @@
       "command_marks": "Command Marks",
       "command_marks_hint": "Add lightweight iTerm2-style marks for reliable commands from the Command Bar, AI, and broadcast. The terminal buffer stays unchanged.",
       "command_marks_hover_actions": "Hover Actions",
-      "command_marks_hover_actions_hint": "Show copy output, Ask OxideSens, and logical fold actions when hovering a command mark.",
+      "command_marks_hover_actions_hint": "Show the copy output action in the command selection toolbar.",
       "command_marks_user_input_observed": "Mark Manual Input (Experimental)",
       "command_marks_user_input_observed_hint": "Best-effort marks for commands typed directly in the terminal. Disabled by default to avoid SSH, REPL, tmux, and sudo false positives.",
       "command_marks_heuristic": "Prompt Heuristics (Experimental)",

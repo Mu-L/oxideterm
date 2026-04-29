@@ -315,7 +315,7 @@
       "command_marks": "コマンドマーク",
       "command_marks_hint": "Command Bar、AI、broadcast から送られた信頼できるコマンドに iTerm2 風の軽量マークを付けます。端末バッファは変更しません。",
       "command_marks_hover_actions": "ホバー操作",
-      "command_marks_hover_actions_hint": "コマンドマークにホバーしたとき、出力コピー、OxideSens へ質問、論理折りたたみを表示します。",
+      "command_marks_hover_actions_hint": "Show the copy output action in the command selection toolbar.",
       "command_marks_user_input_observed": "手入力をマーク（実験的）",
       "command_marks_user_input_observed_hint": "端末内で直接入力されたコマンドを best-effort でマークします。SSH、REPL、tmux、sudo の誤判定を避けるため既定では無効です。",
       "command_marks_heuristic": "プロンプト推定（実験的）",

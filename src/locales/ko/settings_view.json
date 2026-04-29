@@ -315,7 +315,7 @@
       "command_marks": "명령 표시",
       "command_marks_hint": "Command Bar, AI, broadcast에서 보낸 신뢰 가능한 명령에 iTerm2 스타일의 가벼운 표시를 추가합니다. 터미널 버퍼는 변경하지 않습니다.",
       "command_marks_hover_actions": "호버 작업",
-      "command_marks_hover_actions_hint": "명령 표시에 마우스를 올리면 출력 복사, OxideSens에 묻기, 논리적 접기 작업을 표시합니다.",
+      "command_marks_hover_actions_hint": "Show the copy output action in the command selection toolbar.",
       "command_marks_user_input_observed": "수동 입력 표시(실험적)",
       "command_marks_user_input_observed_hint": "터미널에 직접 입력한 명령을 best-effort로 표시합니다. SSH, REPL, tmux, sudo 오탐을 피하기 위해 기본적으로 꺼져 있습니다.",
       "command_marks_heuristic": "프롬프트 휴리스틱(실험적)",

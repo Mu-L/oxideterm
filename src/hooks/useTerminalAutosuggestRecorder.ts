@@ -23,6 +23,7 @@ export function useTerminalAutosuggestRecorder(options: {
     if (result.completedCommand) {
       recordTerminalAutosuggestCommand(result.completedCommand, 'runtime');
     }
+    return result;
   }, []);
 
   const resetInput = useCallback(() => {

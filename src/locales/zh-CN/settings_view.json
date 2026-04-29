@@ -315,7 +315,7 @@
       "command_marks": "命令标记",
       "command_marks_hint": "为命令栏、AI 和广播发送的可靠命令添加 iTerm2 风格轻量标记。不会改写终端缓冲区。",
       "command_marks_hover_actions": "悬停操作",
-      "command_marks_hover_actions_hint": "悬停命令标记时显示复制输出、询问 OxideSens 和逻辑折叠操作。",
+      "command_marks_hover_actions_hint": "在命令选区工具条中显示复制输出操作。",
       "command_marks_user_input_observed": "标记手动输入（实验性）",
       "command_marks_user_input_observed_hint": "为直接在终端里输入的命令做 best-effort 标记。默认关闭，避免 SSH、REPL、tmux 和 sudo 误判。",
       "command_marks_heuristic": "提示符启发式（实验性）",

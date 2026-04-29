@@ -61,6 +61,7 @@ const terminalRegistryMocks = vi.hoisted(() => ({
   notifyTerminalOutput: vi.fn(),
   broadcastToTargets: vi.fn(),
   updateTerminalReadiness: vi.fn(),
+  registerTerminalCommandMarkCreator: vi.fn(),
 }));
 
 const shortcutState = vi.hoisted(() => ({
@@ -394,6 +395,7 @@ vi.mock('@/lib/terminalRegistry', () => ({
   notifyTerminalOutput: terminalRegistryMocks.notifyTerminalOutput,
   broadcastToTargets: terminalRegistryMocks.broadcastToTargets,
   updateTerminalReadiness: terminalRegistryMocks.updateTerminalReadiness,
+  registerTerminalCommandMarkCreator: terminalRegistryMocks.registerTerminalCommandMarkCreator,
 }));
 
 vi.mock('@/lib/fontLoader', () => ({

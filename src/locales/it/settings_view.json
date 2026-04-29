@@ -315,7 +315,7 @@
       "command_marks": "Marcatori comandi",
       "command_marks_hint": "Aggiunge marcatori leggeri in stile iTerm2 ai comandi affidabili inviati da barra comandi, AI e broadcast. Il buffer del terminale resta invariato.",
       "command_marks_hover_actions": "Azioni al passaggio",
-      "command_marks_hover_actions_hint": "Mostra copia output, chiedi a OxideSens e piega logica al passaggio su un marcatore.",
+      "command_marks_hover_actions_hint": "Show the copy output action in the command selection toolbar.",
       "command_marks_user_input_observed": "Marca input manuale (sperimentale)",
       "command_marks_user_input_observed_hint": "Marcatori best-effort per comandi digitati direttamente nel terminale. Disattivato di default per evitare falsi positivi con SSH, REPL, tmux e sudo.",
       "command_marks_heuristic": "Euristiche prompt (sperimentale)",

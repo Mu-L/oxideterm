@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import type { IDecoration, IMarker, Terminal } from '@xterm/xterm';
-import { useAiChatStore } from '@/store/aiChatStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { addAiCommandRecord } from '@/lib/ai/orchestrator/ledger';
 import { getAiRuntimeEpoch } from '@/lib/ai/orchestrator/runtimeEpoch';
+import { writeSystemClipboardText } from '@/lib/clipboardSupport';
 
 export type TerminalCommandMarkDetectionSource =
   | 'command_bar'
@@ -36,6 +36,7 @@ export type TerminalCommandMark = {
   command: string;
   cwd?: string;
   startLine: number;
+  commandLine: number;
   endLine?: number;
   isClosed: boolean;
   closedBy?: TerminalCommandMarkClosedBy;
@@ -62,6 +63,18 @@ export type TerminalCommandMarkRequest = {
 type DecorationRecord = {
   marker: IMarker;
   decoration: IDecoration;
+  primary: boolean;
+  role: CommandMarkDecorationRole;
+  element?: HTMLElement;
+};
+
+type SelectionOverlayRecord = {
+  paneId: string;
+  mark: TerminalCommandMark;
+  term: Terminal;
+  element: HTMLElement;
+  actionsElement?: HTMLElement;
+  disposables: Array<{ dispose: () => void }>;
 };
 
 const MAX_MARKS_PER_PANE = 200;
@@ -69,9 +82,37 @@ const MAX_OUTPUT_CHARS = 24000;
 const MAX_OUTPUT_LINES = 400;
 
 const marksByPane = new Map<string, TerminalCommandMark[]>();
-const decorationsByCommandId = new Map<string, DecorationRecord>();
+const decorationsByCommandId = new Map<string, DecorationRecord[]>();
+const selectionOverlaysByPane = new Map<string, SelectionOverlayRecord>();
+const selectedMarkByPane = new Map<string, string>();
 const listeners = new Set<() => void>();
 let sequence = 0;
+
+const commandSelectionFallbacks: Record<string, string> = {
+  'terminal.command_selection.actions': 'Command selection actions',
+  'terminal.command_selection.copy': 'Copy',
+  'terminal.command_selection.copy_title': 'Copy command output',
+};
+
+function setLocalizedText(element: HTMLElement, key: string, attribute?: 'title' | 'aria-label'): void {
+  const fallback = commandSelectionFallbacks[key] ?? key;
+  if (attribute) {
+    element.setAttribute(attribute, fallback);
+  } else {
+    element.textContent = fallback;
+  }
+
+  void import('@/i18n').then(({ default: i18n }) => {
+    const translated = i18n.t(key);
+    if (attribute) {
+      element.setAttribute(attribute, translated);
+    } else {
+      element.textContent = translated;
+    }
+  }).catch(() => {
+    // Keep the fallback text when i18n is unavailable in isolated tests.
+  });
+}
 
 function nextCommandId(): string {
   sequence += 1;
@@ -92,15 +133,111 @@ function getAbsoluteCursorLine(term: Terminal): number {
   return term.buffer.active.baseY + term.buffer.active.cursorY;
 }
 
+export function getTerminalAbsoluteLineFromClientY(term: Terminal, container: HTMLElement, clientY: number): number | null {
+  const rowsElement = container.querySelector<HTMLElement>('.xterm-rows');
+  const rect = (rowsElement ?? container).getBoundingClientRect();
+  if (rect.height <= 0 || term.rows <= 0) return null;
+  const y = clientY - rect.top;
+  if (y < 0 || y > rect.height) return null;
+  const row = Math.min(term.rows - 1, Math.max(0, Math.floor(y / (rect.height / term.rows))));
+  return term.buffer.active.viewportY + row;
+}
+
 function getLineText(term: Terminal, absoluteLine: number): string {
   const line = term.buffer.active.getLine(absoluteLine);
   return line?.translateToString(true) ?? '';
 }
 
+function isLikelyPromptInputLine(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  return /^[❯➜λ>$#%❮›»]/u.test(trimmed);
+}
+
+function isLikelyPromptPreambleLine(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const hasPrivateUseGlyph = /[\uE000-\uF8FF]/u.test(trimmed);
+  const hasPowerlineGlyph = /[]/u.test(trimmed);
+  const hasRuler = /[·•∙.]{6,}/u.test(trimmed);
+  const hasClock = /\b\d{1,2}:\d{2}(?::\d{2})?\b/.test(trimmed);
+  const hasPromptContext = /[@~/$]|[A-Za-z0-9._-]+@[A-Za-z0-9._-]+/.test(trimmed);
+
+  return hasPowerlineGlyph
+    || (hasPrivateUseGlyph && (hasClock || hasRuler || hasPromptContext))
+    || (hasRuler && (hasClock || hasPromptContext));
+}
+
+function getPromptBlockStartLine(term: Terminal, commandLine: number): number {
+  if (!isLikelyPromptInputLine(getLineText(term, commandLine))) {
+    return commandLine;
+  }
+
+  let startLine = commandLine;
+  const minLine = Math.max(0, commandLine - 3);
+  for (let line = commandLine - 1; line >= minLine; line -= 1) {
+    if (!isLikelyPromptPreambleLine(getLineText(term, line))) break;
+    startLine = line;
+  }
+  return startLine;
+}
+
+function getPrimaryDecorationRecord(commandId: string): DecorationRecord | null {
+  return decorationsByCommandId.get(commandId)?.find((record) => record.primary) ?? null;
+}
+
+function getLiveMarkRange(mark: TerminalCommandMark): { startLine: number; endLine?: number } | null {
+  const primary = getPrimaryDecorationRecord(mark.commandId);
+  if (!primary) {
+    return {
+      startLine: mark.startLine,
+      endLine: mark.endLine,
+    };
+  }
+  if (primary.marker.line < 0 || primary.marker.isDisposed) return null;
+
+  const startLine = primary.marker.line;
+  if (typeof mark.endLine !== 'number') {
+    return { startLine };
+  }
+
+  return {
+    startLine,
+    endLine: startLine + Math.max(0, mark.endLine - mark.startLine),
+  };
+}
+
+function getSelectableMarkRange(term: Terminal, mark: TerminalCommandMark): { startLine: number; endLine: number } | null {
+  const liveRange = getLiveMarkRange(mark);
+  if (!liveRange) return null;
+  if (typeof liveRange.endLine === 'number') {
+    return {
+      startLine: liveRange.startLine,
+      endLine: liveRange.endLine,
+    };
+  }
+  const transientEndLine = Math.max(liveRange.startLine, getPromptBlockStartLine(term, getAbsoluteCursorLine(term)) - 1);
+  return {
+    startLine: liveRange.startLine,
+    endLine: transientEndLine,
+  };
+}
+
+function getLiveCommandLine(mark: TerminalCommandMark): number | null {
+  const liveRange = getLiveMarkRange(mark);
+  if (!liveRange) return null;
+  return liveRange.startLine + Math.max(0, mark.commandLine - mark.startLine);
+}
+
 function getOutputRangeText(term: Terminal, mark: TerminalCommandMark): { text: string; truncated: boolean; lineCount: number } {
-  const start = mark.startLine + 1;
-  const end = typeof mark.endLine === 'number'
-    ? mark.endLine
+  const liveRange = getSelectableMarkRange(term, mark);
+  const liveStartLine = liveRange?.startLine ?? mark.startLine;
+  const liveCommandLine = getLiveCommandLine(mark) ?? liveStartLine;
+  const liveEndLine = liveRange?.endLine ?? mark.endLine;
+  const start = liveCommandLine + 1;
+  const end = typeof liveEndLine === 'number'
+    ? liveEndLine
     : Math.min(term.buffer.active.length - 1, getAbsoluteCursorLine(term));
   const lines: string[] = [];
   let charCount = 0;
@@ -174,19 +311,45 @@ function closeOpenMarks(
   }
 }
 
-function disposeDecoration(commandId: string): void {
-  const record = decorationsByCommandId.get(commandId);
-  if (!record) return;
-  decorationsByCommandId.delete(commandId);
-  try {
-    record.decoration.dispose();
-  } catch {
-    // Ignore stale xterm decoration teardown.
+function disposeRecords(records: DecorationRecord[]): void {
+  for (const record of records) {
+    try {
+      record.decoration.dispose();
+    } catch {
+      // Ignore stale xterm decoration teardown.
+    }
+    try {
+      record.marker.dispose();
+    } catch {
+      // Ignore stale marker teardown.
+    }
   }
-  try {
-    record.marker.dispose();
-  } catch {
-    // Ignore stale marker teardown.
+}
+
+function disposeDecoration(commandId: string): void {
+  const records = decorationsByCommandId.get(commandId);
+  if (!records) return;
+  decorationsByCommandId.delete(commandId);
+  disposeRecords(records);
+}
+
+function disposeSelectionOverlay(record: SelectionOverlayRecord): void {
+  for (const disposable of record.disposables) {
+    try {
+      disposable.dispose();
+    } catch {
+      // Ignore stale xterm listener teardown.
+    }
+  }
+  record.element.remove();
+  record.actionsElement?.remove();
+}
+
+function clearSelectionDecorations(paneId: string): void {
+  const record = selectionOverlaysByPane.get(paneId);
+  if (record) {
+    selectionOverlaysByPane.delete(paneId);
+    disposeSelectionOverlay(record);
   }
 }
 
@@ -199,83 +362,192 @@ function trimPaneMarks(paneId: string): void {
   }
 }
 
-function renderMarkDecoration(element: HTMLElement, term: Terminal, mark: TerminalCommandMark): void {
-  element.classList.add('xterm-command-mark-decoration');
-  element.replaceChildren();
+function pushDecorationRecord(commandId: string, record: DecorationRecord): void {
+  const records = decorationsByCommandId.get(commandId) ?? [];
+  records.push(record);
+  decorationsByCommandId.set(commandId, records);
+}
 
-  const rail = document.createElement('div');
-  rail.className = 'xterm-command-mark-rail';
-
-  const showHoverActions = useSettingsStore.getState().settings.terminal.commandMarks?.showHoverActions ?? true;
-
-  if (!showHoverActions) {
-    element.append(rail);
-    return;
+function removeDecorationRecord(commandId: string, record: DecorationRecord): void {
+  const records = decorationsByCommandId.get(commandId);
+  if (!records) return;
+  const next = records.filter((candidate) => candidate !== record);
+  if (next.length === 0) {
+    decorationsByCommandId.delete(commandId);
+  } else {
+    decorationsByCommandId.set(commandId, next);
   }
+}
+
+type CommandMarkDecorationRole = 'start' | 'body' | 'end' | 'single';
+
+function renderMarkDecoration(element: HTMLElement, mark: TerminalCommandMark, role: CommandMarkDecorationRole): void {
+  element.className = [
+    'xterm-command-mark-decoration',
+    `xterm-command-mark-decoration-${role}`,
+    mark.stale ? 'xterm-command-mark-decoration-stale' : '',
+  ].filter(Boolean).join(' ');
+  element.replaceChildren();
+}
+
+function createSelectionActions(term: Terminal, mark: TerminalCommandMark): HTMLElement | null {
+  const showHoverActions = useSettingsStore.getState().settings.terminal.commandMarks?.showHoverActions ?? true;
+  if (!showHoverActions) return null;
 
   const actions = document.createElement('div');
-  actions.className = 'xterm-command-mark-actions';
+  actions.className = 'xterm-command-selection-actions';
+  actions.setAttribute('role', 'toolbar');
+  setLocalizedText(actions, 'terminal.command_selection.actions', 'aria-label');
 
   const copy = document.createElement('button');
   copy.type = 'button';
-  copy.textContent = 'Copy';
-  copy.title = 'Copy command output';
+  setLocalizedText(copy, 'terminal.command_selection.copy');
+  setLocalizedText(copy, 'terminal.command_selection.copy_title', 'title');
   copy.addEventListener('mousedown', (event) => event.preventDefault());
   copy.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
     const output = getOutputRangeText(term, mark);
-    void navigator.clipboard?.writeText(output.text);
+    void writeSystemClipboardText(output.text);
   });
 
-  const ask = document.createElement('button');
-  ask.type = 'button';
-  ask.textContent = 'Ask';
-  ask.title = 'Ask OxideSens about this output';
-  ask.addEventListener('mousedown', (event) => event.preventDefault());
-  ask.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const output = getOutputRangeText(term, mark);
-    const suffix = output.truncated ? '\n\n[Output truncated before sending to AI.]' : '';
-    useSettingsStore.getState().setAiSidebarCollapsed(false);
-    void useAiChatStore.getState().sendMessage(
-      `Analyze this command output:\n\nCommand: ${mark.command}`,
-      `Terminal command mark ${mark.commandId}\nCWD: ${mark.cwd ?? 'unknown'}\nLines: ${output.lineCount}\n\n${output.text}${suffix}`,
-    );
-  });
-
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.textContent = mark.collapsed ? 'Expand' : 'Fold';
-  toggle.title = 'Toggle logical fold marker';
-  toggle.addEventListener('mousedown', (event) => event.preventDefault());
-  toggle.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    mark.collapsed = !mark.collapsed;
-    notify();
-  });
-
-  actions.append(copy, ask, toggle);
-  element.append(rail, actions);
+  actions.append(copy);
+  return actions;
 }
 
-export function createTerminalCommandMark(
+function getSelectionOverlayHost(term: Terminal): HTMLElement | null {
+  return term.element?.querySelector<HTMLElement>('.xterm-screen') ?? null;
+}
+
+function getSelectionOverlayMetrics(term: Terminal, host: HTMLElement): {
+  rowTop: number;
+  rowHeight: number;
+  width: number;
+} | null {
+  const rowsElement = term.element?.querySelector<HTMLElement>('.xterm-rows') ?? null;
+  const hostRect = host.getBoundingClientRect();
+  const rowsRect = rowsElement?.getBoundingClientRect() ?? hostRect;
+  const rowHeight = rowsRect.height > 0 && term.rows > 0
+    ? rowsRect.height / term.rows
+    : hostRect.height > 0 && term.rows > 0
+      ? hostRect.height / term.rows
+      : 0;
+
+  if (!Number.isFinite(rowHeight) || rowHeight <= 0) return null;
+  return {
+    rowTop: rowsRect.top - hostRect.top,
+    rowHeight,
+    width: host.clientWidth || hostRect.width,
+  };
+}
+
+function updateSelectionOverlay(record: SelectionOverlayRecord): boolean {
+  const host = record.element.parentElement;
+  if (!host) return false;
+  const range = getSelectableMarkRange(record.term, record.mark);
+  if (!range) return false;
+  const metrics = getSelectionOverlayMetrics(record.term, host);
+  if (!metrics) return false;
+
+  const viewportStart = record.term.buffer.active.viewportY;
+  const viewportEnd = viewportStart + record.term.rows - 1;
+  if (range.endLine < viewportStart || range.startLine > viewportEnd) {
+    record.element.style.display = 'none';
+    if (record.actionsElement) record.actionsElement.style.display = 'none';
+    return true;
+  }
+
+  const visibleStart = Math.max(range.startLine, viewportStart);
+  const visibleEnd = Math.min(range.endLine, viewportEnd);
+  const hasTop = range.startLine >= viewportStart;
+  const hasBottom = range.endLine <= viewportEnd;
+  const top = metrics.rowTop + (visibleStart - viewportStart) * metrics.rowHeight;
+  const height = (visibleEnd - visibleStart + 1) * metrics.rowHeight;
+
+  record.element.className = [
+    'xterm-command-selection-overlay',
+    hasTop ? 'xterm-command-selection-overlay-top' : '',
+    hasBottom ? 'xterm-command-selection-overlay-bottom' : '',
+    record.mark.stale ? 'xterm-command-selection-overlay-stale' : '',
+  ].filter(Boolean).join(' ');
+  record.element.style.display = 'block';
+  record.element.style.left = '0px';
+  record.element.style.top = `${top}px`;
+  record.element.style.width = `${metrics.width}px`;
+  record.element.style.height = `${height}px`;
+  if (record.actionsElement) {
+    const actionsHeight = record.actionsElement.offsetHeight || 22;
+    const gap = 5;
+    const viewportTop = metrics.rowTop;
+    const viewportBottom = metrics.rowTop + metrics.rowHeight * record.term.rows;
+    const spaceAbove = top - viewportTop;
+    const spaceBelow = viewportBottom - (top + height);
+    let actionTop = spaceAbove >= actionsHeight + gap || spaceBelow < actionsHeight + gap
+      ? top - actionsHeight - gap
+      : top + height + gap;
+
+    actionTop = Math.max(viewportTop, Math.min(actionTop, viewportBottom - actionsHeight));
+    record.actionsElement.style.display = 'flex';
+    record.actionsElement.style.top = `${actionTop}px`;
+    record.actionsElement.style.right = '10px';
+  }
+  return true;
+}
+
+function addTerminalOverlayListener(
+  record: SelectionOverlayRecord,
+  eventName: 'onScroll' | 'onRender' | 'onResize' | 'onWriteParsed' | 'onCursorMove',
+): void {
+  const subscribe = record.term[eventName] as unknown;
+  if (typeof subscribe !== 'function') return;
+  const disposable = subscribe(() => {
+    if (!updateSelectionOverlay(record)) {
+      clearTerminalCommandMarkSelection(record.paneId);
+    }
+  }) as { dispose: () => void };
+  record.disposables.push(disposable);
+}
+
+function createSelectionOverlay(term: Terminal, paneId: string, mark: TerminalCommandMark): SelectionOverlayRecord | null {
+  const host = getSelectionOverlayHost(term);
+  if (!host) return null;
+  const element = document.createElement('div');
+  const actions = createSelectionActions(term, mark);
+  host.append(element);
+  if (actions) host.append(actions);
+
+  const record: SelectionOverlayRecord = {
+    paneId,
+    mark,
+    term,
+    element,
+    actionsElement: actions ?? undefined,
+    disposables: [],
+  };
+
+  addTerminalOverlayListener(record, 'onScroll');
+  addTerminalOverlayListener(record, 'onRender');
+  addTerminalOverlayListener(record, 'onResize');
+  addTerminalOverlayListener(record, 'onWriteParsed');
+  addTerminalOverlayListener(record, 'onCursorMove');
+
+  if (!updateSelectionOverlay(record)) {
+    disposeSelectionOverlay(record);
+    return null;
+  }
+  return record;
+}
+
+function registerDecorationAtLine(
   term: Terminal,
   paneId: string,
-  request: TerminalCommandMarkRequest,
-): TerminalCommandMark | null {
-  const command = request.command.trim();
-  if (!command) return null;
-  const settings = useSettingsStore.getState().settings.terminal.commandMarks;
-  if (!settings?.enabled) return null;
-  if (request.source === 'user_input_observed' && !settings.userInputObserved) return null;
-  if (request.source === 'heuristic' && !settings.heuristicDetection) return null;
-  if (term.buffer.active.type === 'alternate' || term.modes.mouseTrackingMode !== 'none') return null;
-
-  const startLine = getAbsoluteCursorLine(term);
-  const marker = term.registerMarker(0);
+  mark: TerminalCommandMark,
+  absoluteLine: number,
+  role: CommandMarkDecorationRole,
+  primary: boolean,
+): DecorationRecord | null {
+  const offset = absoluteLine - getAbsoluteCursorLine(term);
+  const marker = term.registerMarker(offset);
   if (!marker) return null;
   const decoration = term.registerDecoration({
     marker,
@@ -287,7 +559,43 @@ export function createTerminalCommandMark(
     marker.dispose();
     return null;
   }
+  const record: DecorationRecord = { marker, decoration, primary, role };
+  decoration.onRender((element) => {
+    record.element = element;
+    renderMarkDecoration(element, mark, role);
+  });
+  marker.onDispose(() => {
+    removeDecorationRecord(mark.commandId, record);
+    if (!primary) return;
+    if (selectedMarkByPane.get(paneId) === mark.commandId) {
+      clearSelectionDecorations(paneId);
+      selectedMarkByPane.delete(paneId);
+    }
+    const marks = marksByPane.get(paneId);
+    if (!marks) return;
+    const index = marks.findIndex((candidate) => candidate.commandId === mark.commandId);
+    if (index >= 0) {
+      marks.splice(index, 1);
+      notify();
+    }
+  });
+  return record;
+}
 
+export function createTerminalCommandMark(
+  term: Terminal,
+  paneId: string,
+  request: TerminalCommandMarkRequest,
+): TerminalCommandMark | null {
+  const command = request.command.trim();
+  if (!command) return null;
+  const settings = useSettingsStore.getState().settings.terminal.commandMarks;
+  if (!settings?.enabled) return null;
+  if (request.source === 'heuristic' && !settings.heuristicDetection) return null;
+  if (term.buffer.active.type === 'alternate' || term.modes.mouseTrackingMode !== 'none') return null;
+
+  const commandLine = getAbsoluteCursorLine(term);
+  const startLine = getPromptBlockStartLine(term, commandLine);
   const mark: TerminalCommandMark = {
     commandId: nextCommandId(),
     paneId,
@@ -296,6 +604,7 @@ export function createTerminalCommandMark(
     command,
     cwd: request.cwd ?? undefined,
     startLine,
+    commandLine,
     isClosed: false,
     runtimeEpoch: getAiRuntimeEpoch(),
     detectionSource: request.source,
@@ -306,21 +615,12 @@ export function createTerminalCommandMark(
     startedAt: Date.now(),
   };
 
-  decoration.onRender((element) => renderMarkDecoration(element, term, mark));
-  marker.onDispose(() => {
-    decorationsByCommandId.delete(mark.commandId);
-    const marks = marksByPane.get(paneId);
-    if (!marks) return;
-    const index = marks.findIndex((candidate) => candidate.commandId === mark.commandId);
-    if (index >= 0) {
-      marks.splice(index, 1);
-      notify();
-    }
-  });
+  const record = registerDecorationAtLine(term, paneId, mark, startLine, 'start', true);
+  if (!record) return null;
 
   // The xterm marker/decoration is registered first. Only now mutate the store.
   closeOpenMarks(paneId, startLine, 'next_command', 'high');
-  decorationsByCommandId.set(mark.commandId, { marker, decoration });
+  pushDecorationRecord(mark.commandId, record);
   const marks = marksByPane.get(paneId) ?? [];
   marks.push(mark);
   marksByPane.set(paneId, marks);
@@ -335,6 +635,7 @@ export function closeTerminalCommandMarks(
   outputConfidence: TerminalCommandMarkOutputConfidence = 'unknown',
   stale = false,
 ): void {
+  clearTerminalCommandMarkSelection(paneId);
   const marks = marksByPane.get(paneId) ?? [];
   const now = Date.now();
   for (const mark of marks) {
@@ -350,7 +651,38 @@ export function closeTerminalCommandMarks(
   notify();
 }
 
+export function selectTerminalCommandMark(term: Terminal, paneId: string, commandId: string): boolean {
+  const mark = (marksByPane.get(paneId) ?? []).find((candidate) => candidate.commandId === commandId);
+  if (!mark) return false;
+  clearSelectionDecorations(paneId);
+  selectedMarkByPane.delete(paneId);
+  const overlay = createSelectionOverlay(term, paneId, mark);
+  if (!overlay) return false;
+  selectedMarkByPane.set(paneId, commandId);
+  selectionOverlaysByPane.set(paneId, overlay);
+  notify();
+  return true;
+}
+
+export function selectTerminalCommandMarkAtLine(term: Terminal, paneId: string, absoluteLine: number): boolean {
+  const marks = marksByPane.get(paneId) ?? [];
+  const mark = [...marks].reverse().find((candidate) => {
+    const liveRange = getSelectableMarkRange(term, candidate);
+    if (!liveRange) return false;
+    return absoluteLine >= liveRange.startLine && absoluteLine <= liveRange.endLine;
+  });
+  if (!mark) return false;
+  return selectTerminalCommandMark(term, paneId, mark.commandId);
+}
+
+export function clearTerminalCommandMarkSelection(paneId: string): void {
+  const hadSelection = selectedMarkByPane.delete(paneId);
+  clearSelectionDecorations(paneId);
+  if (hadSelection) notify();
+}
+
 export function cleanupTerminalCommandMarks(paneId: string): void {
+  clearTerminalCommandMarkSelection(paneId);
   const marks = [...(marksByPane.get(paneId) ?? [])];
   for (const mark of marks) {
     disposeDecoration(mark.commandId);

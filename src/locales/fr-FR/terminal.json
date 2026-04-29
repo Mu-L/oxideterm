@@ -213,6 +213,11 @@
       "source_runtime": "historique",
       "source_local_history": "local",
       "source_ai_ledger": "IA"
+    },
+    "command_selection": {
+      "actions": "Command selection actions",
+      "copy": "Copy",
+      "copy_title": "Copy command output"
     }
   }
 }

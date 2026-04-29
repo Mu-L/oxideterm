@@ -315,7 +315,7 @@
       "command_marks": "Befehlsmarken",
       "command_marks_hint": "Fügt zuverlässigen Befehlen aus Befehlsleiste, KI und Broadcast leichte iTerm2-artige Marken hinzu. Der Terminalpuffer bleibt unverändert.",
       "command_marks_hover_actions": "Hover-Aktionen",
-      "command_marks_hover_actions_hint": "Zeigt beim Hover Ausgabe kopieren, OxideSens fragen und logisches Einklappen.",
+      "command_marks_hover_actions_hint": "Show the copy output action in the command selection toolbar.",
       "command_marks_user_input_observed": "Manuelle Eingabe markieren (experimentell)",
       "command_marks_user_input_observed_hint": "Best-effort-Marken für direkt im Terminal getippte Befehle. Standardmäßig aus, um Fehlgriffe bei SSH, REPL, tmux und sudo zu vermeiden.",
       "command_marks_heuristic": "Prompt-Heuristiken (experimentell)",

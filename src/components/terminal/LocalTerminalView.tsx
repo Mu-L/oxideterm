@@ -47,7 +47,14 @@ import {
   updateTerminalReadiness,
   registerTerminalCommandMarkCreator,
 } from '../../lib/terminalRegistry';
-import { cleanupTerminalCommandMarks, closeTerminalCommandMarks, createTerminalCommandMark } from '../../lib/terminal/commandMarks';
+import {
+  cleanupTerminalCommandMarks,
+  clearTerminalCommandMarkSelection,
+  closeTerminalCommandMarks,
+  createTerminalCommandMark,
+  getTerminalAbsoluteLineFromClientY,
+  selectTerminalCommandMarkAtLine,
+} from '../../lib/terminal/commandMarks';
 import { onMapleRegularLoaded, ensureCJKFallback, prepareTerminalFontForOpen } from '../../lib/fontLoader';
 import { api } from '../../lib/api';
 import { installTerminalClipboardSupport, readSystemClipboardText } from '../../lib/clipboardSupport';
@@ -109,6 +116,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  const commandMarkPointerRef = useRef<{ x: number; y: number; selection: string } | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const webLinksAddonRef = useRef<WebLinksAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
@@ -258,7 +266,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
 
   const autosuggestRecorder = useTerminalAutosuggestRecorder({
     terminalKind: 'local_terminal',
-    localShellHistory: terminalSettings.autosuggest.localShellHistory,
+    localShellHistory: terminalSettings.autosuggest?.localShellHistory ?? true,
   });
   const autosuggestRecorderRef = useRef(autosuggestRecorder);
   autosuggestRecorderRef.current = autosuggestRecorder;
@@ -977,7 +985,14 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       if (!isRunningRef.current) return;
       // Notify adaptive renderer of user activity (exits idle tier)
       adaptiveRendererRef.current.notifyUserInput();
-      autosuggestRecorderRef.current.observeInput(data);
+      const observedInput = autosuggestRecorderRef.current.observeInput(data);
+      if (observedInput.completedCommand) {
+        createTerminalCommandMark(term, effectivePaneId, {
+          command: observedInput.completedCommand,
+          source: 'user_input_observed',
+          sessionId,
+        });
+      }
       observeCliAgentTerminalInput({
         data,
         targetId: 'local-shell:default',
@@ -1639,6 +1654,47 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     }
   }, [searchOpen, aiPanelOpen, effectivePaneId, focusTerminal, onFocus]);
 
+  const cancelCommandMarkDoubleClick = useCallback((event: React.MouseEvent) => {
+    if (event.button !== 0 || event.detail <= 1) return false;
+    commandMarkPointerRef.current = null;
+    clearTerminalCommandMarkSelection(effectivePaneId);
+    terminalRef.current?.clearSelection();
+    event.preventDefault();
+    event.stopPropagation();
+    (event.nativeEvent as MouseEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+    return true;
+  }, [effectivePaneId]);
+
+  const handleCommandMarkPointerDown = useCallback((event: React.MouseEvent) => {
+    if (cancelCommandMarkDoubleClick(event)) return;
+    if (event.button !== 0 || !containerRef.current?.contains(event.target as Node)) {
+      commandMarkPointerRef.current = null;
+      return;
+    }
+    commandMarkPointerRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      selection: terminalRef.current?.getSelection() ?? '',
+    };
+  }, [cancelCommandMarkDoubleClick]);
+
+  const handleCommandMarkPointerUp = useCallback((event: React.MouseEvent) => {
+    if (cancelCommandMarkDoubleClick(event)) return;
+    const start = commandMarkPointerRef.current;
+    commandMarkPointerRef.current = null;
+    const term = terminalRef.current;
+    const container = containerRef.current;
+    if (!start || !term || !container?.contains(event.target as Node)) return;
+    if (event.button !== 0) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
+    const selection = term.getSelection();
+    if (term.buffer.active.type === 'alternate' || (selection && selection !== start.selection)) return;
+    const line = getTerminalAbsoluteLineFromClientY(term, container, event.clientY);
+    if (line === null || !selectTerminalCommandMarkAtLine(term, effectivePaneId, line)) {
+      clearTerminalCommandMarkSelection(effectivePaneId);
+    }
+  }, [cancelCommandMarkDoubleClick, effectivePaneId]);
+
   // ── Background Image ──────────────────────────────────────────────────────────
   const currentTheme = getTerminalTheme(terminalSettings.theme);
   const bgImageUrl = React.useMemo(
@@ -1660,6 +1716,8 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       className="relative flex-1 w-full h-full flex flex-col overflow-hidden"
       style={{ backgroundColor: currentTheme.background }}
       onClick={handleContainerClick}
+      onMouseDownCapture={handleCommandMarkPointerDown}
+      onMouseUpCapture={handleCommandMarkPointerUp}
     >
       {/* Background Image Layer */}
       {bgImageUrl && (

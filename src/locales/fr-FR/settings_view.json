@@ -315,7 +315,7 @@
       "command_marks": "Repères de commandes",
       "command_marks_hint": "Ajoute des repères légers façon iTerm2 aux commandes fiables envoyées par la barre de commande, l’IA et la diffusion. Le buffer du terminal reste intact.",
       "command_marks_hover_actions": "Actions au survol",
-      "command_marks_hover_actions_hint": "Affiche copier la sortie, demander à OxideSens et le pliage logique au survol d’un repère.",
+      "command_marks_hover_actions_hint": "Show the copy output action in the command selection toolbar.",
       "command_marks_user_input_observed": "Marquer la saisie manuelle (expérimental)",
       "command_marks_user_input_observed_hint": "Repères best-effort pour les commandes tapées directement dans le terminal. Désactivé par défaut pour éviter les faux positifs SSH, REPL, tmux et sudo.",
       "command_marks_heuristic": "Heuristiques de prompt (expérimental)",

@@ -81,6 +81,7 @@ const writeToTerminalMock = vi.hoisted(() => vi.fn());
 const subscribeTerminalOutputMock = vi.hoisted(() => vi.fn());
 const waitForTerminalReadyMock = vi.hoisted(() => vi.fn());
 const readScreenMock = vi.hoisted(() => vi.fn());
+const beginTerminalCommandMarkMock = vi.hoisted(() => vi.fn());
 const createTabMock = vi.hoisted(() => vi.fn());
 
 const sessionTreeState = vi.hoisted(() => ({
@@ -211,6 +212,7 @@ vi.mock('@/store/broadcastStore', () => ({
 }));
 
 vi.mock('@/lib/terminalRegistry', () => ({
+  beginTerminalCommandMark: beginTerminalCommandMarkMock,
   findPaneBySessionId: findPaneBySessionIdMock,
   getTerminalBuffer: getTerminalBufferMock,
   writeToTerminal: writeToTerminalMock,

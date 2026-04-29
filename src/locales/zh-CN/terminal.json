@@ -213,6 +213,11 @@
       "source_runtime": "历史",
       "source_local_history": "本地",
       "source_ai_ledger": "AI"
+    },
+    "command_selection": {
+      "actions": "命令选区操作",
+      "copy": "复制",
+      "copy_title": "复制命令输出"
     }
   }
 }

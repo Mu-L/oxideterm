@@ -287,7 +287,6 @@ Plattformübergreifende lokale Shell über `portable-pty 0.8`, Feature-gated hin
 | Plugin | Beschreibung | Repository |
 |---|---|---|
 | **Cloud Sync** | Verschlüsselte selbstgehostete Synchronisation — `.oxide`-Snapshots über WebDAV, HTTP JSON, Dropbox, Git oder S3 hochladen und importieren | [oxideterm.cloud-sync](https://github.com/AnalyseDeCircuit/oxideterm.cloud-sync) |
-| **Quick Commands** | Ein-Klick-Befehlsausführung — häufig verwendete Terminal-Befehle speichern, organisieren und ausführen mit Host-Filter | [oxideterm.quick-commands](https://github.com/AnalyseDeCircuit/oxideterm.quick-commands) |
 | **Telnet Client** | Nativer Telnet-Client für Router, Switches und Legacy-Geräte — keine externe Binary erforderlich | [oxideterm.telnet](https://github.com/AnalyseDeCircuit/oxideterm.telnet) |
 
 <details>
@@ -465,7 +464,6 @@ Gemessen mit `tokei`, ohne Abhängigkeiten und Build-Artefakte.
 - [ ] Vollständige ProxyCommand-Unterstützung
 - [ ] Audit-Protokollierung
 - [ ] Agent-Verbesserungen
-- [ ] Schnellbefehle
 - [ ] Sitzungssuche & Schnellwechsel
 
 ---

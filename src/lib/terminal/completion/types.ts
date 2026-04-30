@@ -10,9 +10,10 @@ export type CommandBarCompletionKind =
   | 'path'
   | 'file'
   | 'directory'
-  | 'ai';
+  | 'ai'
+  | 'quick_command';
 
-export type CommandBarCompletionSource = 'history' | 'fig' | 'path' | 'ai';
+export type CommandBarCompletionSource = 'history' | 'fig' | 'path' | 'ai' | 'quick_command';
 
 export type CommandBarCompletionRisk = 'low' | 'medium' | 'high';
 
@@ -39,6 +40,7 @@ export interface CommandBarCompletionContext {
   nodeId?: string | null;
   cwd?: string | null;
   cwdHost?: string | null;
+  targetLabel?: string | null;
 }
 
 export interface ShellToken {

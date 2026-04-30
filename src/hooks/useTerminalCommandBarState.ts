@@ -95,7 +95,7 @@ export function useTerminalCommandBarState(options: UseTerminalCommandBarStateOp
     void getCommandBarCompletions(
       value,
       cursorIndex,
-      { paneId, sessionId, tabId, terminalType, nodeId, cwd, cwdHost },
+      { paneId, sessionId, tabId, terminalType, nodeId, cwd, cwdHost, targetLabel },
       controller.signal,
     ).then((nextSuggestions) => {
       if (!controller.signal.aborted && requestId === completionRequestRef.current) {
@@ -117,6 +117,7 @@ export function useTerminalCommandBarState(options: UseTerminalCommandBarStateOp
     sessionId,
     tabId,
     terminalType,
+    targetLabel,
     value,
   ]);
 
@@ -127,7 +128,7 @@ export function useTerminalCommandBarState(options: UseTerminalCommandBarStateOp
     const nextSuggestions = await getCommandBarCompletions(
       value,
       cursorIndex,
-      { paneId, sessionId, tabId, terminalType, nodeId, cwd, cwdHost },
+      { paneId, sessionId, tabId, terminalType, nodeId, cwd, cwdHost, targetLabel },
       controller.signal,
       {
         // Empty focus must stay quiet, but ArrowUp/ArrowDown is an explicit
@@ -153,6 +154,7 @@ export function useTerminalCommandBarState(options: UseTerminalCommandBarStateOp
     sessionId,
     tabId,
     terminalType,
+    targetLabel,
     value,
   ]);
 

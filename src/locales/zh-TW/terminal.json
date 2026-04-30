@@ -227,7 +227,9 @@
       "group_history": "歷史",
       "group_command": "命令",
       "group_option": "選項",
-      "group_path": "路徑"
+      "group_path": "路徑",
+      "group_quick_commands": "快捷命令",
+      "source_quick_command": "快捷命令"
     },
     "command_selection": {
       "actions": "命令選區操作",
@@ -261,6 +263,28 @@
       "clear_confirm_description": "歸檔歷史不會被刪除。",
       "clear_confirm_action": "清除回滾",
       "minimap": "歷史熱力圖"
+    },
+    "quick_commands": {
+      "title": "快捷命令",
+      "open": "快捷命令",
+      "close": "关闭快捷命令",
+      "search_placeholder": "搜索快捷命令...",
+      "add": "新增",
+      "edit": "编辑",
+      "delete": "删除",
+      "run": "执行",
+      "save": "保存",
+      "cancel": "取消",
+      "empty_search": "没有匹配的快捷命令",
+      "empty_category": "此分类暂无快捷命令",
+      "name_placeholder": "名称",
+      "command_placeholder": "命令",
+      "description_placeholder": "描述",
+      "host_pattern_placeholder": "主机匹配，如 *.prod",
+      "confirm_title": "执行快捷命令？",
+      "confirm_description": "执行：{{command}}",
+      "confirm_risky_description": "此命令可能具有破坏性或涉及敏感操作。执行：{{command}}",
+      "toast_executed": "快捷命令已发送"
     }
   }
 }

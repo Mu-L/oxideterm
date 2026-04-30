@@ -11,20 +11,37 @@ const commandBarStateMock = vi.hoisted(() => ({
   suggestions: [] as unknown[],
 }));
 
+const quickCommandsMock = vi.hoisted(() => ({
+  commands: [] as Array<{ id: string; name: string; command: string; category: string; description?: string; createdAt: number; updatedAt: number }>,
+  upsertCommand: vi.fn(),
+  deleteCommand: vi.fn(),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('lucide-react', () => ({
   ChevronRight: () => null,
+  Container: () => null,
   FilePlay: () => null,
+  Folder: () => null,
   GitBranch: () => null,
+  Monitor: () => null,
+  Pencil: () => null,
+  Play: () => null,
+  Plus: () => null,
   Radio: () => null,
+  Save: () => null,
+  Search: () => null,
+  Server: () => null,
   SplitSquareHorizontal: () => null,
   SplitSquareVertical: () => null,
   Square: () => null,
   Trash2: () => null,
   Circle: () => null,
+  X: () => null,
+  Zap: () => null,
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -59,6 +76,43 @@ vi.mock('@/hooks/useTerminalCommandBarState', () => ({
       gitBranch: null,
     },
   }),
+}));
+
+vi.mock('@/hooks/useConfirm', () => ({
+  useConfirm: () => ({
+    confirm: vi.fn(() => Promise.resolve(true)),
+    ConfirmDialog: null,
+  }),
+}));
+
+vi.mock('@/store/settingsStore', () => ({
+  useSettingsStore: (selector: (state: unknown) => unknown) => selector({
+    settings: {
+      terminal: {
+        commandBar: {
+          quickCommandsEnabled: true,
+          quickCommandsConfirmBeforeRun: false,
+          quickCommandsShowToast: false,
+        },
+      },
+    },
+  }),
+}));
+
+vi.mock('@/store/quickCommandsStore', () => ({
+  matchQuickCommandHostPattern: vi.fn(() => true),
+  useQuickCommandsStore: (selector: (state: unknown) => unknown) => selector({
+    categories: [{ id: 'system', name: 'System', icon: 'server' }],
+    commands: quickCommandsMock.commands,
+    upsertCommand: quickCommandsMock.upsertCommand,
+    deleteCommand: quickCommandsMock.deleteCommand,
+  }),
+}));
+
+vi.mock('@/hooks/useToast', () => ({
+  useToastStore: {
+    getState: () => ({ addToast: vi.fn() }),
+  },
 }));
 
 vi.mock('@/components/layout/TabBarTerminalActions', () => ({
@@ -128,6 +182,7 @@ describe('TerminalCommandBar', () => {
       },
     ];
     commandBarStateMock.revealHistorySuggestions.mockResolvedValue(0);
+    quickCommandsMock.commands = [];
   });
 
   it('keeps the popup closed while typing until the user explicitly opens suggestions', () => {
@@ -249,5 +304,35 @@ describe('TerminalCommandBar', () => {
 
     expect(commandBarStateMock.setValue).toHaveBeenCalledWith('ls');
     await waitFor(() => expect(commandBarStateMock.setInputComposing).toHaveBeenCalledWith(false));
+  });
+
+  it('inserts a quick command from the Command Bar popover without executing it', () => {
+    quickCommandsMock.commands = [{
+      id: 'qc-test',
+      name: 'List Files',
+      command: 'ls -la',
+      category: 'system',
+      description: 'List files',
+      createdAt: 0,
+      updatedAt: 0,
+    }];
+
+    render(
+      <TerminalCommandBar
+        paneId="pane-1"
+        sessionId="session-1"
+        tabId="tab-1"
+        terminalType="local_terminal"
+        isActive
+        sendInput={vi.fn()}
+        focusTerminal={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTitle('terminal.quick_commands.open'));
+    fireEvent.click(screen.getByText('List Files'));
+
+    expect(commandBarStateMock.setValue).toHaveBeenCalledWith('ls -la');
+    expect(commandBarStateMock.submitCommand).not.toHaveBeenCalledWith('ls -la');
   });
 });

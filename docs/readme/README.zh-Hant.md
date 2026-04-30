@@ -287,7 +287,6 @@ impl Signer for AgentSigner { /* challenge-response via Agent IPC */ }
 | 外掛 | 說明 | 倉庫 |
 |---|---|---|
 | **Cloud Sync** | 加密自託管同步——透過 WebDAV、HTTP JSON、Dropbox、Git 或 S3 上傳和匯入 `.oxide` 快照 | [oxideterm.cloud-sync](https://github.com/AnalyseDeCircuit/oxideterm.cloud-sync) |
-| **Quick Commands** | 一鍵命令執行——儲存、組織和執行常用終端命令，支援按主機篩選 | [oxideterm.quick-commands](https://github.com/AnalyseDeCircuit/oxideterm.quick-commands) |
 | **Telnet Client** | 原生 Telnet 用戶端，用於路由器、交換器和老舊設備——無需外部程式 | [oxideterm.telnet](https://github.com/AnalyseDeCircuit/oxideterm.telnet) |
 
 <details>
@@ -465,7 +464,6 @@ pnpm run tauri build
 - [ ] 完整 ProxyCommand 支援
 - [ ] 稽核功能
 - [ ] Agent 增強
-- [ ] 快捷命令
 - [ ] 工作階段搜尋與快速切換
 
 ---

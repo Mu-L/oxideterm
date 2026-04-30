@@ -220,6 +220,9 @@ export interface TerminalCommandBarSettings {
   showLegacyToolbar: boolean;
   gitStatus: boolean;
   smartCompletion: boolean;
+  quickCommandsEnabled: boolean;
+  quickCommandsConfirmBeforeRun: boolean;
+  quickCommandsShowToast: boolean;
 }
 
 export interface TerminalCommandMarksSettings {
@@ -520,6 +523,9 @@ const defaultTerminalSettings: TerminalSettings = {
     showLegacyToolbar: false,
     gitStatus: true,
     smartCompletion: true,
+    quickCommandsEnabled: true,
+    quickCommandsConfirmBeforeRun: false,
+    quickCommandsShowToast: true,
   },
   commandMarks: {
     enabled: true,

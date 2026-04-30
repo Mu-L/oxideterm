@@ -321,7 +321,13 @@
       "command_marks_heuristic": "Heuristiques de prompt (expérimental)",
       "command_marks_heuristic_hint": "Tente d’inférer les limites prompt/commande sans shell integration. Conservateur et désactivé par défaut.",
       "gpu_canvas_experiments": "WebGPU canvas experiments",
-      "gpu_canvas_experiments_hint": "Experimental GPU-backed visualizations. Does not replace the terminal renderer."
+      "gpu_canvas_experiments_hint": "Experimental GPU-backed visualizations. Does not replace the terminal renderer.",
+      "quick_commands": "Quick Commands",
+      "quick_commands_hint": "Show a built-in quick command library in the Command Bar.",
+      "quick_commands_confirm": "Confirm Quick Command Run",
+      "quick_commands_confirm_hint": "Ask before running a quick command from the Run button.",
+      "quick_commands_toast": "Quick Command Toast",
+      "quick_commands_toast_hint": "Show a toast after a quick command is sent."
     },
     "appearance": {
       "title": "Apparence",

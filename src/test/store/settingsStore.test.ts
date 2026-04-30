@@ -203,6 +203,9 @@ describe('settingsStore', () => {
       showLegacyToolbar: false,
       gitStatus: true,
       smartCompletion: true,
+      quickCommandsEnabled: true,
+      quickCommandsConfirmBeforeRun: false,
+      quickCommandsShowToast: true,
     });
   });
 

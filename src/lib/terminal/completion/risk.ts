@@ -7,17 +7,18 @@ const HIGH_RISK_PATTERNS = [
   /\brm\s+-(?:[^\s]*r[^\s]*f|[^\s]*f[^\s]*r)\b/i,
   /\bkubectl\s+delete\b/i,
   /\bsystemctl\s+(?:stop|restart|disable|kill)\b/i,
+  /\bdocker\s+(?:rm|rmi|system\s+prune|container\s+prune|volume\s+prune|network\s+prune)\b/i,
   /\b(?:shutdown|reboot|halt|poweroff)\b/i,
   /\bkill(?:all)?\s+-9\b/i,
   /\bmkfs(?:\.[^\s]+)?\b/i,
   /\bdd\s+.*\bof=/i,
+  /\bchmod\s+-R\b/i,
+  /\bchown\s+-R\b/i,
 ];
 
 const MEDIUM_RISK_PATTERNS = [
   /\bsudo\b/i,
   /\bchmod\s+(?:-R\s+)?777\b/i,
-  /\bchown\s+-R\b/i,
-  /\bdocker\s+(?:rm|rmi|system\s+prune)\b/i,
 ];
 
 export function classifyCommandRisk(command: string): CommandBarCompletionRisk | undefined {

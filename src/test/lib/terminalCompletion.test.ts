@@ -25,6 +25,7 @@ import {
   clearTerminalAutosuggestHistory,
   importTerminalAutosuggestCommands,
 } from '@/lib/terminal/autosuggest';
+import { useQuickCommandsStore } from '@/store/quickCommandsStore';
 import type { CommandBarCompletionContext } from '@/lib/terminal/completion';
 
 const localContext: CommandBarCompletionContext = {
@@ -53,6 +54,7 @@ describe('Command Bar completion', () => {
     vi.clearAllMocks();
     clearTerminalAutosuggestHistory();
     clearCommandBarPathCompletionCache();
+    useQuickCommandsStore.getState().resetDefaults();
     apiMocks.localListDir.mockResolvedValue([]);
     apiMocks.nodeSftpListDir.mockResolvedValue([]);
   });
@@ -109,6 +111,27 @@ describe('Command Bar completion', () => {
       kind: 'option',
       source: 'fig',
       executable: false,
+    });
+  });
+
+  it('returns executable quick command completions with explicit source metadata', async () => {
+    useQuickCommandsStore.getState().upsertCommand({
+      name: 'List detailed files',
+      command: 'ls -la',
+      category: 'files',
+      description: 'Quick command test',
+    });
+
+    const completions = await getCommandBarCompletions('ls', 2, localContext, signal());
+    const quickCommand = completions.find((completion) => (
+      completion.source === 'quick_command' && completion.insertText === 'ls -la'
+    ));
+
+    expect(quickCommand).toMatchObject({
+      kind: 'quick_command',
+      source: 'quick_command',
+      executable: true,
+      replacement: { start: 0, end: 2 },
     });
   });
 

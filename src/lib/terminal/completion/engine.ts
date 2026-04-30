@@ -5,6 +5,7 @@ import { isLikelySecretCommand } from '@/lib/terminal/autosuggest';
 import { figProvider, getActiveFigArgType } from './figProvider';
 import { historyProvider } from './historyProvider';
 import { pathProvider } from './pathProvider';
+import { quickCommandProvider } from './quickCommandProvider';
 import { tokenizeCommandLine } from './tokenizer';
 import type {
   CommandBarCompletion,
@@ -85,7 +86,7 @@ export async function getCommandBarCompletions(
   const providers: CommandBarCompletionProvider[] = options.historyOnly
     ? [historyProvider]
     : parsed.reliable
-    ? [historyProvider, figProvider, pathProvider]
+    ? [historyProvider, quickCommandProvider, figProvider, pathProvider]
     : [historyProvider];
   const batches = await Promise.all(providers.map((provider) => runProvider(provider, baseArgs)));
   return normalizeAndRank(batches.flat());

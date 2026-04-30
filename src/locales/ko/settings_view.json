@@ -321,7 +321,13 @@
       "command_marks_heuristic": "프롬프트 휴리스틱(실험적)",
       "command_marks_heuristic_hint": "shell integration 없이 프롬프트와 명령 경계를 추정합니다. 보수적이며 기본적으로 꺼져 있습니다.",
       "gpu_canvas_experiments": "WebGPU canvas experiments",
-      "gpu_canvas_experiments_hint": "Experimental GPU-backed visualizations. Does not replace the terminal renderer."
+      "gpu_canvas_experiments_hint": "Experimental GPU-backed visualizations. Does not replace the terminal renderer.",
+      "quick_commands": "Quick Commands",
+      "quick_commands_hint": "Show a built-in quick command library in the Command Bar.",
+      "quick_commands_confirm": "Confirm Quick Command Run",
+      "quick_commands_confirm_hint": "Ask before running a quick command from the Run button.",
+      "quick_commands_toast": "Quick Command Toast",
+      "quick_commands_toast_hint": "Show a toast after a quick command is sent."
     },
     "appearance": {
       "title": "외관",

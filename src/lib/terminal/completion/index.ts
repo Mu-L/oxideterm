@@ -5,6 +5,7 @@ export { getCommandBarCompletions } from './engine';
 export { figProvider, getActiveFigArgType } from './figProvider';
 export { pathProvider, clearCommandBarPathCompletionCache } from './pathProvider';
 export { historyProvider } from './historyProvider';
+export { quickCommandProvider } from './quickCommandProvider';
 export { tokenizeCommandLine } from './tokenizer';
 export type {
   CommandBarCompletion,

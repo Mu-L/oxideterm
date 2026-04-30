@@ -7,25 +7,42 @@ import { readTextFile } from '@tauri-apps/plugin-fs';
 import {
   ChevronRight,
   FilePlay,
+  Folder,
   GitBranch,
+  Pencil,
   Radio,
+  Search,
+  Server,
   SplitSquareHorizontal,
   SplitSquareVertical,
   Square,
   Trash2,
   Circle,
+  Container,
+  Monitor,
+  Play,
+  Plus,
+  Save,
+  X,
+  Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { getAllEntries } from '@/lib/terminalRegistry';
 import { useTerminalCommandBarState, type TerminalCommandBarTerminalType } from '@/hooks/useTerminalCommandBarState';
 import type { CommandBarCompletion } from '@/lib/terminal/completion';
+import { classifyCommandRisk } from '@/lib/terminal/completion/risk';
+import { useConfirm } from '@/hooks/useConfirm';
+import { useToastStore } from '@/hooks/useToast';
 import { useAppStore } from '@/store/appStore';
 import { useBroadcastStore } from '@/store/broadcastStore';
 import { useLocalTerminalStore } from '@/store/localTerminalStore';
+import { useQuickCommandsStore, matchQuickCommandHostPattern, type QuickCommand, type QuickCommandDraft, type QuickCommandIcon } from '@/store/quickCommandsStore';
 import { useRecordingStore } from '@/store/recordingStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { MAX_PANES_PER_TAB, type SplitDirection } from '@/types';
 import { BroadcastDropdown } from '@/components/layout/TabBarTerminalActions';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type TerminalCommandBarProps = {
   paneId: string;
@@ -53,17 +70,50 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
   });
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(-1);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [quickCommandsOpen, setQuickCommandsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const composingRef = useRef(false);
+  const quickCommandSettings = useSettingsStore((s) => s.settings.terminal.commandBar);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const placeholder = t('terminal.command_bar.command_placeholder');
+
+  const runCommand = useCallback(async (command: string) => {
+    const risk = classifyCommandRisk(command);
+    if (quickCommandSettings.quickCommandsConfirmBeforeRun || risk === 'high' || risk === 'medium') {
+      const confirmed = await confirm({
+        title: t('terminal.quick_commands.confirm_title'),
+        description: risk
+          ? t('terminal.quick_commands.confirm_risky_description', { command })
+          : t('terminal.quick_commands.confirm_description', { command }),
+        confirmLabel: t('terminal.quick_commands.run'),
+        variant: risk === 'high' ? 'danger' : 'default',
+      });
+      if (!confirmed) return;
+    }
+    const didSubmit = state.submitCommand(command);
+    if (didSubmit && quickCommandSettings.quickCommandsShowToast) {
+      useToastStore.getState().addToast({
+        title: t('terminal.quick_commands.toast_executed'),
+        description: command,
+        variant: 'success',
+      });
+    }
+    setQuickCommandsOpen(false);
+    inputRef.current?.focus();
+  }, [confirm, quickCommandSettings.quickCommandsConfirmBeforeRun, quickCommandSettings.quickCommandsShowToast, state, t]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
     if (composingRef.current || isComposingKeyEvent(event)) {
       return;
     }
     if (event.key === 'Escape') {
+      if (quickCommandsOpen) {
+        event.preventDefault();
+        setQuickCommandsOpen(false);
+        return;
+      }
       if (suggestionsOpen) {
         event.preventDefault();
         setSuggestionsOpen(false);
@@ -138,7 +188,7 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
       setHighlightedSuggestion(-1);
       state.submitCommand(selectedSuggestion?.insertText);
     }
-  }, [focusTerminal, highlightedSuggestion, state, suggestionsOpen]);
+  }, [focusTerminal, highlightedSuggestion, quickCommandsOpen, state, suggestionsOpen]);
 
   useLayoutEffect(() => {
     if (!rootRef.current || !onLayoutChange) return;
@@ -183,6 +233,23 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
             state.acceptSuggestion(candidate);
             setHighlightedSuggestion(-1);
             setSuggestionsOpen(false);
+            inputRef.current?.focus();
+          }}
+        />
+      )}
+      {quickCommandSettings.quickCommandsEnabled && quickCommandsOpen && (
+        <QuickCommandsPopover
+          targetLabel={state.targetLabel}
+          cwdHost={null}
+          onInsert={(command) => {
+            state.setValue(command);
+            state.setCursorIndex(command.length);
+            setQuickCommandsOpen(false);
+            inputRef.current?.focus();
+          }}
+          onRun={(command) => void runCommand(command)}
+          onClose={() => {
+            setQuickCommandsOpen(false);
             inputRef.current?.focus();
           }}
         />
@@ -273,6 +340,25 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
             {state.ghostText}
           </span>
         )}
+        {quickCommandSettings.quickCommandsEnabled && (
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              setSuggestionsOpen(false);
+              setHighlightedSuggestion(-1);
+              setQuickCommandsOpen((open) => !open);
+              inputRef.current?.focus();
+            }}
+            className={cn(
+              'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md hover:bg-theme-accent/10',
+              quickCommandsOpen ? 'bg-theme-accent/10 text-theme-accent' : 'text-theme-text-muted hover:text-theme-accent',
+            )}
+            title={t('terminal.quick_commands.open')}
+          >
+            <Zap className="h-4 w-4" />
+          </button>
+        )}
         <button
           type="button"
           onMouseDown={(event) => event.preventDefault()}
@@ -283,6 +369,7 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
+      {ConfirmDialog}
     </div>
   );
 };
@@ -336,6 +423,287 @@ const TerminalCommandBarChips: React.FC<ChipsProps> = ({
     </div>
   );
 };
+
+type QuickCommandsPopoverProps = {
+  targetLabel: string;
+  cwdHost?: string | null;
+  onInsert: (command: string) => void;
+  onRun: (command: string) => void;
+  onClose: () => void;
+};
+
+const QuickCommandsPopover: React.FC<QuickCommandsPopoverProps> = ({ targetLabel, cwdHost, onInsert, onRun, onClose }) => {
+  const { t } = useTranslation();
+  const categories = useQuickCommandsStore((s) => s.categories);
+  const commands = useQuickCommandsStore((s) => s.commands);
+  const upsertCommand = useQuickCommandsStore((s) => s.upsertCommand);
+  const deleteCommand = useQuickCommandsStore((s) => s.deleteCommand);
+  const [query, setQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? 'system');
+  const [editingCommand, setEditingCommand] = useState<QuickCommand | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+
+  const targetFields = useMemo(() => [targetLabel, cwdHost], [cwdHost, targetLabel]);
+  const filteredCommands = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return commands.filter((command) => (
+      command.category === activeCategory
+      && matchQuickCommandHostPattern(command.hostPattern, targetFields)
+      && (
+        !normalizedQuery
+        || command.name.toLowerCase().includes(normalizedQuery)
+        || command.command.toLowerCase().includes(normalizedQuery)
+        || command.description?.toLowerCase().includes(normalizedQuery)
+      )
+    ));
+  }, [activeCategory, commands, query, targetFields]);
+
+  const startCreate = useCallback(() => {
+    setEditingCommand(null);
+    setEditorOpen(true);
+  }, []);
+
+  const startEdit = useCallback((command: QuickCommand) => {
+    setEditingCommand(command);
+    setEditorOpen(true);
+  }, []);
+
+  const handleSave = useCallback((draft: QuickCommandDraft) => {
+    upsertCommand(draft);
+    setEditorOpen(false);
+    setEditingCommand(null);
+  }, [upsertCommand]);
+
+  return (
+    <div className="absolute bottom-full right-3 z-30 mb-2 flex max-h-[min(520px,70vh)] w-[min(860px,calc(100%-1.5rem))] overflow-hidden rounded-lg border border-theme-border bg-theme-bg-elevated/95 shadow-xl shadow-black/30">
+      <div className="w-40 flex-shrink-0 border-r border-theme-border/60 bg-theme-bg/45 p-2">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">
+            {t('terminal.quick_commands.title')}
+          </span>
+          <button type="button" onClick={onClose} className="rounded p-1 text-theme-text-muted hover:bg-theme-bg-hover hover:text-theme-text" title={t('terminal.quick_commands.close')}>
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="space-y-1">
+          {categories.map((category) => {
+            const Icon = quickCommandIcon(category.icon);
+            const count = commands.filter((command) => command.category === category.id).length;
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => setActiveCategory(category.id)}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
+                  activeCategory === category.id
+                    ? 'bg-theme-accent/12 text-theme-accent'
+                    : 'text-theme-text-muted hover:bg-theme-bg-hover hover:text-theme-text',
+                )}
+              >
+                <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{category.name}</span>
+                <span className="rounded bg-theme-bg-panel px-1.5 py-0.5 text-[10px] text-theme-text-muted">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-theme-border/60 p-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-theme-text-muted" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('terminal.quick_commands.search_placeholder')}
+              className="h-8 w-full rounded-md border border-theme-border/50 bg-theme-bg/70 pl-7 pr-2 text-sm text-theme-text outline-none placeholder:text-theme-text-muted focus:border-theme-accent/60"
+            />
+          </div>
+          <button type="button" onClick={startCreate} className="inline-flex h-8 items-center gap-1 rounded-md border border-theme-border/60 px-2 text-xs text-theme-text-muted hover:bg-theme-bg-hover hover:text-theme-text">
+            <Plus className="h-3.5 w-3.5" />
+            {t('terminal.quick_commands.add')}
+          </button>
+        </div>
+        {editorOpen && (
+          <QuickCommandEditor
+            command={editingCommand}
+            category={activeCategory}
+            categories={categories}
+            onSave={handleSave}
+            onCancel={() => {
+              setEditorOpen(false);
+              setEditingCommand(null);
+            }}
+          />
+        )}
+        <div className="min-h-0 flex-1 overflow-auto p-2">
+          {filteredCommands.length === 0 ? (
+            <div className="flex h-32 flex-col items-center justify-center text-center text-sm text-theme-text-muted">
+              <Zap className="mb-2 h-5 w-5" />
+              <div>{query ? t('terminal.quick_commands.empty_search') : t('terminal.quick_commands.empty_category')}</div>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {filteredCommands.map((command) => (
+                <QuickCommandRow
+                  key={command.id}
+                  command={command}
+                  onInsert={() => onInsert(command.command)}
+                  onRun={() => onRun(command.command)}
+                  onEdit={() => startEdit(command)}
+                  onDelete={() => deleteCommand(command.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+type QuickCommandRowProps = {
+  command: QuickCommand;
+  onInsert: () => void;
+  onRun: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+};
+
+const QuickCommandRow: React.FC<QuickCommandRowProps> = ({ command, onInsert, onRun, onEdit, onDelete }) => {
+  const { t } = useTranslation();
+  const risk = classifyCommandRisk(command.command);
+  return (
+    <div className="group flex items-center gap-2 rounded-md px-2 py-2 text-sm text-theme-text-muted hover:bg-theme-bg-hover/70 hover:text-theme-text">
+      <button type="button" onClick={onInsert} className="min-w-0 flex-1 text-left">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium text-theme-text">{command.name}</span>
+          {risk && (
+            <span className={cn(
+              'rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
+              risk === 'high' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300',
+            )}>
+              {risk}
+            </span>
+          )}
+          {command.hostPattern && (
+            <span className="rounded bg-theme-bg-panel px-1.5 py-0.5 text-[10px] text-theme-text-muted">
+              {command.hostPattern}
+            </span>
+          )}
+        </div>
+        <div className="truncate font-mono text-xs text-theme-accent/85">{command.command}</div>
+        {command.description && <div className="truncate text-xs text-theme-text-muted/70">{command.description}</div>}
+      </button>
+      <div className="flex flex-shrink-0 items-center gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
+        <button type="button" onClick={onRun} className={actionButtonClass(true)} title={t('terminal.quick_commands.run')}>
+          <Play className="h-3.5 w-3.5" />
+        </button>
+        <button type="button" onClick={onEdit} className={actionButtonClass(true)} title={t('terminal.quick_commands.edit')}>
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button type="button" onClick={onDelete} className={actionButtonClass(true)} title={t('terminal.quick_commands.delete')}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+type QuickCommandEditorProps = {
+  command: QuickCommand | null;
+  category: string;
+  categories: Array<{ id: string; name: string }>;
+  onSave: (draft: QuickCommandDraft) => void;
+  onCancel: () => void;
+};
+
+const QuickCommandEditor: React.FC<QuickCommandEditorProps> = ({ command, category, categories, onSave, onCancel }) => {
+  const { t } = useTranslation();
+  const [name, setName] = useState(command?.name ?? '');
+  const [commandText, setCommandText] = useState(command?.command ?? '');
+  const [description, setDescription] = useState(command?.description ?? '');
+  const [selectedCategory, setSelectedCategory] = useState(command?.category ?? category);
+  const [hostPattern, setHostPattern] = useState(command?.hostPattern ?? '');
+  const canSave = name.trim().length > 0 && commandText.trim().length > 0;
+
+  useEffect(() => {
+    setName(command?.name ?? '');
+    setCommandText(command?.command ?? '');
+    setDescription(command?.description ?? '');
+    setSelectedCategory(command?.category ?? category);
+    setHostPattern(command?.hostPattern ?? '');
+  }, [category, command]);
+
+  return (
+    <div className="border-b border-theme-border/60 bg-theme-bg/35 p-2">
+      <div className="grid gap-2 md:grid-cols-[1fr_1.2fr]">
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('terminal.quick_commands.name_placeholder')} className={quickCommandInputClass} />
+        <input value={commandText} onChange={(event) => setCommandText(event.target.value)} placeholder={t('terminal.quick_commands.command_placeholder')} className={cn(quickCommandInputClass, 'font-mono')} />
+        <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t('terminal.quick_commands.description_placeholder')} className={quickCommandInputClass} />
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="h-8 border-theme-border/50 bg-theme-bg/70 px-2 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((candidate) => (
+                <SelectItem key={candidate.id} value={candidate.id}>
+                  {candidate.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <input value={hostPattern} onChange={(event) => setHostPattern(event.target.value)} placeholder={t('terminal.quick_commands.host_pattern_placeholder')} className={quickCommandInputClass} />
+        </div>
+      </div>
+      <div className="mt-2 flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-theme-text-muted hover:bg-theme-bg-hover hover:text-theme-text">
+          <X className="h-3.5 w-3.5" />
+          {t('terminal.quick_commands.cancel')}
+        </button>
+        <button
+          type="button"
+          disabled={!canSave}
+          onClick={() => onSave({
+            id: command?.id,
+            name,
+            command: commandText,
+            description,
+            category: selectedCategory,
+            hostPattern,
+          })}
+          className={cn(
+            'inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs',
+            canSave ? 'bg-theme-accent/15 text-theme-accent hover:bg-theme-accent/25' : 'cursor-not-allowed text-theme-text-muted/40',
+          )}
+        >
+          <Save className="h-3.5 w-3.5" />
+          {t('terminal.quick_commands.save')}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const quickCommandInputClass = 'h-8 rounded-md border border-theme-border/50 bg-theme-bg/70 px-2 text-sm text-theme-text outline-none placeholder:text-theme-text-muted focus:border-theme-accent/60';
+
+function quickCommandIcon(icon: QuickCommandIcon): React.ComponentType<{ className?: string }> {
+  switch (icon) {
+    case 'server':
+      return Server;
+    case 'folder':
+      return Folder;
+    case 'docker':
+      return Container;
+    case 'zap':
+      return Zap;
+    case 'terminal':
+    default:
+      return Monitor;
+  }
+}
 
 type ActionsProps = {
   paneId: string;
@@ -529,6 +897,7 @@ const TerminalCommandSuggestions: React.FC<SuggestionsProps> = ({ suggestions, h
 
 function groupKey(candidate: CommandBarCompletion): string {
   if (candidate.source === 'history') return 'group_history';
+  if (candidate.source === 'quick_command') return 'group_quick_commands';
   if (candidate.source === 'path') return 'group_path';
   if (candidate.kind === 'option') return 'group_option';
   return 'group_command';
@@ -538,6 +907,8 @@ function sourceKey(candidate: CommandBarCompletion): string {
   switch (candidate.source) {
     case 'history':
       return 'source_history';
+    case 'quick_command':
+      return 'source_quick_command';
     case 'fig':
       return candidate.kind === 'option' ? 'source_option' : 'source_command';
     case 'path':

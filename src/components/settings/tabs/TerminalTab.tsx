@@ -383,6 +383,39 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                         onCheckedChange={(checked) => updateCommandBar('showLegacyToolbar', checked as boolean)}
                     />
                 </div>
+                <div className="flex items-center justify-between mt-4">
+                    <div>
+                        <Label className="text-theme-text">{t('settings_view.terminal.quick_commands')}</Label>
+                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.quick_commands_hint')}</p>
+                    </div>
+                    <Checkbox
+                        id="terminal-command-bar-quick-commands"
+                        checked={terminal.commandBar.quickCommandsEnabled}
+                        onCheckedChange={(checked) => updateCommandBar('quickCommandsEnabled', checked as boolean)}
+                    />
+                </div>
+                <div className="flex items-center justify-between mt-4">
+                    <div>
+                        <Label className="text-theme-text">{t('settings_view.terminal.quick_commands_confirm')}</Label>
+                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.quick_commands_confirm_hint')}</p>
+                    </div>
+                    <Checkbox
+                        id="terminal-command-bar-quick-commands-confirm"
+                        checked={terminal.commandBar.quickCommandsConfirmBeforeRun}
+                        onCheckedChange={(checked) => updateCommandBar('quickCommandsConfirmBeforeRun', checked as boolean)}
+                    />
+                </div>
+                <div className="flex items-center justify-between mt-4">
+                    <div>
+                        <Label className="text-theme-text">{t('settings_view.terminal.quick_commands_toast')}</Label>
+                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.quick_commands_toast_hint')}</p>
+                    </div>
+                    <Checkbox
+                        id="terminal-command-bar-quick-commands-toast"
+                        checked={terminal.commandBar.quickCommandsShowToast}
+                        onCheckedChange={(checked) => updateCommandBar('quickCommandsShowToast', checked as boolean)}
+                    />
+                </div>
                 <Separator className="my-5 opacity-50" />
                 <div className="flex items-center justify-between">
                     <div>

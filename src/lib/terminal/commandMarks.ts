@@ -6,6 +6,14 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { addAiCommandRecord } from '@/lib/ai/orchestrator/ledger';
 import { getAiRuntimeEpoch } from '@/lib/ai/orchestrator/runtimeEpoch';
 import { writeSystemClipboardText } from '@/lib/clipboardSupport';
+import {
+  buildSelectionOverlayRects,
+  getTerminalOverlayHost,
+  getTerminalOverlayMetrics,
+  prepareTerminalOverlayCanvas,
+  renderTerminalOverlayRects,
+  terminalLineRangeToOverlayRange,
+} from './terminalOverlayCanvas';
 
 export type TerminalCommandMarkDetectionSource =
   | 'command_bar'
@@ -72,9 +80,11 @@ type SelectionOverlayRecord = {
   paneId: string;
   mark: TerminalCommandMark;
   term: Terminal;
-  element: HTMLElement;
+  canvas: HTMLCanvasElement;
   actionsElement?: HTMLElement;
   disposables: Array<{ dispose: () => void }>;
+  rafId: number | null;
+  disposed: boolean;
 };
 
 const MAX_MARKS_PER_PANE = 200;
@@ -334,6 +344,11 @@ function disposeDecoration(commandId: string): void {
 }
 
 function disposeSelectionOverlay(record: SelectionOverlayRecord): void {
+  record.disposed = true;
+  if (record.rafId !== null) {
+    cancelOverlayFrame(record.rafId);
+    record.rafId = null;
+  }
   for (const disposable of record.disposables) {
     try {
       disposable.dispose();
@@ -341,7 +356,8 @@ function disposeSelectionOverlay(record: SelectionOverlayRecord): void {
       // Ignore stale xterm listener teardown.
     }
   }
-  record.element.remove();
+  renderTerminalOverlayRects(record.canvas, []);
+  record.canvas.remove();
   record.actionsElement?.remove();
 }
 
@@ -415,76 +431,58 @@ function createSelectionActions(term: Terminal, mark: TerminalCommandMark): HTML
   return actions;
 }
 
-function getSelectionOverlayHost(term: Terminal): HTMLElement | null {
-  return term.element?.querySelector<HTMLElement>('.xterm-screen') ?? null;
+function requestOverlayFrame(callback: FrameRequestCallback): number {
+  if (typeof requestAnimationFrame === 'function') {
+    return requestAnimationFrame(callback);
+  }
+  return window.setTimeout(() => callback(performance.now()), 0);
 }
 
-function getSelectionOverlayMetrics(term: Terminal, host: HTMLElement): {
-  rowTop: number;
-  rowHeight: number;
-  width: number;
-} | null {
-  const rowsElement = term.element?.querySelector<HTMLElement>('.xterm-rows') ?? null;
-  const hostRect = host.getBoundingClientRect();
-  const rowsRect = rowsElement?.getBoundingClientRect() ?? hostRect;
-  const rowHeight = rowsRect.height > 0 && term.rows > 0
-    ? rowsRect.height / term.rows
-    : hostRect.height > 0 && term.rows > 0
-      ? hostRect.height / term.rows
-      : 0;
+function cancelOverlayFrame(id: number): void {
+  if (typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(id);
+    return;
+  }
+  window.clearTimeout(id);
+}
 
-  if (!Number.isFinite(rowHeight) || rowHeight <= 0) return null;
-  return {
-    rowTop: rowsRect.top - hostRect.top,
-    rowHeight,
-    width: host.clientWidth || hostRect.width,
-  };
+function scheduleSelectionOverlayUpdate(record: SelectionOverlayRecord): void {
+  if (record.rafId !== null || record.disposed) return;
+  record.rafId = requestOverlayFrame(() => {
+    record.rafId = null;
+    if (record.disposed) return;
+    if (!updateSelectionOverlay(record)) {
+      clearTerminalCommandMarkSelection(record.paneId);
+    }
+  });
 }
 
 function updateSelectionOverlay(record: SelectionOverlayRecord): boolean {
-  const host = record.element.parentElement;
+  const host = record.canvas.parentElement;
   if (!host) return false;
   const range = getSelectableMarkRange(record.term, record.mark);
   if (!range) return false;
-  const metrics = getSelectionOverlayMetrics(record.term, host);
+  const metrics = getTerminalOverlayMetrics(record.term, host);
   if (!metrics) return false;
 
-  const viewportStart = record.term.buffer.active.viewportY;
-  const viewportEnd = viewportStart + record.term.rows - 1;
-  if (range.endLine < viewportStart || range.startLine > viewportEnd) {
-    record.element.style.display = 'none';
+  const overlayRange = terminalLineRangeToOverlayRange(metrics, range.startLine, range.endLine);
+  if (!overlayRange) {
+    renderTerminalOverlayRects(record.canvas, []);
     if (record.actionsElement) record.actionsElement.style.display = 'none';
     return true;
   }
 
-  const visibleStart = Math.max(range.startLine, viewportStart);
-  const visibleEnd = Math.min(range.endLine, viewportEnd);
-  const hasTop = range.startLine >= viewportStart;
-  const hasBottom = range.endLine <= viewportEnd;
-  const top = metrics.rowTop + (visibleStart - viewportStart) * metrics.rowHeight;
-  const height = (visibleEnd - visibleStart + 1) * metrics.rowHeight;
-
-  record.element.className = [
-    'xterm-command-selection-overlay',
-    hasTop ? 'xterm-command-selection-overlay-top' : '',
-    hasBottom ? 'xterm-command-selection-overlay-bottom' : '',
-    record.mark.stale ? 'xterm-command-selection-overlay-stale' : '',
-  ].filter(Boolean).join(' ');
-  record.element.style.display = 'block';
-  record.element.style.left = '0px';
-  record.element.style.top = `${top}px`;
-  record.element.style.width = `${metrics.width}px`;
-  record.element.style.height = `${height}px`;
+  renderTerminalOverlayRects(record.canvas, buildSelectionOverlayRects(overlayRange, record.mark.stale));
   if (record.actionsElement) {
     const actionsHeight = record.actionsElement.offsetHeight || 22;
     const gap = 5;
     const viewportTop = metrics.rowTop;
-    const viewportBottom = metrics.rowTop + metrics.rowHeight * record.term.rows;
-    const spaceAbove = top - viewportTop;
-    const spaceBelow = viewportBottom - (top + height);
+    const viewportBottom = metrics.rowTop + metrics.cellHeight * metrics.rows;
+    const spaceAbove = overlayRange.y - viewportTop;
+    const spaceBelow = viewportBottom - (overlayRange.y + overlayRange.height);
     let actionTop = spaceAbove >= actionsHeight + gap || spaceBelow < actionsHeight + gap
-      ? top - actionsHeight - gap
-      : top + height + gap;
+      ? overlayRange.y - actionsHeight - gap
+      : overlayRange.y + overlayRange.height + gap;
 
     actionTop = Math.max(viewportTop, Math.min(actionTop, viewportBottom - actionsHeight));
     record.actionsElement.style.display = 'flex';
@@ -501,28 +499,29 @@ function addTerminalOverlayListener(
   const subscribe = record.term[eventName] as unknown;
   if (typeof subscribe !== 'function') return;
   const disposable = subscribe(() => {
-    if (!updateSelectionOverlay(record)) {
-      clearTerminalCommandMarkSelection(record.paneId);
-    }
+    scheduleSelectionOverlayUpdate(record);
   }) as { dispose: () => void };
   record.disposables.push(disposable);
 }
 
 function createSelectionOverlay(term: Terminal, paneId: string, mark: TerminalCommandMark): SelectionOverlayRecord | null {
-  const host = getSelectionOverlayHost(term);
+  const host = getTerminalOverlayHost(term);
   if (!host) return null;
-  const element = document.createElement('div');
+  const canvas = document.createElement('canvas');
+  prepareTerminalOverlayCanvas(canvas, host);
   const actions = createSelectionActions(term, mark);
-  host.append(element);
+  host.append(canvas);
   if (actions) host.append(actions);
 
   const record: SelectionOverlayRecord = {
     paneId,
     mark,
     term,
-    element,
+    canvas,
     actionsElement: actions ?? undefined,
     disposables: [],
+    rafId: null,
+    disposed: false,
   };
 
   addTerminalOverlayListener(record, 'onScroll');

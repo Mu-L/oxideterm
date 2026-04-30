@@ -246,10 +246,11 @@ describe('terminal command marks', () => {
 
     const buttons = Array.from((term.element as HTMLElement).querySelectorAll('button'));
     expect(buttons.map((button) => button.textContent)).toEqual(['Copy']);
-    const overlay = (term.element as HTMLElement).querySelector('.xterm-command-selection-overlay');
+    const overlay = (term.element as HTMLElement).querySelector('.xterm-terminal-overlay-canvas');
     const actions = (term.element as HTMLElement).querySelector('.xterm-command-selection-actions');
     expect(actions?.parentElement).toBe(overlay?.parentElement);
     expect(overlay?.contains(actions)).toBe(false);
+    expect((overlay as HTMLElement | null)?.style.pointerEvents).toBe('none');
 
     buttons[0].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     expect(mocks.writeText).toHaveBeenCalledWith('output\noutput');
@@ -290,7 +291,7 @@ describe('terminal command marks', () => {
       commandLine: 15,
     });
     expect(selectTerminalCommandMarkAtLine(term, 'pane-1', 14)).toBe(true);
-    expect((term.element as HTMLElement).querySelector('.xterm-command-selection-overlay')).toBeTruthy();
+    expect((term.element as HTMLElement).querySelector('.xterm-terminal-overlay-canvas')).toBeTruthy();
   });
 
   it('excludes the returned prompt preamble from an open mark selection and copied output', () => {

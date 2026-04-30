@@ -1,6 +1,7 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
+import { waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { Terminal } from '@xterm/xterm';
 import {
@@ -56,22 +57,26 @@ vi.mock('@/lib/ai/orchestrator/runtimeEpoch', () => ({
 
 vi.mock('@/lib/api', () => ({
   api: {
-    createCommandFact: vi.fn(() => Promise.resolve({
+    createCommandFact: vi.fn((sessionId: string, request: { clientMarkId?: string; source: string; startGlobalLine: number; commandGlobalLine: number; endGlobalLine?: number; runtimeEpoch?: string; confidence?: string }) => Promise.resolve({
       factId: 'fact-1',
       fact: {
         factId: 'fact-1',
-        sessionId: 'session-1',
-        source: 'command_bar',
-        startGlobalLine: 0,
-        commandGlobalLine: 0,
+        clientMarkId: request.clientMarkId,
+        sessionId,
+        source: request.source,
+        startGlobalLine: request.startGlobalLine,
+        commandGlobalLine: request.commandGlobalLine,
+        endGlobalLine: request.endGlobalLine,
         bufferGeneration: 0,
-        runtimeEpoch: 'test-runtime',
+        runtimeEpoch: request.runtimeEpoch ?? 'test-runtime',
         status: 'open',
-        confidence: 'high',
+        confidence: request.confidence ?? 'high',
         createdAt: Date.now(),
       },
     })),
     closeCommandFact: vi.fn(() => Promise.resolve({})),
+    getCommandFacts: vi.fn(() => Promise.resolve([])),
+    getCommandFactOutput: vi.fn(() => Promise.resolve({ text: 'fact output', truncated: false, lineCount: 1, stale: true })),
   },
 }));
 
@@ -251,7 +256,7 @@ describe('terminal command marks', () => {
     expect(term.registerDecoration).toHaveBeenCalledTimes(1);
   });
 
-  it('renders a localized real copy action without exposing fake actions', () => {
+  it('renders a localized real copy action without exposing fake actions', async () => {
     const term = createMockTerminal();
 
     const mark = createTerminalCommandMark(term, 'pane-1', {
@@ -274,7 +279,7 @@ describe('terminal command marks', () => {
     expect((overlay as HTMLElement | null)?.style.pointerEvents).toBe('none');
 
     buttons[0].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    expect(mocks.writeText).toHaveBeenCalledWith('output\noutput');
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith('output\noutput'));
   });
 
   it('starts a mark at the prompt preamble so the previous mark excludes the next prompt', () => {
@@ -315,7 +320,7 @@ describe('terminal command marks', () => {
     expect((term.element as HTMLElement).querySelector('.xterm-terminal-overlay-canvas')).toBeTruthy();
   });
 
-  it('excludes the returned prompt preamble from an open mark selection and copied output', () => {
+  it('excludes the returned prompt preamble from an open mark selection and copied output', async () => {
     const term = createMockTerminal({
       lines: {
         12: '❯ pwd',
@@ -338,7 +343,7 @@ describe('terminal command marks', () => {
 
     const copy = (term.element as HTMLElement).querySelector('button');
     copy?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    expect(mocks.writeText).toHaveBeenCalledWith('/home/lipsc');
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith('/home/lipsc'));
   });
 
   it('closes the previous mark without drawing a range until selected', () => {

@@ -30,6 +30,7 @@ import { GpuChartCanvas } from '../gpu/GpuChartCanvas';
 import type {
   ArchivedHistoryExcerpt,
   BufferStats,
+  CommandFact,
   HistorySearchMatch,
   SearchOptions,
   TerminalLine,
@@ -70,6 +71,14 @@ interface HighlightRange {
   start: number;
   end: number;
   active?: boolean;
+}
+
+type CommandFactRowRole = 'single' | 'start' | 'body' | 'end';
+
+interface CommandFactRowMarker {
+  fact: CommandFact;
+  role: CommandFactRowRole;
+  selected: boolean;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -277,6 +286,9 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   const [searchLoading, setSearchLoading] = useState(false);
   const [matches, setMatches] = useState<HistorySearchMatch[]>([]);
   const matchesRef = useRef<HistorySearchMatch[]>([]);
+  const [commandFacts, setCommandFacts] = useState<CommandFact[]>([]);
+  const commandFactsRef = useRef<CommandFact[]>([]);
+  const [selectedCommandFactId, setSelectedCommandFactId] = useState<string | null>(null);
   const [activeMatchIndex, setActiveMatchIndex] = useState(-1);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [excerpt, setExcerpt] = useState<ArchivedHistoryExcerpt | null>(null);
@@ -327,6 +339,28 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     setExcerptLoading(false);
   }, []);
 
+  const loadCommandFactsForStats = useCallback(async (nextStats: BufferStats) => {
+    if (nextStats.current_lines <= 0) {
+      commandFactsRef.current = [];
+      setCommandFacts([]);
+      setSelectedCommandFactId(null);
+      return;
+    }
+    const base = getBaseGlobalLine(nextStats);
+    const end = base + nextStats.current_lines - 1;
+    try {
+      const facts = await api.getCommandFacts(sessionId, base, end);
+      commandFactsRef.current = facts;
+      setCommandFacts(facts);
+      setSelectedCommandFactId((current) => {
+        if (!current || facts.some((fact) => fact.factId === current)) return current;
+        return null;
+      });
+    } catch (caught) {
+      console.debug('[ScrollbackViewer] failed to load command facts:', caught);
+    }
+  }, [sessionId]);
+
   const refreshStats = useCallback(async (options: { initial?: boolean; resetErrors?: boolean } = {}) => {
     if (!isOpen) return;
     const wasNearBottom = (() => {
@@ -339,6 +373,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
       if (options.initial) setInitialLoading(true);
       if (options.resetErrors) setError(null);
       const nextStats = await api.getBufferStats(sessionId);
+      void loadCommandFactsForStats(nextStats);
 
       setStats((previous) => {
         const previousBase = previous ? getBaseGlobalLine(previous) : 0;
@@ -386,7 +421,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     } finally {
       if (options.initial) setInitialLoading(false);
     }
-  }, [clearSearchState, isOpen, rowHeight, sessionId, setLoadingPageState, setPageState]);
+  }, [clearSearchState, isOpen, loadCommandFactsForStats, rowHeight, sessionId, setLoadingPageState, setPageState]);
 
   const loadPageForGlobalLine = useCallback(async (globalLine: number) => {
     const currentStats = statsRef.current;
@@ -598,6 +633,9 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
       await api.clearBuffer(sessionId);
       generationRef.current += 1;
       setPageState(() => new Map());
+      commandFactsRef.current = [];
+      setCommandFacts([]);
+      setSelectedCommandFactId(null);
       clearSearchState();
       await refreshStats({ resetErrors: true });
     } catch (caught) {
@@ -615,9 +653,12 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     statsRef.current = null;
     pagesRef.current = new Map();
     loadingPagesRef.current = new Set();
+    commandFactsRef.current = [];
     setStats(null);
     setPageState(() => new Map());
     setLoadingPageState(() => new Set());
+    setCommandFacts([]);
+    setSelectedCommandFactId(null);
     setError(null);
     clearSearchState();
     void refreshStats({ initial: true, resetErrors: true });
@@ -698,6 +739,30 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     });
     return map;
   }, [activeMatchIndex, matches]);
+
+  const commandFactsByLine = useMemo(() => {
+    const map = new Map<number, CommandFactRowMarker>();
+    if (!stats || stats.current_lines <= 0) return map;
+    const hotStart = getBaseGlobalLine(stats);
+    const hotEnd = hotStart + stats.current_lines - 1;
+
+    for (const fact of commandFacts) {
+      if (fact.status === 'open' || typeof fact.endGlobalLine !== 'number') continue;
+      const start = clamp(fact.startGlobalLine, hotStart, hotEnd);
+      const end = clamp(fact.endGlobalLine, hotStart, hotEnd);
+      if (start > end) continue;
+      for (let line = start; line <= end; line += 1) {
+        const single = start === end;
+        map.set(line, {
+          fact,
+          role: single ? 'single' : line === start ? 'start' : line === end ? 'end' : 'body',
+          selected: fact.factId === selectedCommandFactId,
+        });
+      }
+    }
+
+    return map;
+  }, [commandFacts, selectedCommandFactId, stats]);
 
   const liveMatchCount = matches.filter((match) => match.source === 'hot').length;
   const archiveMatchCount = matches.filter((match) => match.source === 'cold').length;
@@ -872,11 +937,23 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
                 const cachedLine = getCachedLine(globalLine);
                 const pageLoading = loadingPages.has(getPageKey(globalLine));
                 const ranges = hotMatchesByLine.get(globalLine) ?? [];
+                const commandFactMarker = commandFactsByLine.get(globalLine);
 
                 return (
                   <div
                     key={virtualItem.key}
-                    className="absolute left-0 top-0 grid w-full grid-cols-[3.25rem_minmax(0,1fr)] gap-2 whitespace-pre px-2 text-theme-text"
+                    className={cn(
+                      'absolute left-0 top-0 grid w-full grid-cols-[3.25rem_minmax(0,1fr)] gap-2 whitespace-pre px-2 text-theme-text',
+                      commandFactMarker && 'cursor-pointer border-l-2 border-theme-accent/50 bg-theme-accent/5',
+                      commandFactMarker?.selected && 'bg-theme-accent/12',
+                      (commandFactMarker?.role === 'start' || commandFactMarker?.role === 'single') && 'border-t border-theme-accent/40',
+                      (commandFactMarker?.role === 'end' || commandFactMarker?.role === 'single') && 'border-b border-theme-accent/40',
+                      commandFactMarker?.fact.status === 'stale' && 'opacity-70',
+                    )}
+                    onClick={() => {
+                      if (commandFactMarker) setSelectedCommandFactId(commandFactMarker.fact.factId);
+                    }}
+                    title={commandFactMarker?.fact.command ?? undefined}
                     style={{
                       height: virtualItem.size,
                       transform: `translateY(${virtualItem.start}px)`,

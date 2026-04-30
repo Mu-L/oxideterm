@@ -5,6 +5,7 @@ import type { Terminal } from '@xterm/xterm';
 import {
   closeTerminalCommandMarkById,
   createShellIntegratedCommandMark,
+  getTerminalPromptBlockStartLine,
 } from './commandMarks';
 
 export type ShellIntegrationSource = 'osc133' | 'osc633';
@@ -194,11 +195,11 @@ function updateStatus(paneId: string, source: ShellIntegrationSource, lifecycle:
   return current;
 }
 
-function closeActiveMarkBefore(paneId: string, state: ControllerState, eventLine: number, closedBy: 'next_command' | 'unknown'): void {
+function closeActiveMarkBefore(paneId: string, state: ControllerState, nextBlockStartLine: number, closedBy: 'next_command' | 'unknown'): void {
   if (!state.activeCommandId) return;
-  const fallbackStart = state.activeStartLine ?? state.promptStart?.line ?? eventLine;
+  const fallbackStart = state.activeStartLine ?? state.promptStart?.line ?? nextBlockStartLine;
   closeTerminalCommandMarkById(paneId, state.activeCommandId, closedBy, 'high', {
-    endLine: Math.max(fallbackStart, eventLine - 1),
+    endLine: Math.max(fallbackStart, nextBlockStartLine - 1),
   });
   state.activeCommandId = undefined;
   state.activeStartLine = undefined;
@@ -242,12 +243,14 @@ export function createShellIntegrationController(options: ControllerOptions): {
   const { term, paneId, sessionId, nodeId, getCwd } = options;
 
   const handleEvent = (event: ShellIntegrationEvent): void => {
+    const previousLifecycle = stateByPane.get(paneId)?.lifecycle ?? 'idle';
     const state = updateStatus(paneId, event.source, event.kind === 'command_end' ? 'closed' : event.kind === 'output_start' ? 'output' : event.kind === 'command_start' ? 'command' : 'prompt');
 
     switch (event.kind) {
       case 'prompt_start': {
-        closeActiveMarkBefore(paneId, state, event.line, 'next_command');
-        state.promptStart = { line: event.line, col: event.col, at: Date.now() };
+        const promptBlockStartLine = getTerminalPromptBlockStartLine(term, event.line);
+        closeActiveMarkBefore(paneId, state, promptBlockStartLine, 'next_command');
+        state.promptStart = { line: promptBlockStartLine, col: event.col, at: Date.now() };
         state.commandStart = undefined;
         state.pendingCommandText = null;
         state.pendingCommandTextFromProtocol = false;
@@ -256,7 +259,16 @@ export function createShellIntegrationController(options: ControllerOptions): {
         break;
       }
       case 'command_start': {
+        const promptBlockStartLine = getTerminalPromptBlockStartLine(term, event.line);
+        if (state.activeCommandId) {
+          closeActiveMarkBefore(paneId, state, promptBlockStartLine, 'next_command');
+        }
+        if (previousLifecycle !== 'prompt') {
+          state.promptStart = { line: promptBlockStartLine, col: event.col, at: Date.now() };
+        }
         state.commandStart = { line: event.line, col: event.col, at: Date.now() };
+        state.pendingCommandText = null;
+        state.pendingCommandTextFromProtocol = false;
         state.startedAt = Date.now();
         state.lifecycle = 'command';
         break;
@@ -289,6 +301,7 @@ export function createShellIntegrationController(options: ControllerOptions): {
           state.activeCommandId = mark.commandId;
           state.activeStartLine = startLine;
         }
+        state.promptStart = undefined;
         state.lifecycle = 'output';
         break;
       }
@@ -297,9 +310,10 @@ export function createShellIntegrationController(options: ControllerOptions): {
           state.lifecycle = 'closed';
           break;
         }
-        const fallbackStart = state.activeStartLine ?? state.promptStart?.line ?? event.line;
+        const endBoundaryLine = getTerminalPromptBlockStartLine(term, event.line);
+        const fallbackStart = state.activeStartLine ?? state.promptStart?.line ?? endBoundaryLine;
         closeTerminalCommandMarkById(paneId, state.activeCommandId, 'shell_integration', 'high', {
-          endLine: Math.max(fallbackStart, event.line - 1),
+          endLine: Math.max(fallbackStart, endBoundaryLine - 1),
           exitCode: event.exitCode,
         });
         state.activeCommandId = undefined;

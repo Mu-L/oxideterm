@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   getTerminalHistorySearchResults: vi.fn(),
   cancelTerminalHistorySearch: vi.fn(),
   getArchivedHistoryExcerpt: vi.fn(),
+  getCommandFacts: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -110,6 +111,7 @@ describe('ScrollbackViewer', () => {
       memory_usage_mb: 0.1,
     });
     apiMocks.getScrollBuffer.mockResolvedValue([{ text: 'tail', timestamp: 1 }]);
+    apiMocks.getCommandFacts.mockResolvedValue([]);
     apiMocks.clearBuffer.mockResolvedValue(undefined);
     apiMocks.startTerminalHistorySearch.mockResolvedValue({ search_id: 'search-1' });
     apiMocks.getTerminalHistorySearchResults.mockResolvedValue({
@@ -181,6 +183,43 @@ describe('ScrollbackViewer', () => {
       lineHeight: 'inherit',
     });
     expect(liveRow?.className).toContain('grid-cols-[3.25rem_minmax(0,1fr)]');
+  });
+
+  it('loads command facts for the live window and marks matching rows', async () => {
+    apiMocks.getCommandFacts.mockResolvedValueOnce([{
+      factId: 'fact-1',
+      clientMarkId: 'mark-1',
+      sessionId: 'session-1',
+      nodeId: 'node-1',
+      source: 'command_bar',
+      command: 'tail',
+      startGlobalLine: 400,
+      commandGlobalLine: 400,
+      endGlobalLine: 400,
+      bufferGeneration: 0,
+      runtimeEpoch: 'test-runtime',
+      status: 'closed',
+      confidence: 'high',
+      createdAt: 1,
+      closedAt: 2,
+    }]);
+
+    render(
+      <ScrollbackViewer
+        sessionId="session-1"
+        nodeId="node-1"
+        isOpen
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.getCommandFacts).toHaveBeenCalledWith('session-1', 400, 1199);
+    });
+    const liveText = await screen.findByText('tail');
+    await waitFor(() => {
+      expect(liveText.closest('div')?.className).toContain('border-theme-accent');
+    });
   });
 
   it('clears live scrollback only after confirmation and refreshes stats', async () => {

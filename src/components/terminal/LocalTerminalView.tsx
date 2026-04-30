@@ -54,7 +54,7 @@ import {
   closeTerminalCommandMarks,
   createTerminalCommandMark,
   getTerminalAbsoluteLineFromClientY,
-  selectTerminalCommandMarkAtLine,
+  selectTerminalCommandMarkAtLineFromFacts,
 } from '../../lib/terminal/commandMarks';
 import {
   createShellIntegrationController,
@@ -1704,11 +1704,15 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   }, [effectivePaneId]);
 
   const handleCommandMarkPointerDown = useCallback((event: React.MouseEvent) => {
-    if (cancelCommandMarkDoubleClick(event)) return;
+    // Command-mark hit testing must only observe real xterm viewport clicks.
+    // The search bar and other overlays live inside the terminal shell; letting
+    // their double-clicks reach cancelCommandMarkDoubleClick would clear xterm's
+    // SearchAddon selection and break next/previous search navigation.
     if (event.button !== 0 || !containerRef.current?.contains(event.target as Node)) {
       commandMarkPointerRef.current = null;
       return;
     }
+    if (cancelCommandMarkDoubleClick(event)) return;
     commandMarkPointerRef.current = {
       x: event.clientX,
       y: event.clientY,
@@ -1717,21 +1721,25 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   }, [cancelCommandMarkDoubleClick]);
 
   const handleCommandMarkPointerUp = useCallback((event: React.MouseEvent) => {
-    if (cancelCommandMarkDoubleClick(event)) return;
     const start = commandMarkPointerRef.current;
     commandMarkPointerRef.current = null;
     const term = terminalRef.current;
     const container = containerRef.current;
     if (!start || !term || !container?.contains(event.target as Node)) return;
+    if (cancelCommandMarkDoubleClick(event)) return;
     if (event.button !== 0) return;
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
     const selection = term.getSelection();
     if (term.buffer.active.type === 'alternate' || (selection && selection !== start.selection)) return;
     const line = getTerminalAbsoluteLineFromClientY(term, container, event.clientY);
-    if (line === null || !selectTerminalCommandMarkAtLine(term, effectivePaneId, line)) {
+    if (line === null) {
       clearTerminalCommandMarkSelection(effectivePaneId);
+      return;
     }
-  }, [cancelCommandMarkDoubleClick, effectivePaneId]);
+    void selectTerminalCommandMarkAtLineFromFacts(term, effectivePaneId, sessionId, line).then((selected) => {
+      if (!selected) clearTerminalCommandMarkSelection(effectivePaneId);
+    });
+  }, [cancelCommandMarkDoubleClick, effectivePaneId, sessionId]);
 
   // ── Background Image ──────────────────────────────────────────────────────────
   const currentTheme = getTerminalTheme(terminalSettings.theme);

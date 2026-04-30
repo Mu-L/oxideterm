@@ -170,8 +170,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, resultCount, onFindNext, onFindPrevious, onClose, searchMode, query, caseSensitive, useRegex, wholeWord, onDeepSearch]);
 
-  if (!isOpen) return null;
-
   // Prevent terminal from stealing focus
   const handleKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
@@ -257,6 +255,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     
     return result;
   };
+
+  if (!isOpen) return null;
 
   return (
     <div 

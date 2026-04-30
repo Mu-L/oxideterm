@@ -1053,27 +1053,27 @@ export type CommandFactStatus = 'open' | 'closed' | 'stale';
 
 export interface CommandFact {
   factId: string;
-  clientMarkId?: string;
-  correlationId?: string;
+  clientMarkId?: string | null;
+  correlationId?: string | null;
   sessionId: string;
-  nodeId?: string;
+  nodeId?: string | null;
   source: CommandFactSource;
-  submittedBy?: CommandFactSource;
-  command?: string;
-  cwd?: string;
+  submittedBy?: CommandFactSource | null;
+  command?: string | null;
+  cwd?: string | null;
   startGlobalLine: number;
   commandGlobalLine: number;
-  outputStartGlobalLine?: number;
-  endGlobalLine?: number;
+  outputStartGlobalLine?: number | null;
+  endGlobalLine?: number | null;
   bufferGeneration: number;
   runtimeEpoch: string;
   status: CommandFactStatus;
   confidence: CommandFactConfidence;
-  closedBy?: CommandFactClosedBy;
-  exitCode?: number;
+  closedBy?: CommandFactClosedBy | null;
+  exitCode?: number | null;
   createdAt: number;
-  closedAt?: number;
-  staleReason?: string;
+  closedAt?: number | null;
+  staleReason?: string | null;
 }
 
 export interface CreateCommandFactRequest {

@@ -57,6 +57,8 @@ vi.mock('@/lib/api', () => ({
       },
     })),
     closeCommandFact: vi.fn(() => Promise.resolve({})),
+    getCommandFacts: vi.fn(() => Promise.resolve([])),
+    getCommandFactOutput: vi.fn(() => Promise.resolve({ text: '', truncated: false, lineCount: 0, stale: false })),
   },
 }));
 
@@ -198,7 +200,7 @@ describe('terminal shell integration', () => {
     ]);
   });
 
-  it('allows range marks with null command without writing the ledger', () => {
+  it('creates standalone range marks for empty shell integration commands without writing the ledger', () => {
     const term = createMockTerminal();
     const controller = createShellIntegrationController({ term, paneId: 'pane-1', sessionId: 'session-1' });
 
@@ -214,6 +216,9 @@ describe('terminal shell integration', () => {
     expect(listTerminalCommandMarks('pane-1')).toMatchObject([
       {
         command: null,
+        startLine: 40,
+        commandLine: 41,
+        endLine: 42,
         detectionSource: 'shell_integration',
         isClosed: true,
       },
@@ -239,6 +244,44 @@ describe('terminal shell integration', () => {
       },
     ]);
     expect(addAiCommandRecord).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse a previous prompt start when an empty command is missing prompt_start', () => {
+    const term = createMockTerminal({ 11: 'ls' });
+    const controller = createShellIntegrationController({ term, paneId: 'pane-1', sessionId: 'session-1' });
+
+    term.setPosition(10);
+    controller.handleOsc133('A');
+    term.setPosition(11);
+    controller.handleOsc133('B');
+    term.setPosition(12);
+    controller.handleOsc133('C');
+    term.setPosition(20);
+    controller.handleOsc133('D;0');
+
+    term.setPosition(22);
+    controller.handleOsc133('B');
+    term.setPosition(23);
+    controller.handleOsc133('C');
+    term.setPosition(24);
+    controller.handleOsc133('D;130');
+
+    expect(listTerminalCommandMarks('pane-1')).toMatchObject([
+      {
+        command: 'ls',
+        startLine: 10,
+        endLine: 19,
+        isClosed: true,
+      },
+      {
+        command: null,
+        startLine: 22,
+        commandLine: 22,
+        endLine: 23,
+        isClosed: true,
+      },
+    ]);
+    expect(addAiCommandRecord).toHaveBeenCalledTimes(1);
   });
 
   it('records integration source and last seen time for diagnostics', () => {

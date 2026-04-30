@@ -7,6 +7,7 @@ import { addAiCommandRecord } from '@/lib/ai/orchestrator/ledger';
 import { getAiRuntimeEpoch } from '@/lib/ai/orchestrator/runtimeEpoch';
 import { api } from '@/lib/api';
 import { writeSystemClipboardText } from '@/lib/clipboardSupport';
+import type { CommandFact } from '@/types';
 import {
   buildSelectionOverlayRects,
   getTerminalOverlayHost,
@@ -199,7 +200,7 @@ function isLikelyPromptPreambleLine(text: string): boolean {
     || (hasRuler && (hasClock || hasPromptContext));
 }
 
-function getPromptBlockStartLine(term: Terminal, commandLine: number): number {
+export function getTerminalPromptBlockStartLine(term: Terminal, commandLine: number): number {
   if (!isLikelyPromptInputLine(getLineText(term, commandLine))) {
     return commandLine;
   }
@@ -247,7 +248,7 @@ function getSelectableMarkRange(term: Terminal, mark: TerminalCommandMark): { st
       endLine: liveRange.endLine,
     };
   }
-  const transientEndLine = Math.max(liveRange.startLine, getPromptBlockStartLine(term, getAbsoluteCursorLine(term)) - 1);
+  const transientEndLine = Math.max(liveRange.startLine, getTerminalPromptBlockStartLine(term, getAbsoluteCursorLine(term)) - 1);
   return {
     startLine: liveRange.startLine,
     endLine: transientEndLine,
@@ -289,6 +290,27 @@ function getOutputRangeText(term: Terminal, mark: TerminalCommandMark): { text: 
   }
 
   return { text: lines.join('\n'), truncated, lineCount: Math.max(0, end - start + 1) };
+}
+
+async function getCommandOutputText(term: Terminal, mark: TerminalCommandMark): Promise<{ text: string; truncated: boolean; lineCount: number }> {
+  if (mark.factId) {
+    try {
+      const output = await api.getCommandFactOutput(mark.sessionId, mark.factId, {
+        maxLines: MAX_OUTPUT_LINES,
+        maxChars: MAX_OUTPUT_CHARS,
+      });
+      if (!output.stale) {
+        return {
+          text: output.text,
+          truncated: output.truncated,
+          lineCount: output.lineCount,
+        };
+      }
+    } catch (error) {
+      console.debug('[TerminalCommandFacts] fact output read failed, falling back to xterm buffer:', error);
+    }
+  }
+  return getOutputRangeText(term, mark);
 }
 
 function isLedgerSource(source: TerminalCommandMarkDetectionSource): boolean {
@@ -351,6 +373,7 @@ function shadowCreateCommandFact(mark: TerminalCommandMark): void {
     confidence: mark.confidence,
   }).then((response) => {
     mark.factId = response.factId;
+    debugCompareCommandFactRange(mark, response.fact);
     const pendingClose = pendingFactClosesByCommandId.get(mark.commandId);
     if (pendingClose) {
       pendingFactClosesByCommandId.delete(mark.commandId);
@@ -359,6 +382,30 @@ function shadowCreateCommandFact(mark: TerminalCommandMark): void {
   }).catch((error) => {
     console.debug('[TerminalCommandFacts] shadow create failed:', error);
   });
+}
+
+function debugCompareCommandFactRange(mark: TerminalCommandMark, fact: CommandFact): void {
+  if (
+    fact.startGlobalLine !== mark.startLine
+    || fact.commandGlobalLine !== mark.commandLine
+    || (fact.endGlobalLine !== undefined && mark.endLine !== undefined && fact.endGlobalLine !== mark.endLine)
+  ) {
+    console.debug('[TerminalCommandFacts] shadow range differs from frontend mark:', {
+      commandId: mark.commandId,
+      factId: fact.factId,
+      frontend: {
+        startLine: mark.startLine,
+        commandLine: mark.commandLine,
+        endLine: mark.endLine,
+      },
+      rust: {
+        startGlobalLine: fact.startGlobalLine,
+        commandGlobalLine: fact.commandGlobalLine,
+        endGlobalLine: fact.endGlobalLine,
+        bufferGeneration: fact.bufferGeneration,
+      },
+    });
+  }
 }
 
 function shadowCloseCommandFact(
@@ -515,8 +562,7 @@ function createSelectionActions(term: Terminal, mark: TerminalCommandMark): HTML
   copy.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const output = getOutputRangeText(term, mark);
-    void writeSystemClipboardText(output.text);
+    void getCommandOutputText(term, mark).then((output) => writeSystemClipboardText(output.text));
   });
 
   actions.append(copy);
@@ -706,7 +752,7 @@ export function createTerminalCommandMark(
   if (term.buffer.active.type === 'alternate' || term.modes.mouseTrackingMode !== 'none') return null;
 
   const commandLine = getAbsoluteCursorLine(term);
-  const startLine = getPromptBlockStartLine(term, commandLine);
+  const startLine = getTerminalPromptBlockStartLine(term, commandLine);
   const mark: TerminalCommandMark = {
     commandId: nextCommandId(),
     paneId,
@@ -857,14 +903,75 @@ export function closeTerminalCommandMarks(
 export function selectTerminalCommandMark(term: Terminal, paneId: string, commandId: string): boolean {
   const mark = (marksByPane.get(paneId) ?? []).find((candidate) => candidate.commandId === commandId);
   if (!mark) return false;
+  return selectTerminalCommandMarkRecord(term, paneId, mark);
+}
+
+function selectTerminalCommandMarkRecord(term: Terminal, paneId: string, mark: TerminalCommandMark): boolean {
   clearSelectionDecorations(paneId);
   selectedMarkByPane.delete(paneId);
   const overlay = createSelectionOverlay(term, paneId, mark);
   if (!overlay) return false;
-  selectedMarkByPane.set(paneId, commandId);
+  selectedMarkByPane.set(paneId, mark.commandId);
   selectionOverlaysByPane.set(paneId, overlay);
   notify();
   return true;
+}
+
+function factToPresentationMark(fact: CommandFact, paneId: string): TerminalCommandMark | null {
+  if (typeof fact.endGlobalLine !== 'number') return null;
+  return {
+    commandId: fact.clientMarkId ?? `fact:${fact.factId}`,
+    factId: fact.factId,
+    paneId,
+    sessionId: fact.sessionId,
+    nodeId: fact.nodeId ?? undefined,
+    command: fact.command ?? null,
+    cwd: fact.cwd ?? undefined,
+    startLine: fact.startGlobalLine,
+    commandLine: fact.commandGlobalLine,
+    endLine: fact.endGlobalLine,
+    isClosed: fact.status !== 'open',
+    closedBy: fact.closedBy ?? undefined,
+    exitCode: fact.exitCode ?? null,
+    runtimeEpoch: fact.runtimeEpoch,
+    detectionSource: fact.source,
+    submittedBy: fact.submittedBy ?? undefined,
+    confidence: fact.confidence,
+    outputConfidence: fact.confidence,
+    collapsed: false,
+    stale: fact.status === 'stale',
+    startedAt: fact.createdAt,
+    finishedAt: fact.closedAt ?? undefined,
+    durationMs: fact.closedAt ? fact.closedAt - fact.createdAt : undefined,
+  };
+}
+
+export async function selectTerminalCommandMarkAtLineFromFacts(
+  term: Terminal,
+  paneId: string,
+  sessionId: string,
+  absoluteLine: number,
+): Promise<boolean> {
+  try {
+    const facts = await api.getCommandFacts(sessionId, absoluteLine, absoluteLine);
+    const fact = [...facts].reverse().find((candidate) => {
+      if (candidate.status === 'open' || typeof candidate.endGlobalLine !== 'number') return false;
+      return absoluteLine >= candidate.startGlobalLine && absoluteLine <= candidate.endGlobalLine;
+    });
+    if (fact) {
+      const existing = (marksByPane.get(paneId) ?? []).find((mark) => {
+        return mark.factId === fact.factId || mark.commandId === fact.clientMarkId;
+      });
+      const presentationMark = existing ?? factToPresentationMark(fact, paneId);
+      if (presentationMark && selectTerminalCommandMarkRecord(term, paneId, presentationMark)) {
+        return true;
+      }
+    }
+  } catch (error) {
+    console.debug('[TerminalCommandFacts] fact selection failed, falling back to frontend marks:', error);
+  }
+
+  return selectTerminalCommandMarkAtLine(term, paneId, absoluteLine);
 }
 
 export function selectTerminalCommandMarkAtLine(term: Terminal, paneId: string, absoluteLine: number): boolean {

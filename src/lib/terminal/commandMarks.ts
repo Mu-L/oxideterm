@@ -41,7 +41,7 @@ export type TerminalCommandMark = {
   paneId: string;
   sessionId: string;
   nodeId?: string;
-  command: string;
+  command: string | null;
   cwd?: string;
   startLine: number;
   commandLine: number;
@@ -52,6 +52,7 @@ export type TerminalCommandMark = {
   durationMs?: number;
   runtimeEpoch: string;
   detectionSource: TerminalCommandMarkDetectionSource;
+  submittedBy?: TerminalCommandMarkDetectionSource;
   confidence: TerminalCommandMarkConfidence;
   outputConfidence: TerminalCommandMarkOutputConfidence;
   collapsed: boolean;
@@ -66,6 +67,16 @@ export type TerminalCommandMarkRequest = {
   sessionId: string;
   nodeId?: string;
   cwd?: string | null;
+};
+
+export type ShellIntegratedCommandMarkRequest = {
+  command: string | null;
+  sessionId: string;
+  nodeId?: string;
+  cwd?: string | null;
+  startLine: number;
+  commandLine: number;
+  startedAt?: number;
 };
 
 type DecorationRecord = {
@@ -87,7 +98,10 @@ type SelectionOverlayRecord = {
   disposed: boolean;
 };
 
-const MAX_MARKS_PER_PANE = 200;
+// Command marks must outlive dense prompt history inside the visible xterm
+// scrollback. A low cap makes old-but-still-visible commands impossible to
+// select, which looks like virtualization broke hit-testing.
+const MAX_MARKS_PER_PANE = 2000;
 const MAX_OUTPUT_CHARS = 24000;
 const MAX_OUTPUT_LINES = 400;
 
@@ -97,6 +111,9 @@ const selectionOverlaysByPane = new Map<string, SelectionOverlayRecord>();
 const selectedMarkByPane = new Map<string, string>();
 const listeners = new Set<() => void>();
 let sequence = 0;
+
+const DEDUP_WINDOW_MS = 2000;
+const DEDUP_LINE_DISTANCE = 2;
 
 const commandSelectionFallbacks: Record<string, string> = {
   'terminal.command_selection.actions': 'Command selection actions',
@@ -275,6 +292,43 @@ function isLedgerSource(source: TerminalCommandMarkDetectionSource): boolean {
   return source === 'command_bar' || source === 'ai' || source === 'broadcast' || source === 'shell_integration';
 }
 
+function normalizeCommandForDedup(command: string): string {
+  return command.trim().replace(/\s+/g, ' ');
+}
+
+function persistClosedMarkToLedger(mark: TerminalCommandMark): void {
+  const command = mark.command?.trim();
+  if (!command) return;
+  if (!isLedgerSource(mark.detectionSource) || mark.confidence !== 'high') return;
+
+  addAiCommandRecord({
+    commandId: mark.commandId,
+    targetId: mark.nodeId ? `ssh-node:${mark.nodeId}` : undefined,
+    sessionId: mark.sessionId,
+    nodeId: mark.nodeId,
+    command,
+    cwd: mark.cwd,
+    source: mark.detectionSource === 'ai'
+      ? 'ai.terminal_input'
+      : mark.detectionSource === 'broadcast'
+        ? 'broadcast'
+        : mark.detectionSource === 'shell_integration'
+          ? 'shell_integration'
+          : 'command_bar',
+    status: mark.stale ? 'stale' : 'completed',
+    startedAt: mark.startedAt,
+    finishedAt: mark.finishedAt,
+    runtimeEpoch: mark.runtimeEpoch,
+    risk: 'execute',
+    exitCode: mark.exitCode,
+    startLine: mark.startLine,
+    endLine: mark.endLine,
+    detectionSource: mark.detectionSource,
+    outputConfidence: mark.outputConfidence,
+    stale: mark.stale,
+  });
+}
+
 function closeOpenMarks(
   paneId: string,
   nextStartLine: number,
@@ -290,34 +344,7 @@ function closeOpenMarks(
     mark.endLine = Math.max(mark.startLine, nextStartLine - 1);
     mark.finishedAt = Date.now();
     mark.durationMs = mark.finishedAt - mark.startedAt;
-    if (isLedgerSource(mark.detectionSource) && mark.confidence === 'high') {
-      addAiCommandRecord({
-        commandId: mark.commandId,
-        targetId: mark.nodeId ? `ssh-node:${mark.nodeId}` : undefined,
-        sessionId: mark.sessionId,
-        nodeId: mark.nodeId,
-        command: mark.command,
-        cwd: mark.cwd,
-        source: mark.detectionSource === 'ai'
-          ? 'ai.terminal_input'
-          : mark.detectionSource === 'broadcast'
-            ? 'broadcast'
-            : mark.detectionSource === 'shell_integration'
-              ? 'shell_integration'
-              : 'command_bar',
-        status: mark.stale ? 'stale' : 'completed',
-        startedAt: mark.startedAt,
-        finishedAt: mark.finishedAt,
-        runtimeEpoch: mark.runtimeEpoch,
-        risk: 'execute',
-        exitCode: mark.exitCode,
-        startLine: mark.startLine,
-        endLine: mark.endLine,
-        detectionSource: mark.detectionSource,
-        outputConfidence: mark.outputConfidence,
-        stale: mark.stale,
-      });
-    }
+    persistClosedMarkToLedger(mark);
   }
 }
 
@@ -341,6 +368,19 @@ function disposeDecoration(commandId: string): void {
   if (!records) return;
   decorationsByCommandId.delete(commandId);
   disposeRecords(records);
+}
+
+function removeMarkFromPane(paneId: string, commandId: string): TerminalCommandMark | null {
+  const marks = marksByPane.get(paneId);
+  if (!marks) return null;
+  const index = marks.findIndex((candidate) => candidate.commandId === commandId);
+  if (index < 0) return null;
+  const [removed] = marks.splice(index, 1);
+  if (selectedMarkByPane.get(paneId) === commandId) {
+    clearTerminalCommandMarkSelection(paneId);
+  }
+  disposeDecoration(commandId);
+  return removed ?? null;
 }
 
 function disposeSelectionOverlay(record: SelectionOverlayRecord): void {
@@ -581,6 +621,26 @@ function registerDecorationAtLine(
   return record;
 }
 
+function findShellIntegrationDedupCandidate(
+  paneId: string,
+  command: string,
+  shellStartLine: number,
+  now: number,
+): TerminalCommandMark | null {
+  const normalized = normalizeCommandForDedup(command);
+  if (!normalized) return null;
+  const marks = marksByPane.get(paneId) ?? [];
+  return [...marks].reverse().find((mark) => {
+    if (mark.detectionSource === 'shell_integration') return false;
+    if (mark.detectionSource !== 'command_bar' && mark.detectionSource !== 'ai' && mark.detectionSource !== 'broadcast') {
+      return false;
+    }
+    if (!mark.command || normalizeCommandForDedup(mark.command) !== normalized) return false;
+    if (Math.abs(mark.startLine - shellStartLine) > DEDUP_LINE_DISTANCE) return false;
+    return Math.abs(now - mark.startedAt) <= DEDUP_WINDOW_MS;
+  }) ?? null;
+}
+
 export function createTerminalCommandMark(
   term: Terminal,
   paneId: string,
@@ -626,6 +686,84 @@ export function createTerminalCommandMark(
   trimPaneMarks(paneId);
   notify();
   return mark;
+}
+
+export function createShellIntegratedCommandMark(
+  term: Terminal,
+  paneId: string,
+  request: ShellIntegratedCommandMarkRequest,
+): TerminalCommandMark | null {
+  const settings = useSettingsStore.getState().settings.terminal.commandMarks;
+  if (!settings?.enabled) return null;
+  if (term.buffer.active.type === 'alternate' || term.modes.mouseTrackingMode !== 'none') return null;
+
+  const command = request.command?.trim() || null;
+  const now = Date.now();
+  const dedupCandidate = command
+    ? findShellIntegrationDedupCandidate(paneId, command, request.startLine, now)
+    : null;
+  const submittedBy = dedupCandidate?.detectionSource;
+  const commandId = dedupCandidate?.commandId ?? nextCommandId();
+
+  if (dedupCandidate) {
+    removeMarkFromPane(paneId, dedupCandidate.commandId);
+  }
+
+  const startLine = Math.max(0, request.startLine);
+  const commandLine = Math.max(startLine, request.commandLine);
+  const mark: TerminalCommandMark = {
+    commandId,
+    paneId,
+    sessionId: request.sessionId,
+    nodeId: request.nodeId,
+    command,
+    cwd: request.cwd ?? undefined,
+    startLine,
+    commandLine,
+    isClosed: false,
+    runtimeEpoch: getAiRuntimeEpoch(),
+    detectionSource: 'shell_integration',
+    submittedBy,
+    confidence: 'high',
+    outputConfidence: 'unknown',
+    collapsed: false,
+    stale: false,
+    startedAt: request.startedAt ?? now,
+  };
+
+  const record = registerDecorationAtLine(term, paneId, mark, startLine, 'start', true);
+  if (!record) return null;
+
+  closeOpenMarks(paneId, startLine, 'next_command', 'high');
+  pushDecorationRecord(mark.commandId, record);
+  const marks = marksByPane.get(paneId) ?? [];
+  marks.push(mark);
+  marksByPane.set(paneId, marks);
+  trimPaneMarks(paneId);
+  notify();
+  return mark;
+}
+
+export function closeTerminalCommandMarkById(
+  paneId: string,
+  commandId: string,
+  closedBy: TerminalCommandMarkClosedBy,
+  outputConfidence: TerminalCommandMarkOutputConfidence = 'unknown',
+  options: { endLine?: number; exitCode?: number | null; stale?: boolean } = {},
+): boolean {
+  const mark = (marksByPane.get(paneId) ?? []).find((candidate) => candidate.commandId === commandId);
+  if (!mark || mark.isClosed) return false;
+  mark.isClosed = true;
+  mark.closedBy = closedBy;
+  mark.outputConfidence = outputConfidence;
+  mark.endLine = Math.max(mark.startLine, options.endLine ?? mark.endLine ?? mark.startLine);
+  mark.exitCode = options.exitCode ?? mark.exitCode;
+  mark.finishedAt = Date.now();
+  mark.durationMs = mark.finishedAt - mark.startedAt;
+  mark.stale = options.stale || mark.stale;
+  persistClosedMarkToLedger(mark);
+  notify();
+  return true;
 }
 
 export function closeTerminalCommandMarks(

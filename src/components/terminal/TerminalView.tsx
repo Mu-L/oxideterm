@@ -48,6 +48,10 @@ import {
   getTerminalAbsoluteLineFromClientY,
   selectTerminalCommandMarkAtLine,
 } from '../../lib/terminal/commandMarks';
+import {
+  createShellIntegrationController,
+  isShellIntegrationDetected,
+} from '../../lib/terminal/shellIntegration';
 import { onMapleRegularLoaded, ensureCJKFallback, prepareTerminalFontForOpen } from '../../lib/fontLoader';
 import { runInputPipeline, runOutputPipeline } from '../../lib/plugin/pluginTerminalHooks';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
@@ -1731,6 +1735,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return false; // Let xterm handle default processing
     });
 
+    const shellIntegrationController = createShellIntegrationController({
+      term,
+      paneId: effectivePaneId,
+      sessionId,
+      nodeId,
+    });
+    const osc133Disposable = term.parser.registerOscHandler(133, shellIntegrationController.handleOsc133);
+    const osc633Disposable = term.parser.registerOscHandler(633, shellIntegrationController.handleOsc633);
+
     void installTerminalClipboardSupport(term).then((addon) => {
       if (clipboardInitCancelled) {
         addon.dispose();
@@ -2255,7 +2268,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         const processed = runInputPipeline(data, sessionId, nodeId);
         if (processed === null) return;
         const observedInput = autosuggestRecorderRef.current.observeInput(processed);
-        if (observedInput.completedCommand) {
+        if (observedInput.completedCommand && !isShellIntegrationDetected(effectivePaneId)) {
           createTerminalCommandMark(term, effectivePaneId, {
             command: observedInput.completedCommand,
             source: 'user_input_observed',
@@ -2417,6 +2430,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       if (termElement) {
         termElement.removeEventListener('focusin', handleTerminalFocusIn);
       }
+      osc133Disposable.dispose();
+      osc633Disposable.dispose();
+      shellIntegrationController.dispose();
 
       if (wsConnectTimeout) {
           clearTimeout(wsConnectTimeout);

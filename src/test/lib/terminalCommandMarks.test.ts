@@ -372,4 +372,22 @@ describe('terminal command marks', () => {
     expect(selectTerminalCommandMarkAtLine(term, 'pane-1', 12)).toBe(false);
     expect(selectTerminalCommandMarkAtLine(term, 'pane-1', 9)).toBe(true);
   });
+
+  it('keeps dense command marks beyond the old short retention cap while xterm still owns the lines', () => {
+    const term = createMockTerminal();
+
+    for (let index = 0; index < 250; index += 1) {
+      (term.buffer.active as unknown as { baseY: number }).baseY = 10 + index * 2;
+      (term.buffer.active as unknown as { cursorY: number }).cursorY = 0;
+      createTerminalCommandMark(term, 'pane-1', {
+        command: `echo ${index}`,
+        source: 'command_bar',
+        sessionId: 'session-1',
+      });
+    }
+
+    const marks = listTerminalCommandMarks('pane-1');
+    expect(marks).toHaveLength(250);
+    expect(marks[0]).toMatchObject({ command: 'echo 0' });
+  });
 });

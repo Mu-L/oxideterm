@@ -56,6 +56,10 @@ import {
   getTerminalAbsoluteLineFromClientY,
   selectTerminalCommandMarkAtLine,
 } from '../../lib/terminal/commandMarks';
+import {
+  createShellIntegrationController,
+  isShellIntegrationDetected,
+} from '../../lib/terminal/shellIntegration';
 import { onMapleRegularLoaded, ensureCJKFallback, prepareTerminalFontForOpen } from '../../lib/fontLoader';
 import { api } from '../../lib/api';
 import { installTerminalClipboardSupport, readSystemClipboardText } from '../../lib/clipboardSupport';
@@ -749,6 +753,14 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       return false;
     });
 
+    const shellIntegrationController = createShellIntegrationController({
+      term,
+      paneId: effectivePaneId,
+      sessionId,
+    });
+    const osc133Disposable = term.parser.registerOscHandler(133, shellIntegrationController.handleOsc133);
+    const osc633Disposable = term.parser.registerOscHandler(633, shellIntegrationController.handleOsc633);
+
     void installTerminalClipboardSupport(term).then((addon) => {
       if (clipboardInitCancelled) {
         addon.dispose();
@@ -1009,7 +1021,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       // Notify adaptive renderer of user activity (exits idle tier)
       adaptiveRendererRef.current.notifyUserInput();
       const observedInput = autosuggestRecorderRef.current.observeInput(data);
-      if (observedInput.completedCommand) {
+      if (observedInput.completedCommand && !isShellIntegrationDetected(effectivePaneId)) {
         createTerminalCommandMark(term, effectivePaneId, {
           command: observedInput.completedCommand,
           source: 'user_input_observed',
@@ -1069,6 +1081,9 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       if (termElement) {
         termElement.removeEventListener('focusin', handleTerminalFocus);
       }
+      osc133Disposable.dispose();
+      osc633Disposable.dispose();
+      shellIntegrationController.dispose();
       containerRef.current?.removeEventListener('compositionstart', handleCompositionStart);
       containerRef.current?.removeEventListener('compositionend', handleCompositionEnd);
       

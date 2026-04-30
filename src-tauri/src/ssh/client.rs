@@ -23,6 +23,59 @@ use super::error::SshError;
 use super::known_hosts::{HostKeyVerification, get_known_hosts};
 use super::session::SshSession;
 
+pub type AuthBannerSink = Arc<parking_lot::Mutex<Vec<String>>>;
+
+const MAX_AUTH_BANNER_BYTES: usize = 16 * 1024;
+
+pub fn sanitize_auth_banner(banner: &str) -> Option<String> {
+    let mut out = String::with_capacity(banner.len().min(MAX_AUTH_BANNER_BYTES));
+    for ch in banner.chars() {
+        if out.len() >= MAX_AUTH_BANNER_BYTES {
+            break;
+        }
+        match ch {
+            '\r' | '\n' | '\t' => out.push(ch),
+            c if c.is_control() => {}
+            c => out.push(c),
+        }
+    }
+    let trimmed = out.trim_matches(['\r', '\n']).to_string();
+    if trimmed.trim().is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_auth_banner_strips_control_chars() {
+        assert_eq!(
+            sanitize_auth_banner("hello\u{0007}\nworld"),
+            Some("hello\nworld".to_string())
+        );
+    }
+
+    #[test]
+    fn sanitize_auth_banner_drops_empty_banner() {
+        assert_eq!(sanitize_auth_banner("\u{0007}\r\n"), None);
+    }
+
+    #[test]
+    fn take_auth_banners_drains_sink() {
+        let sink: AuthBannerSink = Arc::new(parking_lot::Mutex::new(vec!["one".to_string()]));
+        assert_eq!(take_auth_banners(&sink), vec!["one".to_string()]);
+        assert!(take_auth_banners(&sink).is_empty());
+    }
+}
+
+pub fn take_auth_banners(sink: &AuthBannerSink) -> Vec<String> {
+    std::mem::take(&mut *sink.lock())
+}
+
 /// SSH Client handler for russh
 pub struct SshClient {
     config: SshConfig,
@@ -75,6 +128,7 @@ impl SshClient {
             self.config.agent_forwarding,
             self.config.expected_host_key_fingerprint.clone(),
         );
+        let auth_banners = handler.auth_banners();
 
         // Connect with timeout
         let mut handle = tokio::time::timeout(
@@ -184,6 +238,7 @@ impl SshClient {
                         self.config.cols,
                         self.config.rows,
                         self.config.agent_forwarding,
+                        auth_banners,
                     ));
                 }
             }
@@ -202,6 +257,7 @@ impl SshClient {
                         self.config.cols,
                         self.config.rows,
                         self.config.agent_forwarding,
+                        auth_banners,
                     ));
                 }
             }
@@ -217,6 +273,7 @@ impl SshClient {
             self.config.cols,
             self.config.rows,
             self.config.agent_forwarding,
+            auth_banners,
         ))
     }
 }
@@ -248,6 +305,8 @@ pub struct ClientHandler {
     agent_forwarding_requested: bool,
     /// Semaphore to limit concurrent agent forwarding channels (max 16)
     agent_forward_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+    /// SSH auth banners reported during authentication.
+    auth_banners: AuthBannerSink,
 }
 
 impl ClientHandler {
@@ -260,6 +319,7 @@ impl ClientHandler {
             expected_host_key_fingerprint: None,
             agent_forwarding_requested: false,
             agent_forward_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(16)),
+            auth_banners: Arc::new(parking_lot::Mutex::new(Vec::new())),
         }
     }
 
@@ -279,7 +339,12 @@ impl ClientHandler {
             expected_host_key_fingerprint,
             agent_forwarding_requested: agent_forwarding,
             agent_forward_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(16)),
+            auth_banners: Arc::new(parking_lot::Mutex::new(Vec::new())),
         }
+    }
+
+    pub fn auth_banners(&self) -> AuthBannerSink {
+        self.auth_banners.clone()
     }
 
     /// Mark that agent forwarding was requested on this connection.
@@ -291,6 +356,20 @@ impl ClientHandler {
 
 impl client::Handler for ClientHandler {
     type Error = SshError;
+
+    async fn auth_banner(
+        &mut self,
+        banner: &str,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        // SSH auth banners are authentication-phase messages from the server.
+        // They are not PAM MOTD/loginmsg. MOTD must still come from the first
+        // visible shell channel as normal terminal output.
+        if let Some(sanitized) = sanitize_auth_banner(banner) {
+            self.auth_banners.lock().push(sanitized);
+        }
+        Ok(())
+    }
 
     async fn check_server_key(
         &mut self,

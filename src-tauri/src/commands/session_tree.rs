@@ -888,7 +888,11 @@ impl ConnectionTraceContext {
             stage,
             status,
             progress,
-            elapsed_ms: self.started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            elapsed_ms: self
+                .started_at
+                .elapsed()
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64,
             detail,
             label: self.label.clone(),
             step_index: self.step_index,
@@ -962,18 +966,16 @@ pub async fn connect_tree_node(
     let (session_config, parent_node_id) = {
         trace.emit(&app, "preparing", "running", 15, None);
         let tree = state.tree.read().await;
-        let node = tree
-            .get_node(&node_id)
-            .ok_or_else(|| {
-                trace.emit(
-                    &app,
-                    "preparing",
-                    "failed",
-                    15,
-                    Some(format!("Node not found: {}", node_id)),
-                );
-                format!("Node not found: {}", node_id)
-            })?;
+        let node = tree.get_node(&node_id).ok_or_else(|| {
+            trace.emit(
+                &app,
+                "preparing",
+                "failed",
+                15,
+                Some(format!("Node not found: {}", node_id)),
+            );
+            format!("Node not found: {}", node_id)
+        })?;
 
         // 确保节点状态允许连接
         match &node.state {
@@ -1032,32 +1034,27 @@ pub async fn connect_tree_node(
         // 有父节点 - 先获取父节点的 SSH 连接 ID
         let parent_ssh_id = {
             let tree = state.tree.read().await;
-            let parent_node = tree
-                .get_node(parent_id)
-                .ok_or_else(|| {
-                    trace.emit(
-                        &app,
-                        "opening_transport",
-                        "failed",
-                        28,
-                        Some(format!("Parent node not found: {}", parent_id)),
-                    );
-                    format!("Parent node not found: {}", parent_id)
-                })?;
+            let parent_node = tree.get_node(parent_id).ok_or_else(|| {
+                trace.emit(
+                    &app,
+                    "opening_transport",
+                    "failed",
+                    28,
+                    Some(format!("Parent node not found: {}", parent_id)),
+                );
+                format!("Parent node not found: {}", parent_id)
+            })?;
 
-            parent_node
-                .ssh_connection_id
-                .clone()
-                .ok_or_else(|| {
-                    trace.emit(
-                        &app,
-                        "opening_transport",
-                        "failed",
-                        28,
-                        Some(format!("Parent node {} has no SSH connection", parent_id)),
-                    );
-                    format!("Parent node {} has no SSH connection", parent_id)
-                })?
+            parent_node.ssh_connection_id.clone().ok_or_else(|| {
+                trace.emit(
+                    &app,
+                    "opening_transport",
+                    "failed",
+                    28,
+                    Some(format!("Parent node {} has no SSH connection", parent_id)),
+                );
+                format!("Parent node {} has no SSH connection", parent_id)
+            })?
         };
 
         // 通过父连接建立隧道连接

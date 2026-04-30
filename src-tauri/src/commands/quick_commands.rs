@@ -109,8 +109,16 @@ fn sanitize_command(command: QuickCommand) -> Result<QuickCommand, String> {
         name: bounded_required(command.name, "command.name", MAX_NAME_LEN)?,
         command: bounded_required(command.command, "command.command", MAX_COMMAND_LEN)?,
         category: bounded_required(command.category, "command.category", MAX_ID_LEN)?,
-        description: bounded_optional(command.description, "command.description", MAX_DESCRIPTION_LEN)?,
-        host_pattern: bounded_optional(command.host_pattern, "command.hostPattern", MAX_HOST_PATTERN_LEN)?,
+        description: bounded_optional(
+            command.description,
+            "command.description",
+            MAX_DESCRIPTION_LEN,
+        )?,
+        host_pattern: bounded_optional(
+            command.host_pattern,
+            "command.hostPattern",
+            MAX_HOST_PATTERN_LEN,
+        )?,
         created_at: command.created_at,
         updated_at: command.updated_at,
     })
@@ -130,7 +138,11 @@ fn bounded_required(value: String, field: &str, max_len: usize) -> Result<String
     Ok(trimmed)
 }
 
-fn bounded_optional(value: Option<String>, field: &str, max_len: usize) -> Result<Option<String>, String> {
+fn bounded_optional(
+    value: Option<String>,
+    field: &str,
+    max_len: usize,
+) -> Result<Option<String>, String> {
     match value.map(|item| item.trim().to_string()) {
         Some(item) if item.is_empty() => Ok(None),
         Some(item) if item.len() > max_len => Err(format!(

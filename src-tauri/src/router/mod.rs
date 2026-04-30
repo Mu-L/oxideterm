@@ -30,7 +30,9 @@ use tracing::{debug, info};
 use crate::commands::SessionTreeState;
 use crate::session::SessionRegistry;
 use crate::sftp::session::SftpSession;
-use crate::ssh::{AcquiredSftpMeta, ConnectionState, SshConnectionRegistry};
+use crate::ssh::{
+    AcquiredSftpMeta, ConnectionState, RemoteEnvDetectionReason, SshConnectionRegistry,
+};
 
 /// 节点路由器：将 nodeId 解析为具体的后端资源。
 ///
@@ -166,6 +168,10 @@ impl NodeRouter {
             .map_err(|e| RouteError::CapabilityUnavailable(format!("SFTP init failed: {}", e)))?;
 
         if was_new {
+            self.connection_registry.maybe_spawn_env_detection(
+                &resolved.connection_id,
+                RemoteEnvDetectionReason::NonTerminalWorkflow,
+            );
             self.emitter
                 .emit_sftp_ready(&resolved.connection_id, true, cwd);
         }
@@ -189,6 +195,10 @@ impl NodeRouter {
         let sftp = entry.acquire_transfer_sftp().await.map_err(|e| {
             RouteError::CapabilityUnavailable(format!("Transfer SFTP init failed: {}", e))
         })?;
+        self.connection_registry.maybe_spawn_env_detection(
+            &resolved.connection_id,
+            RemoteEnvDetectionReason::NonTerminalWorkflow,
+        );
 
         Ok(sftp)
     }

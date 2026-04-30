@@ -77,6 +77,41 @@ struct DeferredPtyConfig {
 struct TerminalPumpConfig {
     deferred_pty: Option<DeferredPtyConfig>,
     resize_debounce: Option<Duration>,
+    terminal_ready_connection: Option<(Arc<SshConnectionRegistry>, String)>,
+}
+
+fn auth_banner_prelude_bytes(banners: Vec<String>) -> Vec<u8> {
+    if banners.is_empty() {
+        return Vec::new();
+    }
+    let mut prelude = Vec::new();
+    for banner in banners {
+        if !prelude.is_empty() {
+            prelude.extend_from_slice(b"\r\n");
+        }
+        let normalized = banner.replace("\r\n", "\n").replace('\r', "\n");
+        let normalized = normalized.replace('\n', "\r\n");
+        prelude.extend_from_slice(normalized.as_bytes());
+    }
+    prelude.extend_from_slice(b"\r\n");
+    prelude
+}
+
+fn mark_visible_terminal_ready(
+    registry: &Arc<SshConnectionRegistry>,
+    connection_id: &str,
+) -> Vec<u8> {
+    match registry.mark_visible_terminal_ready_and_maybe_detect(connection_id) {
+        Ok(true) => auth_banner_prelude_bytes(registry.take_pending_auth_banners(connection_id)),
+        Ok(false) => Vec::new(),
+        Err(err) => {
+            warn!(
+                "Failed to mark visible terminal ready for {}: {}",
+                connection_id, err
+            );
+            Vec::new()
+        }
+    }
 }
 
 async fn run_terminal_channel_pump(
@@ -154,6 +189,10 @@ async fn run_terminal_channel_pump(
             tracing::error!("Failed to request shell for session {}: {}", session_id, e);
             let _ = channel.eof().await;
             return;
+        }
+        if let Some((registry, connection_id)) = &pump_config.terminal_ready_connection {
+            let mut prelude = mark_visible_terminal_ready(registry, connection_id);
+            flush_pending_terminal_output(&mut prelude, &scroll_buffer, &output_tx).await;
         }
         info!(
             "Deferred PTY allocated at {}x{} for session {}",
@@ -639,6 +678,12 @@ pub async fn create_terminal(
         .with_session(&session_id, |entry| entry.output_tx.clone())
         .ok_or_else(|| "Session output channel not found".to_string())?;
 
+    if !deferred_pty {
+        let mut prelude =
+            mark_visible_terminal_ready(connection_registry.inner(), &request.connection_id);
+        flush_pending_terminal_output(&mut prelude, &scroll_buffer, &output_tx).await;
+    }
+
     let output_rx = output_tx.subscribe();
     tokio::spawn(run_terminal_channel_pump(
         channel,
@@ -654,6 +699,10 @@ pub async fn create_terminal(
                 timeout: tokio::time::Duration::from_secs(15),
             }),
             resize_debounce: Some(tokio::time::Duration::from_millis(100)),
+            terminal_ready_connection: deferred_pty.then_some((
+                connection_registry.inner().clone(),
+                request.connection_id.clone(),
+            )),
         },
     ));
 
@@ -1052,6 +1101,9 @@ pub async fn recreate_terminal_pty(
         .with_session(&session_id, |entry| entry.output_tx.clone())
         .ok_or_else(|| "Session output channel not found".to_string())?;
 
+    let mut prelude = mark_visible_terminal_ready(connection_registry.inner(), &connection_id);
+    flush_pending_terminal_output(&mut prelude, &scroll_buffer, &output_tx).await;
+
     let output_rx = output_tx.subscribe();
     tokio::spawn(run_terminal_channel_pump(
         channel,
@@ -1062,6 +1114,7 @@ pub async fn recreate_terminal_pty(
         TerminalPumpConfig {
             deferred_pty: None,
             resize_debounce: None,
+            terminal_ready_connection: None,
         },
     ));
 

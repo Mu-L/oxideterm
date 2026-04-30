@@ -77,6 +77,12 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 const HEARTBEAT_FAIL_THRESHOLD: u32 = 2;
 const LOCK_PROFILE_ENV: &str = "OXIDETERM_PROFILE_LOCKS";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteEnvDetectionReason {
+    VisibleTerminalReady,
+    NonTerminalWorkflow,
+}
+
 fn connection_lock_profiling_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| cfg!(debug_assertions) && std::env::var_os(LOCK_PROFILE_ENV).is_some())
@@ -358,6 +364,15 @@ pub struct ConnectionEntry {
 
     /// 远程环境信息（异步检测结果，一次性写入）
     remote_env: std::sync::OnceLock<RemoteEnvInfo>,
+
+    /// Whether the one-shot remote environment detector has started.
+    env_detection_started: AtomicBool,
+
+    /// Whether the first user-visible terminal shell has reached PTY + shell ready.
+    first_visible_terminal_started: AtomicBool,
+
+    /// SSH authentication banners waiting to be shown in the first visible terminal.
+    pending_auth_banners: parking_lot::Mutex<Vec<String>>,
 }
 
 impl ConnectionEntry {
@@ -463,6 +478,39 @@ impl ConnectionEntry {
             terminal_ids.len()
         };
         self.terminal_count.store(len as u32, Ordering::Release);
+    }
+
+    /// Mark the first visible terminal shell as ready.
+    ///
+    /// Returns true only for the first visible terminal on this connection.
+    pub fn mark_first_visible_terminal_started(&self) -> bool {
+        !self
+            .first_visible_terminal_started
+            .swap(true, Ordering::AcqRel)
+    }
+
+    pub fn first_visible_terminal_started(&self) -> bool {
+        self.first_visible_terminal_started.load(Ordering::Acquire)
+    }
+
+    pub fn try_begin_env_detection(&self) -> bool {
+        self.env_detection_started
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
+    pub fn env_detection_started(&self) -> bool {
+        self.env_detection_started.load(Ordering::Acquire)
+    }
+
+    pub fn push_auth_banners(&self, banners: Vec<String>) {
+        if !banners.is_empty() {
+            self.pending_auth_banners.lock().extend(banners);
+        }
+    }
+
+    pub fn take_pending_auth_banners(&self) -> Vec<String> {
+        std::mem::take(&mut *self.pending_auth_banners.lock())
     }
 
     /// 移除关联的 terminal session ID
@@ -1165,6 +1213,8 @@ impl SshConnectionRegistry {
 
         info!("SSH connection {} established", connection_id);
 
+        let auth_banners = session.take_auth_banners();
+
         // 启动 Handle Owner Task，获取 HandleController
         let handle_controller = session.start(connection_id.clone());
 
@@ -1196,15 +1246,15 @@ impl SshConnectionRegistry {
             last_emitted_status: parking_lot::Mutex::new(None),
             parent_connection_id: None,             // 直连，无父连接
             remote_env: std::sync::OnceLock::new(), // 待异步检测
+            env_detection_started: AtomicBool::new(false),
+            first_visible_terminal_started: AtomicBool::new(false),
+            pending_auth_banners: parking_lot::Mutex::new(auth_banners),
         });
 
         self.connections.insert(connection_id.clone(), entry);
 
         // 启动心跳检测
         self.start_heartbeat(&connection_id);
-
-        // 启动远程环境检测（异步，不阻塞）
-        self.spawn_env_detection(&connection_id);
 
         // Oxide-Next Phase 2: 发射连接就绪事件
         // 注：初次连接时 conn_to_node 映射通常尚未注册（前端在 connect 返回后才调用
@@ -1307,6 +1357,7 @@ impl SshConnectionRegistry {
             target_config.agent_forwarding,
             target_config.expected_host_key_fingerprint.clone(),
         );
+        let auth_banners = handler.auth_banners();
 
         // 使用 russh::connect_stream 在隧道上建立 SSH
         let mut handle = tokio::time::timeout(
@@ -1450,7 +1501,9 @@ impl SshConnectionRegistry {
                         target_config.cols,
                         target_config.rows,
                         target_config.agent_forwarding,
+                        auth_banners.clone(),
                     );
+                    let connection_auth_banners = session.take_auth_banners();
                     let handle_controller = session.start(connection_id.clone());
 
                     let entry = Arc::new(ConnectionEntry {
@@ -1480,13 +1533,15 @@ impl SshConnectionRegistry {
                         last_emitted_status: parking_lot::Mutex::new(None),
                         parent_connection_id: Some(parent_connection_id.to_string()),
                         remote_env: std::sync::OnceLock::new(),
+                        env_detection_started: AtomicBool::new(false),
+                        first_visible_terminal_started: AtomicBool::new(false),
+                        pending_auth_banners: parking_lot::Mutex::new(connection_auth_banners),
                     });
 
                     self.connections.insert(connection_id.clone(), entry);
                     parent_conn.add_ref();
 
                     self.start_heartbeat(&connection_id);
-                    self.spawn_env_detection(&connection_id);
                     return Ok(connection_id);
                 }
             }
@@ -1515,7 +1570,9 @@ impl SshConnectionRegistry {
                         target_config.cols,
                         target_config.rows,
                         target_config.agent_forwarding,
+                        auth_banners.clone(),
                     );
+                    let connection_auth_banners = session.take_auth_banners();
                     let handle_controller = session.start(connection_id.clone());
 
                     let entry = Arc::new(ConnectionEntry {
@@ -1545,13 +1602,15 @@ impl SshConnectionRegistry {
                         last_emitted_status: parking_lot::Mutex::new(None),
                         parent_connection_id: Some(parent_connection_id.to_string()),
                         remote_env: std::sync::OnceLock::new(),
+                        env_detection_started: AtomicBool::new(false),
+                        first_visible_terminal_started: AtomicBool::new(false),
+                        pending_auth_banners: parking_lot::Mutex::new(connection_auth_banners),
                     });
 
                     self.connections.insert(connection_id.clone(), entry);
                     parent_conn.add_ref();
 
                     self.start_heartbeat(&connection_id);
-                    self.spawn_env_detection(&connection_id);
 
                     return Ok(connection_id);
                 }
@@ -1575,7 +1634,9 @@ impl SshConnectionRegistry {
             target_config.cols,
             target_config.rows,
             target_config.agent_forwarding,
+            auth_banners,
         );
+        let connection_auth_banners = session.take_auth_banners();
         let handle_controller = session.start(connection_id.clone());
 
         // 7. 创建连接条目（带父连接 ID）
@@ -1606,6 +1667,9 @@ impl SshConnectionRegistry {
             last_emitted_status: parking_lot::Mutex::new(None),
             parent_connection_id: Some(parent_connection_id.to_string()), // 隧道连接，记录父连接
             remote_env: std::sync::OnceLock::new(),                       // 待异步检测
+            env_detection_started: AtomicBool::new(false),
+            first_visible_terminal_started: AtomicBool::new(false),
+            pending_auth_banners: parking_lot::Mutex::new(connection_auth_banners),
         });
 
         self.connections.insert(connection_id.clone(), entry);
@@ -1619,9 +1683,6 @@ impl SshConnectionRegistry {
 
         // 启动心跳检测
         self.start_heartbeat(&connection_id);
-
-        // 启动远程环境检测（异步，不阻塞）
-        self.spawn_env_detection(&connection_id);
 
         // Oxide-Next Phase 2: 发射隧道连接就绪事件（同 connect，通常 no-op）
         if let Some(emitter) = self.node_emitter() {
@@ -2361,6 +2422,9 @@ impl SshConnectionRegistry {
             last_emitted_status: parking_lot::Mutex::new(None),
             parent_connection_id: None, // 从旧连接注册，无父连接
             remote_env: std::sync::OnceLock::new(), // 待异步检测
+            env_detection_started: AtomicBool::new(false),
+            first_visible_terminal_started: AtomicBool::new(true),
+            pending_auth_banners: parking_lot::Mutex::new(Vec::new()),
         });
 
         self.connections
@@ -2372,10 +2436,12 @@ impl SshConnectionRegistry {
             self.connections.len()
         );
 
-        // 启动远程环境检测（异步，不阻塞）
-        // 使用 inner 版本因为 register_existing 没有 Arc<Self>
-        let app_handle = self.app_handle.blocking_read().clone();
-        Self::spawn_env_detection_inner(entry, connection_id.clone(), app_handle);
+        // Existing registrations already own a visible terminal. Starting
+        // detection here does not steal the first login/session from the user.
+        let app_handle = self.app_handle.read().await.clone();
+        if entry.try_begin_env_detection() {
+            Self::spawn_env_detection_inner(entry, connection_id.clone(), app_handle);
+        }
 
         connection_id
     }
@@ -2444,6 +2510,33 @@ impl SshConnectionRegistry {
         Ok(())
     }
 
+    pub fn take_pending_auth_banners(&self, connection_id: &str) -> Vec<String> {
+        self.connections
+            .get(connection_id)
+            .map(|entry| entry.value().take_pending_auth_banners())
+            .unwrap_or_default()
+    }
+
+    pub fn mark_visible_terminal_ready_and_maybe_detect(
+        self: &Arc<Self>,
+        connection_id: &str,
+    ) -> Result<bool, ConnectionRegistryError> {
+        let entry = self
+            .connections
+            .get(connection_id)
+            .ok_or_else(|| ConnectionRegistryError::NotFound(connection_id.to_string()))?;
+
+        let first = entry.value().mark_first_visible_terminal_started();
+        drop(entry);
+        if first {
+            self.maybe_spawn_env_detection(
+                connection_id,
+                RemoteEnvDetectionReason::VisibleTerminalReady,
+            );
+        }
+        Ok(first)
+    }
+
     /// 移除关联的 terminal session
     pub async fn remove_terminal(
         &self,
@@ -2486,6 +2579,12 @@ impl SshConnectionRegistry {
             .ok_or_else(|| ConnectionRegistryError::NotFound(connection_id.to_string()))?;
 
         entry.value().add_forward(forward_id).await;
+        let conn = entry.value().clone();
+        drop(entry);
+        if conn.try_begin_env_detection() {
+            let app_handle = self.app_handle.read().await.clone();
+            Self::spawn_env_detection_inner(conn, connection_id.to_string(), app_handle);
+        }
         Ok(())
     }
 
@@ -2683,14 +2782,12 @@ impl SshConnectionRegistry {
         });
     }
 
-    /// Spawn remote environment detection task
-    ///
-    /// Runs asynchronously after connection establishment. Results are cached
-    /// in ConnectionEntry and emitted as `env:detected:{connection_id}` event.
-    pub fn spawn_env_detection(self: &Arc<Self>, connection_id: &str) {
-        use crate::session::env_detector::detect_remote_env;
-        use tauri::Emitter;
-
+    /// Start remote environment detection once, after an allowed trigger.
+    pub fn maybe_spawn_env_detection(
+        self: &Arc<Self>,
+        connection_id: &str,
+        reason: RemoteEnvDetectionReason,
+    ) {
         let Some(entry) = self.connections.get(connection_id) else {
             warn!(
                 "Cannot spawn env detection for non-existent connection {}",
@@ -2700,8 +2797,41 @@ impl SshConnectionRegistry {
         };
 
         let conn = entry.value().clone();
-        let registry = Arc::clone(self);
         let connection_id = connection_id.to_string();
+
+        // Environment detection must not be the first visible login/session for
+        // terminal workflows. Some servers attach PAM MOTD/login messages to the
+        // first session child. Running hidden shell/exec detection too early can
+        // consume that output before the user's terminal exists.
+        if reason == RemoteEnvDetectionReason::VisibleTerminalReady
+            && !conn.first_visible_terminal_started()
+        {
+            warn!(
+                "[EnvDetector] Refusing terminal workflow detection before visible terminal ready for {}",
+                connection_id
+            );
+            return;
+        }
+
+        if !conn.try_begin_env_detection() {
+            debug!(
+                "[EnvDetector] Detection already started for {} ({:?})",
+                connection_id, reason
+            );
+            return;
+        }
+
+        Self::spawn_env_detection_with_registry(conn, connection_id, Arc::clone(self));
+    }
+
+    fn spawn_env_detection_with_registry(
+        conn: Arc<ConnectionEntry>,
+        connection_id: String,
+        registry: Arc<Self>,
+    ) {
+        use crate::session::env_detector::detect_remote_env;
+        use tauri::Emitter;
+
         let controller = conn.handle_controller.clone();
 
         tokio::spawn(async move {
@@ -2710,7 +2840,6 @@ impl SshConnectionRegistry {
                 connection_id
             );
 
-            // Run detection
             let env_info = detect_remote_env(&controller, &connection_id).await;
 
             info!(
@@ -2718,10 +2847,8 @@ impl SshConnectionRegistry {
                 connection_id, env_info.os_type
             );
 
-            // Cache result in ConnectionEntry
             conn.set_remote_env(env_info.clone());
 
-            // Emit event to frontend
             let app_handle = registry.app_handle.read().await;
             if let Some(handle) = app_handle.as_ref() {
                 #[derive(Clone, serde::Serialize)]
@@ -3247,6 +3374,9 @@ mod tests {
             last_emitted_status: parking_lot::Mutex::new(None),
             parent_connection_id: None,
             remote_env: std::sync::OnceLock::new(),
+            env_detection_started: AtomicBool::new(false),
+            first_visible_terminal_started: AtomicBool::new(false),
+            pending_auth_banners: parking_lot::Mutex::new(Vec::new()),
         };
 
         assert_eq!(entry.ref_count(), 0);
@@ -3254,6 +3384,38 @@ mod tests {
         assert_eq!(entry.add_ref(), 2);
         assert_eq!(entry.release(), 1);
         assert_eq!(entry.release(), 0);
+    }
+
+    #[test]
+    fn test_env_detection_gate_starts_once() {
+        let entry = create_test_entry("env-gate-test");
+
+        assert!(!entry.env_detection_started());
+        assert!(entry.try_begin_env_detection());
+        assert!(entry.env_detection_started());
+        assert!(!entry.try_begin_env_detection());
+    }
+
+    #[test]
+    fn test_visible_terminal_ready_starts_once() {
+        let entry = create_test_entry("visible-terminal-test");
+
+        assert!(!entry.first_visible_terminal_started());
+        assert!(entry.mark_first_visible_terminal_started());
+        assert!(entry.first_visible_terminal_started());
+        assert!(!entry.mark_first_visible_terminal_started());
+    }
+
+    #[test]
+    fn test_pending_auth_banners_are_consumed_once() {
+        let entry = create_test_entry("auth-banner-test");
+
+        entry.push_auth_banners(vec!["Banner A".to_string(), "Banner B".to_string()]);
+        assert_eq!(
+            entry.take_pending_auth_banners(),
+            vec!["Banner A".to_string(), "Banner B".to_string()]
+        );
+        assert!(entry.take_pending_auth_banners().is_empty());
     }
 
     /// Helper to create a test ConnectionEntry
@@ -3300,6 +3462,9 @@ mod tests {
             last_emitted_status: parking_lot::Mutex::new(None),
             parent_connection_id: None,
             remote_env: std::sync::OnceLock::new(),
+            env_detection_started: AtomicBool::new(false),
+            first_visible_terminal_started: AtomicBool::new(false),
+            pending_auth_banners: parking_lot::Mutex::new(Vec::new()),
         }
     }
 

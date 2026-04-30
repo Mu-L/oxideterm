@@ -9,7 +9,7 @@ use russh::{ChannelMsg, Pty};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info, warn};
 
-use super::client::ClientHandler;
+use super::client::{AuthBannerSink, ClientHandler};
 use super::error::SshError;
 use super::handle_owner::{HandleController, spawn_handle_owner_task};
 
@@ -174,6 +174,7 @@ pub struct SshSession {
     cols: u32,
     rows: u32,
     agent_forwarding: bool,
+    auth_banners: AuthBannerSink,
 }
 
 impl SshSession {
@@ -182,13 +183,19 @@ impl SshSession {
         cols: u32,
         rows: u32,
         agent_forwarding: bool,
+        auth_banners: AuthBannerSink,
     ) -> Self {
         Self {
             handle,
             cols,
             rows,
             agent_forwarding,
+            auth_banners,
         }
+    }
+
+    pub fn take_auth_banners(&self) -> Vec<String> {
+        super::client::take_auth_banners(&self.auth_banners)
     }
 
     /// Start the Handle Owner Task and return a controller

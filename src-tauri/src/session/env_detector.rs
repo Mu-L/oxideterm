@@ -8,7 +8,7 @@
 //! pushed to the frontend via Tauri events for AI context injection.
 //!
 //! # Design
-//! - Opens a **temporary** shell channel (closed immediately after detection)
+//! - Prefers a **temporary exec** channel, then falls back to a shell channel
 //! - Two-phase detection: Phase A identifies Windows vs Unix; Phase B collects details
 //! - Handles "disguised" Windows environments (Git Bash/MinGW, MSYS, Cygwin, WSL)
 //! - Total timeout: 8s. Failure → `os_type = "Unknown"`, logged but non-fatal
@@ -124,6 +124,16 @@ pub async fn detect_remote_env(
 }
 
 async fn detect_inner(controller: &HandleController, connection_id: &str) -> RemoteEnvInfo {
+    match run_detection_exec(controller, connection_id).await {
+        Ok(info) => return info,
+        Err(err) => {
+            debug!(
+                "[EnvDetector] Exec detection failed for {}, falling back to shell detector: {}",
+                connection_id, err
+            );
+        }
+    }
+
     // 1. Open temporary shell channel
     let mut channel = match open_detect_channel(controller).await {
         Ok(ch) => ch,
@@ -147,6 +157,92 @@ async fn detect_inner(controller: &HandleController, connection_id: &str) -> Rem
     }
 
     result
+}
+
+async fn run_detection_exec(
+    controller: &HandleController,
+    connection_id: &str,
+) -> Result<RemoteEnvInfo, String> {
+    let phase_a_output = exec_and_read(controller, PHASE_A_CMD.trim(), PHASE_A_TIMEOUT).await?;
+
+    let is_windows = phase_a_output.contains("PLATFORM=windows");
+    let raw_platform = extract_between(&phase_a_output, "PLATFORM=", "\n")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    debug!(
+        "[EnvDetector] Exec Phase A result for {}: is_windows={}, raw_platform='{}'",
+        connection_id, is_windows, raw_platform
+    );
+
+    let phase_b_cmd = if is_windows {
+        PHASE_B_WINDOWS_CMD.trim()
+    } else {
+        PHASE_B_UNIX_CMD.trim()
+    };
+    let phase_b_output = exec_and_read(controller, phase_b_cmd, PHASE_B_TIMEOUT).await?;
+
+    Ok(if is_windows {
+        parse_windows_env(&phase_b_output)
+    } else {
+        parse_unix_env(&phase_b_output, &raw_platform)
+    })
+}
+
+async fn exec_and_read(
+    controller: &HandleController,
+    cmd: &str,
+    read_timeout: Duration,
+) -> Result<String, String> {
+    let mut channel = timeout(CHANNEL_OPEN_TIMEOUT, controller.open_session_channel())
+        .await
+        .map_err(|_| "Timeout opening exec detection channel".to_string())?
+        .map_err(|e| format!("Failed to open exec detection channel: {}", e))?;
+
+    channel
+        .exec(true, cmd)
+        .await
+        .map_err(|e| format!("Failed to exec detection command: {}", e))?;
+
+    let mut stdout = Vec::new();
+    let result = timeout(read_timeout, async {
+        loop {
+            match channel.wait().await {
+                Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
+                    stdout.extend_from_slice(&data);
+                    if stdout.len() > MAX_OUTPUT_SIZE {
+                        stdout.truncate(MAX_OUTPUT_SIZE);
+                        break;
+                    }
+                    if let Ok(s) = std::str::from_utf8(&stdout) {
+                        if s.contains("===END===") {
+                            break;
+                        }
+                    }
+                }
+                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => break,
+                Some(_) => {}
+                None => break,
+            }
+        }
+        Ok::<(), String>(())
+    })
+    .await;
+
+    match result {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => return Err(e),
+        Err(_) => {
+            return Err(format!(
+                "Exec read timeout ({}ms)",
+                read_timeout.as_millis()
+            ));
+        }
+    }
+
+    let _ = channel.close().await;
+    String::from_utf8(stdout).map_err(|e| format!("Invalid UTF-8: {}", e))
 }
 
 async fn run_detection(channel: &mut Channel<Msg>, connection_id: &str) -> RemoteEnvInfo {

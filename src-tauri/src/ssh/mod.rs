@@ -37,7 +37,8 @@ pub use client::{ClientHandler, SshClient};
 pub use config::{AuthMethod, ProxyHopConfig, SshConfig};
 pub use connection_registry::{
     AcquiredSftpMeta, ConnectionEntry, ConnectionInfo, ConnectionPoolConfig, ConnectionPoolStats,
-    ConnectionRegistryError, ConnectionState, ConnectionSummary, SshConnectionRegistry,
+    ConnectionRegistryError, ConnectionState, ConnectionSummary, RemoteEnvDetectionReason,
+    SshConnectionRegistry,
 };
 pub use error::SshError;
 pub use handle_owner::{HandleCommand, HandleController, spawn_handle_owner_task};

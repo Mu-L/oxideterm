@@ -12,7 +12,7 @@
       "visible_buffer": "可见缓冲区",
       "deep_history": "深度历史",
       "deep_history_tooltip": "搜索整个会话历史（超出滚动缓冲区）",
-      "placeholder_active": "搜索终端输出...",
+      "placeholder_active": "搜索当前终端...",
       "placeholder_deep": "搜索完整历史...",
       "searching": "搜索中...",
       "searching_archived": "已找到 {{count}} 个匹配项 ({{ms}}ms)，正在搜索归档历史...",
@@ -36,7 +36,11 @@
       "archived_preview": "归档预览",
       "showing_first": "显示前 100 个，共 {{total}} 个匹配项",
       "partial_results": "部分结果：某些归档片段无法搜索。",
-      "no_matches_in_history": "会话历史中无匹配项"
+      "no_matches_in_history": "会话历史中无匹配项",
+      "visible_terminal": "当前终端",
+      "full_history": "完整历史",
+      "visible_terminal_hint": "搜索主终端可见回滚。",
+      "full_history_hint": "搜索后端热历史和归档摘录，结果在 Scrollback Viewer 中打开。"
     },
     "ai": {
       "title": "OxideSens",

@@ -12,8 +12,8 @@
       "visible_buffer": "Buffer visible",
       "deep_history": "Historial profundo",
       "deep_history_tooltip": "Buscar en todo el historial de sesión (más allá del scrollback)",
-      "placeholder_active": "Buscar en salida del terminal...",
-      "placeholder_deep": "Buscar en historial completo...",
+      "placeholder_active": "Search visible terminal...",
+      "placeholder_deep": "Search full history...",
       "searching": "Buscando...",
       "searching_archived": "{{count}} coincidencias hasta ahora ({{ms}}ms), buscando en el historial archivado...",
       "error": "Error",
@@ -23,7 +23,7 @@
       "matches_exceeded": "{{count}}+ coincidencias",
       "previous_match": "Coincidencia anterior (Shift+Enter)",
       "next_match": "Siguiente coincidencia (Enter)",
-      "search_full_history": "Buscar historial completo (Enter)",
+      "search_full_history": "Search full history (Enter)",
       "search_button": "Buscar",
       "close": "Cerrar (Esc)",
       "case_sensitive": "Distinguir mayúsculas",
@@ -36,7 +36,11 @@
       "archived_preview": "Vista previa del archivo",
       "showing_first": "Mostrando primeras 100 de {{total}}",
       "partial_results": "Resultados parciales: no se pudieron buscar algunos fragmentos archivados.",
-      "no_matches_in_history": "No se encontraron coincidencias en el historial de sesión"
+      "no_matches_in_history": "No se encontraron coincidencias en el historial de sesión",
+      "visible_terminal": "Visible terminal",
+      "full_history": "Full history",
+      "visible_terminal_hint": "Search the main terminal visible scrollback.",
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
     },
     "ai": {
       "title": "OxideSens",

@@ -42,6 +42,7 @@ interface ScrollbackViewerProps {
   sessionId: string;
   nodeId: string;
   isOpen: boolean;
+  initialMatch?: HistorySearchMatch | null;
   onClose: () => void;
 }
 
@@ -199,6 +200,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   sessionId,
   nodeId,
   isOpen,
+  initialMatch = null,
   onClose,
 }) => {
   const { t } = useTranslation();
@@ -207,6 +209,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const generationRef = useRef(0);
   const searchIdRef = useRef<string | null>(null);
+  const initialMatchKeyRef = useRef<string | null>(null);
   const [stats, setStats] = useState<BufferStats | null>(null);
   const statsRef = useRef<BufferStats | null>(null);
   const [pages, setPages] = useState<Map<number, CachedPage>>(() => new Map());
@@ -449,6 +452,38 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     requestAnimationFrame(() => rowVirtualizerRef.current.scrollToIndex(rowIndex, { align: 'center' }));
   }, [loadExcerptForMatch, loadPageForGlobalLine]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      initialMatchKeyRef.current = null;
+      return;
+    }
+    if (!initialMatch) return;
+    if (initialMatch.source !== 'cold' && !statsRef.current) return;
+    const key = historyMatchKey(initialMatch);
+    if (initialMatchKeyRef.current === key) return;
+    initialMatchKeyRef.current = key;
+
+    cancelActiveSearch();
+    const nextMatches = [initialMatch];
+    matchesRef.current = nextMatches;
+    setMatches(nextMatches);
+    setActiveMatchIndex(0);
+    setSearchQuery(initialMatch.matched_text ?? '');
+    setSearchError(null);
+
+    if (initialMatch.source === 'cold') {
+      void loadExcerptForMatch(initialMatch);
+      return;
+    }
+
+    setExcerpt(null);
+    const currentStats = statsRef.current;
+    if (!currentStats || !isHotMatchInWindow(initialMatch, currentStats)) return;
+    const rowIndex = initialMatch.line_number - getBaseGlobalLine(currentStats);
+    void loadPageForGlobalLine(initialMatch.line_number);
+    requestAnimationFrame(() => rowVirtualizerRef.current.scrollToIndex(rowIndex, { align: 'center' }));
+  }, [cancelActiveSearch, initialMatch, isOpen, loadExcerptForMatch, loadPageForGlobalLine, stats]);
+
   const runSearch = useCallback(async () => {
     const query = searchQuery.trim();
     cancelActiveSearch();
@@ -612,7 +647,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
 
   return (
     <div
-      className="absolute inset-0 z-50 flex flex-col bg-theme-bg text-theme-text border border-theme-border/70 shadow-2xl"
+      className="absolute inset-0 z-[70] flex flex-col bg-theme-bg text-theme-text border border-theme-border/70 shadow-2xl"
       data-node-id={nodeId}
       role="dialog"
       aria-label={t('terminal.scrollback_viewer.title')}

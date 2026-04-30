@@ -109,8 +109,8 @@ export function useTerminalCommandBarState(options: UseTerminalCommandBarStateOp
     };
   }, [commandBarSettings.gitStatus, cwd, terminalType]);
 
-  const submitCommand = useCallback(() => {
-    const command = value.trim();
+  const submitCommand = useCallback((commandOverride?: string) => {
+    const command = (commandOverride ?? value).trim();
     if (!command || !isActive) return false;
     const payload = `${command}\r`;
     beginTerminalCommandMark(paneId, {

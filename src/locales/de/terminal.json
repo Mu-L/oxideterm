@@ -12,8 +12,8 @@
       "visible_buffer": "Sichtbarer Puffer",
       "deep_history": "Tiefe Historie",
       "deep_history_tooltip": "Gesamten Sitzungsverlauf durchsuchen (über Scrollback hinaus)",
-      "placeholder_active": "Terminalausgabe durchsuchen...",
-      "placeholder_deep": "Gesamten Verlauf durchsuchen...",
+      "placeholder_active": "Search visible terminal...",
+      "placeholder_deep": "Search full history...",
       "searching": "Suche läuft...",
       "searching_archived": "Bisher {{count}} Treffer ({{ms}}ms), archivierter Verlauf wird durchsucht...",
       "error": "Fehler",
@@ -23,7 +23,7 @@
       "matches_exceeded": "{{count}}+ Treffer",
       "previous_match": "Vorheriger Treffer (Umschalt+Eingabe)",
       "next_match": "Nächster Treffer (Eingabe)",
-      "search_full_history": "Gesamten Verlauf durchsuchen (Eingabe)",
+      "search_full_history": "Search full history (Enter)",
       "search_button": "Suchen",
       "close": "Schließen (Esc)",
       "case_sensitive": "Groß-/Kleinschreibung beachten",
@@ -36,7 +36,11 @@
       "archived_preview": "Archivvorschau",
       "showing_first": "Zeige erste 100 von {{total}} Treffern",
       "partial_results": "Teilweise Ergebnisse: Einige archivierte Abschnitte konnten nicht durchsucht werden.",
-      "no_matches_in_history": "Keine Treffer im Sitzungsverlauf gefunden"
+      "no_matches_in_history": "Keine Treffer im Sitzungsverlauf gefunden",
+      "visible_terminal": "Visible terminal",
+      "full_history": "Full history",
+      "visible_terminal_hint": "Search the main terminal visible scrollback.",
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
     },
     "ai": {
       "title": "OxideSens",

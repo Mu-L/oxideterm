@@ -44,8 +44,8 @@ export const SettingsView = () => {
     const [activeTab, setActiveTab] = useState('general');
     const [portableStatus, setPortableStatus] = useState<PortableStatusResponse | null | undefined>(undefined);
 
-    const { settings, updateTerminal, updateAppearance, updateConnectionDefaults, updateAi, updateSftp, updateIde, updateReconnect, updateConnectionPool, setLanguage, addProvider, removeProvider, updateProvider, setActiveProvider, refreshProviderModels, setUserContextWindow, setProviderReasoningEffort, setModelReasoningEffort } = useSettingsStore();
-    const { general, terminal, appearance, connectionDefaults, ai, sftp, ide, reconnect } = settings;
+    const { settings, updateTerminal, updateBuffer, updateAppearance, updateConnectionDefaults, updateAi, updateSftp, updateIde, updateReconnect, updateConnectionPool, setLanguage, addProvider, removeProvider, updateProvider, setActiveProvider, refreshProviderModels, setUserContextWindow, setProviderReasoningEffort, setModelReasoningEffort } = useSettingsStore();
+    const { general, terminal, buffer, appearance, connectionDefaults, ai, sftp, ide, reconnect } = settings;
     const [showAiConfirm, setShowAiConfirm] = useState(false);
     const [refreshingModels, setRefreshingModels] = useState<string | null>(null);
     const [embeddingConfigExpanded, setEmbeddingConfigExpanded] = useState(false);
@@ -223,7 +223,7 @@ export const SettingsView = () => {
 
                     {activeTab === 'portable' && <PortableTab />}
 
-                    {activeTab === 'terminal' && <TerminalTab terminal={terminal} updateTerminal={updateTerminal} />}
+                    {activeTab === 'terminal' && <TerminalTab terminal={terminal} buffer={buffer} updateTerminal={updateTerminal} updateBuffer={updateBuffer} />}
 
                     {activeTab === 'appearance' && (
                         <AppearanceTab

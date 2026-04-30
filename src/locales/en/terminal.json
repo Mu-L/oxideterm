@@ -12,7 +12,7 @@
       "visible_buffer": "Visible Buffer",
       "deep_history": "Deep History",
       "deep_history_tooltip": "Search entire session history (beyond scrollback)",
-      "placeholder_active": "Search terminal output...",
+      "placeholder_active": "Search visible terminal...",
       "placeholder_deep": "Search full history...",
       "searching": "Searching...",
       "searching_archived": "{{count}} matches so far ({{ms}}ms), searching archived history...",
@@ -36,7 +36,11 @@
       "archived_preview": "Archived Preview",
       "showing_first": "Showing first 100 of {{total}} matches",
       "partial_results": "Partial results: some archived chunks could not be searched.",
-      "no_matches_in_history": "No matches found in session history"
+      "no_matches_in_history": "No matches found in session history",
+      "visible_terminal": "Visible terminal",
+      "full_history": "Full history",
+      "visible_terminal_hint": "Search the main terminal visible scrollback.",
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
     },
     "ai": {
       "title": "OxideSens",

@@ -492,6 +492,10 @@ describe('sessionTreeStore', () => {
 
     await expect(useSessionTreeStore.getState().createTerminalForNode('node-1')).resolves.toBe('term-1');
 
+    expect(apiMocks.createTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      connectionId: 'conn-1',
+      maxBufferLines: 5000,
+    }));
     expect(appStoreMock.state.connections.get('conn-1')).toEqual(
       expect.objectContaining({
         id: 'conn-1',

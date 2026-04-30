@@ -93,7 +93,7 @@ async function loadSettingsStore() {
 
 function buildSavedSettings(overrides: Record<string, unknown> = {}) {
   return {
-    version: 2,
+    version: 3,
     general: { language: 'en' },
     terminal: { theme: 'default', renderer: 'auto' },
     buffer: { maxLines: 2000 },
@@ -250,7 +250,7 @@ describe('settingsStore', () => {
 
     const useSettingsStore = await loadSettingsStore();
 
-    expect(useSettingsStore.getState().settings.version).toBe(2);
+    expect(useSettingsStore.getState().settings.version).toBe(3);
     expect(localStorage.getItem('oxide-settings')).toBeNull();
     expect(localStorage.getItem('oxide-ui-state')).toBeNull();
   });
@@ -271,11 +271,27 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().settings.general.updateChannel).toBe('stable');
   });
 
-  it('uses derived backend hot-buffer defaults', async () => {
+  it('uses layered scrollback defaults', async () => {
     const useSettingsStore = await loadSettingsStore();
 
-    const buffer = useSettingsStore.getState().settings.buffer;
-    expect(buffer.maxLines).toBe(6000);
+    const settings = useSettingsStore.getState().settings;
+    expect(settings.terminal.scrollback).toBe(1000);
+    expect(settings.buffer.maxLines).toBe(8000);
+  });
+
+  it('migrates pre-layered scrollback into light xterm and backend hot buffer settings', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      version: 2,
+      terminal: { theme: 'default', renderer: 'auto', scrollback: 5000 },
+      buffer: { maxLines: 2000 },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+    const settings = useSettingsStore.getState().settings;
+
+    expect(settings.version).toBe(3);
+    expect(settings.terminal.scrollback).toBe(1000);
+    expect(settings.buffer.maxLines).toBe(10000);
   });
 
   it('clamps oversized persisted history settings on load', async () => {
@@ -288,6 +304,20 @@ describe('settingsStore', () => {
     const settings = useSettingsStore.getState().settings;
 
     expect(settings.terminal.scrollback).toBe(20000);
+    expect(settings.buffer.maxLines).toBe(12000);
+  });
+
+  it('clamps oversized pre-layered scrollback migration', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      version: 2,
+      terminal: { theme: 'default', renderer: 'auto', scrollback: 100000 },
+      buffer: { maxLines: 100000 },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+    const settings = useSettingsStore.getState().settings;
+
+    expect(settings.terminal.scrollback).toBe(1000);
     expect(settings.buffer.maxLines).toBe(12000);
   });
 
@@ -507,15 +537,19 @@ describe('settingsStore', () => {
     expect(i18nMocks.changeLanguage).toHaveBeenCalledWith('fr-FR');
   });
 
-  it('derives backend hot-buffer lines from scrollback changes', async () => {
+  it('decouples main terminal scrollback from backend hot-buffer updates', async () => {
     const useSettingsStore = await loadSettingsStore();
+    const initialBufferLines = useSettingsStore.getState().settings.buffer.maxLines;
 
     useSettingsStore.getState().updateTerminal('scrollback', 4000);
     expect(useSettingsStore.getState().settings.terminal.scrollback).toBe(4000);
-    expect(useSettingsStore.getState().settings.buffer.maxLines).toBe(8000);
+    expect(useSettingsStore.getState().settings.buffer.maxLines).toBe(initialBufferLines);
 
     useSettingsStore.getState().updateTerminal('scrollback', 100000);
     expect(useSettingsStore.getState().settings.terminal.scrollback).toBe(20000);
+    expect(useSettingsStore.getState().settings.buffer.maxLines).toBe(initialBufferLines);
+
+    useSettingsStore.getState().updateBuffer('maxLines', 100000);
     expect(useSettingsStore.getState().settings.buffer.maxLines).toBe(12000);
   });
 

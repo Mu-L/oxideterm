@@ -93,7 +93,10 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
     if (event.key === 'Enter') {
       event.preventDefault();
       setSuggestionsOpen(false);
-      state.submitCommand();
+      const selectedSuggestion = suggestionsOpen
+        ? state.suggestions[highlightedSuggestion] ?? state.suggestions[0]
+        : undefined;
+      state.submitCommand(selectedSuggestion?.command);
     }
   }, [focusTerminal, highlightedSuggestion, state, suggestionsOpen]);
 
@@ -195,7 +198,7 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
         <button
           type="button"
           onMouseDown={(event) => event.preventDefault()}
-          onClick={state.submitCommand}
+          onClick={() => state.submitCommand()}
           className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-theme-accent hover:bg-theme-accent/10"
           title={t('terminal.command_bar.run_command')}
         >

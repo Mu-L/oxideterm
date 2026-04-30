@@ -453,6 +453,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         term.options.cursorStyle = terminal.cursorStyle;
         term.options.cursorBlink = terminal.cursorBlink;
         term.options.lineHeight = terminal.lineHeight;
+        term.options.scrollback = terminal.scrollback;
         
         // Apply theme — use transparent background when bg image is set
         const enabledTabs = terminal.backgroundEnabledTabs ?? ['terminal', 'local_terminal'];
@@ -686,7 +687,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       fontSize: terminalSettings.fontSize,
       lineHeight: terminalSettings.lineHeight,
       theme: xtermTheme,
-      scrollback: terminalSettings.scrollback || 5000,
+      scrollback: terminalSettings.scrollback,
       allowProposedApi: true,
       fastScrollSensitivity: 5,
       drawBoldTextInBrightColors: true,
@@ -878,7 +879,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       prefillHistoryRef.current = true;
       try {
         const stats = await api.getBufferStats(sessionId);
-        const desired = Math.min(terminalSettings.scrollback || 5000, stats.current_lines);
+        const desired = Math.min(terminalSettings.scrollback, stats.current_lines);
         const prefillCount = Math.max(desired - PREFILL_REPLAY_LINE_COUNT, 0);
         if (prefillCount <= 0) {
           return stats.current_lines > 0;

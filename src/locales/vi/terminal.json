@@ -12,8 +12,8 @@
       "visible_buffer": "Buffer hiện tại",
       "deep_history": "Lịch sử sâu",
       "deep_history_tooltip": "Tìm kiếm toàn bộ lịch sử phiên (ngoài scrollback)",
-      "placeholder_active": "Tìm kiếm đầu ra terminal...",
-      "placeholder_deep": "Tìm kiếm toàn bộ lịch sử...",
+      "placeholder_active": "Search visible terminal...",
+      "placeholder_deep": "Search full history...",
       "searching": "Đang tìm kiếm...",
       "searching_archived": "Đã có {{count}} kết quả khớp ({{ms}}ms), đang tìm trong lịch sử lưu trữ...",
       "error": "Lỗi",
@@ -23,7 +23,7 @@
       "matches_exceeded": "{{count}}+ kết quả",
       "previous_match": "Kết quả trước (Shift+Enter)",
       "next_match": "Kết quả tiếp (Enter)",
-      "search_full_history": "Tìm kiếm toàn bộ lịch sử (Enter)",
+      "search_full_history": "Search full history (Enter)",
       "search_button": "Tìm kiếm",
       "close": "Đóng (Esc)",
       "case_sensitive": "Phân biệt chữ hoa",
@@ -36,7 +36,11 @@
       "archived_preview": "Xem trước bản lưu trữ",
       "showing_first": "Hiển thị 100 kết quả đầu tiên trong {{total}} kết quả",
       "partial_results": "Kết quả một phần: không thể tìm kiếm trong một số khối đã lưu trữ.",
-      "no_matches_in_history": "Không tìm thấy kết quả trong lịch sử phiên"
+      "no_matches_in_history": "Không tìm thấy kết quả trong lịch sử phiên",
+      "visible_terminal": "Visible terminal",
+      "full_history": "Full history",
+      "visible_terminal_hint": "Search the main terminal visible scrollback.",
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
     },
     "ai": {
       "title": "OxideSens",

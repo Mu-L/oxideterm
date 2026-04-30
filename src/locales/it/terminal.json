@@ -12,8 +12,8 @@
       "visible_buffer": "Buffer Visibile",
       "deep_history": "Cronologia Profonda",
       "deep_history_tooltip": "Cerca nell'intera cronologia della sessione (oltre lo scrollback)",
-      "placeholder_active": "Cerca nell'output del terminale...",
-      "placeholder_deep": "Cerca nella cronologia completa...",
+      "placeholder_active": "Search visible terminal...",
+      "placeholder_deep": "Search full history...",
       "searching": "Ricerca...",
       "searching_archived": "{{count}} corrispondenze finora ({{ms}}ms), ricerca nella cronologia archiviata in corso...",
       "error": "Errore",
@@ -23,7 +23,7 @@
       "matches_exceeded": "{{count}}+ corrispondenze",
       "previous_match": "Corrispondenza precedente (Shift+Invio)",
       "next_match": "Corrispondenza successiva (Invio)",
-      "search_full_history": "Cerca nella cronologia completa (Invio)",
+      "search_full_history": "Search full history (Enter)",
       "search_button": "Cerca",
       "close": "Chiudi (Esc)",
       "case_sensitive": "Maiuscole/minuscole",
@@ -36,7 +36,11 @@
       "archived_preview": "Anteprima archivio",
       "showing_first": "Prime 100 di {{total}} corrispondenze",
       "partial_results": "Risultati parziali: non è stato possibile cercare in alcuni blocchi archiviati.",
-      "no_matches_in_history": "Nessuna corrispondenza nella cronologia della sessione"
+      "no_matches_in_history": "Nessuna corrispondenza nella cronologia della sessione",
+      "visible_terminal": "Visible terminal",
+      "full_history": "Full history",
+      "visible_terminal_hint": "Search the main terminal visible scrollback.",
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
     },
     "ai": {
       "title": "OxideSens",

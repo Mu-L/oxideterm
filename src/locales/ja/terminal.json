@@ -12,8 +12,8 @@
       "visible_buffer": "表示バッファ",
       "deep_history": "深い履歴",
       "deep_history_tooltip": "セッション全体の履歴を検索（スクロールバックを超えて）",
-      "placeholder_active": "ターミナル出力を検索...",
-      "placeholder_deep": "完全な履歴を検索...",
+      "placeholder_active": "Search visible terminal...",
+      "placeholder_deep": "Search full history...",
       "searching": "検索中...",
       "searching_archived": "ここまで {{count}} 件一致 ({{ms}}ms)、アーカイブ履歴を検索中...",
       "error": "エラー",
@@ -23,7 +23,7 @@
       "matches_exceeded": "{{count}}件以上の一致",
       "previous_match": "前の一致 (Shift+Enter)",
       "next_match": "次の一致 (Enter)",
-      "search_full_history": "完全な履歴を検索 (Enter)",
+      "search_full_history": "Search full history (Enter)",
       "search_button": "検索",
       "close": "閉じる (Esc)",
       "case_sensitive": "大文字小文字を区別",
@@ -36,7 +36,11 @@
       "archived_preview": "アーカイブプレビュー",
       "showing_first": "{{total}}件中最初の100件を表示",
       "partial_results": "部分的な結果: 一部のアーカイブチャンクを検索できませんでした。",
-      "no_matches_in_history": "セッション履歴に一致が見つかりません"
+      "no_matches_in_history": "セッション履歴に一致が見つかりません",
+      "visible_terminal": "Visible terminal",
+      "full_history": "Full history",
+      "visible_terminal_hint": "Search the main terminal visible scrollback.",
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
     },
     "ai": {
       "title": "OxideSens",

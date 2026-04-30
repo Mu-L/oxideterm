@@ -204,6 +204,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [searchOpen, setSearchOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [scrollbackOpen, setScrollbackOpen] = useState(false);
+  const [scrollbackInitialMatch, setScrollbackInitialMatch] = useState<HistorySearchMatch | null>(null);
   const [aiCursorPosition, setAiCursorPosition] = useState<CursorPosition | null>(null);
   const prefillHistoryRef = useRef(false);
   
@@ -1254,6 +1255,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         term.options.cursorStyle = terminal.cursorStyle;
         term.options.cursorBlink = terminal.cursorBlink;
         term.options.lineHeight = terminal.lineHeight;
+        term.options.scrollback = terminal.scrollback;
         
         // Apply theme update — must use transparent background when bg image is set
         const enabledTabs = terminal.backgroundEnabledTabs ?? ['terminal', 'local_terminal'];
@@ -1635,7 +1637,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       fontSize: terminalSettings.fontSize,
       lineHeight: terminalSettings.lineHeight,
       theme: xtermTheme,
-      scrollback: terminalSettings.scrollback || 5000,
+      scrollback: terminalSettings.scrollback,
       allowProposedApi: true,
       fastScrollSensitivity: 5,
       drawBoldTextInBrightColors: true,
@@ -1838,7 +1840,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       prefillHistoryRef.current = true;
       try {
         const stats = await api.getBufferStats(sessionId);
-        const desired = Math.min(terminalSettings.scrollback || 5000, stats.current_lines);
+        const desired = Math.min(terminalSettings.scrollback, stats.current_lines);
         const prefillCount = Math.max(desired - PREFILL_REPLAY_LINE_COUNT, 0);
         if (prefillCount <= 0) {
           return stats.current_lines > 0;
@@ -2755,113 +2757,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   }, [sessionId]);
   
   // === Jump to search match from deep history ===
-  const handleJumpToMatch = useCallback(async (match: HistorySearchMatch) => {
-    const term = terminalRef.current;
-    if (!term) return;
-    
-    const CONTEXT_LINES = 5;
-    const ORANGE = '\x1b[38;2;234;88;12m';
-    const YELLOW_BG = '\x1b[48;2;90;74;0m';
-    const RED = '\x1b[31m';
-    const RESET = '\x1b[0m';
-    
-    // Helper: highlight matched text within a line
-    const highlightMatch = (text: string, matchedText: string): string => {
-      const idx = text.indexOf(matchedText);
-      if (idx === -1) return YELLOW_BG + text + RESET;
-      return (
-        text.slice(0, idx) +
-        YELLOW_BG + matchedText + RESET +
-        text.slice(idx + matchedText.length)
-      );
-    };
-
-    if (match.source === 'cold') {
-      if (!match.chunk_id) return;
-
-      try {
-        const excerpt = await api.getArchivedHistoryExcerpt(
-          sessionId,
-          match.chunk_id,
-          match.line_number,
-          CONTEXT_LINES,
-        );
-        setDeepSearchState((prev) => ({ ...prev, excerpt }));
-      } catch (err) {
-        setDeepSearchState((prev) => ({
-          ...prev,
-          error: err instanceof Error ? err.message : 'Failed to load archived excerpt',
-        }));
-      }
-      return;
-    }
-
+  const handleJumpToMatch = useCallback((match: HistorySearchMatch) => {
     setDeepSearchState((prev) => ({ ...prev, excerpt: undefined }));
-    const targetLineNumber = match.buffer_line_number ?? Number(match.line_number);
-    
-    try {
-      // Fetch context around the match line from backend
-      const lines = await api.scrollToLine(sessionId, targetLineNumber, CONTEXT_LINES);
-      
-      if (lines.length === 0) {
-        // Buffer might have been completely cleared
-        term.writeln(`\r\n${ORANGE}━━━ ${i18n.t('terminal.ssh.history_match', { line: match.line_number + 1 })} ━━━${RESET}`);
-        term.writeln(`${RED}${i18n.t('terminal.ssh.buffer_empty')}${RESET}`);
-        term.writeln(highlightMatch(match.line_content, match.matched_text));
-        term.writeln(`${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\r\n`);
-        term.scrollToBottom();
-        return;
-      }
-      
-      // Calculate which line in the returned array should be the match
-      // scrollToLine returns: [line_number - context ... line_number ... line_number + context]
-      const startLineInBuffer = targetLineNumber - CONTEXT_LINES;
-      const targetIndexInResult = targetLineNumber - Math.max(0, startLineInBuffer);
-      
-      // Validate: check if the target line still contains the matched text
-      const targetLine = lines[Math.min(targetIndexInResult, lines.length - 1)];
-      const isStillValid = targetLine && targetLine.text.includes(match.matched_text);
-      
-      // Write header
-      term.writeln(`\r\n${ORANGE}━━━ ${i18n.t('terminal.ssh.history_match', { line: match.line_number + 1 })} ━━━${RESET}`);
-      
-      if (!isStillValid) {
-        // Buffer has rotated - the line at this index is no longer the same
-        term.writeln(`${RED}${i18n.t('terminal.ssh.buffer_rotated')}${RESET}`);
-        term.writeln(`${RED}${i18n.t('terminal.ssh.cached_match')}${RESET} ${highlightMatch(match.line_content, match.matched_text)}`);
-        term.writeln(`${RED}${i18n.t('terminal.ssh.current_line', { index: match.line_number })}${RESET} ${targetLine?.text || '(empty)'}`);
-        term.writeln(`${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\r\n`);
-        term.scrollToBottom();
-        return;
-      }
-      
-      // Valid match - show context with highlighting
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const actualLineNum = Math.max(0, startLineInBuffer) + i;
-        const isMatchLine = actualLineNum === targetLineNumber;
-        
-        if (isMatchLine) {
-          // Highlight the matched text within the line
-          term.writeln(highlightMatch(line.text, match.matched_text));
-        } else {
-          term.writeln(line.text);
-        }
-      }
-      
-      term.writeln(`${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\r\n`);
-      term.scrollToBottom();
-      
-    } catch (err) {
-      console.error('Failed to fetch line context:', err);
-      // Fallback: show the cached match from search results
-      term.writeln(`\r\n${ORANGE}━━━ ${i18n.t('terminal.ssh.history_match', { line: match.line_number + 1 })} ━━━${RESET}`);
-      term.writeln(`${RED}${i18n.t('terminal.ssh.fetch_context_failed')}${RESET}`);
-      term.writeln(highlightMatch(match.line_content, match.matched_text));
-      term.writeln(`${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\r\n`);
-      term.scrollToBottom();
-    }
-  }, [sessionId]);
+    setScrollbackInitialMatch(match);
+    setScrollbackOpen(true);
+  }, []);
   
   // === AI Panel Helper Functions ===
   
@@ -3163,6 +3063,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
            type="button"
            onClick={(event) => {
              event.stopPropagation();
+             setScrollbackInitialMatch(null);
              setScrollbackOpen(true);
            }}
            className="absolute right-2 top-2 z-20 rounded border border-theme-border/70 bg-theme-bg-panel/85 p-1.5 text-theme-text-muted opacity-0 shadow-lg transition-all hover:text-theme-accent focus:opacity-100 group-hover:opacity-100"
@@ -3177,6 +3078,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
          sessionId={sessionId}
          nodeId={nodeId ?? effectivePaneId}
          isOpen={scrollbackOpen}
+         initialMatch={scrollbackInitialMatch}
          onClose={() => setScrollbackOpen(false)}
        />
        {/* Input Lock Overlay - shown during reconnection */}

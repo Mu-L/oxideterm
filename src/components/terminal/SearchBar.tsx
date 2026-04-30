@@ -245,7 +245,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             onClick={() => handleModeChange('active')}
           >
             <Search className="w-3 h-3 inline mr-1" />
-            {t('terminal.search.visible_buffer')}
+            {t('terminal.search.visible_terminal')}
           </button>
           <button
             className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -256,8 +256,16 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             onClick={() => handleModeChange('deep')}
           >
             <History className="w-3 h-3 inline mr-1" />
-            {t('terminal.search.deep_history')}
+            {t('terminal.search.full_history')}
           </button>
+        </div>
+      )}
+
+      {canDeepSearch && (
+        <div className="border-b border-theme-border px-3 py-1.5 text-[11px] leading-relaxed text-theme-text-muted">
+          {searchMode === 'active'
+            ? t('terminal.search.visible_terminal_hint')
+            : t('terminal.search.full_history_hint')}
         </div>
       )}
       

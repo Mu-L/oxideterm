@@ -212,6 +212,54 @@ describe('ScrollbackViewer', () => {
     expect((await screen.findAllByText('archived hit')).length).toBeGreaterThan(0);
   });
 
+  it('opens directly on an external archived match excerpt', async () => {
+    render(
+      <ScrollbackViewer
+        sessionId="session-1"
+        nodeId="node-1"
+        isOpen
+        initialMatch={{
+          source: 'cold',
+          line_number: 41,
+          column_start: 0,
+          column_end: 8,
+          matched_text: 'archived',
+          line_content: 'archived hit',
+          chunk_id: 'chunk-1',
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.getArchivedHistoryExcerpt).toHaveBeenCalledWith('session-1', 'chunk-1', 41, 6);
+    });
+    expect(await screen.findByText('Archive excerpt')).toBeInTheDocument();
+  });
+
+  it('opens directly on an external live match and requests its hot-buffer page', async () => {
+    render(
+      <ScrollbackViewer
+        sessionId="session-1"
+        nodeId="node-1"
+        isOpen
+        initialMatch={{
+          source: 'hot',
+          line_number: 1199,
+          column_start: 0,
+          column_end: 4,
+          matched_text: 'tail',
+          line_content: 'tail',
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.getScrollBuffer).toHaveBeenCalledWith('session-1', 400, 400);
+    });
+  });
+
   it('evicts least recently used pages while protecting the current viewport neighborhood', () => {
     const pages = new Map<number, { lastAccessedAt: number }>();
     for (let index = 0; index < 12; index += 1) {

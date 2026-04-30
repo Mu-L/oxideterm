@@ -13,6 +13,7 @@ import { platform } from '@/lib/platform';
 import { TerminalHighlightRulesSection } from '@/components/settings/TerminalHighlightRulesSection';
 import type {
     AdaptiveRendererMode,
+    BufferSettings,
     CursorStyle,
     FontFamily,
     RendererType,
@@ -22,10 +23,12 @@ import type {
 
 type TerminalTabProps = {
     terminal: TerminalSettings;
+    buffer: BufferSettings;
     updateTerminal: <K extends keyof TerminalSettings>(key: K, value: TerminalSettings[K]) => void;
+    updateBuffer: <K extends keyof BufferSettings>(key: K, value: BufferSettings[K]) => void;
 };
 
-export const TerminalTab = ({ terminal, updateTerminal }: TerminalTabProps) => {
+export const TerminalTab = ({ terminal, buffer, updateTerminal, updateBuffer }: TerminalTabProps) => {
     const { t } = useTranslation();
     const parseIntegerInput = (value: string, fallback: number) => {
         const parsed = parseInt(value, 10);
@@ -512,6 +515,23 @@ export const TerminalTab = ({ terminal, updateTerminal }: TerminalTabProps) => {
                         onChange={(event) => updateTerminal('scrollback', parseInt(event.target.value, 10))}
                         min={500}
                         max={20000}
+                        className="w-28"
+                    />
+                </div>
+                <Separator className="my-5 opacity-50" />
+                <div className="flex items-center justify-between">
+                    <div>
+                        <Label className="text-theme-text">{t('settings_view.terminal.backend_buffer_lines')}</Label>
+                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.backend_buffer_lines_hint')}</p>
+                        <p className="text-xs text-theme-text-muted mt-1">{t('settings_view.terminal.backend_buffer_recommended')}</p>
+                    </div>
+                    <Input
+                        type="number"
+                        value={buffer.maxLines}
+                        onChange={(event) => updateBuffer('maxLines', parseIntegerInput(event.target.value, buffer.maxLines))}
+                        min={5000}
+                        max={12000}
+                        step={500}
                         className="w-28"
                     />
                 </div>

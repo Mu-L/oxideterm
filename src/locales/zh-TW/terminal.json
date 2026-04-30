@@ -12,7 +12,7 @@
       "visible_buffer": "可見緩衝區",
       "deep_history": "深層歷史",
       "deep_history_tooltip": "搜尋整個工作階段歷史（超出捲動緩衝區）",
-      "placeholder_active": "搜尋終端機輸出...",
+      "placeholder_active": "搜尋目前終端...",
       "placeholder_deep": "搜尋完整歷史...",
       "searching": "搜尋中...",
       "searching_archived": "目前已找到 {{count}} 個符合項目（{{ms}}ms），正在搜尋封存歷史...",
@@ -23,7 +23,7 @@
       "matches_exceeded": "{{count}}+ 個符合項目",
       "previous_match": "上一個符合項目（Shift+Enter）",
       "next_match": "下一個符合項目（Enter）",
-      "search_full_history": "搜尋完整歷史（Enter）",
+      "search_full_history": "搜尋完整歷史 (Enter)",
       "search_button": "搜尋",
       "close": "關閉（Esc）",
       "case_sensitive": "區分大小寫",
@@ -36,7 +36,11 @@
       "archived_preview": "封存預覽",
       "showing_first": "顯示 {{total}} 個符合項目中的前 100 個",
       "partial_results": "部分結果：某些封存片段無法搜尋。",
-      "no_matches_in_history": "工作階段歷史中找不到符合項目"
+      "no_matches_in_history": "工作階段歷史中找不到符合項目",
+      "visible_terminal": "目前終端",
+      "full_history": "完整歷史",
+      "visible_terminal_hint": "搜尋主終端可見回滾。",
+      "full_history_hint": "搜尋後端熱歷史與歸檔摘錄，結果會在 Scrollback Viewer 中開啟。"
     },
     "ai": {
       "title": "OxideSens",

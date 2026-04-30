@@ -12,8 +12,8 @@
       "visible_buffer": "현재 버퍼",
       "deep_history": "전체 기록",
       "deep_history_tooltip": "전체 세션 기록 검색 (스크롤백 범위 외)",
-      "placeholder_active": "터미널 출력 검색...",
-      "placeholder_deep": "전체 기록 검색...",
+      "placeholder_active": "Search visible terminal...",
+      "placeholder_deep": "Search full history...",
       "searching": "검색 중...",
       "searching_archived": "현재까지 {{count}}개 일치 ({{ms}}ms), 보관된 기록 검색 중...",
       "error": "오류",
@@ -23,7 +23,7 @@
       "matches_exceeded": "{{count}}개 이상 일치",
       "previous_match": "이전 일치 (Shift+Enter)",
       "next_match": "다음 일치 (Enter)",
-      "search_full_history": "전체 기록 검색 (Enter)",
+      "search_full_history": "Search full history (Enter)",
       "search_button": "검색",
       "close": "닫기 (Esc)",
       "case_sensitive": "대소문자 구분",
@@ -36,7 +36,11 @@
       "archived_preview": "보관 미리보기",
       "showing_first": "{{total}}개 중 처음 100개 표시",
       "partial_results": "부분 결과: 일부 보관된 청크는 검색할 수 없습니다.",
-      "no_matches_in_history": "세션 기록에서 일치 항목을 찾을 수 없습니다"
+      "no_matches_in_history": "세션 기록에서 일치 항목을 찾을 수 없습니다",
+      "visible_terminal": "Visible terminal",
+      "full_history": "Full history",
+      "visible_terminal_hint": "Search the main terminal visible scrollback.",
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
     },
     "ai": {
       "title": "OxideSens",

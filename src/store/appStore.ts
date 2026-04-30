@@ -422,14 +422,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   createTerminalSession: async (connectionId: string, cols?: number, rows?: number) => {
     try {
-      const { useSettingsStore, deriveBackendHotLines } = await import('./settingsStore');
-      const scrollback = useSettingsStore.getState().settings.terminal.scrollback;
+      const { useSettingsStore } = await import('./settingsStore');
+      const maxBufferLines = useSettingsStore.getState().settings.buffer.maxLines;
       
       const response = await api.createTerminal({
         connectionId,
         cols,
         rows,
-        maxBufferLines: deriveBackendHotLines(scrollback),
+        maxBufferLines,
       });
       
       // 更新 sessions 和 connections

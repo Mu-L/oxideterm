@@ -12,8 +12,8 @@
       "visible_buffer": "Buffer visível",
       "deep_history": "Histórico profundo",
       "deep_history_tooltip": "Pesquisar em todo o histórico da sessão (além do scrollback)",
-      "placeholder_active": "Pesquisar na saída do terminal...",
-      "placeholder_deep": "Pesquisar no histórico completo...",
+      "placeholder_active": "Search visible terminal...",
+      "placeholder_deep": "Search full history...",
       "searching": "Pesquisando...",
       "searching_archived": "{{count}} correspondências até agora ({{ms}}ms), pesquisando no histórico arquivado...",
       "error": "Erro",
@@ -23,7 +23,7 @@
       "matches_exceeded": "{{count}}+ correspondências",
       "previous_match": "Correspondência anterior (Shift+Enter)",
       "next_match": "Próxima correspondência (Enter)",
-      "search_full_history": "Pesquisar histórico completo (Enter)",
+      "search_full_history": "Search full history (Enter)",
       "search_button": "Pesquisar",
       "close": "Fechar (Esc)",
       "case_sensitive": "Diferenciar maiúsculas",
@@ -36,7 +36,11 @@
       "archived_preview": "Prévia do arquivo",
       "showing_first": "Mostrando primeiras 100 de {{total}}",
       "partial_results": "Resultados parciais: não foi possível pesquisar em alguns blocos arquivados.",
-      "no_matches_in_history": "Nenhuma correspondência encontrada no histórico da sessão"
+      "no_matches_in_history": "Nenhuma correspondência encontrada no histórico da sessão",
+      "visible_terminal": "Visible terminal",
+      "full_history": "Full history",
+      "visible_terminal_hint": "Search the main terminal visible scrollback.",
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
     },
     "ai": {
       "title": "OxideSens",

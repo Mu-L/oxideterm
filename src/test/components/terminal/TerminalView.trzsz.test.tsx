@@ -279,6 +279,7 @@ vi.mock('lucide-react', () => ({
   Loader2: () => null,
   RefreshCw: () => null,
   AlertTriangle: () => null,
+  ScrollText: () => null,
 }));
 
 vi.mock('@/store/appStore', () => ({

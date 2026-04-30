@@ -1381,15 +1381,15 @@ export const useSessionTreeStore = create<SessionTreeStore>()(
         throw new Error(`Node ${nodeId} is not connected`);
       }
       
-      const { useSettingsStore, deriveBackendHotLines } = await import('./settingsStore');
-      const scrollback = useSettingsStore.getState().settings.terminal.scrollback;
+      const { useSettingsStore } = await import('./settingsStore');
+      const maxBufferLines = useSettingsStore.getState().settings.buffer.maxLines;
       
       // 调用 API 创建终端
       const response = await api.createTerminal({
         connectionId,
         cols,
         rows,
-        maxBufferLines: deriveBackendHotLines(scrollback),
+        maxBufferLines,
       });
       const terminalId = response.sessionId;
       

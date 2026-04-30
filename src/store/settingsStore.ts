@@ -37,7 +37,7 @@ import packageJson from '../../package.json';
 // ============================================================================
 
 /** Settings data version, used to detect legacy formats */
-const SETTINGS_VERSION = 2;
+const SETTINGS_VERSION = 3;
 
 /** localStorage key */
 const STORAGE_KEY = 'oxide-settings-v2';
@@ -50,9 +50,10 @@ const LEGACY_KEYS = [
   'oxide-focused-node',
 ] as const;
 
-const DEFAULT_TERMINAL_SCROLLBACK = 3000;
+const DEFAULT_TERMINAL_SCROLLBACK = 1000;
 const TERMINAL_SCROLLBACK_MIN = 500;
 const TERMINAL_SCROLLBACK_MAX = 20_000;
+const DEFAULT_BACKEND_HOT_BUFFER_LINES = 8_000;
 const BACKEND_HOT_BUFFER_MIN = 5_000;
 const BACKEND_HOT_BUFFER_MAX = 12_000;
 const IN_BAND_TRANSFER_CHUNK_MIN = 64 * 1024;
@@ -85,9 +86,16 @@ function clampTerminalScrollback(scrollback: number): number {
 
 export function deriveBackendHotLines(scrollback: number): number {
   const normalizedScrollback = clampTerminalScrollback(scrollback);
+  return clampBackendHotLines(normalizedScrollback * 2);
+}
+
+export function clampBackendHotLines(lines: number): number {
+  if (!Number.isFinite(lines)) {
+    return DEFAULT_BACKEND_HOT_BUFFER_LINES;
+  }
   return Math.min(
     BACKEND_HOT_BUFFER_MAX,
-    Math.max(BACKEND_HOT_BUFFER_MIN, normalizedScrollback * 2),
+    Math.max(BACKEND_HOT_BUFFER_MIN, Math.round(lines)),
   );
 }
 
@@ -437,7 +445,7 @@ export interface ConnectionPoolSettings {
 
 /** Complete settings structure */
 export interface PersistedSettingsV2 {
-  version: 2;
+  version: number;
   general: GeneralSettings;
   terminal: TerminalSettings;
   buffer: BufferSettings;
@@ -534,7 +542,7 @@ const defaultTerminalSettings: TerminalSettings = {
 };
 
 const defaultBufferSettings: BufferSettings = {
-  maxLines: deriveBackendHotLines(DEFAULT_TERMINAL_SCROLLBACK),
+  maxLines: DEFAULT_BACKEND_HOT_BUFFER_LINES,
 };
 
 const defaultAppearanceSettings: AppearanceSettings = {
@@ -685,7 +693,7 @@ function syncConnectionPoolToBackend(connectionPool: ConnectionPoolSettings): vo
 
 function createDefaultSettings(): PersistedSettingsV2 {
   return {
-    version: 2,
+    version: SETTINGS_VERSION,
     general: { ...defaultGeneralSettings },
     terminal: { ...defaultTerminalSettings },
     buffer: { ...defaultBufferSettings },
@@ -737,6 +745,13 @@ function normalizeTerminalSettings(settings: TerminalSettings): TerminalSettings
   };
 }
 
+function normalizeBufferSettings(settings: BufferSettings): BufferSettings {
+  return {
+    ...settings,
+    maxLines: clampBackendHotLines(settings.maxLines),
+  };
+}
+
 function areInBandTransferSettingsEqual(
   a: InBandTransferSettings | undefined,
   b: InBandTransferSettings | undefined,
@@ -750,15 +765,11 @@ function areInBandTransferSettingsEqual(
 }
 
 function normalizeHistorySettings(settings: PersistedSettingsV2): PersistedSettingsV2 {
-  const terminal = normalizeTerminalSettings(settings.terminal);
-  const scrollback = terminal.scrollback;
   return {
     ...settings,
-    terminal,
-    buffer: {
-      ...settings.buffer,
-      maxLines: deriveBackendHotLines(scrollback),
-    },
+    version: SETTINGS_VERSION,
+    terminal: normalizeTerminalSettings(settings.terminal),
+    buffer: normalizeBufferSettings(settings.buffer),
   };
 }
 
@@ -790,8 +801,21 @@ function mergeAutoApproveTools(
 /** Merge saved settings with defaults (handles version upgrades with new fields) */
 function mergeWithDefaults(saved: OxidePartialSettingsSnapshot | Partial<PersistedSettingsV2>): PersistedSettingsV2 {
   const defaults = createDefaultSettings();
+  const savedVersion = typeof saved.version === 'number' ? saved.version : 0;
+  const isPreLayeredScrollback = savedVersion < SETTINGS_VERSION;
+  const hasSavedScrollback = typeof saved.terminal?.scrollback === 'number';
+  const savedScrollback = hasSavedScrollback
+    ? Number(saved.terminal!.scrollback)
+    : defaults.terminal.scrollback;
+  const terminalScrollback = isPreLayeredScrollback && hasSavedScrollback
+    ? Math.min(savedScrollback, DEFAULT_TERMINAL_SCROLLBACK)
+    : saved.terminal?.scrollback;
+  const bufferMaxLines = isPreLayeredScrollback && hasSavedScrollback
+    ? deriveBackendHotLines(savedScrollback)
+    : saved.buffer?.maxLines;
+
   return normalizeHistorySettings({
-    version: 2,
+    version: SETTINGS_VERSION,
     general: {
       ...defaults.general,
       ...saved.general,
@@ -800,6 +824,7 @@ function mergeWithDefaults(saved: OxidePartialSettingsSnapshot | Partial<Persist
     terminal: {
       ...defaults.terminal,
       ...saved.terminal,
+      ...(terminalScrollback !== undefined ? { scrollback: terminalScrollback } : {}),
       autosuggest: {
         ...defaults.terminal.autosuggest,
         ...saved.terminal?.autosuggest,
@@ -813,7 +838,11 @@ function mergeWithDefaults(saved: OxidePartialSettingsSnapshot | Partial<Persist
         ...saved.terminal?.inBandTransfer,
       },
     },
-    buffer: { ...defaults.buffer, ...saved.buffer },
+    buffer: {
+      ...defaults.buffer,
+      ...saved.buffer,
+      ...(bufferMaxLines !== undefined ? { maxLines: bufferMaxLines } : {}),
+    },
     appearance: { ...defaults.appearance, ...saved.appearance },
     connectionDefaults: { ...defaults.connectionDefaults, ...saved.connectionDefaults },
     treeUI: { ...defaults.treeUI, ...saved.treeUI },
@@ -993,8 +1022,8 @@ function loadSettings(): PersistedSettingsV2 {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed.version === SETTINGS_VERSION) {
-        // Valid v2 format, merge with defaults for any new fields
+      if (typeof parsed.version === 'number' && parsed.version <= SETTINGS_VERSION) {
+        // Valid persisted format, merge with defaults and migrate newer schema fields
         const settings = mergeWithDefaults(parsed);
         // Migrate: ensure providers array exists
         const migrated = migrateAiProviders(settings);
@@ -1156,12 +1185,7 @@ export const useSettingsStore = create<SettingsStore>()(
         const newSettings: PersistedSettingsV2 = {
           ...state.settings,
           terminal: normalizedTerminal,
-          buffer: key === 'scrollback'
-            ? {
-                ...state.settings.buffer,
-                maxLines: deriveBackendHotLines(normalizedTerminal.scrollback),
-              }
-            : state.settings.buffer,
+          buffer: state.settings.buffer,
         };
         persistSettings(newSettings);
         return { settings: newSettings };
@@ -1171,9 +1195,13 @@ export const useSettingsStore = create<SettingsStore>()(
     // ========== Buffer Settings ==========
     updateBuffer: (key, value) => {
       set((state) => {
+        const nextBuffer = {
+          ...state.settings.buffer,
+          [key]: key === 'maxLines' ? clampBackendHotLines(value as number) : value,
+        };
         const newSettings: PersistedSettingsV2 = {
           ...state.settings,
-          buffer: { ...state.settings.buffer, [key]: value },
+          buffer: normalizeBufferSettings(nextBuffer),
         };
         persistSettings(newSettings);
         return { settings: newSettings };

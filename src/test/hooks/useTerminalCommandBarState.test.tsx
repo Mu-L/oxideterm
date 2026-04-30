@@ -18,6 +18,7 @@ vi.mock('@/store/settingsStore', () => ({
         commandBar: {
           enabled: true,
           gitStatus: false,
+          smartCompletion: true,
         },
       },
     },
@@ -65,8 +66,8 @@ vi.mock('@/lib/terminalRegistry', () => ({
   subscribeTerminalOutput: terminalRegistryMocks.subscribeTerminalOutput,
 }));
 
-vi.mock('@/lib/terminal/autosuggest', () => ({
-  getTerminalAutosuggestCandidates: vi.fn(() => []),
+vi.mock('@/lib/terminal/completion', () => ({
+  getCommandBarCompletions: vi.fn(() => Promise.resolve([])),
 }));
 
 import { useTerminalCommandBarState } from '@/hooks/useTerminalCommandBarState';

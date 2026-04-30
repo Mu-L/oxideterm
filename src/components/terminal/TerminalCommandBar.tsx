@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import {
@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { getAllEntries } from '@/lib/terminalRegistry';
 import { useTerminalCommandBarState, type TerminalCommandBarTerminalType } from '@/hooks/useTerminalCommandBarState';
-import type { TerminalAutosuggestCandidate } from '@/lib/terminal/autosuggest';
+import type { CommandBarCompletion } from '@/lib/terminal/completion';
 import { useAppStore } from '@/store/appStore';
 import { useBroadcastStore } from '@/store/broadcastStore';
 import { useLocalTerminalStore } from '@/store/localTerminalStore';
@@ -32,6 +32,7 @@ type TerminalCommandBarProps = {
   sessionId: string;
   tabId: string;
   terminalType: TerminalCommandBarTerminalType;
+  nodeId?: string | null;
   isActive: boolean;
   sendInput: (input: string) => void;
   focusTerminal: () => void;
@@ -39,13 +40,14 @@ type TerminalCommandBarProps = {
 };
 
 export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => {
-  const { paneId, sessionId, tabId, terminalType, isActive, sendInput, focusTerminal, onLayoutChange } = props;
+  const { paneId, sessionId, tabId, terminalType, nodeId, isActive, sendInput, focusTerminal, onLayoutChange } = props;
   const { t } = useTranslation();
   const state = useTerminalCommandBarState({
     paneId,
     sessionId,
     tabId,
     terminalType,
+    nodeId,
     isActive,
     sendInput,
   });
@@ -54,6 +56,7 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const composingRef = useRef(false);
+  const dismissedSuggestionsForValueRef = useRef<string | null>(null);
 
   const placeholder = t('terminal.command_bar.command_placeholder');
 
@@ -64,6 +67,7 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
     if (event.key === 'Escape') {
       if (suggestionsOpen) {
         event.preventDefault();
+        dismissedSuggestionsForValueRef.current = state.value;
         setSuggestionsOpen(false);
         return;
       }
@@ -78,10 +82,28 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
       }
       return;
     }
+    if (event.key === 'ArrowRight' && state.suggestions.length > 0 && state.ghostText) {
+      const inlineSuggestion = state.suggestions.find((candidate) => candidate.inlineSafe);
+      if (state.acceptSuggestion(inlineSuggestion)) {
+        event.preventDefault();
+        setSuggestionsOpen(false);
+      }
+      return;
+    }
     if (event.key === 'ArrowDown' && state.suggestions.length > 0) {
       event.preventDefault();
       setSuggestionsOpen(true);
       setHighlightedSuggestion((current) => suggestionsOpen ? Math.min(current + 1, state.suggestions.length - 1) : 0);
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      void state.revealHistorySuggestions().then((count) => {
+        if (count > 0) {
+          setSuggestionsOpen(true);
+          setHighlightedSuggestion(0);
+        }
+      });
       return;
     }
     if (event.key === 'ArrowUp' && state.suggestions.length > 0) {
@@ -90,13 +112,27 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
       setHighlightedSuggestion((current) => suggestionsOpen ? Math.max(current - 1, 0) : state.suggestions.length - 1);
       return;
     }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      void state.revealHistorySuggestions().then((count) => {
+        if (count > 0) {
+          setSuggestionsOpen(true);
+          setHighlightedSuggestion(count - 1);
+        }
+      });
+      return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
       setSuggestionsOpen(false);
       const selectedSuggestion = suggestionsOpen
         ? state.suggestions[highlightedSuggestion] ?? state.suggestions[0]
         : undefined;
-      state.submitCommand(selectedSuggestion?.command);
+      if (selectedSuggestion && !selectedSuggestion.executable) {
+        state.acceptSuggestion(selectedSuggestion);
+        return;
+      }
+      state.submitCommand(selectedSuggestion?.insertText);
     }
   }, [focusTerminal, highlightedSuggestion, state, suggestionsOpen]);
 
@@ -118,6 +154,20 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
       observer.disconnect();
     };
   }, [onLayoutChange]);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input || document.activeElement !== input) return;
+    const cursor = Math.max(0, Math.min(state.value.length, state.cursorIndex));
+    input.setSelectionRange(cursor, cursor);
+  }, [state.cursorIndex, state.value]);
+
+  useEffect(() => {
+    if (!state.focused || state.suggestions.length === 0) return;
+    if (dismissedSuggestionsForValueRef.current === state.value) return;
+    setSuggestionsOpen(true);
+    setHighlightedSuggestion((current) => Math.min(current, state.suggestions.length - 1));
+  }, [state.focused, state.suggestions.length, state.value]);
 
   return (
     <div ref={rootRef} className="relative z-20 flex-shrink-0 border-t border-theme-border/70 bg-theme-bg/95 px-3 py-1 shadow-[0_-6px_18px_rgba(0,0,0,0.16)]">
@@ -174,9 +224,14 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
           value={state.value}
           onChange={(event) => {
             state.setValue(event.target.value);
+            state.setCursorIndex(event.target.selectionStart ?? event.target.value.length);
+            dismissedSuggestionsForValueRef.current = null;
             setHighlightedSuggestion(0);
             setSuggestionsOpen(false);
           }}
+          onSelect={(event) => state.setCursorIndex(event.currentTarget.selectionStart ?? state.value.length)}
+          onKeyUp={(event) => state.setCursorIndex(event.currentTarget.selectionStart ?? state.value.length)}
+          onClick={(event) => state.setCursorIndex(event.currentTarget.selectionStart ?? state.value.length)}
           onFocus={() => state.setFocused(true)}
           onBlur={() => window.setTimeout(() => {
             setSuggestionsOpen(false);
@@ -195,6 +250,11 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
           className="min-w-0 max-w-[960px] flex-1 bg-transparent py-0.5 text-sm leading-6 text-theme-text outline-none placeholder:text-theme-text-muted"
           spellCheck={false}
         />
+        {state.focused && state.ghostText && (
+          <span className="pointer-events-none max-w-[24rem] flex-shrink truncate font-mono text-sm leading-6 text-theme-text-muted/35">
+            {state.ghostText}
+          </span>
+        )}
         <button
           type="button"
           onMouseDown={(event) => event.preventDefault()}
@@ -390,42 +450,82 @@ function isComposingKeyEvent(event: React.KeyboardEvent<HTMLInputElement>): bool
 }
 
 type SuggestionsProps = {
-  suggestions: TerminalAutosuggestCandidate[];
+  suggestions: CommandBarCompletion[];
   highlightedIndex: number;
-  onPick: (candidate: TerminalAutosuggestCandidate) => void;
+  onPick: (candidate: CommandBarCompletion) => void;
 };
 
 const TerminalCommandSuggestions: React.FC<SuggestionsProps> = ({ suggestions, highlightedIndex, onPick }) => {
   const { t } = useTranslation();
+  const groupedSuggestions = useMemo(() => {
+    const groups = new Map<string, Array<{ candidate: CommandBarCompletion; index: number }>>();
+    suggestions.forEach((candidate, index) => {
+      const key = groupKey(candidate);
+      groups.set(key, [...(groups.get(key) ?? []), { candidate, index }]);
+    });
+    return [...groups.entries()];
+  }, [suggestions]);
+
   return (
     <div className="absolute bottom-full left-3 mb-2 w-[min(720px,calc(100%-1.5rem))] overflow-hidden rounded-lg border border-theme-border bg-theme-bg-elevated/95 shadow-xl shadow-black/30">
-      {suggestions.map((candidate, index) => (
-        <button
-          key={`${candidate.source}:${candidate.command}`}
-          type="button"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onPick(candidate)}
-          className={cn(
-            'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors',
-            index === highlightedIndex ? 'bg-theme-bg-hover text-theme-text' : 'text-theme-text-muted hover:bg-theme-bg-hover/60 hover:text-theme-text',
-          )}
-        >
-          <span className="min-w-0 flex-1 truncate font-mono">{candidate.command}</span>
-          <span className="rounded bg-theme-bg-panel px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-theme-text-muted">
-            {t(`terminal.command_bar.${sourceKey(candidate.source)}`, { defaultValue: candidate.source })}
-          </span>
-        </button>
+      {groupedSuggestions.map(([group, entries]) => (
+        <div key={group}>
+          <div className="border-b border-theme-border/50 bg-theme-bg/60 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-theme-text-muted">
+            {t(`terminal.command_bar.${group}`)}
+          </div>
+          {entries.map(({ candidate, index }) => (
+            <button
+              key={`${candidate.source}:${candidate.kind}:${candidate.insertText}`}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onPick(candidate)}
+              className={cn(
+                'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors',
+                index === highlightedIndex ? 'bg-theme-bg-hover text-theme-text' : 'text-theme-text-muted hover:bg-theme-bg-hover/60 hover:text-theme-text',
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate font-mono">{candidate.label}</span>
+              {candidate.description && (
+                <span className="hidden min-w-0 flex-1 truncate text-xs text-theme-text-muted/70 sm:inline">
+                  {candidate.description}
+                </span>
+              )}
+              {candidate.risk && (
+                <span className={cn(
+                  'rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
+                  candidate.risk === 'high' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300',
+                )}>
+                  {candidate.risk}
+                </span>
+              )}
+              <span className="rounded bg-theme-bg-panel px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-theme-text-muted">
+                {t(`terminal.command_bar.${sourceKey(candidate)}`, { defaultValue: candidate.source })}
+              </span>
+            </button>
+          ))}
+        </div>
       ))}
     </div>
   );
 };
 
-function sourceKey(source: string): string {
-  switch (source) {
-    case 'local-history':
-      return 'source_local_history';
-    case 'ai-ledger':
-      return 'source_ai_ledger';
+function groupKey(candidate: CommandBarCompletion): string {
+  if (candidate.source === 'history') return 'group_history';
+  if (candidate.source === 'path') return 'group_path';
+  if (candidate.kind === 'option') return 'group_option';
+  return 'group_command';
+}
+
+function sourceKey(candidate: CommandBarCompletion): string {
+  switch (candidate.source) {
+    case 'history':
+      return 'source_history';
+    case 'fig':
+      return candidate.kind === 'option' ? 'source_option' : 'source_command';
+    case 'path':
+      return 'source_path';
+    case 'ai':
+      return 'source_ai';
     default:
       return 'source_runtime';
   }

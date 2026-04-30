@@ -216,7 +216,16 @@
       "recording": "REC",
       "source_runtime": "history",
       "source_local_history": "local",
-      "source_ai_ledger": "AI"
+      "source_ai_ledger": "AI",
+      "source_history": "history",
+      "source_command": "command",
+      "source_option": "option",
+      "source_path": "path",
+      "source_ai": "AI",
+      "group_history": "History",
+      "group_command": "Command",
+      "group_option": "Option",
+      "group_path": "Path"
     },
     "command_selection": {
       "actions": "Command selection actions",

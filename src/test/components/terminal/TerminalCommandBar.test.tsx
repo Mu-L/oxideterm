@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const commandBarStateMock = vi.hoisted(() => ({
@@ -6,6 +6,8 @@ const commandBarStateMock = vi.hoisted(() => ({
   setValue: vi.fn(),
   setFocused: vi.fn(),
   acceptSuggestion: vi.fn(),
+  revealHistorySuggestions: vi.fn(),
+  suggestions: [] as unknown[],
 }));
 
 vi.mock('react-i18next', () => ({
@@ -36,12 +38,13 @@ vi.mock('@/hooks/useTerminalCommandBarState', () => ({
   useTerminalCommandBarState: () => ({
     value: 'ls',
     setValue: commandBarStateMock.setValue,
+    cursorIndex: 2,
+    setCursorIndex: vi.fn(),
     focused: true,
     setFocused: commandBarStateMock.setFocused,
-    suggestions: [
-      { command: 'ls -l', source: 'local-history', lastUsedAt: 2, score: 2 },
-      { command: 'ls -s', source: 'local-history', lastUsedAt: 1, score: 1 },
-    ],
+    ghostText: '',
+    suggestions: commandBarStateMock.suggestions,
+    revealHistorySuggestions: commandBarStateMock.revealHistorySuggestions,
     acceptSuggestion: commandBarStateMock.acceptSuggestion,
     submitCommand: commandBarStateMock.submitCommand,
     cwd: '/tmp',
@@ -101,6 +104,27 @@ import { TerminalCommandBar } from '@/components/terminal/TerminalCommandBar';
 describe('TerminalCommandBar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    commandBarStateMock.suggestions = [
+      {
+        kind: 'history',
+        label: 'ls -l',
+        insertText: 'ls -l',
+        source: 'history',
+        executable: true,
+        replacement: { start: 0, end: 2 },
+        score: 2,
+      },
+      {
+        kind: 'history',
+        label: 'ls -s',
+        insertText: 'ls -s',
+        source: 'history',
+        executable: true,
+        replacement: { start: 0, end: 2 },
+        score: 1,
+      },
+    ];
+    commandBarStateMock.revealHistorySuggestions.mockResolvedValue(0);
   });
 
   it('submits the highlighted suggestion when Enter is pressed with suggestions open', () => {
@@ -122,5 +146,58 @@ describe('TerminalCommandBar', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(commandBarStateMock.submitCommand).toHaveBeenCalledWith('ls -s');
+  });
+
+  it('accepts non-executable completions on Enter without submitting', async () => {
+    commandBarStateMock.suggestions = [{
+      kind: 'option',
+      label: '-l',
+      insertText: '-l',
+      source: 'fig',
+      executable: false,
+      replacement: { start: 3, end: 3 },
+      score: 1,
+    }];
+    commandBarStateMock.submitCommand.mockClear();
+    vi.mocked(commandBarStateMock.acceptSuggestion).mockReturnValue(true);
+    render(
+      <TerminalCommandBar
+        paneId="pane-1"
+        sessionId="session-1"
+        tabId="tab-1"
+        terminalType="local_terminal"
+        isActive
+        sendInput={vi.fn()}
+        focusTerminal={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText('terminal.command_bar.command_placeholder');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(commandBarStateMock.acceptSuggestion).toHaveBeenCalledWith(commandBarStateMock.suggestions[0]);
+    expect(commandBarStateMock.submitCommand).not.toHaveBeenCalled();
+  });
+
+  it('uses ArrowUp on an empty suggestion list to explicitly recall history', async () => {
+    commandBarStateMock.suggestions = [];
+    commandBarStateMock.revealHistorySuggestions.mockResolvedValue(2);
+    render(
+      <TerminalCommandBar
+        paneId="pane-1"
+        sessionId="session-1"
+        tabId="tab-1"
+        terminalType="local_terminal"
+        isActive
+        sendInput={vi.fn()}
+        focusTerminal={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText('terminal.command_bar.command_placeholder');
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+
+    await waitFor(() => expect(commandBarStateMock.revealHistorySuggestions).toHaveBeenCalled());
   });
 });

@@ -216,7 +216,16 @@
       "recording": "录制中",
       "source_runtime": "历史",
       "source_local_history": "本地",
-      "source_ai_ledger": "AI"
+      "source_ai_ledger": "AI",
+      "source_history": "历史",
+      "source_command": "命令",
+      "source_option": "选项",
+      "source_path": "路径",
+      "source_ai": "AI",
+      "group_history": "历史",
+      "group_command": "命令",
+      "group_option": "选项",
+      "group_path": "路径"
     },
     "command_selection": {
       "actions": "命令选区操作",

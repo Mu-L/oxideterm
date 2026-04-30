@@ -219,6 +219,7 @@ export interface TerminalCommandBarSettings {
   enabled: boolean;
   showLegacyToolbar: boolean;
   gitStatus: boolean;
+  smartCompletion: boolean;
 }
 
 export interface TerminalCommandMarksSettings {
@@ -516,6 +517,7 @@ const defaultTerminalSettings: TerminalSettings = {
     enabled: true,
     showLegacyToolbar: false,
     gitStatus: true,
+    smartCompletion: true,
   },
   commandMarks: {
     enabled: true,

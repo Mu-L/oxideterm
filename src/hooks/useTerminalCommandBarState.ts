@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/appStore';
 import { useBroadcastStore } from '@/store/broadcastStore';
@@ -17,9 +17,9 @@ import {
   subscribeTerminalOutput,
 } from '@/lib/terminalRegistry';
 import {
-  getTerminalAutosuggestCandidates,
-} from '@/lib/terminal/autosuggest';
-import type { TerminalAutosuggestCandidate } from '@/lib/terminal/autosuggest';
+  getCommandBarCompletions,
+  type CommandBarCompletion,
+} from '@/lib/terminal/completion';
 
 export type TerminalCommandBarTerminalType = 'terminal' | 'local_terminal';
 
@@ -28,17 +28,21 @@ type UseTerminalCommandBarStateOptions = {
   sessionId: string;
   tabId: string;
   terminalType: TerminalCommandBarTerminalType;
+  nodeId?: string | null;
   isActive: boolean;
   sendInput: (input: string) => void;
 };
 
 export function useTerminalCommandBarState(options: UseTerminalCommandBarStateOptions) {
-  const { paneId, sessionId, tabId, terminalType, isActive, sendInput } = options;
+  const { paneId, sessionId, tabId, terminalType, nodeId, isActive, sendInput } = options;
   const { t } = useTranslation();
   const [value, setValue] = useState('');
+  const [cursorIndex, setCursorIndex] = useState(0);
+  const [suggestions, setSuggestions] = useState<CommandBarCompletion[]>([]);
   const [focused, setFocused] = useState(false);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [terminalActivityTick, setTerminalActivityTick] = useState(0);
+  const completionRequestRef = useRef(0);
   const commandBarSettings = useSettingsStore((s) => s.settings.terminal.commandBar);
   const broadcastEnabled = useBroadcastStore((s) => s.enabled);
   const broadcastTargets = useBroadcastStore((s) => s.targets);
@@ -79,10 +83,75 @@ export function useTerminalCommandBarState(options: UseTerminalCommandBarStateOp
     };
   }, [sessionId]);
 
-  const suggestions = useMemo<TerminalAutosuggestCandidate[]>(() => {
-    if (!commandBarSettings.enabled) return [];
-    return getTerminalAutosuggestCandidates(value, 6);
-  }, [commandBarSettings.enabled, value]);
+  useEffect(() => {
+    if (!commandBarSettings.enabled || !commandBarSettings.smartCompletion || !focused) {
+      setSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const requestId = ++completionRequestRef.current;
+    void getCommandBarCompletions(
+      value,
+      cursorIndex,
+      { paneId, sessionId, tabId, terminalType, nodeId, cwd, cwdHost },
+      controller.signal,
+    ).then((nextSuggestions) => {
+      if (!controller.signal.aborted && requestId === completionRequestRef.current) {
+        setSuggestions(nextSuggestions);
+      }
+    });
+
+    return () => controller.abort();
+  }, [
+    commandBarSettings.enabled,
+    commandBarSettings.smartCompletion,
+    cursorIndex,
+    cwd,
+    cwdHost,
+    focused,
+    nodeId,
+    paneId,
+    sessionId,
+    tabId,
+    terminalType,
+    value,
+  ]);
+
+  const revealHistorySuggestions = useCallback(async () => {
+    if (!commandBarSettings.enabled || !commandBarSettings.smartCompletion || !focused) return 0;
+    const controller = new AbortController();
+    const requestId = ++completionRequestRef.current;
+    const nextSuggestions = await getCommandBarCompletions(
+      value,
+      cursorIndex,
+      { paneId, sessionId, tabId, terminalType, nodeId, cwd, cwdHost },
+      controller.signal,
+      {
+        // Empty focus must stay quiet, but ArrowUp/ArrowDown is an explicit
+        // history-recall gesture. Keep this opt-in so an empty command bar does
+        // not regress into auto-opening the full smart completion catalog.
+        allowEmptyHistory: true,
+        historyOnly: true,
+      },
+    );
+    if (controller.signal.aborted || requestId !== completionRequestRef.current) return 0;
+    setSuggestions(nextSuggestions);
+    return nextSuggestions.length;
+  }, [
+    commandBarSettings.enabled,
+    commandBarSettings.smartCompletion,
+    cursorIndex,
+    cwd,
+    cwdHost,
+    focused,
+    nodeId,
+    paneId,
+    sessionId,
+    tabId,
+    terminalType,
+    value,
+  ]);
 
   useEffect(() => {
     if (!commandBarSettings.gitStatus || terminalType !== 'local_terminal' || !cwd) {
@@ -134,19 +203,37 @@ export function useTerminalCommandBarState(options: UseTerminalCommandBarStateOp
     return true;
   }, [cwd, isActive, paneId, sendInput, sessionId, value]);
 
-  const acceptSuggestion = useCallback((candidate?: TerminalAutosuggestCandidate) => {
-    const next = candidate?.command ?? suggestions[0]?.command;
-    if (!next) return false;
+  const acceptSuggestion = useCallback((candidate?: CommandBarCompletion) => {
+    const completion = candidate ?? suggestions[0];
+    if (!completion) return false;
+    const next = [
+      value.slice(0, completion.replacement.start),
+      completion.insertText,
+      value.slice(completion.replacement.end),
+    ].join('');
     setValue(next);
+    setCursorIndex(completion.replacement.start + completion.insertText.length);
     return true;
-  }, [suggestions]);
+  }, [suggestions, value]);
+
+  const ghostText = useMemo(() => {
+    const completion = suggestions.find((candidate) => candidate.inlineSafe);
+    if (!completion) return '';
+    const current = value.slice(completion.replacement.start, completion.replacement.end);
+    if (!completion.insertText.startsWith(current)) return '';
+    return completion.insertText.slice(current.length);
+  }, [suggestions, value]);
 
   return {
     value,
     setValue,
+    cursorIndex,
+    setCursorIndex,
     focused,
     setFocused,
     suggestions,
+    ghostText,
+    revealHistorySuggestions,
     acceptSuggestion,
     submitCommand,
     cwd,

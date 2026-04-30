@@ -3187,6 +3187,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
            sessionId={sessionId}
            tabId={effectiveTabId}
            terminalType="terminal"
+           nodeId={nodeId}
            isActive={isActive}
            sendInput={sendCommandBarInput}
            focusTerminal={() => { focusTerminal('strong'); }}

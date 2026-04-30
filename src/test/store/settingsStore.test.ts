@@ -202,6 +202,7 @@ describe('settingsStore', () => {
       enabled: true,
       showLegacyToolbar: false,
       gitStatus: true,
+      smartCompletion: true,
     });
   });
 

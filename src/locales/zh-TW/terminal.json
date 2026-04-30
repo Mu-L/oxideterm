@@ -216,7 +216,16 @@
       "recording": "錄製中",
       "source_runtime": "歷史",
       "source_local_history": "本機",
-      "source_ai_ledger": "AI"
+      "source_ai_ledger": "AI",
+      "source_history": "歷史",
+      "source_command": "命令",
+      "source_option": "選項",
+      "source_path": "路徑",
+      "source_ai": "AI",
+      "group_history": "歷史",
+      "group_command": "命令",
+      "group_option": "選項",
+      "group_path": "路徑"
     },
     "command_selection": {
       "actions": "命令選區操作",

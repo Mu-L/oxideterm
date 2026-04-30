@@ -15,6 +15,7 @@
 
 pub mod auth;
 pub mod auto_reconnect;
+pub mod command_facts;
 pub mod env_detector;
 pub mod events;
 pub mod health;
@@ -32,6 +33,11 @@ pub mod types;
 
 pub use auth::{KeyAuth, load_private_key};
 pub use auto_reconnect::AutoReconnectService;
+pub use command_facts::{
+    CloseCommandFactPatch, CommandFact, CommandFactClosedBy, CommandFactConfidence,
+    CommandFactOutputResponse, CommandFactSource, CommandFactStatus, CommandFactStore,
+    CreateCommandFactRequest, CreateCommandFactResponse,
+};
 pub use env_detector::RemoteEnvInfo;
 pub use events::{NetworkStatusPayload, event_names};
 pub use health::{
@@ -48,7 +54,9 @@ pub use reconnect::{
     ReconnectConfig, ReconnectError, ReconnectEvent, ReconnectState, SessionReconnector,
 };
 pub use registry::{RegistryError, SessionRegistry};
-pub use scroll_buffer::{BufferStats, ScrollBuffer, SerializedBuffer, TerminalLine};
+pub use scroll_buffer::{
+    BufferLineIdentity, BufferStats, ScrollBuffer, SerializedBuffer, TerminalLine,
+};
 pub use search::{SearchMatch, SearchOptions, SearchResult, search_lines};
 pub use state::{SessionState, SessionStateMachine};
 pub use topology_graph::{

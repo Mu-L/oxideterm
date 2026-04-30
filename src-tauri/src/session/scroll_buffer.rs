@@ -81,6 +81,19 @@ pub struct BufferStats {
     pub memory_usage_mb: f64,
 }
 
+/// Stable identity snapshot for translating hot-buffer indexes and global lines.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BufferLineIdentity {
+    /// Current number of lines in the hot buffer
+    pub current_lines: usize,
+    /// Total lines ever written (including scrolled out)
+    pub total_lines: u64,
+    /// Global line number of hot-buffer index 0
+    pub base_global_line: u64,
+    /// Monotonic semantic generation bumped on clear/recreate-style breaks
+    pub buffer_generation: u64,
+}
+
 /// Serialized buffer for persistence
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializedBuffer {
@@ -100,6 +113,8 @@ pub struct ScrollBuffer {
     archive: Option<TerminalHistoryArchive>,
     /// Total lines written (including scrolled out)
     total_lines: AtomicU64,
+    /// Semantic generation for invalidating ranges across clear/reconnect/recreate.
+    buffer_generation: AtomicU64,
 }
 
 impl ScrollBuffer {
@@ -123,6 +138,7 @@ impl ScrollBuffer {
             max_lines,
             archive,
             total_lines: AtomicU64::new(0),
+            buffer_generation: AtomicU64::new(0),
         }
     }
 
@@ -211,11 +227,53 @@ impl ScrollBuffer {
         }
     }
 
+    /// Get a stable line identity snapshot for command facts and viewers.
+    pub async fn identity(&self) -> BufferLineIdentity {
+        let lines = self.lines.read().await;
+        let current_lines = lines.len();
+        let total_lines = self.total_lines.load(Ordering::Relaxed);
+        BufferLineIdentity {
+            current_lines,
+            total_lines,
+            base_global_line: total_lines.saturating_sub(current_lines as u64),
+            buffer_generation: self.buffer_generation.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Convert a global line number into a hot-buffer index, if still retained.
+    pub async fn hot_index_for_global_line(&self, global_line: u64) -> Option<usize> {
+        let identity = self.identity().await;
+        if global_line < identity.base_global_line || global_line >= identity.total_lines {
+            return None;
+        }
+        let hot_index = global_line - identity.base_global_line;
+        if hot_index < identity.current_lines as u64 {
+            Some(hot_index as usize)
+        } else {
+            None
+        }
+    }
+
+    /// Convert a hot-buffer index to a global line number.
+    pub async fn global_line_for_hot_index(&self, hot_index: usize) -> Option<u64> {
+        let identity = self.identity().await;
+        if hot_index >= identity.current_lines {
+            return None;
+        }
+        Some(identity.base_global_line + hot_index as u64)
+    }
+
+    /// Bump the semantic line generation and return the new value.
+    pub fn bump_generation(&self) -> u64 {
+        self.buffer_generation.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
     /// Clear all lines from the buffer
     pub async fn clear(&self) {
         let mut lines = self.lines.write().await;
         lines.clear();
         // Note: We don't reset total_lines counter - it's a historical count
+        self.bump_generation();
     }
 
     /// Get current line count
@@ -253,6 +311,7 @@ impl ScrollBuffer {
             max_lines: serialized.max_lines,
             archive: None,
             total_lines: AtomicU64::new(serialized.total_lines),
+            buffer_generation: AtomicU64::new(0),
         };
 
         Ok(Arc::new(buffer))
@@ -266,6 +325,11 @@ impl ScrollBuffer {
     /// Get total lines written (including scrolled out)
     pub fn total_lines(&self) -> u64 {
         self.total_lines.load(Ordering::Relaxed)
+    }
+
+    /// Get the current semantic buffer generation.
+    pub fn buffer_generation(&self) -> u64 {
+        self.buffer_generation.load(Ordering::Relaxed)
     }
 }
 
@@ -340,10 +404,33 @@ mod tests {
 
         assert_eq!(buffer.len().await, 2);
 
+        let generation_before = buffer.buffer_generation();
         buffer.clear().await;
 
         assert_eq!(buffer.len().await, 0);
         assert_eq!(buffer.total_lines(), 2); // Historical count preserved
+        assert!(buffer.buffer_generation() > generation_before);
+    }
+
+    #[tokio::test]
+    async fn test_line_identity_converts_global_and_hot_indexes() {
+        let buffer = ScrollBuffer::with_capacity(3);
+
+        for i in 0..5 {
+            buffer
+                .append(TerminalLine::new(format!("line {}", i)))
+                .await;
+        }
+
+        let identity = buffer.identity().await;
+        assert_eq!(identity.current_lines, 3);
+        assert_eq!(identity.total_lines, 5);
+        assert_eq!(identity.base_global_line, 2);
+        assert_eq!(buffer.hot_index_for_global_line(2).await, Some(0));
+        assert_eq!(buffer.hot_index_for_global_line(4).await, Some(2));
+        assert_eq!(buffer.hot_index_for_global_line(1).await, None);
+        assert_eq!(buffer.global_line_for_hot_index(1).await, Some(3));
+        assert_eq!(buffer.global_line_for_hot_index(3).await, None);
     }
 
     #[tokio::test]

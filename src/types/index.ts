@@ -1029,6 +1029,88 @@ export interface BufferLinesResponse {
   truncated: boolean;
 }
 
+// Command Fact Types
+export type CommandFactSource =
+  | 'command_bar'
+  | 'ai'
+  | 'broadcast'
+  | 'user_input_observed'
+  | 'heuristic'
+  | 'shell_integration';
+
+export type CommandFactClosedBy =
+  | 'next_command'
+  | 'shell_integration'
+  | 'terminal_reset'
+  | 'session_lost'
+  | 'interrupted_mode'
+  | 'timeout'
+  | 'manual'
+  | 'unknown';
+
+export type CommandFactConfidence = 'high' | 'medium' | 'low';
+export type CommandFactStatus = 'open' | 'closed' | 'stale';
+
+export interface CommandFact {
+  factId: string;
+  clientMarkId?: string;
+  correlationId?: string;
+  sessionId: string;
+  nodeId?: string;
+  source: CommandFactSource;
+  submittedBy?: CommandFactSource;
+  command?: string;
+  cwd?: string;
+  startGlobalLine: number;
+  commandGlobalLine: number;
+  outputStartGlobalLine?: number;
+  endGlobalLine?: number;
+  bufferGeneration: number;
+  runtimeEpoch: string;
+  status: CommandFactStatus;
+  confidence: CommandFactConfidence;
+  closedBy?: CommandFactClosedBy;
+  exitCode?: number;
+  createdAt: number;
+  closedAt?: number;
+  staleReason?: string;
+}
+
+export interface CreateCommandFactRequest {
+  clientMarkId?: string;
+  correlationId?: string;
+  nodeId?: string;
+  source: CommandFactSource;
+  submittedBy?: CommandFactSource;
+  command?: string | null;
+  cwd?: string;
+  startGlobalLine: number;
+  commandGlobalLine: number;
+  outputStartGlobalLine?: number;
+  runtimeEpoch?: string;
+  confidence?: CommandFactConfidence;
+}
+
+export interface CreateCommandFactResponse {
+  factId: string;
+  fact: CommandFact;
+}
+
+export interface CloseCommandFactPatch {
+  endGlobalLine?: number;
+  closedBy?: CommandFactClosedBy;
+  exitCode?: number | null;
+  status?: CommandFactStatus;
+  staleReason?: string;
+}
+
+export interface CommandFactOutputResponse {
+  text: string;
+  truncated: boolean;
+  lineCount: number;
+  stale: boolean;
+}
+
 // Search Types
 export interface SearchOptions {
   query: string;

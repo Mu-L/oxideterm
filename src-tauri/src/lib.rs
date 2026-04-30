@@ -596,6 +596,10 @@ pub fn run() {
         commands::get_buffer_stats,
         commands::clear_buffer,
         commands::get_all_buffer_lines,
+        commands::create_command_fact,
+        commands::close_command_fact,
+        commands::get_command_facts,
+        commands::get_command_fact_output,
         // Search commands
         commands::start_terminal_history_search,
         commands::get_terminal_history_search_results,
@@ -980,6 +984,10 @@ pub fn run() {
         commands::get_buffer_stats,
         commands::clear_buffer,
         commands::get_all_buffer_lines,
+        commands::create_command_fact,
+        commands::close_command_fact,
+        commands::get_command_facts,
+        commands::get_command_fact_output,
         // Search commands
         commands::start_terminal_history_search,
         commands::get_terminal_history_search_results,

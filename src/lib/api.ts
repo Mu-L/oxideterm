@@ -40,6 +40,11 @@ import {
   PersistedForwardInfo,
   TerminalLine,
   BufferStats,
+  CommandFact,
+  CommandFactOutputResponse,
+  CloseCommandFactPatch,
+  CreateCommandFactRequest,
+  CreateCommandFactResponse,
   SearchOptions,
   ArchiveHealthSnapshot,
   ConnectPresetChainRequest,
@@ -1492,6 +1497,88 @@ export const api = {
   getAllBufferLines: async (sessionId: string): Promise<import('../types').BufferLinesResponse> => {
     if (USE_MOCK) return { lines: [], total_lines: 0, returned_lines: 0, truncated: false };
     return invoke('get_all_buffer_lines', { sessionId });
+  },
+
+  createCommandFact: async (
+    sessionId: string,
+    request: CreateCommandFactRequest,
+  ): Promise<CreateCommandFactResponse> => {
+    if (USE_MOCK) {
+      const factId = `mock-fact-${Date.now()}`;
+      return {
+        factId,
+        fact: {
+          factId,
+          clientMarkId: request.clientMarkId,
+          correlationId: request.correlationId,
+          sessionId,
+          nodeId: request.nodeId,
+          source: request.source,
+          submittedBy: request.submittedBy,
+          command: request.command ?? undefined,
+          cwd: request.cwd,
+          startGlobalLine: request.startGlobalLine,
+          commandGlobalLine: request.commandGlobalLine,
+          outputStartGlobalLine: request.outputStartGlobalLine,
+          bufferGeneration: 0,
+          runtimeEpoch: request.runtimeEpoch ?? 'mock',
+          status: 'open',
+          confidence: request.confidence ?? 'high',
+          createdAt: Date.now(),
+        },
+      };
+    }
+    return invoke('create_command_fact', { sessionId, request });
+  },
+
+  closeCommandFact: async (
+    sessionId: string,
+    factId: string,
+    patch: CloseCommandFactPatch,
+  ): Promise<CommandFact> => {
+    if (USE_MOCK) {
+      return {
+        factId,
+        sessionId,
+        source: 'command_bar',
+        startGlobalLine: 0,
+        commandGlobalLine: 0,
+        bufferGeneration: 0,
+        runtimeEpoch: 'mock',
+        status: patch.status ?? 'closed',
+        confidence: 'high',
+        endGlobalLine: patch.endGlobalLine,
+        closedBy: patch.closedBy,
+        exitCode: patch.exitCode ?? undefined,
+        createdAt: Date.now(),
+        closedAt: Date.now(),
+        staleReason: patch.staleReason,
+      };
+    }
+    return invoke('close_command_fact', { sessionId, factId, patch });
+  },
+
+  getCommandFacts: async (
+    sessionId: string,
+    globalStart: number,
+    globalEnd: number,
+  ): Promise<CommandFact[]> => {
+    if (USE_MOCK) return [];
+    return invoke('get_command_facts', { sessionId, globalStart, globalEnd });
+  },
+
+  getCommandFactOutput: async (
+    sessionId: string,
+    factId: string,
+    limits: { maxLines?: number; maxChars?: number } = {},
+  ): Promise<CommandFactOutputResponse> => {
+    if (USE_MOCK) return { text: '', truncated: false, lineCount: 0, stale: false };
+    return invoke('get_command_fact_output', {
+      sessionId,
+      factId,
+      maxLines: limits.maxLines,
+      maxChars: limits.maxChars,
+    });
   },
 
   // --- Search APIs ---

@@ -539,11 +539,19 @@ pub async fn clear_buffer(
     session_id: String,
     registry: State<'_, Arc<SessionRegistry>>,
 ) -> Result<(), String> {
-    let scroll_buffer = registry
-        .with_session(&session_id, |entry| entry.scroll_buffer.clone())
+    let (scroll_buffer, command_facts) = registry
+        .with_session(&session_id, |entry| {
+            (entry.scroll_buffer.clone(), entry.command_facts.clone())
+        })
         .ok_or_else(|| format!("Session {} not found", session_id))?;
 
     scroll_buffer.clear().await;
+    command_facts
+        .mark_open_facts_stale(
+            "clear_buffer",
+            crate::session::CommandFactClosedBy::TerminalReset,
+        )
+        .await;
     Ok(())
 }
 

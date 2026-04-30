@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
+use super::command_facts::CommandFactStore;
 use super::history_archive::TerminalHistoryArchive;
 use super::scroll_buffer::ScrollBuffer;
 use super::state::{SessionState, SessionStateMachine};
@@ -168,6 +169,8 @@ pub struct SessionEntry {
     pub handle_controller: Option<HandleController>,
     /// Terminal scroll buffer for backend storage and search
     pub scroll_buffer: Arc<ScrollBuffer>,
+    /// Authoritative command fact shadow store for this terminal session
+    pub command_facts: Arc<CommandFactStore>,
     /// Session-scoped ephemeral cold archive for evicted history lines
     pub terminal_history_archive: Option<TerminalHistoryArchive>,
     /// Buffer limits and persistence policy captured at session creation time
@@ -205,6 +208,7 @@ impl SessionEntry {
                 buffer_config.max_lines,
                 terminal_history_archive.clone(),
             )),
+            command_facts: Arc::new(CommandFactStore::new()),
             terminal_history_archive,
             buffer_config,
             output_tx,
@@ -237,6 +241,7 @@ impl SessionEntry {
                 buffer_config.max_lines,
                 terminal_history_archive.clone(),
             )),
+            command_facts: Arc::new(CommandFactStore::new()),
             terminal_history_archive,
             buffer_config,
             output_tx,

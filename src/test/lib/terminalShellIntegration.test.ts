@@ -39,6 +39,27 @@ vi.mock('@/lib/ai/orchestrator/runtimeEpoch', () => ({
   getAiRuntimeEpoch: () => 'test-runtime',
 }));
 
+vi.mock('@/lib/api', () => ({
+  api: {
+    createCommandFact: vi.fn(() => Promise.resolve({
+      factId: 'fact-1',
+      fact: {
+        factId: 'fact-1',
+        sessionId: 'session-1',
+        source: 'shell_integration',
+        startGlobalLine: 0,
+        commandGlobalLine: 0,
+        bufferGeneration: 0,
+        runtimeEpoch: 'test-runtime',
+        status: 'open',
+        confidence: 'high',
+        createdAt: Date.now(),
+      },
+    })),
+    closeCommandFact: vi.fn(() => Promise.resolve({})),
+  },
+}));
+
 vi.mock('@/lib/clipboardSupport', () => ({
   writeSystemClipboardText: vi.fn(() => Promise.resolve()),
 }));

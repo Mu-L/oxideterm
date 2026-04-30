@@ -5,6 +5,7 @@ import type { IDecoration, IMarker, Terminal } from '@xterm/xterm';
 import { useSettingsStore } from '@/store/settingsStore';
 import { addAiCommandRecord } from '@/lib/ai/orchestrator/ledger';
 import { getAiRuntimeEpoch } from '@/lib/ai/orchestrator/runtimeEpoch';
+import { api } from '@/lib/api';
 import { writeSystemClipboardText } from '@/lib/clipboardSupport';
 import {
   buildSelectionOverlayRects,
@@ -38,6 +39,7 @@ export type TerminalCommandMarkOutputConfidence = TerminalCommandMarkConfidence 
 
 export type TerminalCommandMark = {
   commandId: string;
+  factId?: string;
   paneId: string;
   sessionId: string;
   nodeId?: string;
@@ -110,6 +112,7 @@ const decorationsByCommandId = new Map<string, DecorationRecord[]>();
 const selectionOverlaysByPane = new Map<string, SelectionOverlayRecord>();
 const selectedMarkByPane = new Map<string, string>();
 const listeners = new Set<() => void>();
+const pendingFactClosesByCommandId = new Map<string, { closedBy: TerminalCommandMarkClosedBy; endLine?: number; exitCode?: number | null; stale?: boolean }>();
 let sequence = 0;
 
 const DEDUP_WINDOW_MS = 2000;
@@ -329,6 +332,54 @@ function persistClosedMarkToLedger(mark: TerminalCommandMark): void {
   });
 }
 
+function shadowCreateCommandFact(mark: TerminalCommandMark): void {
+  void api.createCommandFact(mark.sessionId, {
+    clientMarkId: mark.commandId,
+    correlationId: mark.commandId,
+    nodeId: mark.nodeId,
+    source: mark.detectionSource,
+    submittedBy: mark.submittedBy,
+    command: mark.command,
+    cwd: mark.cwd,
+    // Phase 1 shadow mode maps current frontend xterm absolute lines into
+    // the Rust fact range. Rust owns the generated fact id and generation;
+    // later phases will replace this adapter with backend global line data.
+    startGlobalLine: mark.startLine,
+    commandGlobalLine: mark.commandLine,
+    outputStartGlobalLine: mark.commandLine + 1,
+    runtimeEpoch: mark.runtimeEpoch,
+    confidence: mark.confidence,
+  }).then((response) => {
+    mark.factId = response.factId;
+    const pendingClose = pendingFactClosesByCommandId.get(mark.commandId);
+    if (pendingClose) {
+      pendingFactClosesByCommandId.delete(mark.commandId);
+      shadowCloseCommandFact(mark, pendingClose);
+    }
+  }).catch((error) => {
+    console.debug('[TerminalCommandFacts] shadow create failed:', error);
+  });
+}
+
+function shadowCloseCommandFact(
+  mark: TerminalCommandMark,
+  close: { closedBy: TerminalCommandMarkClosedBy; endLine?: number; exitCode?: number | null; stale?: boolean },
+): void {
+  if (!mark.factId) {
+    pendingFactClosesByCommandId.set(mark.commandId, close);
+    return;
+  }
+  void api.closeCommandFact(mark.sessionId, mark.factId, {
+    endGlobalLine: Math.max(mark.startLine, close.endLine ?? mark.endLine ?? mark.startLine),
+    closedBy: close.closedBy,
+    exitCode: close.exitCode ?? undefined,
+    status: close.stale ? 'stale' : 'closed',
+    staleReason: close.stale ? close.closedBy : undefined,
+  }).catch((error) => {
+    console.debug('[TerminalCommandFacts] shadow close failed:', error);
+  });
+}
+
 function closeOpenMarks(
   paneId: string,
   nextStartLine: number,
@@ -345,6 +396,7 @@ function closeOpenMarks(
     mark.finishedAt = Date.now();
     mark.durationMs = mark.finishedAt - mark.startedAt;
     persistClosedMarkToLedger(mark);
+    shadowCloseCommandFact(mark, { closedBy, endLine: mark.endLine, exitCode: mark.exitCode, stale: mark.stale });
   }
 }
 
@@ -684,6 +736,7 @@ export function createTerminalCommandMark(
   marks.push(mark);
   marksByPane.set(paneId, marks);
   trimPaneMarks(paneId);
+  shadowCreateCommandFact(mark);
   notify();
   return mark;
 }
@@ -740,6 +793,7 @@ export function createShellIntegratedCommandMark(
   marks.push(mark);
   marksByPane.set(paneId, marks);
   trimPaneMarks(paneId);
+  shadowCreateCommandFact(mark);
   notify();
   return mark;
 }
@@ -762,6 +816,12 @@ export function closeTerminalCommandMarkById(
   mark.durationMs = mark.finishedAt - mark.startedAt;
   mark.stale = options.stale || mark.stale;
   persistClosedMarkToLedger(mark);
+  shadowCloseCommandFact(mark, {
+    closedBy,
+    endLine: mark.endLine,
+    exitCode: mark.exitCode,
+    stale: mark.stale,
+  });
   notify();
   return true;
 }
@@ -784,6 +844,12 @@ export function closeTerminalCommandMarks(
     mark.finishedAt = now;
     mark.durationMs = mark.finishedAt - mark.startedAt;
     mark.stale = stale || mark.stale;
+    shadowCloseCommandFact(mark, {
+      closedBy,
+      endLine: mark.endLine,
+      exitCode: mark.exitCode,
+      stale: mark.stale,
+    });
   }
   notify();
 }
@@ -823,6 +889,7 @@ export function cleanupTerminalCommandMarks(paneId: string): void {
   const marks = [...(marksByPane.get(paneId) ?? [])];
   for (const mark of marks) {
     disposeDecoration(mark.commandId);
+    pendingFactClosesByCommandId.delete(mark.commandId);
   }
   marksByPane.delete(paneId);
   notify();

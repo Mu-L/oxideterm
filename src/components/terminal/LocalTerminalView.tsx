@@ -94,6 +94,7 @@ import {
   TerminalOutputDecoder,
   type TerminalEncoding,
 } from '../../lib/terminalEncoding';
+import { createTerminalResizeScheduler, type TerminalResizeScheduler } from '../../lib/terminal/resizeScheduler';
 
 interface LocalTerminalViewProps {
   sessionId: string;
@@ -120,6 +121,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   const terminalRef = useRef<Terminal | null>(null);
   const commandMarkPointerRef = useRef<{ x: number; y: number; selection: string } | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const commandBarResizeSchedulerRef = useRef<TerminalResizeScheduler | null>(null);
   const webLinksAddonRef = useRef<WebLinksAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const imageAddonRef = useRef<ImageAddon | null>(null);
@@ -309,10 +311,8 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   }, [resizeTerminal, sessionId]);
 
   const handleCommandBarLayoutChange = useCallback(() => {
-    if (!fitAddonRef.current || !terminalRef.current || !isTerminalContainerRenderable(containerRef.current)) return;
-    fitAddonRef.current.fit();
-    syncLocalPtySize();
-  }, [syncLocalPtySize]);
+    commandBarResizeSchedulerRef.current?.scheduleFit();
+  }, []);
 
   const getEffectiveHighlightRules = useCallback((rules: HighlightRule[]) => {
     const rulesSignature = getHighlightRulesSignature(rules);
@@ -401,6 +401,25 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     terminalType: 'local',
     label: terminalInfo?.shell?.path || sessionId,
   });
+
+  useEffect(() => {
+    commandBarResizeSchedulerRef.current?.dispose();
+    commandBarResizeSchedulerRef.current = createTerminalResizeScheduler({
+      fitAddonRef,
+      terminalRef,
+      isRenderable: () => isTerminalContainerRenderable(containerRef.current),
+      getDimensions: () => resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current),
+      onResize: ({ cols, rows }) => {
+        resizeTerminal(sessionId, cols, rows);
+        feedResize(cols, rows);
+      },
+      resizeDebounceMs: 100,
+    });
+    return () => {
+      commandBarResizeSchedulerRef.current?.dispose();
+      commandBarResizeSchedulerRef.current = null;
+    };
+  }, [feedResize, resizeTerminal, sessionId]);
 
   const sendCommandBarInput = useCallback((input: string) => {
     if (!isRunningRef.current) return;

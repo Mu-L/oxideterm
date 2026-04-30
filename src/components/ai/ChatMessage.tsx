@@ -73,6 +73,57 @@ function stripStreamingSuggestions(value: string, isStreaming: boolean): string 
   return value;
 }
 
+const MAX_RENDERED_MESSAGE_CACHE_ENTRIES = 300;
+const renderedMessageCache = new Map<string, string>();
+
+function renderUserContent(content: string): string {
+  return content
+    .split('\n')
+    .map(line => `<p class="md-paragraph">${escapeHtml(line)}</p>`)
+    .join('');
+}
+
+function getRenderedMessageCacheKey(message: AiChatMessage, content: string, scope: string): string {
+  return `${message.id}:${message.role}:${message.timestamp}:${scope}:${hashString(content)}`;
+}
+
+function renderMessageHtmlCached(
+  message: AiChatMessage,
+  content: string,
+  options: { isUser: boolean; isStreaming: boolean; scope: string },
+): string {
+  const render = () => options.isUser ? renderUserContent(content) : renderMarkdown(content);
+  if (options.isStreaming) {
+    return render();
+  }
+
+  const key = getRenderedMessageCacheKey(message, content, options.scope);
+  const cached = renderedMessageCache.get(key);
+  if (cached !== undefined) {
+    renderedMessageCache.delete(key);
+    renderedMessageCache.set(key, cached);
+    return cached;
+  }
+
+  const rendered = render();
+  renderedMessageCache.set(key, rendered);
+  if (renderedMessageCache.size > MAX_RENDERED_MESSAGE_CACHE_ENTRIES) {
+    const oldestKey = renderedMessageCache.keys().next().value;
+    if (oldestKey) {
+      renderedMessageCache.delete(oldestKey);
+    }
+  }
+  return rendered;
+}
+
+function hashString(value: string): string {
+  let hash = 5381;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) + hash) ^ value.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 // Custom comparison for memo - only re-render when content actually changes
 function arePropsEqual(prev: ChatMessageProps, next: ChatMessageProps): boolean {
   return (
@@ -158,15 +209,8 @@ export const ChatMessage = memo(function ChatMessage({
 
   // Render markdown content
   const renderedHtml = useMemo(() => {
-    if (isUser) {
-      // For user messages, simple text with line breaks
-      return visibleContent
-        .split('\n')
-        .map(line => `<p class="md-paragraph">${escapeHtml(line)}</p>`)
-        .join('');
-    }
-    return renderMarkdown(visibleContent);
-  }, [visibleContent, isUser]);
+    return renderMessageHtmlCached(message, visibleContent, { isUser, isStreaming, scope: 'body' });
+  }, [isStreaming, isUser, message, visibleContent]);
 
   // Handle Mermaid diagram rendering
   useMermaid(contentRef, visibleContent);
@@ -177,7 +221,7 @@ export const ChatMessage = memo(function ChatMessage({
       // Render math formulas after content is in DOM
       renderMathInElement(contentRef.current);
     }
-  }, [renderedHtml, isUser]);
+  }, [renderedHtml, isUser, turnDisplaySegments, visibleContent]);
 
   // Handle code block interactions
   const handleClick = useCallback(async (e: React.MouseEvent) => {
@@ -409,7 +453,11 @@ export const ChatMessage = memo(function ChatMessage({
                     );
                   }
 
-                  const segmentHtml = renderMarkdown(stripStreamingSuggestions(segment.text, isStreaming));
+                  const segmentHtml = renderMessageHtmlCached(
+                    message,
+                    stripStreamingSuggestions(segment.text, isStreaming),
+                    { isUser: false, isStreaming, scope: `segment:${index}` },
+                  );
                   return (
                     <div
                       key={`${message.id}-text-${index}`}

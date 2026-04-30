@@ -23,6 +23,8 @@ type KaTeXModule = typeof import('katex');
 let katexInstance: KaTeXModule | null = null;
 let katexLoadPromise: Promise<KaTeXModule> | null = null;
 let katexCssLoaded = false;
+const MAX_MATH_RENDER_CACHE_ENTRIES = 512;
+const mathRenderCache = new Map<string, string>();
 
 /**
  * Dynamically load KaTeX library and CSS
@@ -465,6 +467,34 @@ interface MathBlock {
 
 let mathBlockCounter = 0;
 
+function getMathCacheKey(formula: string, isDisplay: boolean): string {
+  return `${isDisplay ? 'display' : 'inline'}:${formula}`;
+}
+
+function getCachedMathHtml(formula: string, isDisplay: boolean): string | undefined {
+  const key = getMathCacheKey(formula, isDisplay);
+  const cached = mathRenderCache.get(key);
+  if (cached !== undefined) {
+    mathRenderCache.delete(key);
+    mathRenderCache.set(key, cached);
+  }
+  return cached;
+}
+
+function setCachedMathHtml(formula: string, isDisplay: boolean, html: string): void {
+  const key = getMathCacheKey(formula, isDisplay);
+  if (mathRenderCache.has(key)) {
+    mathRenderCache.delete(key);
+  }
+  mathRenderCache.set(key, html);
+  if (mathRenderCache.size > MAX_MATH_RENDER_CACHE_ENTRIES) {
+    const oldestKey = mathRenderCache.keys().next().value;
+    if (oldestKey) {
+      mathRenderCache.delete(oldestKey);
+    }
+  }
+}
+
 /**
  * Protect math formulas from markdown parsing by replacing them with placeholders
  * 
@@ -540,17 +570,23 @@ function restoreMathFormulas(html: string, mathBlocks: MathBlock[]): string {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
+    const cachedMathHtml = getCachedMathHtml(block.formula, block.isDisplay);
+
     if (block.isDisplay) {
       // Display math (block level)
       result = result.replace(
         block.placeholder,
-        `<div class="md-math md-math-display" data-math="${escapedFormula}" data-math-display="true">$$${escapeHtml(block.formula)}$$</div>`
+        cachedMathHtml
+          ? `<div class="md-math md-math-display rendered" data-math="${escapedFormula}" data-math-display="true">${cachedMathHtml}</div>`
+          : `<div class="md-math md-math-display" data-math="${escapedFormula}" data-math-display="true">$$${escapeHtml(block.formula)}$$</div>`
       );
     } else {
       // Inline math
       result = result.replace(
         block.placeholder,
-        `<span class="md-math md-math-inline" data-math="${escapedFormula}">$${escapeHtml(block.formula)}$</span>`
+        cachedMathHtml
+          ? `<span class="md-math md-math-inline rendered" data-math="${escapedFormula}">${cachedMathHtml}</span>`
+          : `<span class="md-math md-math-inline" data-math="${escapedFormula}">$${escapeHtml(block.formula)}$</span>`
       );
     }
   }
@@ -567,23 +603,33 @@ export async function renderMathInElement(container: HTMLElement): Promise<void>
 
   if (mathElements.length === 0) return;
 
-  // Load KaTeX dynamically
-  const katex = await getKaTeX();
+  const pendingElements: Array<{ element: HTMLElement; decodedFormula: string; isDisplay: boolean }> = [];
 
   for (const element of mathElements) {
     const formula = element.getAttribute('data-math');
     if (!formula) continue;
-
     const isDisplay = element.getAttribute('data-math-display') === 'true';
+    const decodedFormula = formula
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+    const cachedMathHtml = getCachedMathHtml(decodedFormula, isDisplay);
+    if (cachedMathHtml !== undefined) {
+      element.innerHTML = cachedMathHtml;
+      element.classList.add('rendered');
+      continue;
+    }
+    pendingElements.push({ element, decodedFormula, isDisplay });
+  }
 
+  if (pendingElements.length === 0) return;
+
+  // Load KaTeX dynamically
+  const katex = await getKaTeX();
+
+  for (const { element, decodedFormula, isDisplay } of pendingElements) {
     try {
-      // Decode the formula
-      const decodedFormula = formula
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>');
-
       // Render with KaTeX
       const rendered = katex.default.renderToString(decodedFormula, {
         displayMode: isDisplay,
@@ -593,6 +639,7 @@ export async function renderMathInElement(container: HTMLElement): Promise<void>
         strict: false,
       });
 
+      setCachedMathHtml(decodedFormula, isDisplay, rendered);
       element.innerHTML = rendered;
       element.classList.add('rendered');
     } catch (error) {

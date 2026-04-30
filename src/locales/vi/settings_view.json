@@ -329,7 +329,13 @@
       "quick_commands_confirm": "Confirm Quick Command Run",
       "quick_commands_confirm_hint": "Ask before running a quick command from the Run button.",
       "quick_commands_toast": "Quick Command Toast",
-      "quick_commands_toast_hint": "Show a toast after a quick command is sent."
+      "quick_commands_toast_hint": "Show a toast after a quick command is sent.",
+      "page_display": "Hiển thị",
+      "page_input": "Nhập liệu",
+      "page_commandBar": "Thanh lệnh",
+      "page_history": "Lịch sử và đánh dấu",
+      "page_transfer": "Truyền",
+      "page_highlight": "Tô sáng"
     },
     "appearance": {
       "title": "Giao diện",

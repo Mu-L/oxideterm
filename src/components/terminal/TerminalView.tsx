@@ -111,6 +111,7 @@ import {
   TerminalOutputDecoder,
   type TerminalEncoding,
 } from '../../lib/terminalEncoding';
+import { createTerminalResizeScheduler, type TerminalResizeScheduler } from '../../lib/terminal/resizeScheduler';
 
 const PREFILL_REPLAY_LINE_COUNT = 50; // Keep aligned with backend replay count
 const TRZSZ_MAGIC_PREFIX = '::TRZSZ:TRANSFER:';
@@ -172,6 +173,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const terminalRef = useRef<Terminal | null>(null);
   const commandMarkPointerRef = useRef<{ x: number; y: number; selection: string } | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const commandBarResizeSchedulerRef = useRef<TerminalResizeScheduler | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const imageAddonRef = useRef<ImageAddon | null>(null);
   const clipboardAddonRef = useRef<{ dispose: () => void } | null>(null);
@@ -185,6 +187,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const onDataDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const onBinaryDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const onResizeDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const remoteResizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRemoteResizeRef = useRef<{ cols: number; rows: number } | null>(null);
+  const lastRemoteResizeRef = useRef<{ cols: number; rows: number } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const smartCopyDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const trzszControllerRef = useRef<TrzszController | null>(null);
@@ -444,6 +449,36 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       isInputLocked: () => inputLockedRef.current,
     });
   }
+
+  const scheduleRemotePtyResize = useCallback((cols: number, rows: number) => {
+    if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols <= 0 || rows <= 0) return;
+    pendingRemoteResizeRef.current = { cols, rows };
+    if (remoteResizeTimerRef.current) {
+      clearTimeout(remoteResizeTimerRef.current);
+    }
+    remoteResizeTimerRef.current = setTimeout(() => {
+      remoteResizeTimerRef.current = null;
+      const next = pendingRemoteResizeRef.current;
+      if (!next) return;
+      pendingRemoteResizeRef.current = null;
+      const last = lastRemoteResizeRef.current;
+      if (last && last.cols === next.cols && last.rows === next.rows) {
+        return;
+      }
+      lastRemoteResizeRef.current = next;
+      feedResize(next.cols, next.rows);
+      trzszControllerRef.current?.setTerminalColumns(next.cols);
+      transportRef.current?.sendResize(next.cols, next.rows);
+    }, 100);
+  }, [feedResize]);
+
+  useEffect(() => () => {
+    if (remoteResizeTimerRef.current) {
+      clearTimeout(remoteResizeTimerRef.current);
+      remoteResizeTimerRef.current = null;
+    }
+    pendingRemoteResizeRef.current = null;
+  }, []);
 
   const ensureSearchAddon = useCallback(() => {
     const term = terminalRef.current;
@@ -852,15 +887,28 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const dims = resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current);
     if (!dims) return;
 
-    trzszControllerRef.current?.setTerminalColumns(dims.cols);
-    transportRef.current?.sendResize(dims.cols, dims.rows);
-  }, []);
+    scheduleRemotePtyResize(dims.cols, dims.rows);
+  }, [scheduleRemotePtyResize]);
+
+  useEffect(() => {
+    commandBarResizeSchedulerRef.current?.dispose();
+    commandBarResizeSchedulerRef.current = createTerminalResizeScheduler({
+      fitAddonRef,
+      terminalRef,
+      isRenderable: () => isTerminalContainerRenderable(containerRef.current),
+      getDimensions: () => resolveTerminalDimensions(containerRef.current, terminalRef.current, fitAddonRef.current),
+      onResize: ({ cols, rows }) => scheduleRemotePtyResize(cols, rows),
+      resizeDebounceMs: 100,
+    });
+    return () => {
+      commandBarResizeSchedulerRef.current?.dispose();
+      commandBarResizeSchedulerRef.current = null;
+    };
+  }, [scheduleRemotePtyResize]);
 
   const handleCommandBarLayoutChange = useCallback(() => {
-    if (!fitAddonRef.current || !terminalRef.current || !isTerminalContainerRenderable(containerRef.current)) return;
-    fitAddonRef.current.fit();
-    syncRemotePtySize();
-  }, [syncRemotePtySize]);
+    commandBarResizeSchedulerRef.current?.scheduleFit();
+  }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Unified WebSocket message handler
@@ -2273,11 +2321,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         // Don't send resize when in Standby mode or while hidden.
         if (inputLockedRef.current || !isTerminalContainerRenderable(containerRef.current)) return;
 
-        // Feed recording (resize)
-        feedResize(size.cols, size.rows);
-
-      trzszControllerRef.current?.setTerminalColumns(size.cols);
-      transportRef.current?.sendResize(size.cols, size.rows);
+      scheduleRemotePtyResize(size.cols, size.rows);
     });
 
     // Track focus for split pane support
@@ -2505,7 +2549,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         term.dispose();
         terminalRef.current = null;
     };
-  }, [fontOpenReady, sessionId, syncRemotePtySize, syncTrzszController, disposeTrzszController, sendEncodedTerminalInput, resolveNodeForTerminalSession, notifyTerminalLifecycle]); // Only remount on session change — bg image is handled dynamically
+  }, [fontOpenReady, sessionId, syncRemotePtySize, scheduleRemotePtyResize, syncTrzszController, disposeTrzszController, sendEncodedTerminalInput, resolveNodeForTerminalSession, notifyTerminalLifecycle]); // Only remount on session change — bg image is handled dynamically
 
   useEffect(() => {
     selectionGestureRef.current?.refresh();

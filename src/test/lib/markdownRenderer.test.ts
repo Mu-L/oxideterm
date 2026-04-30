@@ -35,4 +35,12 @@ describe('renderMarkdown', () => {
     expect(html).not.toContain('md-math');
     expect(html).toContain('$10');
   });
+
+  it('leaves unclosed streaming display math as text', () => {
+    const html = renderMarkdown('Formula is starting:\n$$\nE =');
+
+    expect(html).not.toContain('md-math');
+    expect(html).toContain('$$');
+    expect(html).toContain('E =');
+  });
 });

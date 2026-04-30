@@ -387,7 +387,7 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={Math.min(6, Math.max(1, state.value.split(/\r?\n/).length))}
-          className="max-h-36 min-h-6 min-w-0 max-w-[960px] flex-1 resize-none bg-transparent py-0.5 text-sm leading-6 text-theme-text outline-none placeholder:text-theme-text-muted"
+          className="max-h-36 min-h-6 min-w-0 flex-1 resize-none bg-transparent py-0.5 text-sm leading-6 text-theme-text outline-none placeholder:text-theme-text-muted"
           spellCheck={false}
         />
         {state.focused && state.ghostText && !state.value.includes('\n') && (
@@ -396,33 +396,26 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
           </span>
         )}
         {quickCommandSettings.quickCommandsEnabled && (
-          <button
-            type="button"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              setSuggestionsOpen(false);
-              setHighlightedSuggestion(-1);
-              setQuickCommandsOpen((open) => !open);
-              inputRef.current?.focus();
-            }}
-            className={cn(
-              'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md hover:bg-theme-accent/10',
-              quickCommandsOpen ? 'bg-theme-accent/10 text-theme-accent' : 'text-theme-text-muted hover:text-theme-accent',
-            )}
-            title={t('terminal.quick_commands.open')}
-          >
-            <Zap className="h-4 w-4" />
-          </button>
+          <div className="ml-auto flex flex-shrink-0 items-center">
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setSuggestionsOpen(false);
+                setHighlightedSuggestion(-1);
+                setQuickCommandsOpen((open) => !open);
+                inputRef.current?.focus();
+              }}
+              className={cn(
+                'inline-flex h-6 w-6 items-center justify-center rounded-md hover:bg-theme-accent/10',
+                quickCommandsOpen ? 'bg-theme-accent/10 text-theme-accent' : 'text-theme-text-muted hover:text-theme-accent',
+              )}
+              title={t('terminal.quick_commands.open')}
+            >
+              <Zap className="h-4 w-4" />
+            </button>
+          </div>
         )}
-        <button
-          type="button"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => submitCommand()}
-          className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-theme-accent hover:bg-theme-accent/10"
-          title={t('terminal.command_bar.run_command')}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
       </div>
       {ConfirmDialog}
     </div>

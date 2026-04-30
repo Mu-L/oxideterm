@@ -1,5 +1,10 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const markdownRendererMock = vi.hoisted(() => ({
+  renderMarkdown: vi.fn((content: string) => `<p>${content}</p>`),
+  renderMathInElement: vi.fn(),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -17,8 +22,8 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
 
 vi.mock('@/lib/markdownRenderer', () => ({
   markdownStyles: '',
-  renderMarkdown: (content: string) => `<p>${content}</p>`,
-  renderMathInElement: vi.fn(),
+  renderMarkdown: markdownRendererMock.renderMarkdown,
+  renderMathInElement: markdownRendererMock.renderMathInElement,
 }));
 
 vi.mock('@/hooks/useMermaid', () => ({
@@ -47,6 +52,10 @@ import { ChatMessage } from '@/components/ai/ChatMessage';
 import type { AiChatMessage } from '@/types';
 
 describe('ChatMessage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('shows the model used for assistant messages without the provider name', () => {
     const message: AiChatMessage = {
       id: 'assistant-model',
@@ -105,6 +114,37 @@ describe('ChatMessage', () => {
     expect(screen.getByText('turn text')).toBeInTheDocument();
     expect(screen.queryByText('legacy content')).not.toBeInTheDocument();
     expect(screen.queryByText('legacy thinking')).not.toBeInTheDocument();
+  });
+
+  it('reuses rendered markdown for completed assistant messages', () => {
+    const message: AiChatMessage = {
+      id: 'assistant-cached',
+      role: 'assistant',
+      content: 'cached **answer**',
+      timestamp: 10,
+      isStreaming: false,
+    };
+
+    const { rerender } = render(<ChatMessage message={message} isLastAssistant={false} />);
+    expect(markdownRendererMock.renderMarkdown).toHaveBeenCalledTimes(1);
+
+    rerender(<ChatMessage message={{ ...message }} isLastAssistant />);
+    expect(markdownRendererMock.renderMarkdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache streaming assistant markdown', () => {
+    const message: AiChatMessage = {
+      id: 'assistant-streaming-cache',
+      role: 'assistant',
+      content: 'streaming',
+      timestamp: 11,
+      isStreaming: true,
+    };
+
+    const { rerender } = render(<ChatMessage message={message} />);
+    rerender(<ChatMessage message={{ ...message }} isLastAssistant />);
+
+    expect(markdownRendererMock.renderMarkdown).toHaveBeenCalledTimes(2);
   });
 
   it('falls back to legacy content when a turn has no text or structured feedback parts', () => {

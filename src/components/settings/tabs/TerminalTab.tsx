@@ -33,8 +33,13 @@ type TerminalTabProps = {
     updateExperimental: <K extends keyof ExperimentalSettings>(key: K, value: ExperimentalSettings[K]) => void;
 };
 
+type TerminalSettingsPage = 'display' | 'input' | 'commandBar' | 'history' | 'transfer' | 'highlight';
+
+const TERMINAL_SETTINGS_PAGES: TerminalSettingsPage[] = ['display', 'input', 'commandBar', 'history', 'transfer', 'highlight'];
+
 export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, updateBuffer, updateExperimental }: TerminalTabProps) => {
     const { t } = useTranslation();
+    const [activePage, setActivePage] = useState<TerminalSettingsPage>('display');
     const [focusHandoffDraft, setFocusHandoffDraft] = useState(() => terminal.commandBar.focusHandoffCommands.join('\n'));
     const parseIntegerInput = (value: string, fallback: number) => {
         const parsed = parseInt(value, 10);
@@ -99,6 +104,24 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
             </div>
             <Separator />
 
+            <div className="flex flex-wrap gap-2 rounded-lg border border-theme-border bg-theme-bg-card p-2">
+                {TERMINAL_SETTINGS_PAGES.map((page) => (
+                    <button
+                        key={page}
+                        type="button"
+                        onClick={() => setActivePage(page)}
+                        className={`rounded-md px-3 py-1.5 text-sm transition-colors ${activePage === page
+                            ? 'bg-theme-accent/15 text-theme-accent'
+                            : 'text-theme-text-muted hover:bg-theme-bg-hover hover:text-theme-text'
+                        }`}
+                    >
+                        {t(`settings_view.terminal.page_${page}`)}
+                    </button>
+                ))}
+            </div>
+
+            {activePage === 'display' && (
+                <>
             <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
                 <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.terminal.font')}</h4>
                 <div className="space-y-5">
@@ -314,7 +337,10 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                     </div>
                 </div>
             </div>
+                </>
+            )}
 
+            {activePage === 'input' && (
             <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
                 <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.terminal.input_safety')}</h4>
                 <div className="flex items-center justify-between">
@@ -373,7 +399,12 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                         onCheckedChange={(checked) => updateAutosuggest('localShellHistory', checked as boolean)}
                     />
                 </div>
-                <Separator className="my-5 opacity-50" />
+            </div>
+            )}
+
+            {activePage === 'commandBar' && (
+            <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
+                <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.terminal.command_bar')}</h4>
                 <div className="flex items-center justify-between">
                     <div>
                         <Label className="text-theme-text">{t('settings_view.terminal.command_bar')}</Label>
@@ -447,7 +478,13 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                         onCheckedChange={(checked) => updateCommandBar('quickCommandsShowToast', checked as boolean)}
                     />
                 </div>
-                <Separator className="my-5 opacity-50" />
+            </div>
+            )}
+
+            {activePage === 'history' && (
+            <>
+            <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
+                <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.terminal.command_marks')}</h4>
                 <div className="flex items-center justify-between">
                     <div>
                         <Label className="text-theme-text">{t('settings_view.terminal.command_marks')}</Label>
@@ -494,6 +531,44 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                 </div>
             </div>
 
+            <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
+                <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.terminal.buffer')}</h4>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <Label className="text-theme-text">{t('settings_view.terminal.scrollback')}</Label>
+                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.scrollback_hint')}</p>
+                    </div>
+                    <Input
+                        type="number"
+                        value={terminal.scrollback}
+                        onChange={(event) => updateTerminal('scrollback', parseInt(event.target.value, 10))}
+                        min={500}
+                        max={20000}
+                        className="w-28"
+                    />
+                </div>
+                <Separator className="my-5 opacity-50" />
+                <div className="flex items-center justify-between">
+                    <div>
+                        <Label className="text-theme-text">{t('settings_view.terminal.backend_buffer_lines')}</Label>
+                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.backend_buffer_lines_hint')}</p>
+                        <p className="text-xs text-theme-text-muted mt-1">{t('settings_view.terminal.backend_buffer_recommended')}</p>
+                    </div>
+                    <Input
+                        type="number"
+                        value={buffer.maxLines}
+                        onChange={(event) => updateBuffer('maxLines', parseIntegerInput(event.target.value, buffer.maxLines))}
+                        min={5000}
+                        max={12000}
+                        step={500}
+                        className="w-28"
+                    />
+                </div>
+            </div>
+            </>
+            )}
+
+            {activePage === 'transfer' && (
             <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
                 <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.terminal.in_band_transfer.title')}</h4>
                 <div className="space-y-5">
@@ -579,46 +654,14 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                     </div>
                 </div>
             </div>
+            )}
 
-            <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
-                <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.terminal.buffer')}</h4>
-                <div className="flex items-center justify-between">
-                    <div>
-                        <Label className="text-theme-text">{t('settings_view.terminal.scrollback')}</Label>
-                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.scrollback_hint')}</p>
-                    </div>
-                    <Input
-                        type="number"
-                        value={terminal.scrollback}
-                        onChange={(event) => updateTerminal('scrollback', parseInt(event.target.value, 10))}
-                        min={500}
-                        max={20000}
-                        className="w-28"
-                    />
-                </div>
-                <Separator className="my-5 opacity-50" />
-                <div className="flex items-center justify-between">
-                    <div>
-                        <Label className="text-theme-text">{t('settings_view.terminal.backend_buffer_lines')}</Label>
-                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.backend_buffer_lines_hint')}</p>
-                        <p className="text-xs text-theme-text-muted mt-1">{t('settings_view.terminal.backend_buffer_recommended')}</p>
-                    </div>
-                    <Input
-                        type="number"
-                        value={buffer.maxLines}
-                        onChange={(event) => updateBuffer('maxLines', parseIntegerInput(event.target.value, buffer.maxLines))}
-                        min={5000}
-                        max={12000}
-                        step={500}
-                        className="w-28"
-                    />
-                </div>
-            </div>
-
+            {activePage === 'highlight' && (
             <TerminalHighlightRulesSection
                 rules={terminal.highlightRules}
                 updateRules={(rules) => updateTerminal('highlightRules', rules)}
             />
+            )}
         </div>
     );
 };

@@ -329,7 +329,13 @@
       "quick_commands_confirm": "Confirm Quick Command Run",
       "quick_commands_confirm_hint": "Ask before running a quick command from the Run button.",
       "quick_commands_toast": "Quick Command Toast",
-      "quick_commands_toast_hint": "Show a toast after a quick command is sent."
+      "quick_commands_toast_hint": "Show a toast after a quick command is sent.",
+      "page_display": "表示",
+      "page_input": "入力",
+      "page_commandBar": "コマンドバー",
+      "page_history": "履歴とマーク",
+      "page_transfer": "転送",
+      "page_highlight": "ハイライト"
     },
     "appearance": {
       "title": "外観",

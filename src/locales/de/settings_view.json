@@ -329,7 +329,13 @@
       "quick_commands_confirm": "Confirm Quick Command Run",
       "quick_commands_confirm_hint": "Ask before running a quick command from the Run button.",
       "quick_commands_toast": "Quick Command Toast",
-      "quick_commands_toast_hint": "Show a toast after a quick command is sent."
+      "quick_commands_toast_hint": "Show a toast after a quick command is sent.",
+      "page_display": "Anzeige",
+      "page_input": "Eingabe",
+      "page_commandBar": "Befehlsleiste",
+      "page_history": "Verlauf & Markierungen",
+      "page_transfer": "Übertragung",
+      "page_highlight": "Hervorhebung"
     },
     "appearance": {
       "title": "Erscheinungsbild",

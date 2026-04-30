@@ -329,7 +329,13 @@
       "quick_commands_confirm": "Confirm Quick Command Run",
       "quick_commands_confirm_hint": "Ask before running a quick command from the Run button.",
       "quick_commands_toast": "Quick Command Toast",
-      "quick_commands_toast_hint": "Show a toast after a quick command is sent."
+      "quick_commands_toast_hint": "Show a toast after a quick command is sent.",
+      "page_display": "Exibição",
+      "page_input": "Entrada",
+      "page_commandBar": "Barra de comandos",
+      "page_history": "Histórico e marcas",
+      "page_transfer": "Transferência",
+      "page_highlight": "Realce"
     },
     "appearance": {
       "title": "Aparência",

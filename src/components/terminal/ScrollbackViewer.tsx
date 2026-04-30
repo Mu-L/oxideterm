@@ -942,6 +942,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
                 return (
                   <div
                     key={virtualItem.key}
+                    data-testid="scrollback-live-row"
                     className={cn(
                       'absolute left-0 top-0 grid w-full grid-cols-[3.25rem_minmax(0,1fr)] gap-2 whitespace-pre px-2 text-theme-text',
                       commandFactMarker && 'cursor-pointer border-l-2 border-theme-accent/50 bg-theme-accent/5',
@@ -966,6 +967,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
                       {globalLine + 1}
                     </span>
                     <pre
+                      data-testid="scrollback-live-line-text"
                       className="m-0 min-w-0 overflow-visible"
                       style={{
                         fontFamily: 'inherit',

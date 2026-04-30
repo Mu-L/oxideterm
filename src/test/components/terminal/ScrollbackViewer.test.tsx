@@ -173,15 +173,15 @@ describe('ScrollbackViewer', () => {
       />,
     );
 
-    const liveText = await screen.findByText('tail');
-    const livePre = liveText.closest('pre');
-    const liveRow = livePre?.parentElement;
+    await screen.findByText('tail');
+    const livePre = screen
+      .getAllByTestId('scrollback-live-line-text')
+      .find((element) => element.textContent?.includes('tail'));
+    const liveRow = livePre?.closest('[data-testid="scrollback-live-row"]');
 
-    expect(livePre).toHaveStyle({
-      fontFamily: 'inherit',
-      fontSize: 'inherit',
-      lineHeight: 'inherit',
-    });
+    expect(livePre?.style.fontFamily).toBe('inherit');
+    expect(livePre?.style.fontSize).toBe('inherit');
+    expect(livePre?.style.lineHeight).toBe('inherit');
     expect(liveRow?.className).toContain('grid-cols-[3.25rem_minmax(0,1fr)]');
   });
 

@@ -51,6 +51,8 @@
       "done": "完成",
       "failed": "失败",
       "cancelled": "已取消"
-    }
+    },
+    "timeline": "事件时间线",
+    "timeline_hint": "点击定位事件"
   }
 }

@@ -474,6 +474,8 @@ export interface ExperimentalSettings {
    * Kept for settings schema compatibility; value is ignored at runtime.
    */
   virtualSessionProxy: boolean;
+  /** Experimental GPU-backed visualizations. Does not replace xterm rendering. */
+  gpuCanvas: boolean;
 }
 
 // ============================================================================
@@ -709,7 +711,7 @@ function createDefaultSettings(): PersistedSettingsV2 {
     ide: { ...defaultIdeSettings },
     reconnect: { ...defaultReconnectSettings },
     connectionPool: { ...defaultConnectionPoolSettings },
-    experimental: { virtualSessionProxy: false },
+    experimental: { virtualSessionProxy: false, gpuCanvas: false },
     onboardingCompleted: false,
   };
 }
@@ -1087,6 +1089,7 @@ interface SettingsStore {
   updateIde: <K extends keyof IdeSettings>(key: K, value: IdeSettings[K]) => void;
   updateReconnect: <K extends keyof ReconnectSettings>(key: K, value: ReconnectSettings[K]) => void;
   updateConnectionPool: <K extends keyof ConnectionPoolSettings>(key: K, value: ConnectionPoolSettings[K]) => void;
+  updateExperimental: <K extends keyof ExperimentalSettings>(key: K, value: ExperimentalSettings[K]) => void;
 
   // Actions - Dedicated language setter with i18n sync
   setLanguage: (language: Language) => void;
@@ -1307,6 +1310,19 @@ export const useSettingsStore = create<SettingsStore>()(
         syncConnectionPoolToBackend(
           newSettings.connectionPool || defaultConnectionPoolSettings,
         );
+        return { settings: newSettings };
+      });
+    },
+
+    // ========== Experimental Settings ==========
+    updateExperimental: (key, value) => {
+      set((state) => {
+        const currentExperimental = state.settings.experimental || createDefaultSettings().experimental!;
+        const newSettings: PersistedSettingsV2 = {
+          ...state.settings,
+          experimental: { ...currentExperimental, [key]: value },
+        };
+        persistSettings(newSettings);
         return { settings: newSettings };
       });
     },

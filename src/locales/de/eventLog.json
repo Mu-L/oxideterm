@@ -51,6 +51,8 @@
       "done": "Fertig",
       "failed": "Fehlgeschlagen",
       "cancelled": "Abgebrochen"
-    }
+    },
+    "timeline": "Event timeline",
+    "timeline_hint": "Click to locate event"
   }
 }

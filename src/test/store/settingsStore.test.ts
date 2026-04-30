@@ -278,6 +278,29 @@ describe('settingsStore', () => {
     const settings = useSettingsStore.getState().settings;
     expect(settings.terminal.scrollback).toBe(1000);
     expect(settings.buffer.maxLines).toBe(8000);
+    expect(settings.experimental?.gpuCanvas).toBe(false);
+  });
+
+  it('merges experimental GPU canvas defaults for existing settings', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      experimental: { virtualSessionProxy: false },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+
+    expect(useSettingsStore.getState().settings.experimental).toMatchObject({
+      virtualSessionProxy: false,
+      gpuCanvas: false,
+    });
+  });
+
+  it('persists experimental GPU canvas setting updates', async () => {
+    const useSettingsStore = await loadSettingsStore();
+
+    useSettingsStore.getState().updateExperimental('gpuCanvas', true);
+
+    expect(useSettingsStore.getState().settings.experimental?.gpuCanvas).toBe(true);
+    expect(JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}').experimental.gpuCanvas).toBe(true);
   });
 
   it('migrates pre-layered scrollback into light xterm and backend hot buffer settings', async () => {

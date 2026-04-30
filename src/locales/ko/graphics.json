@@ -29,6 +29,13 @@
     "app_common_apps": "자주 사용하는 앱:",
     "start_app": "앱 실행",
     "app_starting": "애플리케이션 시작 중...",
-    "app_experimental_note": "앱 모드는 모든 애플리케이션에서 작동하지 않을 수 있습니다. 일부 프로그램은 추가 의존성이나 환경 구성이 필요합니다."
+    "app_experimental_note": "앱 모드는 모든 애플리케이션에서 작동하지 않을 수 있습니다. 일부 프로그램은 추가 의존성이나 환경 구성이 필요합니다.",
+    "gpu_canvas_disabled": "WebGPU: disabled",
+    "gpu_canvas_webgpu": "WebGPU: using WebGPU",
+    "gpu_canvas_fallback": "WebGPU: using Canvas2D fallback",
+    "gpu_canvas_diagnostics": "WebGPU Canvas diagnostics",
+    "gpu_canvas_status": "Status",
+    "gpu_canvas_backend": "Backend",
+    "gpu_canvas_renderers": "Renderers"
   }
 }

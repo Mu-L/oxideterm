@@ -14,9 +14,12 @@
  *   • WPS         — terminal.write() calls per second (hook-measured)
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import type { AdaptiveRendererHandle, RenderTier } from '../../hooks/useAdaptiveRenderer';
+import { buildPerformanceSparklineBins, type PerformanceSparklineSample } from '../../lib/gpu';
+import { useSettingsStore } from '../../store/settingsStore';
+import { GpuChartCanvas } from '../gpu/GpuChartCanvas';
 
 type Props = {
   getStats: AdaptiveRendererHandle['getStats'];
@@ -48,6 +51,9 @@ const TIER_FULL: Record<RenderTier, string> = {
 
 export function FpsOverlay({ getStats }: Props) {
   const [display, setDisplay] = useState<Display>({ tier: 'normal', fps: 0, wps: 0 });
+  const [samples, setSamples] = useState<PerformanceSparklineSample[]>([]);
+  const gpuCanvasEnabled = useSettingsStore((state) => state.settings.experimental?.gpuCanvas ?? false);
+  const lanes = useMemo(() => buildPerformanceSparklineBins({ samples, binCount: 48 }), [samples]);
 
   // Track RAF frame count for FPS measurement
   const frameCountRef = useRef(0);
@@ -69,7 +75,9 @@ export function FpsOverlay({ getStats }: Props) {
         // still runs at display rate. Use WPS as the effective "fps" instead.
         const displayFps = stats.tier === 'idle' ? stats.actualWps : measuredFps;
 
-        setDisplay({ tier: stats.tier, fps: displayFps, wps: stats.actualWps });
+        const nextDisplay = { tier: stats.tier, fps: displayFps, wps: stats.actualWps };
+        setDisplay(nextDisplay);
+        setSamples((current) => [...current.slice(-47), nextDisplay]);
         frameCountRef.current = 0;
         lastTimeRef.current = now;
       }
@@ -109,6 +117,16 @@ export function FpsOverlay({ getStats }: Props) {
       {/* WPS: writes per second */}
       <span className="text-theme-text-muted">{display.wps}</span>
       <span className="text-theme-text-muted">wps</span>
+
+      <span className="text-theme-text-muted">·</span>
+      <span className="h-5 w-20 overflow-hidden rounded-sm border border-theme-border/40 bg-theme-bg">
+        <GpuChartCanvas
+          kind="timeline"
+          enabled={gpuCanvasEnabled}
+          lanes={lanes}
+          title="FPS/WPS trend"
+        />
+      </span>
     </div>
   );
 }

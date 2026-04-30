@@ -15,6 +15,7 @@ import type {
     AdaptiveRendererMode,
     BufferSettings,
     CursorStyle,
+    ExperimentalSettings,
     FontFamily,
     RendererType,
     TerminalEncoding,
@@ -24,11 +25,13 @@ import type {
 type TerminalTabProps = {
     terminal: TerminalSettings;
     buffer: BufferSettings;
+    experimental?: ExperimentalSettings;
     updateTerminal: <K extends keyof TerminalSettings>(key: K, value: TerminalSettings[K]) => void;
     updateBuffer: <K extends keyof BufferSettings>(key: K, value: BufferSettings[K]) => void;
+    updateExperimental: <K extends keyof ExperimentalSettings>(key: K, value: ExperimentalSettings[K]) => void;
 };
 
-export const TerminalTab = ({ terminal, buffer, updateTerminal, updateBuffer }: TerminalTabProps) => {
+export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, updateBuffer, updateExperimental }: TerminalTabProps) => {
     const { t } = useTranslation();
     const parseIntegerInput = (value: string, fallback: number) => {
         const parsed = parseInt(value, 10);
@@ -251,6 +254,17 @@ export const TerminalTab = ({ terminal, buffer, updateTerminal, updateBuffer }: 
                             id="show-fps-overlay"
                             checked={terminal.showFpsOverlay ?? false}
                             onCheckedChange={(checked) => updateTerminal('showFpsOverlay', checked as boolean)}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <Label className="text-theme-text">{t('settings_view.terminal.gpu_canvas_experiments')}</Label>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.gpu_canvas_experiments_hint')}</p>
+                        </div>
+                        <Checkbox
+                            id="gpu-canvas-experiments"
+                            checked={experimental?.gpuCanvas ?? false}
+                            onCheckedChange={(checked) => updateExperimental('gpuCanvas', checked as boolean)}
                         />
                     </div>
                 </div>

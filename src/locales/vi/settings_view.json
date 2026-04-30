@@ -319,7 +319,9 @@
       "command_marks_user_input_observed": "Đánh dấu nhập tay (thử nghiệm)",
       "command_marks_user_input_observed_hint": "Đánh dấu best-effort cho lệnh gõ trực tiếp trong terminal. Mặc định tắt để tránh nhận nhầm SSH, REPL, tmux và sudo.",
       "command_marks_heuristic": "Heuristic prompt (thử nghiệm)",
-      "command_marks_heuristic_hint": "Thử suy luận ranh giới prompt và lệnh khi không có shell integration. Thận trọng và mặc định tắt."
+      "command_marks_heuristic_hint": "Thử suy luận ranh giới prompt và lệnh khi không có shell integration. Thận trọng và mặc định tắt.",
+      "gpu_canvas_experiments": "WebGPU canvas experiments",
+      "gpu_canvas_experiments_hint": "Experimental GPU-backed visualizations. Does not replace the terminal renderer."
     },
     "appearance": {
       "title": "Giao diện",

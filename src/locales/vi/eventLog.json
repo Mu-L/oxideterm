@@ -51,6 +51,8 @@
       "done": "Hoàn tất",
       "failed": "Thất bại",
       "cancelled": "Đã hủy"
-    }
+    },
+    "timeline": "Event timeline",
+    "timeline_hint": "Click to locate event"
   }
 }

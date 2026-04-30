@@ -40,7 +40,9 @@
       "visible_terminal": "目前終端",
       "full_history": "完整歷史",
       "visible_terminal_hint": "搜尋主終端可見回滾。",
-      "full_history_hint": "搜尋後端熱歷史與歸檔摘錄，結果會在 Scrollback Viewer 中開啟。"
+      "full_history_hint": "搜尋後端熱歷史與歸檔摘錄，結果會在 Scrollback Viewer 中開啟。",
+      "results_map": "結果分布",
+      "results_map_hint": "點擊跳轉"
     },
     "ai": {
       "title": "OxideSens",
@@ -257,7 +259,8 @@
       "archive_excerpt": "歸檔摘錄",
       "clear_confirm_title": "清除目前回滾緩衝區？",
       "clear_confirm_description": "歸檔歷史不會被刪除。",
-      "clear_confirm_action": "清除回滾"
+      "clear_confirm_action": "清除回滾",
+      "minimap": "歷史熱力圖"
     }
   }
 }

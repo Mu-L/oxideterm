@@ -8,13 +8,16 @@
  * into a filterable, scrollable event log.
  */
 
-import { useRef, useEffect, useMemo, useCallback } from 'react';
+import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Info,
   AlertTriangle,
   XCircle,
   BellOff,
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
   Trash2,
   Filter,
   Search,
@@ -26,6 +29,12 @@ import { useAppStore } from '../../store/appStore';
 import { useEventLogStore, type EventLogEntry, type EventSeverity, type EventCategory } from '../../store/eventLogStore';
 import { useActivityStore } from '../../store/activityStore';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import {
+  buildEventTimelineBins,
+  findEventTimelineEntryForBin,
+} from '../../lib/gpu';
+import { GpuChartCanvas } from '../gpu/GpuChartCanvas';
 
 // ============================================================================
 // Severity icon component
@@ -121,7 +130,10 @@ const EventRow = ({ entry }: { entry: EventLogEntry }) => {
   }, [entry.detail, entry.source, t]);
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1 hover:bg-theme-bg-hover text-xs font-mono group min-h-[24px]">
+    <div
+      className="flex items-center gap-2 px-3 py-1 hover:bg-theme-bg-hover text-xs font-mono group min-h-[24px]"
+      data-event-id={entry.id}
+    >
       <span className="text-theme-text-muted w-[60px] shrink-0 tabular-nums">
         {formatTimestamp(entry.timestamp)}
       </span>
@@ -150,6 +162,7 @@ const EventRow = ({ entry }: { entry: EventLogEntry }) => {
 
 export const EventLogPanel = () => {
   const { t } = useTranslation();
+  const gpuCanvasEnabled = useSettingsStore((s) => s.settings.experimental?.gpuCanvas ?? false);
   const activeView = useActivityStore((s) => s.activeView);
   const tabs = useAppStore((s) => s.tabs);
   const activeTabId = useAppStore((s) => s.activeTabId);
@@ -161,6 +174,7 @@ export const EventLogPanel = () => {
   const openPanel = useEventLogStore((s) => s.openPanel);
   const closePanel = useEventLogStore((s) => s.closePanel);
   const toggleDnd = useEventLogStore((s) => s.toggleDnd);
+  const [timelineOpen, setTimelineOpen] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
@@ -209,6 +223,12 @@ export const EventLogPanel = () => {
     return c;
   }, [filteredEntries]);
 
+  const timelineBinCount = 120;
+  const timelineLanes = useMemo(() => buildEventTimelineBins({
+    entries: filteredEntries,
+    binCount: timelineBinCount,
+  }), [filteredEntries]);
+
   // Auto-scroll to bottom on new entries
   useEffect(() => {
     if (shouldAutoScroll.current && scrollRef.current) {
@@ -236,6 +256,13 @@ export const EventLogPanel = () => {
     const idx = cycle.indexOf(filter.category);
     setFilter({ category: cycle[(idx + 1) % cycle.length] });
   }, [filter.category, setFilter]);
+
+  const jumpToTimelineBin = useCallback((binIndex: number) => {
+    const entry = findEventTimelineEntryForBin(filteredEntries, binIndex, timelineBinCount);
+    if (!entry || !scrollRef.current) return;
+    const target = scrollRef.current.querySelector<HTMLElement>(`[data-event-id="${entry.id}"]`);
+    target?.scrollIntoView({ block: 'center' });
+  }, [filteredEntries]);
 
   return (
     <div className="h-full flex flex-col bg-theme-bg select-none">
@@ -352,6 +379,34 @@ export const EventLogPanel = () => {
       {dndEnabled && (
         <div className="border-b border-theme-border bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
           {t('event_log.dnd.description')}
+        </div>
+      )}
+
+      {filteredEntries.length > 0 && (
+        <div className="border-b border-theme-border bg-theme-bg-panel/50">
+          <button
+            type="button"
+            onClick={() => setTimelineOpen((open) => !open)}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-theme-text-muted hover:bg-theme-bg-hover hover:text-theme-text"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            <span className="font-medium">{t('event_log.timeline')}</span>
+            <span className="ml-auto text-[10px]">{t('event_log.timeline_hint')}</span>
+            {timelineOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+          {timelineOpen && (
+            <div className="px-3 pb-2">
+              <div className="h-7 overflow-hidden rounded-sm border border-theme-border/60 bg-theme-bg-sunken">
+                <GpuChartCanvas
+                  kind="timeline"
+                  enabled={gpuCanvasEnabled}
+                  lanes={timelineLanes}
+                  title={t('event_log.timeline')}
+                  onClickBin={jumpToTimelineBin}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

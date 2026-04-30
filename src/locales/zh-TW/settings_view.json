@@ -319,7 +319,9 @@
       "command_marks_user_input_observed": "標記手動輸入（實驗性）",
       "command_marks_user_input_observed_hint": "為直接在終端輸入的命令做 best-effort 標記。預設關閉，避免 SSH、REPL、tmux 和 sudo 誤判。",
       "command_marks_heuristic": "提示符啟發式（實驗性）",
-      "command_marks_heuristic_hint": "沒有 shell integration 時嘗試推斷提示符和命令邊界。預設保守關閉。"
+      "command_marks_heuristic_hint": "沒有 shell integration 時嘗試推斷提示符和命令邊界。預設保守關閉。",
+      "gpu_canvas_experiments": "WebGPU Canvas 實驗",
+      "gpu_canvas_experiments_hint": "啟用實驗性 GPU 視覺化。不取代主終端機渲染器。"
     },
     "appearance": {
       "title": "外觀",

@@ -51,6 +51,8 @@
       "done": "완료",
       "failed": "실패",
       "cancelled": "취소됨"
-    }
+    },
+    "timeline": "Event timeline",
+    "timeline_hint": "Click to locate event"
   }
 }

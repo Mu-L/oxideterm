@@ -80,6 +80,29 @@ import { ScrollbackViewer, enforceScrollbackPageCacheLimit } from '@/components/
 describe('ScrollbackViewer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      disconnect() {}
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((contextId: string) => {
+      if (contextId !== '2d') return null;
+      return {
+        clearRect: vi.fn(),
+        fillRect: vi.fn(),
+        fillStyle: '',
+      } as unknown as RenderingContext;
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 12,
+      height: 220,
+      top: 0,
+      right: 12,
+      bottom: 220,
+      left: 0,
+      toJSON: () => ({}),
+    });
     apiMocks.getBufferStats.mockResolvedValue({
       current_lines: 800,
       total_lines: 1200,
@@ -136,6 +159,28 @@ describe('ScrollbackViewer', () => {
     await waitFor(() => {
       expect(apiMocks.getScrollBuffer).toHaveBeenCalledWith('session-1', 400, 400);
     });
+  });
+
+  it('uses terminal font inheritance with a compact live-row gutter', async () => {
+    render(
+      <ScrollbackViewer
+        sessionId="session-1"
+        nodeId="node-1"
+        isOpen
+        onClose={vi.fn()}
+      />,
+    );
+
+    const liveText = await screen.findByText('tail');
+    const livePre = liveText.closest('pre');
+    const liveRow = livePre?.parentElement;
+
+    expect(livePre).toHaveStyle({
+      fontFamily: 'inherit',
+      fontSize: 'inherit',
+      lineHeight: 'inherit',
+    });
+    expect(liveRow?.className).toContain('grid-cols-[3.25rem_minmax(0,1fr)]');
   });
 
   it('clears live scrollback only after confirmation and refreshes stats', async () => {

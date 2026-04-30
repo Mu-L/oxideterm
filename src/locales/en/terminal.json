@@ -40,7 +40,9 @@
       "visible_terminal": "Visible terminal",
       "full_history": "Full history",
       "visible_terminal_hint": "Search the main terminal visible scrollback.",
-      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer."
+      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer.",
+      "results_map": "Results map",
+      "results_map_hint": "Click to jump"
     },
     "ai": {
       "title": "OxideSens",
@@ -257,7 +259,8 @@
       "archive_excerpt": "Archive excerpt",
       "clear_confirm_title": "Clear current scrollback buffer?",
       "clear_confirm_description": "Archived history is not removed.",
-      "clear_confirm_action": "Clear scrollback"
+      "clear_confirm_action": "Clear scrollback",
+      "minimap": "History minimap"
     }
   }
 }

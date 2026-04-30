@@ -319,7 +319,9 @@
       "command_marks_user_input_observed": "手入力をマーク（実験的）",
       "command_marks_user_input_observed_hint": "端末内で直接入力されたコマンドを best-effort でマークします。SSH、REPL、tmux、sudo の誤判定を避けるため既定では無効です。",
       "command_marks_heuristic": "プロンプト推定（実験的）",
-      "command_marks_heuristic_hint": "shell integration なしでプロンプトとコマンド境界を推定します。保守的で既定では無効です。"
+      "command_marks_heuristic_hint": "shell integration なしでプロンプトとコマンド境界を推定します。保守的で既定では無効です。",
+      "gpu_canvas_experiments": "WebGPU canvas experiments",
+      "gpu_canvas_experiments_hint": "Experimental GPU-backed visualizations. Does not replace the terminal renderer."
     },
     "appearance": {
       "title": "外観",

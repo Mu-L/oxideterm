@@ -51,6 +51,8 @@
       "done": "完了",
       "failed": "失敗",
       "cancelled": "キャンセル済み"
-    }
+    },
+    "timeline": "Event timeline",
+    "timeline_hint": "Click to locate event"
   }
 }

@@ -22,6 +22,11 @@ import { useConfirm } from '../../hooks/useConfirm';
 import { getFontFamily } from '../../lib/fontFamily';
 import { useSettingsStore } from '../../store/settingsStore';
 import { parseTerminalLineText, type ParsedAnsiLine, type ParsedAnsiSpan } from '../../lib/terminal/ansiSgr';
+import {
+  buildScrollbackMinimapBins,
+  type ScrollbackMinimapVisibleRange,
+} from '../../lib/gpu';
+import { GpuChartCanvas } from '../gpu/GpuChartCanvas';
 import type {
   ArchivedHistoryExcerpt,
   BufferStats,
@@ -37,6 +42,7 @@ const STATS_REFRESH_MS = 2000;
 const SEARCH_POLL_MS = 250;
 const EXCERPT_CONTEXT_LINES = 6;
 const DEFAULT_ROW_HEIGHT = 22;
+const MINIMAP_BIN_COUNT = 128;
 
 interface ScrollbackViewerProps {
   sessionId: string;
@@ -196,6 +202,51 @@ function renderParsedLine(parsed: ParsedAnsiLine, ranges: HighlightRange[]) {
   });
 }
 
+interface ScrollbackMinimapProps {
+  enabled: boolean;
+  stats: BufferStats | null;
+  visibleRange: ScrollbackMinimapVisibleRange | null;
+  matches: HistorySearchMatch[];
+  activeMatchIndex: number;
+  onJumpToRow: (rowIndex: number) => void;
+  title: string;
+}
+
+const ScrollbackMinimap: React.FC<ScrollbackMinimapProps> = ({
+  enabled,
+  stats,
+  visibleRange,
+  matches,
+  activeMatchIndex,
+  onJumpToRow,
+  title,
+}) => {
+  const bins = useMemo(() => buildScrollbackMinimapBins({
+    stats,
+    visibleRange,
+    searchMatches: matches,
+    activeMatchIndex,
+    binCount: MINIMAP_BIN_COUNT,
+  }), [activeMatchIndex, matches, stats, visibleRange]);
+
+  return (
+    <div className="relative w-3 shrink-0 border-l border-theme-border/40 bg-theme-bg-panel/30">
+      <GpuChartCanvas
+        kind="vertical"
+        enabled={enabled}
+        bins={bins}
+        className="cursor-pointer"
+        title={title}
+        onClickBin={(binIndex) => {
+          if (!stats || stats.current_lines <= 0) return;
+          const ratio = binIndex / Math.max(1, bins.length);
+          onJumpToRow(clamp(Math.floor(ratio * stats.current_lines), 0, stats.current_lines - 1));
+        }}
+      />
+    </div>
+  );
+};
+
 export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   sessionId,
   nodeId,
@@ -205,6 +256,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
 }) => {
   const { t } = useTranslation();
   const terminalSettings = useSettingsStore((state) => state.settings.terminal);
+  const gpuCanvasEnabled = useSettingsStore((state) => state.settings.experimental?.gpuCanvas ?? false);
   const { confirm, ConfirmDialog } = useConfirm();
   const scrollRef = useRef<HTMLDivElement>(null);
   const generationRef = useRef(0);
@@ -599,6 +651,13 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
 
   const virtualItems = rowVirtualizer.getVirtualItems();
   const visibleRangeSignature = virtualItems.map((item) => item.index).join(',');
+  const visibleRange = useMemo<ScrollbackMinimapVisibleRange | null>(() => {
+    if (virtualItems.length === 0) return null;
+    return {
+      startIndex: virtualItems[0].index,
+      endIndex: virtualItems[virtualItems.length - 1].index,
+    };
+  }, [visibleRangeSignature]);
 
   useEffect(() => {
     if (!isOpen || !stats || stats.current_lines === 0) return;
@@ -817,16 +876,26 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
                 return (
                   <div
                     key={virtualItem.key}
-                    className="absolute left-0 top-0 grid w-full grid-cols-[7rem_1fr] gap-3 whitespace-pre px-3 text-theme-text"
+                    className="absolute left-0 top-0 grid w-full grid-cols-[3.25rem_minmax(0,1fr)] gap-2 whitespace-pre px-2 text-theme-text"
                     style={{
                       height: virtualItem.size,
                       transform: `translateY(${virtualItem.start}px)`,
                     }}
                   >
-                    <span className="select-none text-right text-theme-text-muted/60 tabular-nums">
+                    <span
+                      className="select-none text-right text-theme-text-muted/60 tabular-nums"
+                      style={{ fontFamily: 'inherit', fontSize: '0.92em' }}
+                    >
                       {globalLine + 1}
                     </span>
-                    <pre className="m-0 min-w-0 overflow-visible font-inherit leading-inherit">
+                    <pre
+                      className="m-0 min-w-0 overflow-visible"
+                      style={{
+                        fontFamily: 'inherit',
+                        fontSize: 'inherit',
+                        lineHeight: 'inherit',
+                      }}
+                    >
                       {cachedLine
                         ? renderParsedLine(cachedLine.parsed, ranges)
                         : pageLoading
@@ -839,6 +908,15 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
             </div>
           )}
         </div>
+        <ScrollbackMinimap
+          enabled={gpuCanvasEnabled}
+          stats={stats}
+          visibleRange={visibleRange}
+          matches={matches}
+          activeMatchIndex={activeMatchIndex}
+          title={t('terminal.scrollback_viewer.minimap')}
+          onJumpToRow={(rowIndex) => rowVirtualizerRef.current.scrollToIndex(rowIndex, { align: 'center' })}
+        />
 
         {(matches.length > 0 || excerpt || excerptLoading) && (
           <aside className="flex w-80 shrink-0 flex-col border-l border-theme-border bg-theme-bg-panel/70">
@@ -881,7 +959,10 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
                       {t('terminal.scrollback_viewer.line_number', { line: match.line_number + 1 })}
                     </span>
                   </div>
-                  <p className="line-clamp-2 break-all font-mono text-theme-text-muted">
+                  <p
+                    className="line-clamp-2 break-all text-theme-text-muted"
+                    style={{ fontFamily: terminalFontFamily }}
+                  >
                     {match.line_content}
                   </p>
                 </button>
@@ -899,11 +980,16 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
                     return (
                       <div
                         key={line.line_number}
-                        className={cn('grid grid-cols-[4rem_1fr] gap-2 py-0.5 font-mono text-[12px] leading-5', line.is_match && 'bg-theme-accent/15')}
+                        className={cn('grid grid-cols-[4rem_1fr] gap-2 py-0.5 text-[12px] leading-5', line.is_match && 'bg-theme-accent/15')}
                         style={{ fontFamily: terminalFontFamily }}
                       >
                         <span className="text-right text-theme-text-muted/70 tabular-nums">{line.line_number + 1}</span>
-                        <pre className="m-0 overflow-hidden text-theme-text">{renderParsedLine(parsed, line.is_match ? [{ start: 0, end: parsed.plainText.length, active: true }] : [])}</pre>
+                        <pre
+                          className="m-0 overflow-hidden text-theme-text"
+                          style={{ fontFamily: 'inherit', lineHeight: 'inherit' }}
+                        >
+                          {renderParsedLine(parsed, line.is_match ? [{ start: 0, end: parsed.plainText.length, active: true }] : [])}
+                        </pre>
                       </div>
                     );
                   })}

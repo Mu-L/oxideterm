@@ -40,7 +40,9 @@
       "visible_terminal": "当前终端",
       "full_history": "完整历史",
       "visible_terminal_hint": "搜索主终端可见回滚。",
-      "full_history_hint": "搜索后端热历史和归档摘录，结果在 Scrollback Viewer 中打开。"
+      "full_history_hint": "搜索后端热历史和归档摘录，结果在 Scrollback Viewer 中打开。",
+      "results_map": "结果分布",
+      "results_map_hint": "点击跳转"
     },
     "ai": {
       "title": "OxideSens",
@@ -257,7 +259,8 @@
       "archive_excerpt": "归档摘录",
       "clear_confirm_title": "清除当前回滚缓冲区？",
       "clear_confirm_description": "归档历史不会被删除。",
-      "clear_confirm_action": "清除回滚"
+      "clear_confirm_action": "清除回滚",
+      "minimap": "历史热力图"
     }
   }
 }

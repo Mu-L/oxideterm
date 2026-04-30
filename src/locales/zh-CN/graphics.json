@@ -29,6 +29,13 @@
     "app_common_apps": "常用应用：",
     "start_app": "启动应用",
     "app_starting": "正在启动应用...",
-    "app_experimental_note": "应用模式可能无法适用于所有应用。部分程序需要额外的依赖或环境配置。"
+    "app_experimental_note": "应用模式可能无法适用于所有应用。部分程序需要额外的依赖或环境配置。",
+    "gpu_canvas_disabled": "WebGPU：已关闭",
+    "gpu_canvas_webgpu": "WebGPU：使用中",
+    "gpu_canvas_fallback": "WebGPU：使用回退渲染",
+    "gpu_canvas_diagnostics": "WebGPU Canvas 诊断",
+    "gpu_canvas_status": "状态",
+    "gpu_canvas_backend": "后端",
+    "gpu_canvas_renderers": "渲染器"
   }
 }

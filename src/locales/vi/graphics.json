@@ -29,6 +29,13 @@
     "app_common_apps": "Ứng dụng phổ biến:",
     "start_app": "Khởi chạy ứng dụng",
     "app_starting": "Đang khởi chạy ứng dụng...",
-    "app_experimental_note": "Chế độ ứng dụng có thể không hoạt động với tất cả ứng dụng. Một số chương trình cần thêm các phụ thuộc hoặc cấu hình môi trường."
+    "app_experimental_note": "Chế độ ứng dụng có thể không hoạt động với tất cả ứng dụng. Một số chương trình cần thêm các phụ thuộc hoặc cấu hình môi trường.",
+    "gpu_canvas_disabled": "WebGPU: disabled",
+    "gpu_canvas_webgpu": "WebGPU: using WebGPU",
+    "gpu_canvas_fallback": "WebGPU: using Canvas2D fallback",
+    "gpu_canvas_diagnostics": "WebGPU Canvas diagnostics",
+    "gpu_canvas_status": "Status",
+    "gpu_canvas_backend": "Backend",
+    "gpu_canvas_renderers": "Renderers"
   }
 }

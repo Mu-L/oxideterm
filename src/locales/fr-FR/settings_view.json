@@ -319,7 +319,9 @@
       "command_marks_user_input_observed": "Marquer la saisie manuelle (expérimental)",
       "command_marks_user_input_observed_hint": "Repères best-effort pour les commandes tapées directement dans le terminal. Désactivé par défaut pour éviter les faux positifs SSH, REPL, tmux et sudo.",
       "command_marks_heuristic": "Heuristiques de prompt (expérimental)",
-      "command_marks_heuristic_hint": "Tente d’inférer les limites prompt/commande sans shell integration. Conservateur et désactivé par défaut."
+      "command_marks_heuristic_hint": "Tente d’inférer les limites prompt/commande sans shell integration. Conservateur et désactivé par défaut.",
+      "gpu_canvas_experiments": "WebGPU canvas experiments",
+      "gpu_canvas_experiments_hint": "Experimental GPU-backed visualizations. Does not replace the terminal renderer."
     },
     "appearance": {
       "title": "Apparence",

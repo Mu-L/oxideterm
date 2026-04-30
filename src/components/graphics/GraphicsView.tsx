@@ -19,6 +19,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { cn } from '../../lib/utils';
 import { linuxBackdropBlurClass } from '../../lib/linuxWebviewProfile';
+import { gpuCanvasManager, type GpuCanvasDetection } from '../../lib/gpu';
+import { useSettingsStore } from '../../store/settingsStore';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -71,6 +73,71 @@ const STATUS = {
 type Status = typeof STATUS[keyof typeof STATUS];
 
 type LaunchMode = 'desktop' | 'app';
+
+function GpuCanvasDiagnosticsBadge() {
+  const { t } = useTranslation();
+  const enabled = useSettingsStore((state) => state.settings.experimental?.gpuCanvas ?? false);
+  const [detection, setDetection] = useState<GpuCanvasDetection>({
+    status: 'disabled',
+    backend: { kind: 'canvas2d' },
+  });
+  const [rendererCount, setRendererCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!enabled) {
+      setDetection({ status: 'disabled', backend: { kind: 'canvas2d' } });
+      return;
+    }
+    void gpuCanvasManager.detect().then((next) => {
+      if (!cancelled) setDetection(next.status === 'ready' ? next : { ...next, status: next.status === 'unsupported' ? 'unsupported' : 'fallback' });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setRendererCount(0);
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setRendererCount(gpuCanvasManager.rendererCount());
+    }, 1000);
+    setRendererCount(gpuCanvasManager.rendererCount());
+    return () => window.clearInterval(interval);
+  }, [enabled]);
+
+  const isReady = enabled && detection.status === 'ready' && detection.backend.kind === 'webgpu';
+  const label = !enabled
+    ? t('graphics.gpu_canvas_disabled')
+    : isReady
+      ? t('graphics.gpu_canvas_webgpu')
+      : t('graphics.gpu_canvas_fallback');
+
+  return (
+    <div
+      className={cn(
+        'absolute right-3 top-12 z-20 rounded border px-2 py-1 text-[11px] shadow-sm',
+        isReady
+          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+          : 'border-theme-border bg-theme-bg-panel/85 text-theme-text-muted',
+      )}
+      title={detection.reason ?? t('graphics.gpu_canvas_diagnostics')}
+    >
+      <div className="font-medium">{label}</div>
+      <div className="mt-1 grid grid-cols-[auto_auto] gap-x-2 text-[10px] opacity-80">
+        <span>{t('graphics.gpu_canvas_status')}</span>
+        <span className="text-right">{detection.status}</span>
+        <span>{t('graphics.gpu_canvas_backend')}</span>
+        <span className="text-right">{detection.backend.kind}</span>
+        <span>{t('graphics.gpu_canvas_renderers')}</span>
+        <span className="text-right tabular-nums">{rendererCount}</span>
+      </div>
+    </div>
+  );
+}
 
 // ─── WSLg Status Badge ──────────────────────────────────────────────
 
@@ -743,6 +810,7 @@ export function GraphicsView() {
         sessionInfo={session}
       />
       <StatusOverlay status={status} error={error} />
+      <GpuCanvasDiagnosticsBadge />
       <div
         ref={canvasContainerRef}
         className="w-full h-full"

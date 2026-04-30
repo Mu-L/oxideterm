@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { Search, X, ChevronUp, ChevronDown, CaseSensitive, Regex, WholeWord, History, Loader2 } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
@@ -10,6 +10,12 @@ import { Label } from '../ui/label';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { HistorySearchMatch, ArchivedHistoryExcerpt, ArchiveHealthSnapshot } from '../../types';
 import { useTranslation } from 'react-i18next';
+import {
+  buildHistorySearchMapBins,
+  findHistorySearchMatchForBin,
+} from '../../lib/gpu';
+import { useSettingsStore } from '../../store/settingsStore';
+import { GpuChartCanvas } from '../gpu/GpuChartCanvas';
 
 export type SearchMode = 'active' | 'deep';
 
@@ -44,6 +50,10 @@ interface SearchBarProps {
   showDeepSearch?: boolean;
 }
 
+function historyMatchKey(match: HistorySearchMatch): string {
+  return `${match.source}:${match.chunk_id ?? 'hot'}:${match.line_number}:${match.column_start}:${match.column_end}`;
+}
+
 export const SearchBar: React.FC<SearchBarProps> = ({ 
   isOpen, 
   onClose,
@@ -58,6 +68,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   showDeepSearch,
 }) => {
   const { t } = useTranslation();
+  const gpuCanvasEnabled = useSettingsStore((state) => state.settings.experimental?.gpuCanvas ?? false);
   // Determine if deep search should be shown
   const canDeepSearch = showDeepSearch !== false && !!onDeepSearch;
   
@@ -69,6 +80,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const resultsListRef = useRef<HTMLDivElement>(null);
+  const [activeDeepMatchKey, setActiveDeepMatchKey] = useState<string | null>(null);
   // Track IME composition state (for CJK input methods)
   const isComposingRef = useRef(false);
   // Ignore the next Enter after IME composition end (prevents double-trigger)
@@ -203,9 +215,28 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   // Handle deep search button click
   const handleDeepSearchClick = () => {
     if (query.trim() && onDeepSearch) {
+      setActiveDeepMatchKey(null);
       onDeepSearch(query, { caseSensitive, regex: useRegex, wholeWord });
     }
   };
+
+  const deepMatches = deepSearchState?.matches ?? [];
+  const activeDeepMatchIndex = useMemo(() => {
+    if (!activeDeepMatchKey) return -1;
+    return deepMatches.findIndex((match) => historyMatchKey(match) === activeDeepMatchKey);
+  }, [activeDeepMatchKey, deepMatches]);
+  const searchMapBins = useMemo(() => buildHistorySearchMapBins({
+    matches: deepMatches,
+    activeMatchIndex: activeDeepMatchIndex,
+    truncated: deepSearchState?.truncated,
+    partialFailure: deepSearchState?.partialFailure,
+    binCount: 96,
+  }), [activeDeepMatchIndex, deepMatches, deepSearchState?.partialFailure, deepSearchState?.truncated]);
+
+  const jumpToDeepMatch = useCallback((match: HistorySearchMatch) => {
+    setActiveDeepMatchKey(historyMatchKey(match));
+    onJumpToMatch?.(match);
+  }, [onJumpToMatch]);
   
   // Truncate line content for display
   const truncateLine = (text: string, match: HistorySearchMatch, maxLength: number = 60) => {
@@ -446,6 +477,24 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           ref={resultsListRef}
           className="max-h-64 overflow-y-auto border-t border-theme-border"
         >
+          <div className="border-b border-theme-border/60 bg-theme-bg px-3 py-2">
+            <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wide text-theme-text-muted">
+              <span>{t('terminal.search.results_map')}</span>
+              <span>{t('terminal.search.results_map_hint')}</span>
+            </div>
+            <div className="h-4 overflow-hidden rounded-sm border border-theme-border/60 bg-theme-bg-sunken">
+              <GpuChartCanvas
+                kind="horizontal"
+                enabled={gpuCanvasEnabled}
+                bins={searchMapBins}
+                title={t('terminal.search.results_map')}
+                onClickBin={(binIndex) => {
+                  const match = findHistorySearchMatchForBin(deepSearchState.matches, binIndex, searchMapBins.length);
+                  if (match) jumpToDeepMatch(match);
+                }}
+              />
+            </div>
+          </div>
           <div className="text-xs text-theme-text-muted px-3 py-1 bg-theme-bg sticky top-0 flex items-center justify-between gap-2">
             <span>{t('terminal.search.click_to_jump')}</span>
             {deepSearchState.loading && (
@@ -459,7 +508,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             <button
               key={`${match.source}-${match.chunk_id || 'hot'}-${match.line_number}-${match.column_start}-${idx}`}
               className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover border-b border-theme-border transition-colors"
-              onClick={() => onJumpToMatch?.(match)}
+              onClick={() => jumpToDeepMatch(match)}
             >
               <div className="flex items-center justify-between text-xs text-theme-text-muted mb-1">
                 <span className="font-mono">{t('terminal.search.line_number', { line: match.line_number + 1 })}</span>

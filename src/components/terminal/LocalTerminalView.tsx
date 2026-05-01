@@ -99,6 +99,7 @@ import {
   type TerminalEncoding,
 } from '../../lib/terminalEncoding';
 import { createTerminalResizeScheduler, type TerminalResizeScheduler } from '../../lib/terminal/resizeScheduler';
+import { NativeAlacrittyTerminalSurface } from './NativeAlacrittyTerminalSurface';
 
 interface LocalTerminalViewProps {
   sessionId: string;
@@ -113,7 +114,7 @@ interface LocalTerminalViewProps {
 
 const PREFILL_REPLAY_LINE_COUNT = 50; // Keep aligned with backend replay count
 
-export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({ 
+const XtermLocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   sessionId, 
   isActive = true,
   paneId,
@@ -1907,4 +1908,24 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       )}
     </div>
   );
+};
+
+export const LocalTerminalView: React.FC<LocalTerminalViewProps> = (props) => {
+  const terminalEngine = useSettingsStore((state) => state.settings.terminal.engine ?? 'xterm');
+  const effectivePaneId = props.paneId || props.sessionId;
+
+  if (terminalEngine === 'native_alacritty') {
+    // Engine switch belongs to the existing Tauri app, not a separate GPUI/WebView
+    // process. The future native surface must reuse this same local terminal session
+    // and must not create a second local PTY for the pane.
+    return (
+      <NativeAlacrittyTerminalSurface
+        sessionId={props.sessionId}
+        paneId={effectivePaneId}
+        terminalType="local_terminal"
+      />
+    );
+  }
+
+  return <XtermLocalTerminalView {...props} />;
 };

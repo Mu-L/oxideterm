@@ -8,6 +8,20 @@
       "exit_code": "Tiến trình thoát với mã: {{code}}",
       "process_terminated": "Tiến trình đã kết thúc"
     },
+    "native_alacritty": {
+      "title": "Native Alacritty engine",
+      "description": "This pane is using the experimental native_alacritty engine inside the existing Tauri app. It reuses the same session and Alacritty parser/grid state; xterm.js remains the safe fallback.",
+      "boundary": "The native engine uses the same nodeId, session, backend connection, and NodeRouter path. It must not create a second SSH shell or local PTY.",
+      "session": "Session",
+      "pane": "Pane",
+      "type": "Type",
+      "use_xterm": "Switch back to xterm.js",
+      "status": "Status",
+      "surface": "Surface",
+      "attaching": "attaching",
+      "grid": "Grid",
+      "parsed": "Parsed"
+    },
     "search": {
       "visible_buffer": "Buffer hiện tại",
       "deep_history": "Lịch sử sâu",

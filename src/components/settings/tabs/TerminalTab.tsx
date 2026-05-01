@@ -20,6 +20,7 @@ import type {
     ExperimentalSettings,
     FontFamily,
     RendererType,
+    TerminalEngine,
     TerminalEncoding,
     TerminalSettings,
 } from '@/store/settingsStore';
@@ -239,6 +240,24 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                                 <SelectItem value="euc-jp">EUC-JP</SelectItem>
                                 <SelectItem value="euc-kr">EUC-KR</SelectItem>
                                 <SelectItem value="windows-1252">Windows-1252</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <Separator className="opacity-50" />
+
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <Label className="text-theme-text">{t('settings_view.terminal.engine')}</Label>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.engine_hint')}</p>
+                        </div>
+                        <Select value={terminal.engine ?? 'xterm'} onValueChange={(value) => updateTerminal('engine', value as TerminalEngine)}>
+                            <SelectTrigger className="w-[220px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="xterm">{t('settings_view.terminal.engine_xterm')}</SelectItem>
+                                <SelectItem value="native_alacritty">{t('settings_view.terminal.engine_native_alacritty')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

@@ -136,12 +136,19 @@ function normalizeTerminalEncoding(value: unknown): TerminalEncoding {
   }
 }
 
+function normalizeTerminalEngine(value: unknown): TerminalEngine {
+  return value === 'native_alacritty' ? 'native_alacritty' : 'xterm';
+}
+
 // ============================================================================
 // Types
 // ============================================================================
 
 /** Renderer type */
 export type RendererType = 'auto' | 'webgl' | 'canvas';
+
+/** Terminal engine type. xterm is production; native_alacritty is an opt-in engine slot. */
+export type TerminalEngine = 'xterm' | 'native_alacritty';
 
 /** Adaptive renderer mode (Dynamic Refresh Rate) */
 export type AdaptiveRendererMode = 'auto' | 'always-60' | 'off';
@@ -237,6 +244,7 @@ export interface TerminalCommandMarksSettings {
 /** Terminal settings */
 export interface TerminalSettings {
   theme: string;
+  engine: TerminalEngine;
   fontFamily: FontFamily;
   customFontFamily: string; // 自定义轨道: user-defined font stack (e.g. "'Sarasa Fixed SC', monospace")
   fontSize: number;        // 8-32
@@ -500,6 +508,7 @@ const defaultGeneralSettings: GeneralSettings = {
 
 const defaultTerminalSettings: TerminalSettings = {
   theme: 'default',
+  engine: 'xterm',
   fontFamily: 'jetbrains',
   customFontFamily: '',  // 自定义轨道为空时不生效
   fontSize: 14,
@@ -729,6 +738,7 @@ function normalizeTerminalSettings(settings: TerminalSettings): TerminalSettings
   const inBandTransfer = settings.inBandTransfer;
   return {
     ...settings,
+    engine: normalizeTerminalEngine(settings.engine),
     scrollback: clampTerminalScrollback(settings.scrollback),
     terminalEncoding: normalizeTerminalEncoding(settings.terminalEncoding),
     highlightRules: sanitizeHighlightRules(settings.highlightRules),

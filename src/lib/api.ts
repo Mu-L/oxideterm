@@ -123,6 +123,81 @@ type TestConnectionRequestOptions = {
   proxy_chain?: TestConnectionProxyHop[];
 };
 
+export type NativeTerminalType = 'terminal' | 'local_terminal';
+export type NativeTerminalSurfaceStatus = 'ready' | 'unsupported' | 'failed';
+export type NativeTerminalActiveBuffer = 'normal' | 'alt_screen';
+
+export type NativeTerminalBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  dpr: number;
+};
+
+export type NativeTerminalFont = {
+  family: string;
+  size: number;
+  lineHeight: number;
+};
+
+export type NativeTerminalTheme = {
+  foreground: string;
+  background: string;
+  cursor: string;
+  selection: string;
+};
+
+export type NativeTerminalAttachRequest = {
+  paneId: string;
+  terminalType: NativeTerminalType;
+  sessionId: string;
+  nodeId?: string | null;
+  bounds: NativeTerminalBounds;
+  font: NativeTerminalFont;
+  theme: NativeTerminalTheme;
+};
+
+export type NativeTerminalAttachResponse = {
+  surfaceId: string;
+  status: NativeTerminalSurfaceStatus;
+  backend: string;
+  message?: string | null;
+};
+
+export type NativeTerminalSnapshot = {
+  surfaceId: string;
+  status: NativeTerminalSurfaceStatus;
+  columns: number;
+  rows: number;
+  revision: number;
+  parsedBytes: number;
+  outputBytes: number;
+  droppedOutputFrames: number;
+  lines: string[];
+  styledRows: Array<Array<{
+    text: string;
+    fg?: string | null;
+    bg?: string | null;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    inverse: boolean;
+  }>>;
+  cursorRow: number;
+  cursorCol: number;
+  bracketedPaste: boolean;
+  altScreen: boolean;
+  activeBuffer: NativeTerminalActiveBuffer;
+  scrollbackLen: number;
+  viewportRows: number;
+  viewportTop: number;
+  followTail: boolean;
+  pinnedToBottom: boolean;
+  canScrollUp: boolean;
+  canScrollDown: boolean;
+};
+
 export type TestConnectionProxyHop =
   | {
       host: string;
@@ -537,6 +612,110 @@ export const api = {
       };
     }
     return invoke('recreate_terminal_pty', { sessionId });
+  },
+
+  nativeTerminalAttach: async (request: NativeTerminalAttachRequest): Promise<NativeTerminalAttachResponse> => {
+    if (USE_MOCK) {
+      return {
+        surfaceId: 'mock-native-surface',
+        status: 'unsupported',
+        backend: 'mock',
+        message: 'Mock runtime does not provide a native terminal surface.',
+      };
+    }
+    return invoke('native_terminal_attach', { request });
+  },
+
+  nativeTerminalUpdateBounds: async (surfaceId: string, bounds: NativeTerminalBounds): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_update_bounds', {
+      request: { surfaceId, bounds },
+    });
+  },
+
+  nativeTerminalGetSnapshot: async (surfaceId: string): Promise<NativeTerminalSnapshot> => {
+    if (USE_MOCK) {
+      return {
+        surfaceId,
+        status: 'unsupported',
+        columns: 80,
+        rows: 24,
+        revision: 0,
+        parsedBytes: 0,
+        outputBytes: 0,
+        droppedOutputFrames: 0,
+        lines: [],
+        styledRows: [],
+        cursorRow: 0,
+        cursorCol: 0,
+        bracketedPaste: false,
+        altScreen: false,
+        activeBuffer: 'normal',
+        scrollbackLen: 0,
+        viewportRows: 24,
+        viewportTop: 0,
+        followTail: true,
+        pinnedToBottom: true,
+        canScrollUp: false,
+        canScrollDown: false,
+      };
+    }
+    return invoke('native_terminal_get_snapshot', { surfaceId });
+  },
+
+  nativeTerminalGetViewportSnapshot: async (surfaceId: string): Promise<NativeTerminalSnapshot> => {
+    if (USE_MOCK) {
+      return api.nativeTerminalGetSnapshot(surfaceId);
+    }
+    return invoke('native_terminal_get_viewport_snapshot', { surfaceId });
+  },
+
+  nativeTerminalWrite: async (surfaceId: string, data: Uint8Array | number[]): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_write', {
+      request: { surfaceId, data: Array.from(data) },
+    });
+  },
+
+  nativeTerminalFocus: async (surfaceId: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_focus', { surfaceId });
+  },
+
+  nativeTerminalScroll: async (surfaceId: string, deltaRows: number): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_scroll', { surfaceId, deltaRows });
+  },
+
+  nativeTerminalPageUp: async (surfaceId: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_page_up', { surfaceId });
+  },
+
+  nativeTerminalPageDown: async (surfaceId: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_page_down', { surfaceId });
+  },
+
+  nativeTerminalScrollToBottom: async (surfaceId: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_scroll_to_bottom', { surfaceId });
+  },
+
+  nativeTerminalDetach: async (surfaceId: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_detach', { surfaceId });
+  },
+
+  nativeTerminalUpdateSettings: async (
+    surfaceId: string,
+    font: NativeTerminalFont,
+    theme: NativeTerminalTheme,
+  ): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('native_terminal_update_settings', {
+      request: { surfaceId, font, theme },
+    });
   },
 
   // ============ Session Persistence ============

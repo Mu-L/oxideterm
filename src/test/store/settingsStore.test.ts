@@ -191,6 +191,25 @@ describe('settingsStore', () => {
     });
   });
 
+  it('defaults existing settings to the xterm terminal engine', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      terminal: { theme: 'default', renderer: 'auto' },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+
+    expect(useSettingsStore.getState().settings.terminal.engine).toBe('xterm');
+  });
+
+  it('persists the experimental native Alacritty terminal engine slot', async () => {
+    const useSettingsStore = await loadSettingsStore();
+
+    useSettingsStore.getState().updateTerminal('engine', 'native_alacritty');
+
+    expect(useSettingsStore.getState().settings.terminal.engine).toBe('native_alacritty');
+    expect(JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}').terminal.engine).toBe('native_alacritty');
+  });
+
   it('merges terminal command bar defaults for existing settings', async () => {
     localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
       terminal: { theme: 'default', renderer: 'auto' },

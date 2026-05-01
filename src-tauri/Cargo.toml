@@ -55,6 +55,11 @@ futures-util = "0.3"
 # Binary Protocol
 bytes = "1"
 
+# Native terminal parser/grid experiment. The first integrated engine path wires
+# lifecycle and existing session streams; renderer support is added behind the
+# native_terminal platform boundary.
+alacritty_terminal = "0.26.0"
+
 # Utilities
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
@@ -149,7 +154,13 @@ unicode-normalization = "0.1"
 # macOS Touch ID authentication (LAContext via LocalAuthentication.framework)
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSError", "NSString"] }
+objc2-app-kit = { version = "0.3", features = ["NSResponder", "NSView", "NSWindow", "NSColor", "NSEvent", "NSPasteboard", "NSFont", "NSStringDrawing", "NSAttributedString", "NSBezierPath", "objc2-core-foundation"] }
+objc2-core-graphics = "0.3"
+objc2-core-text = "0.3"
+objc2-foundation = { version = "0.3", features = ["NSError", "NSString", "NSDictionary", "NSAttributedString", "NSObject"] }
+objc2-metal = "0.3"
+objc2-metal-kit = "0.3"
+objc2-quartz-core = "0.3"
 block2 = "0.6"
 
 # Unix process group management (for PTY cleanup)

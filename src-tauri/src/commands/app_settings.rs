@@ -7,7 +7,7 @@
 //! import/export, portable mode, and future native UI share one authority.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
@@ -314,8 +314,18 @@ fn default_settings() -> Value {
     })
 }
 
-fn clamp_i64(value: &mut Value, fallback: i64, min: i64, max: i64, path: &str, warnings: &mut Vec<String>) {
-    let Some(number) = value.as_i64().or_else(|| value.as_f64().map(|v| v.round() as i64)) else {
+fn clamp_i64(
+    value: &mut Value,
+    fallback: i64,
+    min: i64,
+    max: i64,
+    path: &str,
+    warnings: &mut Vec<String>,
+) {
+    let Some(number) = value
+        .as_i64()
+        .or_else(|| value.as_f64().map(|v| v.round() as i64))
+    else {
         *value = json!(fallback);
         warnings.push(format!("{} reset to default {}", path, fallback));
         return;
@@ -327,7 +337,14 @@ fn clamp_i64(value: &mut Value, fallback: i64, min: i64, max: i64, path: &str, w
     *value = json!(clamped);
 }
 
-fn clamp_f64(value: &mut Value, fallback: f64, min: f64, max: f64, path: &str, warnings: &mut Vec<String>) {
+fn clamp_f64(
+    value: &mut Value,
+    fallback: f64,
+    min: f64,
+    max: f64,
+    path: &str,
+    warnings: &mut Vec<String>,
+) {
     let Some(number) = value.as_f64() else {
         *value = json!(fallback);
         warnings.push(format!("{} reset to default {}", path, fallback));
@@ -397,10 +414,7 @@ fn sanitize_enum(
 }
 
 fn sanitize_settings(raw: Value) -> SanitizedSettings {
-    let saved_version = raw
-        .get("version")
-        .and_then(Value::as_u64)
-        .unwrap_or(0) as u32;
+    let saved_version = raw.get("version").and_then(Value::as_u64).unwrap_or(0) as u32;
     let mut migration_warnings = Vec::new();
     let mut validation_warnings = Vec::new();
     let mut settings = default_settings();
@@ -431,74 +445,302 @@ fn sanitize_settings(raw: Value) -> SanitizedSettings {
     }
 
     if let Some(value) = get_path_mut(&mut settings, &["terminal", "scrollback"]) {
-        clamp_i64(value, DEFAULT_TERMINAL_SCROLLBACK, TERMINAL_SCROLLBACK_MIN, TERMINAL_SCROLLBACK_MAX, "terminal.scrollback", &mut validation_warnings);
+        clamp_i64(
+            value,
+            DEFAULT_TERMINAL_SCROLLBACK,
+            TERMINAL_SCROLLBACK_MIN,
+            TERMINAL_SCROLLBACK_MAX,
+            "terminal.scrollback",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["buffer", "maxLines"]) {
-        clamp_i64(value, DEFAULT_BACKEND_HOT_BUFFER_LINES, BACKEND_HOT_BUFFER_MIN, BACKEND_HOT_BUFFER_MAX, "buffer.maxLines", &mut validation_warnings);
+        clamp_i64(
+            value,
+            DEFAULT_BACKEND_HOT_BUFFER_LINES,
+            BACKEND_HOT_BUFFER_MIN,
+            BACKEND_HOT_BUFFER_MAX,
+            "buffer.maxLines",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["terminal", "fontSize"]) {
-        clamp_i64(value, 14, 8, 32, "terminal.fontSize", &mut validation_warnings);
+        clamp_i64(
+            value,
+            14,
+            8,
+            32,
+            "terminal.fontSize",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["terminal", "lineHeight"]) {
-        clamp_f64(value, 1.2, 0.8, 3.0, "terminal.lineHeight", &mut validation_warnings);
+        clamp_f64(
+            value,
+            1.2,
+            0.8,
+            3.0,
+            "terminal.lineHeight",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["appearance", "borderRadius"]) {
-        clamp_i64(value, 6, 0, 16, "appearance.borderRadius", &mut validation_warnings);
+        clamp_i64(
+            value,
+            6,
+            0,
+            16,
+            "appearance.borderRadius",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["connectionDefaults", "port"]) {
-        clamp_i64(value, 22, 1, 65_535, "connectionDefaults.port", &mut validation_warnings);
+        clamp_i64(
+            value,
+            22,
+            1,
+            65_535,
+            "connectionDefaults.port",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["sftp", "maxConcurrentTransfers"]) {
-        clamp_i64(value, 3, 1, 10, "sftp.maxConcurrentTransfers", &mut validation_warnings);
+        clamp_i64(
+            value,
+            3,
+            1,
+            10,
+            "sftp.maxConcurrentTransfers",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["sftp", "directoryParallelism"]) {
-        clamp_i64(value, 4, 1, 16, "sftp.directoryParallelism", &mut validation_warnings);
+        clamp_i64(
+            value,
+            4,
+            1,
+            16,
+            "sftp.directoryParallelism",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["sftp", "speedLimitKBps"]) {
-        clamp_i64(value, 0, 0, 10_000_000, "sftp.speedLimitKBps", &mut validation_warnings);
+        clamp_i64(
+            value,
+            0,
+            0,
+            10_000_000,
+            "sftp.speedLimitKBps",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["reconnect", "maxAttempts"]) {
-        clamp_i64(value, 5, 1, 20, "reconnect.maxAttempts", &mut validation_warnings);
+        clamp_i64(
+            value,
+            5,
+            1,
+            20,
+            "reconnect.maxAttempts",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["reconnect", "baseDelayMs"]) {
-        clamp_i64(value, 1000, 500, 10_000, "reconnect.baseDelayMs", &mut validation_warnings);
+        clamp_i64(
+            value,
+            1000,
+            500,
+            10_000,
+            "reconnect.baseDelayMs",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["reconnect", "maxDelayMs"]) {
-        clamp_i64(value, 15_000, 5_000, 60_000, "reconnect.maxDelayMs", &mut validation_warnings);
+        clamp_i64(
+            value,
+            15_000,
+            5_000,
+            60_000,
+            "reconnect.maxDelayMs",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["connectionPool", "idleTimeoutSecs"]) {
-        clamp_i64(value, 1800, 60, 86_400, "connectionPool.idleTimeoutSecs", &mut validation_warnings);
+        clamp_i64(
+            value,
+            1800,
+            60,
+            86_400,
+            "connectionPool.idleTimeoutSecs",
+            &mut validation_warnings,
+        );
     }
     if let Some(value) = get_path_mut(&mut settings, &["ai", "toolUse", "maxRounds"]) {
-        clamp_i64(value, DEFAULT_AI_TOOL_MAX_ROUNDS, MIN_AI_TOOL_MAX_ROUNDS, MAX_AI_TOOL_MAX_ROUNDS, "ai.toolUse.maxRounds", &mut validation_warnings);
+        clamp_i64(
+            value,
+            DEFAULT_AI_TOOL_MAX_ROUNDS,
+            MIN_AI_TOOL_MAX_ROUNDS,
+            MAX_AI_TOOL_MAX_ROUNDS,
+            "ai.toolUse.maxRounds",
+            &mut validation_warnings,
+        );
     }
 
-    if let Some(value) = get_path_mut(&mut settings, &["terminal", "inBandTransfer", "maxChunkBytes"]) {
-        clamp_i64(value, 1024 * 1024, IN_BAND_TRANSFER_CHUNK_MIN, IN_BAND_TRANSFER_CHUNK_MAX, "terminal.inBandTransfer.maxChunkBytes", &mut validation_warnings);
+    if let Some(value) = get_path_mut(
+        &mut settings,
+        &["terminal", "inBandTransfer", "maxChunkBytes"],
+    ) {
+        clamp_i64(
+            value,
+            1024 * 1024,
+            IN_BAND_TRANSFER_CHUNK_MIN,
+            IN_BAND_TRANSFER_CHUNK_MAX,
+            "terminal.inBandTransfer.maxChunkBytes",
+            &mut validation_warnings,
+        );
     }
-    if let Some(value) = get_path_mut(&mut settings, &["terminal", "inBandTransfer", "maxFileCount"]) {
-        clamp_i64(value, 1024, IN_BAND_TRANSFER_FILE_COUNT_MIN, IN_BAND_TRANSFER_FILE_COUNT_MAX, "terminal.inBandTransfer.maxFileCount", &mut validation_warnings);
+    if let Some(value) = get_path_mut(
+        &mut settings,
+        &["terminal", "inBandTransfer", "maxFileCount"],
+    ) {
+        clamp_i64(
+            value,
+            1024,
+            IN_BAND_TRANSFER_FILE_COUNT_MIN,
+            IN_BAND_TRANSFER_FILE_COUNT_MAX,
+            "terminal.inBandTransfer.maxFileCount",
+            &mut validation_warnings,
+        );
     }
-    if let Some(value) = get_path_mut(&mut settings, &["terminal", "inBandTransfer", "maxTotalBytes"]) {
-        clamp_i64(value, 10 * 1024 * 1024 * 1024, IN_BAND_TRANSFER_TOTAL_BYTES_MIN, IN_BAND_TRANSFER_TOTAL_BYTES_MAX, "terminal.inBandTransfer.maxTotalBytes", &mut validation_warnings);
+    if let Some(value) = get_path_mut(
+        &mut settings,
+        &["terminal", "inBandTransfer", "maxTotalBytes"],
+    ) {
+        clamp_i64(
+            value,
+            10 * 1024 * 1024 * 1024,
+            IN_BAND_TRANSFER_TOTAL_BYTES_MIN,
+            IN_BAND_TRANSFER_TOTAL_BYTES_MAX,
+            "terminal.inBandTransfer.maxTotalBytes",
+            &mut validation_warnings,
+        );
     }
 
-    sanitize_enum(&mut settings, &["general", "language"], &["zh-CN", "en", "fr-FR", "ja", "es-ES", "pt-BR", "vi", "ko", "de", "it", "zh-TW"], "zh-CN", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["general", "updateChannel"], &["stable", "beta"], "beta", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["terminal", "fontFamily"], &["jetbrains", "meslo", "maple", "cascadia", "consolas", "menlo", "custom"], "jetbrains", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["terminal", "cursorStyle"], &["block", "underline", "bar"], "block", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["terminal", "renderer"], &["auto", "webgl", "canvas"], if cfg!(windows) { "canvas" } else { "auto" }, &mut validation_warnings);
-    sanitize_enum(&mut settings, &["terminal", "terminalEncoding"], &["utf-8", "gbk", "gb18030", "big5", "shift_jis", "euc-jp", "euc-kr", "windows-1252"], "utf-8", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["terminal", "adaptiveRenderer"], &["auto", "always-60", "off"], "auto", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["terminal", "backgroundFit"], &["cover", "contain", "fill", "tile"], "cover", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["appearance", "uiDensity"], &["compact", "comfortable", "spacious"], "comfortable", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["appearance", "animationSpeed"], &["off", "reduced", "normal", "fast"], "normal", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["appearance", "frostedGlass"], &["off", "css", "native"], "off", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["sftp", "conflictAction"], &["ask", "overwrite", "skip", "rename"], "ask", &mut validation_warnings);
-    sanitize_enum(&mut settings, &["ide", "agentMode"], &["ask", "enabled", "disabled"], "ask", &mut validation_warnings);
+    sanitize_enum(
+        &mut settings,
+        &["general", "language"],
+        &[
+            "zh-CN", "en", "fr-FR", "ja", "es-ES", "pt-BR", "vi", "ko", "de", "it", "zh-TW",
+        ],
+        "zh-CN",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["general", "updateChannel"],
+        &["stable", "beta"],
+        "beta",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["terminal", "fontFamily"],
+        &[
+            "jetbrains",
+            "meslo",
+            "maple",
+            "cascadia",
+            "consolas",
+            "menlo",
+            "custom",
+        ],
+        "jetbrains",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["terminal", "cursorStyle"],
+        &["block", "underline", "bar"],
+        "block",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["terminal", "renderer"],
+        &["auto", "webgl", "canvas"],
+        if cfg!(windows) { "canvas" } else { "auto" },
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["terminal", "terminalEncoding"],
+        &[
+            "utf-8",
+            "gbk",
+            "gb18030",
+            "big5",
+            "shift_jis",
+            "euc-jp",
+            "euc-kr",
+            "windows-1252",
+        ],
+        "utf-8",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["terminal", "adaptiveRenderer"],
+        &["auto", "always-60", "off"],
+        "auto",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["terminal", "backgroundFit"],
+        &["cover", "contain", "fill", "tile"],
+        "cover",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["appearance", "uiDensity"],
+        &["compact", "comfortable", "spacious"],
+        "comfortable",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["appearance", "animationSpeed"],
+        &["off", "reduced", "normal", "fast"],
+        "normal",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["appearance", "frostedGlass"],
+        &["off", "css", "native"],
+        "off",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["sftp", "conflictAction"],
+        &["ask", "overwrite", "skip", "rename"],
+        "ask",
+        &mut validation_warnings,
+    );
+    sanitize_enum(
+        &mut settings,
+        &["ide", "agentMode"],
+        &["ask", "enabled", "disabled"],
+        "ask",
+        &mut validation_warnings,
+    );
 
     if let Some(object) = object_mut(&mut settings, "terminal") {
-        if let Some(in_band) = object.get_mut("inBandTransfer").and_then(Value::as_object_mut) {
+        if let Some(in_band) = object
+            .get_mut("inBandTransfer")
+            .and_then(Value::as_object_mut)
+        {
             in_band.insert("provider".to_string(), json!("trzsz"));
         }
     }
@@ -621,11 +863,12 @@ pub async fn load_app_settings(
     let sanitized = sanitize_settings(envelope.settings.clone());
     migration_warnings.extend(sanitized.migration_warnings);
     validation_warnings.extend(sanitized.validation_warnings);
-    let envelope = if sanitized.settings != envelope.settings || envelope.version != SETTINGS_SCHEMA_VERSION {
-        save_sanitized(sanitized.settings).await?
-    } else {
-        envelope
-    };
+    let envelope =
+        if sanitized.settings != envelope.settings || envelope.version != SETTINGS_SCHEMA_VERSION {
+            save_sanitized(sanitized.settings).await?
+        } else {
+            envelope
+        };
 
     Ok(SettingsLoadResult {
         settings: envelope.settings,
@@ -744,7 +987,13 @@ const SFTP_KEYS: &[&str] = &[
     "speedLimitKBps",
     "conflictAction",
 ];
-const IDE_KEYS: &[&str] = &["autoSave", "fontSize", "lineHeight", "agentMode", "wordWrap"];
+const IDE_KEYS: &[&str] = &[
+    "autoSave",
+    "fontSize",
+    "lineHeight",
+    "agentMode",
+    "wordWrap",
+];
 const LOCAL_TERMINAL_KEYS: &[&str] = &[
     "defaultShellId",
     "recentShellIds",
@@ -782,7 +1031,12 @@ fn selected_sections(options: Option<ExportAppSettingsSnapshotOptions>) -> Vec<S
     let raw = options
         .and_then(|options| options.selected_sections)
         .filter(|sections| !sections.is_empty())
-        .unwrap_or_else(|| DEFAULT_EXPORT_SECTIONS.iter().map(|item| item.to_string()).collect());
+        .unwrap_or_else(|| {
+            DEFAULT_EXPORT_SECTIONS
+                .iter()
+                .map(|item| item.to_string())
+                .collect()
+        });
     let mut seen = Vec::new();
     for section in raw {
         if APP_SETTINGS_SECTION_IDS.contains(&section.as_str()) && !seen.contains(&section) {
@@ -792,7 +1046,10 @@ fn selected_sections(options: Option<ExportAppSettingsSnapshotOptions>) -> Vec<S
     seen
 }
 
-fn build_sectioned_snapshot(settings: &Value, options: Option<ExportAppSettingsSnapshotOptions>) -> Option<Value> {
+fn build_sectioned_snapshot(
+    settings: &Value,
+    options: Option<ExportAppSettingsSnapshotOptions>,
+) -> Option<Value> {
     let include_env = options
         .as_ref()
         .and_then(|item| item.include_local_terminal_env_vars)
@@ -807,18 +1064,72 @@ fn build_sectioned_snapshot(settings: &Value, options: Option<ExportAppSettingsS
 
     for section in &sections {
         match section.as_str() {
-            "general" => merge_object_field(&mut partial, "general", pick_fields(root.get("general").and_then(Value::as_object), GENERAL_KEYS)),
-            "terminalAppearance" => merge_object_field(&mut partial, "terminal", pick_fields(root.get("terminal").and_then(Value::as_object), TERMINAL_APPEARANCE_KEYS)),
-            "terminalBehavior" => merge_object_field(&mut partial, "terminal", pick_fields(root.get("terminal").and_then(Value::as_object), TERMINAL_BEHAVIOR_KEYS)),
-            "appearance" => merge_object_field(&mut partial, "appearance", pick_fields(root.get("appearance").and_then(Value::as_object), APPEARANCE_KEYS)),
+            "general" => merge_object_field(
+                &mut partial,
+                "general",
+                pick_fields(root.get("general").and_then(Value::as_object), GENERAL_KEYS),
+            ),
+            "terminalAppearance" => merge_object_field(
+                &mut partial,
+                "terminal",
+                pick_fields(
+                    root.get("terminal").and_then(Value::as_object),
+                    TERMINAL_APPEARANCE_KEYS,
+                ),
+            ),
+            "terminalBehavior" => merge_object_field(
+                &mut partial,
+                "terminal",
+                pick_fields(
+                    root.get("terminal").and_then(Value::as_object),
+                    TERMINAL_BEHAVIOR_KEYS,
+                ),
+            ),
+            "appearance" => merge_object_field(
+                &mut partial,
+                "appearance",
+                pick_fields(
+                    root.get("appearance").and_then(Value::as_object),
+                    APPEARANCE_KEYS,
+                ),
+            ),
             "connections" => {
-                merge_object_field(&mut partial, "connectionDefaults", pick_fields(root.get("connectionDefaults").and_then(Value::as_object), CONNECTION_DEFAULT_KEYS));
-                merge_object_field(&mut partial, "reconnect", pick_fields(root.get("reconnect").and_then(Value::as_object), RECONNECT_KEYS));
-                merge_object_field(&mut partial, "connectionPool", pick_fields(root.get("connectionPool").and_then(Value::as_object), CONNECTION_POOL_KEYS));
+                merge_object_field(
+                    &mut partial,
+                    "connectionDefaults",
+                    pick_fields(
+                        root.get("connectionDefaults").and_then(Value::as_object),
+                        CONNECTION_DEFAULT_KEYS,
+                    ),
+                );
+                merge_object_field(
+                    &mut partial,
+                    "reconnect",
+                    pick_fields(
+                        root.get("reconnect").and_then(Value::as_object),
+                        RECONNECT_KEYS,
+                    ),
+                );
+                merge_object_field(
+                    &mut partial,
+                    "connectionPool",
+                    pick_fields(
+                        root.get("connectionPool").and_then(Value::as_object),
+                        CONNECTION_POOL_KEYS,
+                    ),
+                );
             }
             "fileAndEditor" => {
-                merge_object_field(&mut partial, "sftp", pick_fields(root.get("sftp").and_then(Value::as_object), SFTP_KEYS));
-                merge_object_field(&mut partial, "ide", pick_fields(root.get("ide").and_then(Value::as_object), IDE_KEYS));
+                merge_object_field(
+                    &mut partial,
+                    "sftp",
+                    pick_fields(root.get("sftp").and_then(Value::as_object), SFTP_KEYS),
+                );
+                merge_object_field(
+                    &mut partial,
+                    "ide",
+                    pick_fields(root.get("ide").and_then(Value::as_object), IDE_KEYS),
+                );
             }
             "ai" => merge_object_field(&mut partial, "ai", root.get("ai").cloned()),
             "localTerminal" => {
@@ -851,11 +1162,7 @@ fn build_sectioned_snapshot(settings: &Value, options: Option<ExportAppSettingsS
 fn parse_settings_snapshot(snapshot_json: &str) -> Result<(bool, Vec<String>, Value), String> {
     let parsed: Value = serde_json::from_str(snapshot_json)
         .map_err(|err| format!("Failed to parse app settings snapshot: {}", err))?;
-    if parsed
-        .get("format")
-        .and_then(Value::as_str)
-        == Some(OXIDE_APP_SETTINGS_ENVELOPE_FORMAT)
-    {
+    if parsed.get("format").and_then(Value::as_str) == Some(OXIDE_APP_SETTINGS_ENVELOPE_FORMAT) {
         let sections = parsed
             .get("sectionIds")
             .and_then(Value::as_array)
@@ -885,23 +1192,61 @@ fn merge_selected_import_sections(current: Value, imported: Value, selected: &[S
 
     for section in selected {
         match section.as_str() {
-            "general" => merge_object_field(next.as_object_mut().unwrap(), "general", imported_root.get("general").cloned()),
-            "terminalAppearance" => merge_object_field(next.as_object_mut().unwrap(), "terminal", pick_fields(imported_root.get("terminal").and_then(Value::as_object), TERMINAL_APPEARANCE_KEYS)),
-            "terminalBehavior" => merge_object_field(next.as_object_mut().unwrap(), "terminal", pick_fields(imported_root.get("terminal").and_then(Value::as_object), TERMINAL_BEHAVIOR_KEYS)),
-            "appearance" => merge_object_field(next.as_object_mut().unwrap(), "appearance", imported_root.get("appearance").cloned()),
+            "general" => merge_object_field(
+                next.as_object_mut().unwrap(),
+                "general",
+                imported_root.get("general").cloned(),
+            ),
+            "terminalAppearance" => merge_object_field(
+                next.as_object_mut().unwrap(),
+                "terminal",
+                pick_fields(
+                    imported_root.get("terminal").and_then(Value::as_object),
+                    TERMINAL_APPEARANCE_KEYS,
+                ),
+            ),
+            "terminalBehavior" => merge_object_field(
+                next.as_object_mut().unwrap(),
+                "terminal",
+                pick_fields(
+                    imported_root.get("terminal").and_then(Value::as_object),
+                    TERMINAL_BEHAVIOR_KEYS,
+                ),
+            ),
+            "appearance" => merge_object_field(
+                next.as_object_mut().unwrap(),
+                "appearance",
+                imported_root.get("appearance").cloned(),
+            ),
             "connections" => {
                 let root = next.as_object_mut().unwrap();
-                merge_object_field(root, "connectionDefaults", imported_root.get("connectionDefaults").cloned());
+                merge_object_field(
+                    root,
+                    "connectionDefaults",
+                    imported_root.get("connectionDefaults").cloned(),
+                );
                 merge_object_field(root, "reconnect", imported_root.get("reconnect").cloned());
-                merge_object_field(root, "connectionPool", imported_root.get("connectionPool").cloned());
+                merge_object_field(
+                    root,
+                    "connectionPool",
+                    imported_root.get("connectionPool").cloned(),
+                );
             }
             "fileAndEditor" => {
                 let root = next.as_object_mut().unwrap();
                 merge_object_field(root, "sftp", imported_root.get("sftp").cloned());
                 merge_object_field(root, "ide", imported_root.get("ide").cloned());
             }
-            "ai" => merge_object_field(next.as_object_mut().unwrap(), "ai", imported_root.get("ai").cloned()),
-            "localTerminal" => merge_object_field(next.as_object_mut().unwrap(), "localTerminal", imported_root.get("localTerminal").cloned()),
+            "ai" => merge_object_field(
+                next.as_object_mut().unwrap(),
+                "ai",
+                imported_root.get("ai").cloned(),
+            ),
+            "localTerminal" => merge_object_field(
+                next.as_object_mut().unwrap(),
+                "localTerminal",
+                imported_root.get("localTerminal").cloned(),
+            ),
             _ => {}
         }
     }
@@ -999,8 +1344,14 @@ mod tests {
             "terminal": { "scrollback": 999999 },
             "buffer": { "maxLines": 1 }
         }));
-        assert_eq!(sanitized.settings["terminal"]["scrollback"], json!(TERMINAL_SCROLLBACK_MAX));
-        assert_eq!(sanitized.settings["buffer"]["maxLines"], json!(BACKEND_HOT_BUFFER_MIN));
+        assert_eq!(
+            sanitized.settings["terminal"]["scrollback"],
+            json!(TERMINAL_SCROLLBACK_MAX)
+        );
+        assert_eq!(
+            sanitized.settings["buffer"]["maxLines"],
+            json!(BACKEND_HOT_BUFFER_MIN)
+        );
         assert!(!sanitized.validation_warnings.is_empty());
     }
 
@@ -1020,12 +1371,18 @@ mod tests {
         let snapshot = build_sectioned_snapshot(
             &default_settings(),
             Some(ExportAppSettingsSnapshotOptions {
-                selected_sections: Some(vec!["general".to_string(), "terminalBehavior".to_string()]),
+                selected_sections: Some(vec![
+                    "general".to_string(),
+                    "terminalBehavior".to_string(),
+                ]),
                 include_local_terminal_env_vars: None,
             }),
         )
         .unwrap();
-        assert_eq!(snapshot["format"], json!(OXIDE_APP_SETTINGS_ENVELOPE_FORMAT));
+        assert_eq!(
+            snapshot["format"],
+            json!(OXIDE_APP_SETTINGS_ENVELOPE_FORMAT)
+        );
         assert!(snapshot["settings"]["general"]["language"].is_string());
         assert!(snapshot["settings"]["terminal"]["scrollback"].is_number());
         assert!(snapshot["settings"]["terminal"]["fontFamily"].is_null());

@@ -360,11 +360,6 @@ pub fn run() {
     #[cfg(feature = "local-terminal")]
     let local_terminal_state = Arc::new(commands::local::LocalTerminalState::new());
 
-    // Experimental native terminal engine state. This lives in the same Tauri
-    // backend as xterm.js and only attaches to already-created terminal
-    // sessions; it must not create a second SSH shell or local PTY.
-    let native_terminal_state = Arc::new(commands::NativeTerminalState::new());
-
     // Create WSL graphics state (only on Windows with feature enabled)
     #[cfg(all(feature = "wsl-graphics", target_os = "windows"))]
     let wsl_graphics_state = Arc::new(graphics::WslGraphicsState::new());
@@ -416,7 +411,6 @@ pub fn run() {
         .manage(session_tree_state)
         .manage(node_router)
         .manage(node_event_emitter.clone())
-        .manage(native_terminal_state)
         .manage(Arc::new(PluginFileServer::new()))
         .manage(update_manager::UpdateManagerState::default())
         .manage(Arc::new(commands::McpProcessRegistry::new()))
@@ -607,18 +601,6 @@ pub fn run() {
         commands::get_command_facts,
         commands::get_command_fact_output,
         commands::get_command_fact_ledger_diagnostics,
-        commands::native_terminal_attach,
-        commands::native_terminal_get_snapshot,
-        commands::native_terminal_get_viewport_snapshot,
-        commands::native_terminal_update_bounds,
-        commands::native_terminal_focus,
-        commands::native_terminal_detach,
-        commands::native_terminal_update_settings,
-        commands::native_terminal_write,
-        commands::native_terminal_scroll,
-        commands::native_terminal_page_up,
-        commands::native_terminal_page_down,
-        commands::native_terminal_scroll_to_bottom,
         // Search commands
         commands::start_terminal_history_search,
         commands::get_terminal_history_search_results,
@@ -1008,18 +990,6 @@ pub fn run() {
         commands::get_command_facts,
         commands::get_command_fact_output,
         commands::get_command_fact_ledger_diagnostics,
-        commands::native_terminal_attach,
-        commands::native_terminal_get_snapshot,
-        commands::native_terminal_get_viewport_snapshot,
-        commands::native_terminal_update_bounds,
-        commands::native_terminal_focus,
-        commands::native_terminal_detach,
-        commands::native_terminal_update_settings,
-        commands::native_terminal_write,
-        commands::native_terminal_scroll,
-        commands::native_terminal_page_up,
-        commands::native_terminal_page_down,
-        commands::native_terminal_scroll_to_bottom,
         // Search commands
         commands::start_terminal_history_search,
         commands::get_terminal_history_search_results,

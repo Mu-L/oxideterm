@@ -116,7 +116,6 @@ import {
   type TerminalEncoding,
 } from '../../lib/terminalEncoding';
 import { createTerminalResizeScheduler, type TerminalResizeScheduler } from '../../lib/terminal/resizeScheduler';
-import { NativeAlacrittyTerminalSurface } from './NativeAlacrittyTerminalSurface';
 
 const PREFILL_REPLAY_LINE_COUNT = 50; // Keep aligned with backend replay count
 const TRZSZ_MAGIC_PREFIX = '::TRZSZ:TRANSFER:';
@@ -166,7 +165,7 @@ interface TerminalViewProps {
   onFocus?: (paneId: string) => void;
 }
 
-const XtermTerminalView: React.FC<TerminalViewProps> = ({
+export const TerminalView: React.FC<TerminalViewProps> = ({ 
   sessionId, 
   isActive = true,
   paneId,
@@ -3279,28 +3278,6 @@ const XtermTerminalView: React.FC<TerminalViewProps> = ({
            onLayoutChange={handleCommandBarLayoutChange}
          />
        )}
-   </div>
+    </div>
   );
-};
-
-export const TerminalView: React.FC<TerminalViewProps> = (props) => {
-  const terminalEngine = useSettingsStore((state) => state.settings.terminal.engine ?? 'xterm');
-  const effectivePaneId = props.paneId || props.sessionId;
-  const nodeId = useSessionTreeStore(s => s.terminalNodeMap.get(props.sessionId));
-
-  if (terminalEngine === 'native_alacritty') {
-    // Engine switch belongs to the existing Tauri app, not a separate GPUI/WebView
-    // process. The future native surface must reuse this same session/node routing
-    // path and must not create a second SSH shell for the pane.
-    return (
-      <NativeAlacrittyTerminalSurface
-        sessionId={props.sessionId}
-        paneId={effectivePaneId}
-        terminalType="terminal"
-        nodeId={nodeId}
-      />
-    );
-  }
-
-  return <XtermTerminalView {...props} />;
 };

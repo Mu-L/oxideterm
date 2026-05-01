@@ -8,20 +8,6 @@
       "exit_code": "进程退出代码: {{code}}",
       "process_terminated": "进程已终止"
     },
-    "native_alacritty": {
-      "title": "Native Alacritty 引擎",
-      "description": "当前 pane 正在使用现有 Tauri app 内的实验性 native_alacritty 引擎。它复用同一个 session 与 Alacritty parser/grid 状态，xterm.js 仍是安全回退路径。",
-      "boundary": "native 引擎复用同一个 nodeId、session、后端连接和 NodeRouter 路径，不能创建第二个 SSH shell 或本地 PTY。",
-      "session": "会话",
-      "pane": "面板",
-      "type": "类型",
-      "use_xterm": "切回 xterm.js",
-      "status": "状态",
-      "surface": "Surface",
-      "attaching": "正在接入",
-      "grid": "Grid",
-      "parsed": "已解析"
-    },
     "search": {
       "visible_buffer": "可见缓冲区",
       "deep_history": "深度历史",

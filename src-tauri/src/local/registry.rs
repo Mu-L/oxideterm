@@ -145,22 +145,6 @@ impl LocalTerminalRegistry {
         sessions.get(session_id).map(|s| s.info())
     }
 
-    /// Clone the existing output broadcaster for a local terminal session.
-    ///
-    /// Native terminal surfaces must subscribe to this existing stream instead
-    /// of creating a second PTY. That keeps xterm.js and native_alacritty on the
-    /// same session identity while preserving xterm as the safe fallback.
-    pub async fn with_session_output_tx(
-        &self,
-        session_id: &str,
-    ) -> Result<tokio::sync::broadcast::Sender<Vec<u8>>, SessionError> {
-        let sessions = self.sessions.read().await;
-        sessions
-            .get(session_id)
-            .map(|session| session.output_tx.clone())
-            .ok_or_else(|| SessionError::NotFound(session_id.to_string()))
-    }
-
     /// List all sessions
     pub async fn list_sessions(&self) -> Vec<LocalTerminalInfo> {
         let sessions = self.sessions.read().await;

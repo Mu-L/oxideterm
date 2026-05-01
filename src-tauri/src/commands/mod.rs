@@ -21,7 +21,6 @@ pub mod kbi;
 #[cfg(feature = "local-terminal")]
 pub mod local;
 pub mod mcp;
-pub mod native_terminal;
 pub mod network;
 
 // WSL Graphics commands — the actual module lives at src/graphics/
@@ -59,7 +58,6 @@ pub use kbi::*;
 #[cfg(feature = "local-terminal")]
 pub use local::*;
 pub use mcp::*;
-pub use native_terminal::*;
 pub use network::*;
 pub use node_agent::*;
 pub use node_forwarding::*;

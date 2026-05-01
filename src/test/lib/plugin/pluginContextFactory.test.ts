@@ -195,6 +195,16 @@ const settingsManagerMock = vi.hoisted(() => ({ get: vi.fn(() => null), set: vi.
 const i18nManagerMock = vi.hoisted(() => ({ t: vi.fn((key: string) => key), getLanguage: vi.fn(() => 'en'), onLanguageChange: vi.fn(() => vi.fn()) }));
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
+vi.mock('@/lib/api', () => ({
+  api: {
+    exportAppSettingsSnapshot: vi.fn(async (options?: { selectedSections?: string[] }) => JSON.stringify({
+      format: 'oxide-settings-sections-v1',
+      version: 1,
+      sectionIds: options?.selectedSections ?? [],
+      settings: {},
+    })),
+  },
+}));
 vi.mock('@/store/appStore', () => ({ useAppStore: appStoreMock }));
 vi.mock('@/store/localTerminalStore', () => ({ useLocalTerminalStore: localTerminalStoreMock }));
 vi.mock('@/store/sessionTreeStore', () => ({ useSessionTreeStore: sessionTreeStoreMock }));

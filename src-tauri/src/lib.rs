@@ -1,5 +1,6 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
+#![recursion_limit = "256"]
 
 //! OxideTerm - A modern SSH terminal client
 //!
@@ -688,6 +689,12 @@ pub fn run() {
         commands::config::has_ai_provider_api_key,
         commands::config::delete_ai_provider_api_key,
         commands::config::list_ai_provider_keys,
+        commands::app_settings::load_app_settings,
+        commands::app_settings::save_app_settings,
+        commands::app_settings::validate_app_settings,
+        commands::app_settings::reset_app_settings,
+        commands::app_settings::export_app_settings_snapshot,
+        commands::app_settings::apply_app_settings_snapshot,
         commands::plugin::set_plugin_secret,
         commands::plugin::get_plugin_secret,
         commands::plugin::get_plugin_secrets_batch,
@@ -1082,6 +1089,12 @@ pub fn run() {
         commands::config::has_ai_provider_api_key,
         commands::config::delete_ai_provider_api_key,
         commands::config::list_ai_provider_keys,
+        commands::app_settings::load_app_settings,
+        commands::app_settings::save_app_settings,
+        commands::app_settings::validate_app_settings,
+        commands::app_settings::reset_app_settings,
+        commands::app_settings::export_app_settings_snapshot,
+        commands::app_settings::apply_app_settings_snapshot,
         commands::plugin::set_plugin_secret,
         commands::plugin::get_plugin_secret,
         commands::plugin::get_plugin_secrets_batch,

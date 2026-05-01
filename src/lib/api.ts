@@ -93,6 +93,44 @@ const USE_MOCK = false;
 const TERMINAL_HISTORY_POLL_INTERVAL_MS = 40;
 const TERMINAL_HISTORY_SEARCH_TIMEOUT_MS = 60_000;
 
+export type AppSettingsLoadResult<TSettings = unknown> = {
+  settings: TSettings;
+  version: number;
+  updatedAt: number;
+  migrationWarnings: string[];
+  validationWarnings: string[];
+  migratedFromLegacyLocalStorage: boolean;
+  recoveredFromCorruptFile: boolean;
+};
+
+export type AppSettingsSaveResult<TSettings = unknown> = {
+  settings: TSettings;
+  version: number;
+  updatedAt: number;
+  validationWarnings: string[];
+};
+
+export type AppSettingsValidationResult<TSettings = unknown> = {
+  settings: TSettings;
+  version: number;
+  validationWarnings: string[];
+};
+
+export type AppSettingsSnapshotOptions = {
+  selectedSections?: string[];
+  includeLocalTerminalEnvVars?: boolean;
+};
+
+export type AppSettingsImportResult<TSettings = unknown> = {
+  imported: boolean;
+  settings: TSettings;
+  version: number;
+  updatedAt: number;
+  migrationWarnings: string[];
+  validationWarnings: string[];
+  errors: string[];
+};
+
 function hasTauriRuntime(): boolean {
   if (typeof window === 'undefined') {
     return false;
@@ -2121,6 +2159,75 @@ export const api = {
   ): Promise<void> => {
     if (USE_MOCK) return;
     return invoke('sync_ai_providers', { providers, activeProviderId });
+  },
+
+  // ============ App Settings ============
+
+  loadAppSettings: async <TSettings = unknown>(
+    legacySettingsJson?: string | null,
+  ): Promise<AppSettingsLoadResult<TSettings>> => {
+    if (USE_MOCK) {
+      throw new Error('loadAppSettings mock is not implemented');
+    }
+    return invoke('load_app_settings', { legacySettingsJson: legacySettingsJson ?? null });
+  },
+
+  saveAppSettings: async <TSettings = unknown>(
+    settings: TSettings,
+  ): Promise<AppSettingsSaveResult<TSettings>> => {
+    if (USE_MOCK) {
+      return {
+        settings,
+        version: 3,
+        updatedAt: Date.now(),
+        validationWarnings: [],
+      };
+    }
+    return invoke('save_app_settings', { settings });
+  },
+
+  validateAppSettings: async <TSettings = unknown>(
+    settings: TSettings,
+  ): Promise<AppSettingsValidationResult<TSettings>> => {
+    if (USE_MOCK) {
+      return { settings, version: 3, validationWarnings: [] };
+    }
+    return invoke('validate_app_settings', { settings });
+  },
+
+  resetAppSettings: async <TSettings = unknown>(): Promise<AppSettingsLoadResult<TSettings>> => {
+    if (USE_MOCK) {
+      throw new Error('resetAppSettings mock is not implemented');
+    }
+    return invoke('reset_app_settings');
+  },
+
+  exportAppSettingsSnapshot: async (
+    options?: AppSettingsSnapshotOptions,
+  ): Promise<string | null> => {
+    if (USE_MOCK) return null;
+    return invoke('export_app_settings_snapshot', { options: options ?? null });
+  },
+
+  applyAppSettingsSnapshot: async <TSettings = unknown>(
+    snapshotJson: string,
+    options?: { selectedSections?: string[] },
+  ): Promise<AppSettingsImportResult<TSettings>> => {
+    if (USE_MOCK) {
+      return {
+        imported: true,
+        settings: JSON.parse(snapshotJson) as TSettings,
+        version: 3,
+        updatedAt: Date.now(),
+        migrationWarnings: [],
+        validationWarnings: [],
+        errors: [],
+      };
+    }
+    return invoke('apply_app_settings_snapshot', {
+      snapshotJson,
+      options: options ?? null,
+    });
   },
 
   // ============ Local Terminal (PTY) ============

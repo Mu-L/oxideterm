@@ -18,9 +18,7 @@ import type { PortableInfoResponse, PortableStatusResponse } from './types'
 // Dev-only: register fault injection API (window.__faultInjection)
 import './lib/faultInjection'
 
-// Initialize settings (including theme) before rendering
-// This loads from oxide-settings-v2, applies theme, and cleans up legacy keys
-initializeSettings()
+// Settings are hydrated through Rust before rendering below.
 
 type PortableBootstrapSnapshot = {
   info: PortableInfoResponse;
@@ -74,7 +72,12 @@ function BootstrapGateApp({ initialSnapshot }: { initialSnapshot: PortableBootst
         info={snapshot.info}
         status={snapshot.status}
         onReady={(status) => {
-          setSnapshot((current) => ({ ...current, status }));
+          void (async () => {
+            if (status.canLaunchApp) {
+              await initializeSettings();
+            }
+            setSnapshot((current) => ({ ...current, status }));
+          })();
         }}
       />
     );
@@ -182,6 +185,9 @@ const i18nStartupReady = i18nReady.catch((err) => {
 // combined wait is max(i18n, portable) rather than i18n + portable.
 Promise.all([i18nStartupReady, portableReady, linuxWebviewProfileReady])
   .then(([, snapshot]) => {
+    if (!snapshot.status.isPortable || snapshot.status.canLaunchApp) {
+      return initializeSettings().then(() => mountApp(snapshot));
+    }
     mountApp(snapshot);
   })
   .catch((err) => {

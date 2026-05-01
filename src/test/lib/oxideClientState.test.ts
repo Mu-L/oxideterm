@@ -22,7 +22,12 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('@/store/settingsStore', () => ({
   applyImportedSettingsSnapshot: applyImportedSettingsSnapshotMock,
-  exportOxideAppSettingsSnapshot: exportOxideAppSettingsSnapshotMock,
+}));
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    exportAppSettingsSnapshot: exportOxideAppSettingsSnapshotMock,
+  },
 }));
 
 vi.mock('@/lib/plugin/pluginSettingsManager', () => ({

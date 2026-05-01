@@ -811,8 +811,15 @@ function mergeAutoApproveTools(
 // Persistence Helpers
 // ============================================================================
 
+let settingsSaveGeneration = 0;
+
+function logSettingsWarnings(context: string, warnings: readonly string[] | undefined): void {
+  if (!warnings?.length) return;
+  console.warn(`[SettingsStore] ${context}:`, warnings);
+}
+
 /** Merge saved settings with defaults (handles version upgrades with new fields) */
-function mergeWithDefaults(saved: OxidePartialSettingsSnapshot | Partial<PersistedSettingsV2>): PersistedSettingsV2 {
+export function mergeWithDefaults(saved: OxidePartialSettingsSnapshot | Partial<PersistedSettingsV2>): PersistedSettingsV2 {
   const defaults = createDefaultSettings();
   const savedVersion = typeof saved.version === 'number' ? saved.version : 0;
   const isPreLayeredScrollback = savedVersion < SETTINGS_VERSION;
@@ -1029,44 +1036,26 @@ function syncSftpToBackend(sftp: SftpSettings): void {
   });
 }
 
-/** Load settings from localStorage, detect and clean legacy formats */
+/** Initial in-memory settings. Authoritative settings are hydrated from Rust. */
 function loadSettings(): PersistedSettingsV2 {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (typeof parsed.version === 'number' && parsed.version <= SETTINGS_VERSION) {
-        // Valid persisted format, merge with defaults and migrate newer schema fields
-        const settings = mergeWithDefaults(parsed);
-        // Migrate: ensure providers array exists
-        const migrated = migrateAiProviders(settings);
-        // Migrate: convert old autoApproveReadOnly/autoApproveAll to per-tool map
-        const migrated2 = migrateToolUseSettings(migrated);
-        return normalizeHistorySettings(migrated2);
-      }
-    }
-
-    // Check for legacy formats and clean them up
-    const hasLegacy = LEGACY_KEYS.some(key => localStorage.getItem(key) !== null);
-    if (hasLegacy) {
-      console.warn('[SettingsStore] Detected legacy settings format. Clearing and using defaults.');
-      LEGACY_KEYS.forEach(key => localStorage.removeItem(key));
-    }
-  } catch (e) {
-    console.error('[SettingsStore] Failed to load settings:', e);
-  }
-
-  const defaults = createDefaultSettings();
-  return normalizeHistorySettings(migrateToolUseSettings(migrateAiProviders(defaults)));
+  return createDefaultSettings();
 }
 
-/** Persist settings to localStorage */
+/** Persist settings through the Rust schema authority. */
 function persistSettings(settings: PersistedSettingsV2): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch (e) {
-    console.error('[SettingsStore] Failed to persist settings:', e);
-  }
+  const generation = ++settingsSaveGeneration;
+  api.saveAppSettings<PersistedSettingsV2>(settings)
+    .then((result) => {
+      logSettingsWarnings('Validation warnings while saving settings', result.validationWarnings);
+      if (generation !== settingsSaveGeneration) return;
+      const current = useSettingsStore.getState().settings;
+      if (JSON.stringify(current) !== JSON.stringify(result.settings)) {
+        useSettingsStore.setState({ settings: result.settings });
+      }
+    })
+    .catch((error) => {
+      console.error('[SettingsStore] Failed to persist settings via Rust:', error);
+    });
 }
 
 // ============================================================================
@@ -1775,13 +1764,18 @@ export const useSettingsStore = create<SettingsStore>()(
 
     // ========== Bulk Operations ==========
     resetToDefaults: () => {
-      const newSettings = createDefaultSettings();
-      persistSettings(newSettings);
-      syncSftpToBackend(newSettings.sftp || defaultSftpSettings);
-      syncConnectionPoolToBackend(
-        newSettings.connectionPool || defaultConnectionPoolSettings,
-      );
-      set({ settings: newSettings });
+      api.resetAppSettings<PersistedSettingsV2>()
+        .then((result) => {
+          const newSettings = result.settings;
+          syncSftpToBackend(newSettings.sftp || defaultSftpSettings);
+          syncConnectionPoolToBackend(
+            newSettings.connectionPool || defaultConnectionPoolSettings,
+          );
+          set({ settings: newSettings });
+        })
+        .catch((error) => {
+          console.error('[SettingsStore] Failed to reset settings via Rust:', error);
+        });
     },
 
     // ========== Selectors ==========
@@ -1850,12 +1844,6 @@ type OxideSectionedSettingsEnvelope = {
   format: 'oxide-settings-sections-v1';
   version: 1;
   sectionIds: OxideAppSettingsSectionId[];
-  settings: OxidePartialSettingsSnapshot;
-};
-
-type ParsedImportedSettingsSnapshot = {
-  format: 'legacy' | 'sectioned';
-  sectionIds: OxideImportedAppSettingsSectionId[];
   settings: OxidePartialSettingsSnapshot;
 };
 
@@ -2157,156 +2145,31 @@ export function exportOxideAppSettingsSnapshot(options?: ExportOxideAppSettingsO
   }
 }
 
-function parseImportedSettingsSnapshot(snapshotJson: string): ParsedImportedSettingsSnapshot {
-  const parsed = JSON.parse(snapshotJson) as unknown;
-
-  if (
-    parsed
-    && typeof parsed === 'object'
-    && 'format' in parsed
-    && (parsed as { format?: unknown }).format === OXIDE_APP_SETTINGS_ENVELOPE_FORMAT
-    && 'settings' in parsed
-    && (parsed as { settings?: unknown }).settings
-    && typeof (parsed as { settings?: unknown }).settings === 'object'
-  ) {
-    const envelope = parsed as OxideSectionedSettingsEnvelope;
-    return {
-      format: 'sectioned',
-      sectionIds: uniqueOxideSectionIds(envelope.sectionIds),
-      settings: envelope.settings,
-    };
-  }
-
-  return {
-    format: 'legacy',
-    sectionIds: ['legacy'],
-    settings: parsed as OxidePartialSettingsSnapshot,
-  };
-}
-
-function mergeSelectedOxideSettingsSections(
-  currentSettings: PersistedSettingsV2,
-  importedSettings: OxidePartialSettingsSnapshot,
-  selectedSections: readonly OxideAppSettingsSectionId[],
-): PersistedSettingsV2 {
-  const nextSettings = mergeWithDefaults(currentSettings);
-
-  for (const sectionId of selectedSections) {
-    switch (sectionId) {
-      case 'general':
-        if (importedSettings.general) {
-          nextSettings.general = { ...nextSettings.general, ...importedSettings.general };
-        }
-        break;
-      case 'terminalAppearance':
-        nextSettings.terminal = {
-          ...nextSettings.terminal,
-          ...pickDefinedFields(importedSettings.terminal, TERMINAL_APPEARANCE_KEYS),
-        };
-        break;
-      case 'terminalBehavior':
-        nextSettings.terminal = {
-          ...nextSettings.terminal,
-          ...pickDefinedFields(importedSettings.terminal, TERMINAL_BEHAVIOR_KEYS),
-        };
-        break;
-      case 'appearance':
-        if (importedSettings.appearance) {
-          nextSettings.appearance = { ...nextSettings.appearance, ...importedSettings.appearance };
-        }
-        break;
-      case 'connections':
-        if (importedSettings.connectionDefaults) {
-          nextSettings.connectionDefaults = {
-            ...nextSettings.connectionDefaults,
-            ...importedSettings.connectionDefaults,
-          };
-        }
-        if (importedSettings.reconnect) {
-          nextSettings.reconnect = {
-            ...(nextSettings.reconnect || defaultReconnectSettings),
-            ...importedSettings.reconnect,
-          };
-        }
-        if (importedSettings.connectionPool) {
-          nextSettings.connectionPool = {
-            ...(nextSettings.connectionPool || defaultConnectionPoolSettings),
-            ...importedSettings.connectionPool,
-          };
-        }
-        break;
-      case 'ai':
-        if (importedSettings.ai) {
-          nextSettings.ai = {
-            ...nextSettings.ai,
-            ...importedSettings.ai,
-          };
-        }
-        break;
-      case 'fileAndEditor':
-        if (importedSettings.sftp) {
-          nextSettings.sftp = {
-            ...(nextSettings.sftp || defaultSftpSettings),
-            ...importedSettings.sftp,
-          };
-        }
-        if (importedSettings.ide) {
-          nextSettings.ide = {
-            ...(nextSettings.ide || defaultIdeSettings),
-            ...importedSettings.ide,
-          };
-        }
-        break;
-      case 'localTerminal':
-        if (importedSettings.localTerminal) {
-          nextSettings.localTerminal = {
-            ...(nextSettings.localTerminal || defaultLocalTerminalSettings),
-            ...importedSettings.localTerminal,
-          };
-        }
-        break;
-    }
-  }
-
-  return normalizeHistorySettings(nextSettings);
-}
-
 export async function applyImportedSettingsSnapshot(
   snapshotJson: string,
   options?: ApplyImportedSettingsOptions,
 ): Promise<boolean> {
   try {
-    const parsedSnapshot = parseImportedSettingsSnapshot(snapshotJson);
-    const selectedSections = options?.selectedSections?.length
-      ? parsedSnapshot.sectionIds.filter((sectionId) => options.selectedSections!.includes(sectionId))
-      : parsedSnapshot.sectionIds;
-
-    if (selectedSections.length === 0) {
+    const result = await api.applyAppSettingsSnapshot<PersistedSettingsV2>(snapshotJson, {
+      selectedSections: options?.selectedSections,
+    });
+    logSettingsWarnings('Migration warnings while importing settings', result.migrationWarnings);
+    logSettingsWarnings('Validation warnings while importing settings', result.validationWarnings);
+    if (result.errors.length > 0) {
+      console.warn('[SettingsStore] App settings import warnings:', result.errors);
+    }
+    if (!result.imported) {
       return false;
     }
 
-    const normalized = parsedSnapshot.format === 'legacy' || selectedSections.includes('legacy')
-      ? normalizeHistorySettings(
-          migrateToolUseSettings(migrateAiProviders(mergeWithDefaults(parsedSnapshot.settings))),
-        )
-      : normalizeHistorySettings(
-          migrateToolUseSettings(
-            migrateAiProviders(
-              mergeSelectedOxideSettingsSections(
-                useSettingsStore.getState().settings,
-                parsedSnapshot.settings,
-                selectedSections as OxideAppSettingsSectionId[],
-              ),
-            ),
-          ),
-        );
-
-    persistSettings(normalized);
+    let normalized = migrateToolUseSettings(migrateAiProviders(result.settings));
+    normalized = normalizeHistorySettings(normalized);
     useSettingsStore.setState({ settings: normalized });
 
-    const shouldApplyGeneral = parsedSnapshot.format === 'legacy' || selectedSections.includes('general');
-    const shouldApplyFileAndEditor = parsedSnapshot.format === 'legacy' || selectedSections.includes('fileAndEditor');
-    const shouldApplyConnections = parsedSnapshot.format === 'legacy' || selectedSections.includes('connections');
+    const selectedSections = options?.selectedSections ?? [];
+    const shouldApplyGeneral = selectedSections.length === 0 || selectedSections.includes('general');
+    const shouldApplyFileAndEditor = selectedSections.length === 0 || selectedSections.includes('fileAndEditor');
+    const shouldApplyConnections = selectedSections.length === 0 || selectedSections.includes('connections');
 
     if (shouldApplyGeneral) {
       localStorage.setItem('app_lang', normalized.general.language);
@@ -2466,12 +2329,7 @@ function applyAppearanceToDOM(appearance: AppearanceSettings): void {
 // Initialization
 // ============================================================================
 
-/**
- * Initialize settings on app startup.
- * Call this once in main.tsx or App.tsx.
- */
-export function initializeSettings(): void {
-  const { settings } = useSettingsStore.getState();
+function applySettingsSideEffects(settings: PersistedSettingsV2): void {
 
   // Apply theme immediately
   const currentTheme = settings.terminal.theme;
@@ -2506,6 +2364,34 @@ export function initializeSettings(): void {
     renderer: settings.terminal.renderer,
     sidebarCollapsed: settings.sidebarUI.collapsed,
   });
+}
+
+/**
+ * Initialize settings on app startup.
+ * Rust owns persisted settings rules; this hydrates Zustand before React renders.
+ */
+export async function initializeSettings(): Promise<void> {
+  const legacySettingsJson = localStorage.getItem(STORAGE_KEY);
+  const result = await api.loadAppSettings<PersistedSettingsV2>(legacySettingsJson);
+  logSettingsWarnings('Migration warnings while loading settings', result.migrationWarnings);
+  logSettingsWarnings('Validation warnings while loading settings', result.validationWarnings);
+
+  let settings = result.settings;
+  settings = migrateAiProviders(settings);
+  settings = migrateToolUseSettings(settings);
+  settings = normalizeHistorySettings(settings);
+  useSettingsStore.setState({ settings });
+
+  if (result.migratedFromLegacyLocalStorage) {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+  LEGACY_KEYS.forEach(key => localStorage.removeItem(key));
+
+  localStorage.setItem('app_lang', settings.general.language);
+  const { changeLanguage } = await import('../i18n');
+  await changeLanguage(settings.general.language);
+
+  applySettingsSideEffects(settings);
 }
 
 // ============================================================================

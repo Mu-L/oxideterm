@@ -139,6 +139,7 @@ describe('main startup bootstrap', () => {
     portableApiMocks.getPortableInfo.mockReset();
     portableApiMocks.getLinuxWebviewProfile.mockReset();
     portableApiMocks.frontendReady.mockReset();
+    initializeSettingsMock.mockResolvedValue(undefined);
     portableApiMocks.getLinuxWebviewProfile.mockResolvedValue(null);
     portableApiMocks.frontendReady.mockResolvedValue(undefined);
     i18nState.ready = Promise.resolve();

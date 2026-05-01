@@ -11,7 +11,6 @@ import {
 } from './plugin/pluginSettingsManager';
 import {
   applyImportedSettingsSnapshot,
-  exportOxideAppSettingsSnapshot,
   type OxideAppSettingsSectionId,
 } from '../store/settingsStore';
 import {
@@ -19,6 +18,7 @@ import {
   exportQuickCommandsSnapshot,
   type QuickCommandImportStrategy,
 } from '../store/quickCommandsStore';
+import { api } from './api';
 
 type ExportOxideRequest = {
   connectionIds: string[];
@@ -73,16 +73,16 @@ type ImportFromOxideEnvelope = Omit<ImportResult, 'importedAppSettings' | 'impor
   pluginSettings?: PluginSettingSnapshotEntry[] | null;
 };
 
-function buildClientStatePayload(options?: {
+async function buildClientStatePayload(options?: {
   selectedAppSettingsSections?: OxideAppSettingsSectionId[];
   includeLocalTerminalEnvVars?: boolean;
-}): {
+}): Promise<{
   appSettingsJson: string | null;
   quickCommandsJson: string | null;
   pluginSettings: PluginSettingSnapshotEntry[];
-} {
+}> {
   return {
-    appSettingsJson: exportOxideAppSettingsSnapshot({
+    appSettingsJson: await api.exportAppSettingsSnapshot({
       selectedSections: options?.selectedAppSettingsSections,
       includeLocalTerminalEnvVars: options?.includeLocalTerminalEnvVars,
     }),
@@ -110,7 +110,7 @@ export async function exportOxideWithClientState(
   const includeQuickCommands = request.includeQuickCommands ?? true;
   const includePluginSettings = request.includePluginSettings ?? true;
   const clientState = (includeAppSettings || includeQuickCommands || includePluginSettings)
-    ? buildClientStatePayload({
+    ? await buildClientStatePayload({
         selectedAppSettingsSections: request.selectedAppSettingsSections,
         includeLocalTerminalEnvVars: request.includeLocalTerminalEnvVars,
       })

@@ -32,6 +32,11 @@ const apiMocks = vi.hoisted(() => ({
   getAiProviderApiKey: vi.fn().mockResolvedValue('secret-key'),
   sshGetPoolConfig: vi.fn().mockResolvedValue({ idleTimeoutSecs: 1800, maxConnections: 0, protectOnExit: true }),
   sshSetPoolConfig: vi.fn().mockResolvedValue(undefined),
+  loadAppSettings: vi.fn(),
+  saveAppSettings: vi.fn(),
+  resetAppSettings: vi.fn(),
+  exportAppSettingsSnapshot: vi.fn(),
+  applyAppSettingsSnapshot: vi.fn(),
 }));
 
 vi.mock('@/lib/themes', () => themeMocks);
@@ -88,7 +93,56 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 async function loadSettingsStore() {
   const mod = await import('@/store/settingsStore');
+  installSettingsApiMocks(mod);
+  await mod.initializeSettings();
   return mod.useSettingsStore;
+}
+
+type SettingsStoreModule = typeof import('@/store/settingsStore');
+
+function settingsLoadResult(settings: unknown, migratedFromLegacyLocalStorage = false) {
+  return {
+    settings,
+    version: 3,
+    updatedAt: Date.now(),
+    migrationWarnings: [],
+    validationWarnings: [],
+    migratedFromLegacyLocalStorage,
+    recoveredFromCorruptFile: false,
+  };
+}
+
+function settingsSaveResult(settings: unknown) {
+  return {
+    settings,
+    version: 3,
+    updatedAt: Date.now(),
+    validationWarnings: [],
+  };
+}
+
+function installSettingsApiMocks(mod: SettingsStoreModule) {
+  apiMocks.loadAppSettings.mockImplementation(async (legacySettingsJson?: string | null) => {
+    const raw = legacySettingsJson ? JSON.parse(legacySettingsJson) : {};
+    return settingsLoadResult(mod.mergeWithDefaults(raw), Boolean(legacySettingsJson));
+  });
+  apiMocks.saveAppSettings.mockImplementation(async (settings: unknown) => (
+    settingsSaveResult(mod.mergeWithDefaults(settings as Record<string, unknown>))
+  ));
+  apiMocks.resetAppSettings.mockImplementation(async () => (
+    settingsLoadResult(mod.mergeWithDefaults({}))
+  ));
+  apiMocks.exportAppSettingsSnapshot.mockImplementation(async () => (
+    mod.exportOxideAppSettingsSnapshot()
+  ));
+}
+
+async function expectLastSavedSettings() {
+  await waitFor(() => {
+    expect(apiMocks.saveAppSettings).toHaveBeenCalled();
+  });
+  const calls = apiMocks.saveAppSettings.mock.calls;
+  return calls[calls.length - 1]?.[0];
 }
 
 function buildSavedSettings(overrides: Record<string, unknown> = {}) {
@@ -154,7 +208,7 @@ describe('settingsStore', () => {
     expect(settings.ai.toolUse?.autoApproveTools.run_command).toBe(false);
     expect(settings.ai.toolUse?.maxRounds).toBe(10);
 
-    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    const persisted = await expectLastSavedSettings();
     expect(persisted.ai.providers.length).toBeGreaterThan(0);
     expect(persisted.ai.toolUse.autoApproveTools.list_targets).toBe(true);
     expect(persisted.ai.toolUse.autoApproveTools.run_command).toBe(false);
@@ -325,7 +379,8 @@ describe('settingsStore', () => {
     useSettingsStore.getState().updateExperimental('gpuCanvas', true);
 
     expect(useSettingsStore.getState().settings.experimental?.gpuCanvas).toBe(true);
-    expect(JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}').experimental.gpuCanvas).toBe(true);
+    const persisted = await expectLastSavedSettings();
+    expect(persisted.experimental.gpuCanvas).toBe(true);
   });
 
   it('migrates pre-layered scrollback into light xterm and backend hot buffer settings', async () => {
@@ -456,7 +511,7 @@ describe('settingsStore', () => {
       maxTotalBytes: 100 * 1024 * 1024 * 1024,
     });
 
-    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    const persisted = await expectLastSavedSettings();
     expect(persisted.terminal.inBandTransfer).toEqual({
       enabled: false,
       provider: 'trzsz',
@@ -515,7 +570,7 @@ describe('settingsStore', () => {
 
     expect(useSettingsStore.getState().settings.terminal.copyOnSelect).toBe(false);
     expect(useSettingsStore.getState().settings.terminal.middleClickPaste).toBe(false);
-    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    const persisted = await expectLastSavedSettings();
     expect(persisted.terminal.copyOnSelect).toBe(false);
     expect(persisted.terminal.middleClickPaste).toBe(false);
   });
@@ -532,7 +587,7 @@ describe('settingsStore', () => {
     useSettingsStore.getState().updateTerminal('selectionRequiresShift', false);
 
     expect(useSettingsStore.getState().settings.terminal.selectionRequiresShift).toBe(false);
-    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    const persisted = await expectLastSavedSettings();
     expect(persisted.terminal.selectionRequiresShift).toBe(false);
   });
 
@@ -626,7 +681,7 @@ describe('settingsStore', () => {
       },
     ]);
 
-    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    const persisted = await expectLastSavedSettings();
     const rules = persisted.terminal.highlightRules;
 
     expect(rules).toHaveLength(2);
@@ -696,10 +751,7 @@ describe('settingsStore', () => {
       connectionPool: { idleTimeoutSecs: 3600 },
     })));
 
-    const mod = await import('@/store/settingsStore');
-    const useSettingsStore = mod.useSettingsStore;
-
-    mod.initializeSettings();
+    const useSettingsStore = await loadSettingsStore();
 
     await waitFor(() => {
       expect(apiMocks.sshSetPoolConfig).toHaveBeenCalledWith({
@@ -719,7 +771,7 @@ describe('settingsStore', () => {
       });
     });
 
-    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    const persisted = await expectLastSavedSettings();
     expect(persisted.connectionPool.idleTimeoutSecs).toBe(900);
   });
 
@@ -748,7 +800,7 @@ describe('settingsStore', () => {
     useSettingsStore.getState().setUserContextWindow(providerId, 'model-a', null);
     expect(useSettingsStore.getState().settings.ai.userContextWindows?.[providerId]).toBeUndefined();
 
-    const persisted = JSON.parse(localStorage.getItem('oxide-settings-v2') || '{}');
+    const persisted = await expectLastSavedSettings();
     expect(persisted.ai.userContextWindows?.[providerId]).toBeUndefined();
   });
 
@@ -773,6 +825,7 @@ describe('settingsStore', () => {
 
   it('exports only selected .oxide app settings sections and excludes local env vars by default', async () => {
     const mod = await import('@/store/settingsStore');
+    installSettingsApiMocks(mod);
     const useSettingsStore = mod.useSettingsStore;
 
     useSettingsStore.setState((state) => ({
@@ -809,6 +862,7 @@ describe('settingsStore', () => {
 
   it('merges only selected sectioned .oxide app settings on import', async () => {
     const mod = await import('@/store/settingsStore');
+    installSettingsApiMocks(mod);
     const useSettingsStore = mod.useSettingsStore;
 
     useSettingsStore.setState((state) => ({
@@ -832,6 +886,22 @@ describe('settingsStore', () => {
         terminal: { theme: 'paper-oxide' },
         connectionPool: { idleTimeoutSecs: 900 },
       },
+    });
+    apiMocks.applyAppSettingsSnapshot.mockImplementationOnce(async () => {
+      const current = useSettingsStore.getState().settings;
+      return {
+        imported: true,
+        settings: mod.mergeWithDefaults({
+          ...current,
+          general: { ...current.general, language: 'ja', updateChannel: 'beta' },
+          connectionPool: { idleTimeoutSecs: 900 },
+        }),
+        version: 3,
+        updatedAt: Date.now(),
+        migrationWarnings: [],
+        validationWarnings: [],
+        errors: [],
+      };
     });
 
     const applied = await mod.applyImportedSettingsSnapshot(imported, {

@@ -7,6 +7,8 @@ export type {
   ToolResultError,
   ToolResultMeta,
   ToolOutputPreview,
+  ToolExecutionSummary,
+  ToolExecutionTarget,
   ToolRisk,
   ToolTarget,
   ToolTargetKind,
@@ -17,6 +19,11 @@ export {
   fromLegacyToolResult,
   toLegacyToolResult,
 } from './envelope';
+export {
+  createExecutionSummary,
+  normalizeExecutionTarget,
+  summarizeStderr,
+} from './executionSummary';
 export {
   inferToolRisk,
   isHighRiskToolRisk,

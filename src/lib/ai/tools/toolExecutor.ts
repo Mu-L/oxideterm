@@ -48,6 +48,7 @@ import {
   buildCapabilityStatuses,
   buildToolTargets,
   byteLengthOfText,
+  createExecutionSummary,
   createToolResultEnvelope,
   formatScreenSnapshot,
   hashTextContent,
@@ -929,6 +930,17 @@ async function execTerminalCommand(
     summary: success ? 'Remote command completed.' : `Remote command exited with ${result.exitCode}.`,
     output: text,
     data: { nodeId: resolved.nodeId, exitCode: result.exitCode },
+    execution: createExecutionSummary({
+      kind: 'command',
+      command,
+      cwd,
+      target: { id: `ssh-node:${resolved.nodeId}`, kind: 'ssh-node', label: resolved.nodeId },
+      exitCode: result.exitCode ?? null,
+      timedOut: false,
+      truncated,
+      stderr: result.stderr,
+      errorMessage: success ? undefined : `Exit code: ${result.exitCode}`,
+    }),
     capability: 'command.run',
     targetId: `ssh-node:${resolved.nodeId}`,
     truncated,
@@ -999,6 +1011,14 @@ async function execTerminalCommandToSession(
         summary: 'Command sent to terminal session.',
         output: `Command sent to terminal session ${sessionId}: ${command}`,
         data: { sessionId, command },
+        execution: createExecutionSummary({
+          kind: 'terminal',
+          command,
+          target: { id: `terminal-session:${sessionId}`, kind: 'terminal-session', label: `Terminal ${sessionId}` },
+          exitCode: null,
+          timedOut: false,
+          truncated: false,
+        }),
         capability: 'terminal.send',
         targetId: `terminal-session:${sessionId}`,
         durationMs: Date.now() - startTime,
@@ -1040,6 +1060,15 @@ async function execTerminalCommandToSession(
       summary: (renderedWaitResult?.success ?? waitResult.success) ? 'Terminal command output captured.' : 'Terminal command did not produce completed output.',
       output: renderedWaitResult?.output ?? waitResult.output,
       data: { sessionId, command },
+      execution: createExecutionSummary({
+        kind: 'terminal',
+        command,
+        target: { id: `terminal-session:${sessionId}`, kind: 'terminal-session', label: `Terminal ${sessionId}` },
+        exitCode: null,
+        timedOut: waitResult.reason === 'timeout',
+        truncated: renderedWaitResult?.truncated ?? waitResult.truncated ?? false,
+        errorMessage: renderedWaitResult?.error ?? waitResult.error,
+      }),
       capability: 'terminal.send',
       targetId: `terminal-session:${sessionId}`,
       ...(renderedWaitResult?.error ?? waitResult.error ? {
@@ -2040,15 +2069,34 @@ async function execAwaitTerminalOutput(
   }
 
   const waitResult = await waitForTerminalOutput(sessionId, timeoutSecs, stableSecs, patternRe, startTime, undefined, abortSignal);
-  return {
-    toolCallId,
+  return envelopeResult(toolCallId, {
+    ok: waitResult.success,
     toolName,
-    success: waitResult.success,
+    summary: waitResult.success ? 'Terminal output captured.' : 'Terminal output wait failed.',
     output: waitResult.output,
-    error: waitResult.error,
+    data: { sessionId, reason: waitResult.reason },
+    execution: createExecutionSummary({
+      kind: 'terminal',
+      target: { id: `terminal-session:${sessionId}`, kind: 'terminal-session', label: `Terminal ${sessionId}` },
+      exitCode: null,
+      timedOut: waitResult.reason === 'timeout',
+      truncated: waitResult.truncated ?? false,
+      errorMessage: waitResult.error,
+    }),
+    capability: 'terminal.wait',
+    targetId: `terminal-session:${sessionId}`,
     truncated: waitResult.truncated,
     durationMs: Date.now() - startTime,
-  };
+    targets: [{ id: `terminal-session:${sessionId}`, kind: 'terminal-session', label: `Terminal ${sessionId}`, metadata: { sessionId } }],
+    ...(waitResult.success ? {} : {
+      error: {
+        code: waitResult.reason === 'timeout' ? 'terminal_wait_timeout' : 'terminal_wait_failed',
+        message: waitResult.error ?? 'Terminal output wait failed.',
+        recoverable: true,
+      },
+      recoverable: true,
+    }),
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2162,6 +2210,7 @@ async function execBatchExec(
   }
 
   const results: string[] = [];
+  const executionItems: NonNullable<ReturnType<typeof createExecutionSummary>['items']> = [];
 
   try {
     for (let i = 0; i < commands.length; i++) {
@@ -2170,12 +2219,20 @@ async function execBatchExec(
       const cmd = typeof commands[i] === 'string' ? commands[i].trim() : '';
       if (!cmd) {
         results.push(`[${i + 1}] (empty command — skipped)`);
+        executionItems.push({ command: '', exitCode: null, timedOut: false, truncated: false });
         continue;
       }
 
       const notReadyError = await waitForInteractiveTerminalReady(sessionId, abortSignal);
       if (notReadyError) {
         results.push(`[${i + 1}] $ ${cmd}\n❌ ${notReadyError}`);
+        executionItems.push({
+          command: cmd,
+          exitCode: null,
+          timedOut: false,
+          truncated: false,
+          stderrSummary: createExecutionSummary({ errorMessage: notReadyError }).stderrSummary,
+        });
         break;
       }
 
@@ -2187,6 +2244,13 @@ async function execBatchExec(
         const sendResult = terminalSend({ sessionId, input: cmd, inputKind: 'command', appendEnter: true });
         if (!sendResult.ok) {
           results.push(`[${i + 1}] $ ${cmd}\n❌ ${sendResult.error || 'Terminal is not writable.'}`);
+          executionItems.push({
+            command: cmd,
+            exitCode: null,
+            timedOut: false,
+            truncated: false,
+            stderrSummary: createExecutionSummary({ errorMessage: sendResult.error || 'Terminal is not writable.' }).stderrSummary,
+          });
           break;
         }
 
@@ -2203,11 +2267,24 @@ async function execBatchExec(
 
         if (!waitResult.success) {
           results.push(`[${i + 1}] $ ${cmd}\n❌ ${waitResult.error || 'Failed to read output.'}`);
+          executionItems.push({
+            command: cmd,
+            exitCode: null,
+            timedOut: waitResult.reason === 'timeout',
+            truncated: waitResult.truncated ?? false,
+            stderrSummary: createExecutionSummary({ errorMessage: waitResult.error || 'Failed to read output.' }).stderrSummary,
+          });
           if (waitResult.error === 'Generation was stopped.') {
             break;
           }
         } else {
           results.push(`[${i + 1}] $ ${cmd}\n${waitResult.output}`);
+          executionItems.push({
+            command: cmd,
+            exitCode: null,
+            timedOut: waitResult.reason === 'timeout',
+            truncated: waitResult.truncated ?? false,
+          });
         }
       } finally {
         outputSubscription.unsubscribe();
@@ -2222,15 +2299,30 @@ async function execBatchExec(
   const combinedOutput = results.join('\n\n');
   const { text, truncated } = truncateOutput(combinedOutput);
 
-  return {
-    toolCallId,
+  return envelopeResult(toolCallId, {
+    ok: !abortSignal?.aborted,
     toolName,
-    success: !abortSignal?.aborted,
+    summary: abortSignal?.aborted ? 'Batch execution stopped.' : 'Batch execution completed.',
     output: text,
-    error: abortSignal?.aborted ? 'Generation was stopped.' : undefined,
+    data: { sessionId, commandCount: commands.length },
+    execution: createExecutionSummary({
+      kind: 'batch',
+      target: { id: `terminal-session:${sessionId}`, kind: 'terminal-session', label: `Terminal ${sessionId}` },
+      timedOut: executionItems.some((item) => item.timedOut === true),
+      truncated,
+      items: executionItems,
+      errorMessage: abortSignal?.aborted ? 'Generation was stopped.' : undefined,
+    }),
+    capability: 'terminal.send',
+    targetId: `terminal-session:${sessionId}`,
     truncated,
     durationMs: Date.now() - startTime,
-  };
+    targets: [{ id: `terminal-session:${sessionId}`, kind: 'terminal-session', label: `Terminal ${sessionId}`, metadata: { sessionId } }],
+    ...(abortSignal?.aborted ? {
+      error: { code: 'batch_exec_aborted', message: 'Generation was stopped.', recoverable: true },
+      recoverable: true,
+    } : {}),
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3550,7 +3642,30 @@ async function execLocalExec(
     );
 
     if (result.timedOut) {
-      return { toolCallId, toolName: 'local_exec', success: false, output: result.stderr, error: 'Command timed out', durationMs: Date.now() - startTime };
+      return envelopeResult(toolCallId, {
+        ok: false,
+        toolName: 'local_exec',
+        summary: 'Local command timed out.',
+        output: result.stderr || 'Command timed out',
+        data: { exitCode: result.exitCode ?? null, timedOut: true },
+        execution: createExecutionSummary({
+          kind: 'command',
+          command,
+          cwd: args.cwd as string | undefined,
+          target: { id: 'local-shell:default', kind: 'local-shell', label: 'Local shell' },
+          exitCode: result.exitCode ?? null,
+          timedOut: true,
+          truncated: false,
+          stderr: result.stderr,
+          errorMessage: 'Command timed out',
+        }),
+        capability: 'command.run',
+        targetId: 'local-shell:default',
+        durationMs: Date.now() - startTime,
+        targets: [{ id: 'local-shell:default', kind: 'local-shell', label: 'Local shell' }],
+        error: { code: 'local_command_timeout', message: 'Command timed out', recoverable: true },
+        recoverable: true,
+      });
     }
 
     const parts: string[] = [];
@@ -3564,6 +3679,17 @@ async function execLocalExec(
       summary: result.exitCode === 0 ? 'Local command completed.' : `Local command exited with ${result.exitCode ?? 'unknown'}.`,
       output: parts.join('\n'),
       data: { exitCode: result.exitCode ?? null },
+      execution: createExecutionSummary({
+        kind: 'command',
+        command,
+        cwd: args.cwd as string | undefined,
+        target: { id: 'local-shell:default', kind: 'local-shell', label: 'Local shell' },
+        exitCode: result.exitCode ?? null,
+        timedOut: false,
+        truncated: false,
+        stderr: result.stderr,
+        errorMessage: result.exitCode === 0 ? undefined : `Exit code: ${result.exitCode ?? 'unknown'}`,
+      }),
       capability: 'command.run',
       targetId: 'local-shell:default',
       durationMs: Date.now() - startTime,

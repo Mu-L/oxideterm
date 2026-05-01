@@ -93,6 +93,30 @@ export type ToolNextAction = {
   priority: 'recommended' | 'optional' | 'fallback';
 };
 
+export type ToolExecutionTarget = {
+  id: string;
+  kind?: string;
+  label?: string;
+};
+
+export type ToolExecutionSummary = {
+  kind?: 'command' | 'terminal' | 'batch';
+  command?: string;
+  cwd?: string;
+  target?: ToolExecutionTarget;
+  exitCode?: number | null;
+  timedOut?: boolean;
+  truncated?: boolean;
+  stderrSummary?: string;
+  items?: Array<{
+    command?: string;
+    exitCode?: number | null;
+    timedOut?: boolean;
+    truncated?: boolean;
+    stderrSummary?: string;
+  }>;
+};
+
 export type ToolResultDisambiguation = {
   prompt: string;
   options: Array<{
@@ -111,6 +135,7 @@ export interface ToolResultEnvelope<TData = unknown> {
   /** UI-only full output when it is small enough to persist. Never send this to the model. */
   rawOutput?: string;
   outputPreview?: ToolOutputPreview;
+  execution?: ToolExecutionSummary;
   warnings?: string[];
   error?: ToolResultError;
   observations?: string[];

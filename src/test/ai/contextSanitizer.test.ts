@@ -4,6 +4,8 @@
 import { describe, it, expect } from 'vitest';
 import { sanitizeForAi, sanitizeConnectionInfo, sanitizeApiMessages } from '@/lib/ai/contextSanitizer';
 
+const fakeSecret = (...parts: string[]) => parts.join('');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // sanitizeForAi — should redact secrets
 // ═══════════════════════════════════════════════════════════════════════════
@@ -181,10 +183,10 @@ serde = { version = "1", features = ["derive"] }`;
     });
 
     it('redacts export API_TOKEN=...', () => {
-      const input = 'export API_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+      const input = 'export API_TOKEN=' + fakeSecret('gh', 'p_', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
-      expect(result).not.toContain('ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
+      expect(result).not.toContain(fakeSecret('gh', 'p_', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'));
     });
 
     it('redacts AWS_SECRET_ACCESS_KEY=value', () => {
@@ -257,16 +259,16 @@ b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAA
       const input = `export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
 export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 export DB_PASSWORD=hunter2hunter2h
-Authorization: Bearer sk-1234567890abcdefghij`;
+Authorization: Bearer ${fakeSecret('sk', '-1234567890abcdefghij')}`;
       const result = sanitizeForAi(input);
       expect(result).not.toContain('AKIAIOSFODNN7EXAMPLE');
       expect(result).not.toContain('wJalrXUtnFEMI');
       expect(result).not.toContain('hunter2hunter2h');
-      expect(result).not.toContain('sk-1234567890');
+      expect(result).not.toContain(fakeSecret('sk', '-1234567890'));
     });
 
     it('redacts secrets inside JSON', () => {
-      const input = '{"api_key": "sk_live_' + 'abcdefghijklmnopqrstuvwxyz1234567890"}';
+      const input = '{"api_key": "' + fakeSecret('sk', '_live_', 'abcdefghijklmnopqrstuvwxyz1234567890') + '"}';
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
       // The value should be redacted since it matches KEY= pattern
@@ -366,45 +368,45 @@ REDIS_AUTH_TOKEN=redis_token_value_12345`;
 
   describe('vendor-specific tokens', () => {
     it('redacts GitHub fine-grained PAT (github_pat_...)', () => {
-      const input = 'token: github_pat_11ABCDEF0123456789_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789abcdefghijklmnop';
+      const input = 'token: ' + fakeSecret('github', '_pat_', '11ABCDEF0123456789_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789abcdefghijklmnop');
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
-      expect(result).not.toContain('github_pat_11ABCDEF');
+      expect(result).not.toContain(fakeSecret('github', '_pat_', '11ABCDEF'));
     });
 
     it('redacts GitHub classic PAT (ghp_...)', () => {
-      const input = 'GITHUB_TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh';
+      const input = 'GITHUB_TOKEN=' + fakeSecret('gh', 'p_', 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh');
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
-      expect(result).not.toContain('ghp_ABCDEFG');
+      expect(result).not.toContain(fakeSecret('gh', 'p_', 'ABCDEFG'));
     });
 
     it('redacts OpenAI API key (sk-proj-...)', () => {
-      const input = 'OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456';
+      const input = fakeSecret('OPENAI', '_API', '_KEY') + '=' + fakeSecret('sk', '-proj-', 'abcdefghijklmnopqrstuvwxyz123456');
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
-      expect(result).not.toContain('sk-proj-');
+      expect(result).not.toContain(fakeSecret('sk', '-proj-'));
     });
 
     it('redacts Stripe secret key (sk_live_...)', () => {
-      const input = 'STRIPE_SECRET_KEY=' + 'sk_live_' + '51HG7dKJf8sE3RmZabc123def456ghi';
+      const input = 'STRIPE_SECRET_KEY=' + fakeSecret('sk', '_live_', '51HG7dKJf8sE3RmZabc123def456ghi');
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
-      expect(result).not.toContain('sk_live_' + '51HG7d');
+      expect(result).not.toContain(fakeSecret('sk', '_live_', '51HG7d'));
     });
 
     it('redacts Stripe test key (sk_test_...)', () => {
-      const input = 'stripe_key=' + 'sk_test_' + '4eC39HqLyjWDarjtT1zdp7dc';
+      const input = 'stripe_key=' + fakeSecret('sk', '_test_', '4eC39HqLyjWDarjtT1zdp7dc');
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
-      expect(result).not.toContain('sk_test_' + '4eC39');
+      expect(result).not.toContain(fakeSecret('sk', '_test_', '4eC39'));
     });
 
     it('redacts standalone vendor tokens without KEY= prefix', () => {
-      const input = 'Using token github_pat_11ABCDEF0123456789_aBcDeFgHiJkLmNoPqRsTuVwXyZabcdef1234567890abcdefghijk';
+      const input = 'Using token ' + fakeSecret('github', '_pat_', '11ABCDEF0123456789_aBcDeFgHiJkLmNoPqRsTuVwXyZabcdef1234567890abcdefghijk');
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
-      expect(result).not.toContain('github_pat_11ABCDEF');
+      expect(result).not.toContain(fakeSecret('github', '_pat_', '11ABCDEF'));
     });
   });
 
@@ -412,10 +414,10 @@ REDIS_AUTH_TOKEN=redis_token_value_12345`;
 
   describe('JSON escaping', () => {
     it('redacts JSON without spaces: {"api_key":"value"}', () => {
-      const input = '{"api_key":"sk-1234567890abcdef"}';
+      const input = '{"api_key":"' + fakeSecret('sk', '-1234567890abcdef') + '"}';
       const result = sanitizeForAi(input);
       expect(result).toContain('[REDACTED]');
-      expect(result).not.toContain('sk-1234567890');
+      expect(result).not.toContain(fakeSecret('sk', '-1234567890'));
     });
 
     it('redacts JSON with single-quoted values (non-standard)', () => {
@@ -459,7 +461,7 @@ NODE_ENV=production`;
     it('handles terminal output with prompt + commands + secrets', () => {
       const input = `user@server:~$ echo $HOME
 /home/user
-user@server:~$ export API_KEY=${'sk_live_' + 'abcdefghijklmnopqrstuvwx'}
+user@server:~$ export API_KEY=${fakeSecret('sk', '_live_', 'abcdefghijklmnopqrstuvwx')}
 user@server:~$ curl -H "Authorization: Bearer eyJtoken123456789012345678901234567" https://api.example.com
 {"status": "ok"}`;
       const result = sanitizeForAi(input);
@@ -468,7 +470,7 @@ user@server:~$ curl -H "Authorization: Bearer eyJtoken12345678901234567890123456
       expect(result).toContain('https://api.example.com');
       expect(result).toContain('{"status": "ok"}');
       // Secrets should be gone
-      expect(result).not.toContain('sk_live_' + 'abcdefghijklmnop');
+      expect(result).not.toContain(fakeSecret('sk', '_live_', 'abcdefghijklmnop'));
     });
 
     it('preserves cargo build output', () => {

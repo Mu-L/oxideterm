@@ -19,6 +19,7 @@ import { isOrchestratorToolName, ORCHESTRATOR_TOOL_DEFS } from './definitions';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { commandRecordFromToolResult } from './ledger';
 import { recordCliAgentCommand } from './cliAgents';
+import { createExecutionSummary } from '../tools/protocol';
 
 function stringArg(args: Record<string, unknown>, key: string): string | undefined {
   const value = args[key];
@@ -281,8 +282,24 @@ export async function executeOrchestratorTool(
       status: record.status === 'waiting_for_input' ? 'waiting_for_input' : record.status === 'error' ? 'failed' : 'running',
     });
   }
+  const execution = toolName === 'run_command'
+    ? createExecutionSummary({
+        kind: result.target?.kind === 'terminal-session' ? 'terminal' : 'command',
+        command: stringArg(args, 'command'),
+        cwd: stringArg(args, 'cwd'),
+        target: result.target ? { id: result.target.id, kind: result.target.kind, label: result.target.label } : undefined,
+        exitCode: exitCode ?? null,
+        timedOut: result.data && typeof result.data === 'object' && 'timedOut' in result.data
+          ? Boolean((result.data as { timedOut?: boolean }).timedOut)
+          : undefined,
+        truncated: previewProbe.truncated,
+        errorMessage: result.error?.message,
+      })
+    : undefined;
+
   return actionResultToToolResult(toolCallId, toolName, result, performance.now() - startedAt, {
     commandRecordId: record?.commandId,
+    execution,
     policyDecision: context.policyDecision ? {
       decision: context.policyDecision.decision,
       risk: context.policyDecision.risk,

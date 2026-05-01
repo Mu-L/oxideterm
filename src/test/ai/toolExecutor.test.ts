@@ -236,6 +236,7 @@ vi.mock('@/lib/ai/tools/outputCompressor', () => ({
 
 vi.mock('@/lib/ai/contextSanitizer', () => ({
   sanitizeConnectionInfo: (value: unknown) => value,
+  sanitizeForAi: (value: string) => value.replace(/API_TOKEN=\S+/g, 'API_TOKEN=[REDACTED]'),
 }));
 
 vi.mock('@/lib/ai/mcp', () => ({
@@ -409,6 +410,33 @@ describe('toolExecutor get_settings sanitization', () => {
     );
 
     expect(localExecCommandMock).toHaveBeenCalledWith('sudo reboot', undefined, 5, false);
+  });
+
+  it('adds execution diagnostics to local_exec failures', async () => {
+    localExecCommandMock.mockResolvedValue({
+      stdout: '',
+      stderr: 'API_TOKEN=super-secret-token-value\nfile missing\nsecond detail\nthird detail\nfourth detail',
+      exitCode: 2,
+      timedOut: false,
+    });
+
+    const result = await executeTool(
+      'local_exec',
+      { command: 'grep needle missing.txt', cwd: '/tmp/project' },
+      { activeNodeId: null, activeAgentAvailable: false },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.envelope?.execution).toMatchObject({
+      kind: 'command',
+      command: 'grep needle missing.txt',
+      cwd: '/tmp/project',
+      target: { id: 'local-shell:default' },
+      exitCode: 2,
+      timedOut: false,
+    });
+    expect(result.envelope?.execution?.stderrSummary).toContain('[REDACTED]');
+    expect(result.envelope?.execution?.stderrSummary).not.toContain('fourth detail');
   });
 
   it('reads terminal buffer through paged backend APIs instead of full-buffer fetch', async () => {
@@ -1346,6 +1374,13 @@ describe('toolExecutor regressions', () => {
     expect(result).toMatchObject({
       success: false,
       error: 'Generation was stopped.',
+    });
+    expect(result.envelope?.execution).toMatchObject({
+      kind: 'batch',
+      target: { id: 'terminal-session:session-1' },
+      items: [
+        expect.objectContaining({ command: 'first', exitCode: null }),
+      ],
     });
   });
 

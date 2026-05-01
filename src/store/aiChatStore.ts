@@ -1286,14 +1286,10 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
       systemPrompt += SUGGESTIONS_INSTRUCTION;
     }
 
-    const toolUseNegativeConstraint = getToolUseNegativeConstraint(toolUseEnabled);
-    if (toolUseNegativeConstraint) {
-      systemPrompt += `\n\n## Tool Use Policy\n${toolUseNegativeConstraint}`;
-    }
-
-    if (toolUseEnabled) {
-      systemPrompt += `\n\n${buildOrchestratorSystemPrompt()}`;
-    }
+    systemPrompt += `\n\n${buildOrchestratorSystemPrompt({
+      toolUseEnabled,
+      toolUseNegativeConstraint: getToolUseNegativeConstraint(toolUseEnabled),
+    })}`;
 
     apiMessages.push({
       role: 'system',

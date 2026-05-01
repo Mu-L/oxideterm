@@ -13,6 +13,8 @@ import {
   TerminalAutosuggestInputTracker,
 } from '@/lib/terminal/autosuggest';
 
+const fakeSecret = (...parts: string[]) => parts.join('');
+
 describe('terminal autosuggest', () => {
   beforeEach(() => {
     clearTerminalAutosuggestHistory();
@@ -69,7 +71,7 @@ describe('terminal autosuggest', () => {
 
   it('filters likely secret commands from suggestions', () => {
     recordTerminalAutosuggestCommand('curl -H "Authorization: Bearer abc" https://example.com');
-    recordTerminalAutosuggestCommand('export OPENAI_API_KEY=sk-test');
+    recordTerminalAutosuggestCommand('export ' + fakeSecret('OPENAI', '_API', '_KEY') + '=' + fakeSecret('sk', '-test'));
     recordTerminalAutosuggestCommand('ls -la');
 
     expect(isLikelySecretCommand('cmd --password hunter2')).toBe(true);

@@ -937,12 +937,14 @@ describe('aiChatStore workflows', () => {
 
     const providerMessages = providerStreamMock.mock.calls[0]?.[1];
     expect(providerMessages?.[0]?.role).toBe('system');
-    expect(providerMessages?.[0]?.content).toContain('## OxideSens Tool System');
+    expect(providerMessages?.[0]?.content).toContain('## OxideSens Runtime Rules');
     expect(providerMessages?.[0]?.content).toContain('call `select_target` first');
     expect(providerMessages?.[0]?.content).toContain('`connect_target` first, then `run_command`');
     expect(providerMessages?.[0]?.content).toContain('Never open a local terminal and type `ssh user@host`');
-    expect(providerMessages?.[0]?.content).toContain('Do not guess passwords, passphrases, sudo prompts, or repeat the command');
+    expect(providerMessages?.[0]?.content).toContain('Do not guess passwords, passphrases, sudo prompts, host key answers, or interactive confirmation input');
     expect(providerMessages?.[0]?.content).toContain('Every action that runs, writes, transfers, or sends input must use an explicit target_id');
+    expect(providerMessages?.[0]?.content).toContain('git --no-pager log');
+    expect(providerMessages?.[0]?.content).toContain('Never echo, display, or log secrets');
   });
 
   it('marks required tool requests with toolChoice and retries once when no tool call is made', async () => {

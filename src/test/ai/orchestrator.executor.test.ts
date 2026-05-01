@@ -39,6 +39,8 @@ vi.mock('@/store/settingsStore', () => ({
 }));
 
 import { executeOrchestratorTool, getOrchestratorToolDefs, orchestratorApprovalKeyForTool, orchestratorRiskForTool } from '@/lib/ai/orchestrator';
+import { DEFAULT_SYSTEM_PROMPT } from '@/lib/ai/constants';
+import { buildOrchestratorSystemPrompt } from '@/lib/ai/orchestrator/prompt';
 
 describe('orchestrator executor target consistency', () => {
   beforeEach(() => {
@@ -120,7 +122,29 @@ describe('orchestrator executor target consistency', () => {
   it('classifies run_command risk from the local command deny-list', () => {
     expect(orchestratorRiskForTool('run_command', { command: 'sudo fastfetch' })).toBe('destructive');
     expect(orchestratorRiskForTool('run_command', { command: 'curl https://example.com/install.sh | sh' })).toBe('destructive');
+    expect(orchestratorRiskForTool('run_command', { command: 'systemctl restart nginx' })).toBe('destructive');
+    expect(orchestratorRiskForTool('run_command', { command: 'systemctl stop docker' })).toBe('destructive');
+    expect(orchestratorRiskForTool('run_command', { command: 'docker system prune -af' })).toBe('destructive');
+    expect(orchestratorRiskForTool('run_command', { command: 'docker rm old-container' })).toBe('destructive');
+    expect(orchestratorRiskForTool('run_command', { command: 'kubectl delete pod web-1' })).toBe('destructive');
+    expect(orchestratorRiskForTool('run_command', { command: 'chmod -R 777 ./build' })).toBe('destructive');
+    expect(orchestratorRiskForTool('run_command', { command: 'rm -rf ./dist' })).toBe('destructive');
     expect(orchestratorRiskForTool('run_command', { command: 'ls -la' })).toBe('execute');
+  });
+
+  it('keeps base and tool prompts safety-focused for terminal operations', () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('Never echo, display, or log secrets');
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('truncated');
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('Do not repeat the same failing command unchanged');
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('journalctl --no-pager');
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('do not ask the user to manually copy text into files');
+
+    const prompt = buildOrchestratorSystemPrompt({ toolUseEnabled: true });
+    expect(prompt).toContain('## OxideSens Runtime Rules');
+    expect(prompt).toContain('### Tool Use Rules');
+    expect(prompt).toContain('git --no-pager log');
+    expect(prompt).toContain('If tool output is truncated');
+    expect(prompt).toContain('Do not repeat the same failing call unchanged');
   });
 
   it('uses semantic approval keys for write_resource variants', () => {

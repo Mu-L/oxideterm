@@ -155,6 +155,119 @@ describe('tool protocol v2 adapters', () => {
     });
   });
 
+  it('lifts command execution diagnostics into model-visible tool results', () => {
+    const result = toLegacyToolResult(createToolResultEnvelope({
+      ok: false,
+      toolName: 'local_exec',
+      summary: 'Local command exited with 2.',
+      output: 'stderr preview',
+      execution: {
+        kind: 'command',
+        command: 'grep needle missing.txt',
+        cwd: '/work',
+        target: { id: 'local-shell:default', kind: 'local-shell', label: 'Local shell' },
+        exitCode: 2,
+        timedOut: false,
+        truncated: false,
+        stderrSummary: 'grep: missing.txt: No such file or directory',
+      },
+      error: {
+        code: 'local_command_failed',
+        message: 'Exit code: 2',
+        recoverable: true,
+      },
+      nextActions: [
+        { tool: 'local_exec', args: { command: 'ls -la missing.txt' }, reason: 'Check whether the path exists.', priority: 'recommended' },
+      ],
+    }), 'call-exec-diagnostics');
+
+    const payload = JSON.parse(formatToolResultForModel(result));
+
+    expect(payload).toMatchObject({
+      ok: false,
+      target: { id: 'local-shell:default' },
+      cwd: '/work',
+      exitCode: 2,
+      timedOut: false,
+      truncated: false,
+      stderrSummary: 'grep: missing.txt: No such file or directory',
+      nextActions: [
+        expect.objectContaining({ tool: 'local_exec' }),
+      ],
+      execution: expect.objectContaining({
+        command: 'grep needle missing.txt',
+        exitCode: 2,
+      }),
+    });
+  });
+
+  it('keeps outputPreview when truncated and exposes timeout state', () => {
+    const result = toLegacyToolResult(createToolResultEnvelope({
+      ok: false,
+      toolName: 'terminal_exec',
+      summary: 'Terminal command did not produce completed output.',
+      output: 'partial output',
+      outputPreview: {
+        strategy: 'head_tail',
+        charCount: 50000,
+        lineCount: 900,
+        omittedChars: 49000,
+      },
+      execution: {
+        kind: 'terminal',
+        command: 'journalctl -u nginx',
+        target: { id: 'terminal-session:s1', kind: 'terminal-session', label: 'Terminal s1' },
+        exitCode: null,
+        timedOut: true,
+        truncated: true,
+      },
+      truncated: true,
+      error: {
+        code: 'terminal_wait_timeout',
+        message: 'Timed out waiting for output.',
+        recoverable: true,
+      },
+    }), 'call-timeout');
+
+    const payload = JSON.parse(formatToolResultForModel(result));
+
+    expect(payload).toMatchObject({
+      ok: false,
+      exitCode: null,
+      timedOut: true,
+      truncated: true,
+      outputPreview: {
+        strategy: 'head_tail',
+        lineCount: 900,
+      },
+    });
+  });
+
+  it('redacts secret-like stderr summaries before model output', () => {
+    const result = toLegacyToolResult(createToolResultEnvelope({
+      ok: false,
+      toolName: 'local_exec',
+      summary: 'Local command failed.',
+      output: 'failed',
+      execution: {
+        kind: 'command',
+        command: 'deploy',
+        exitCode: 1,
+        stderrSummary: 'API_TOKEN=super-secret-token-value',
+      },
+      error: {
+        code: 'local_command_failed',
+        message: 'Exit code: 1',
+        recoverable: true,
+      },
+    }), 'call-secret-stderr');
+
+    const payload = JSON.parse(formatToolResultForModel(result));
+
+    expect(payload.stderrSummary).toContain('[REDACTED]');
+    expect(JSON.stringify(payload)).not.toContain('super-secret-token-value');
+  });
+
   it('uses a tighter model-output cap for failed tool results', () => {
     const longOutput = 'x'.repeat(6000);
     const result = toLegacyToolResult(createToolResultEnvelope({

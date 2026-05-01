@@ -9,6 +9,8 @@ import {
   compressOutput,
 } from '@/lib/ai/tools/outputCompressor';
 
+const fakeSecret = (...parts: string[]) => parts.join('');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // stripAnsi
 // ═══════════════════════════════════════════════════════════════════════════
@@ -171,10 +173,10 @@ describe('compressOutput', () => {
   });
 
   it('redacts secrets via sanitizeForAi', () => {
-    const input = 'export API_KEY=sk-1234567890abcdef1234567890abcdef';
+    const input = 'export API_KEY=' + fakeSecret('sk', '-1234567890abcdef1234567890abcdef');
     const result = compressOutput(input);
     expect(result).toContain('[REDACTED]');
-    expect(result).not.toContain('sk-1234567890abcdef');
+    expect(result).not.toContain(fakeSecret('sk', '-1234567890abcdef'));
   });
 
   it('preserves normal output', () => {

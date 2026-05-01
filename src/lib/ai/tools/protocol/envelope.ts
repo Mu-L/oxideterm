@@ -3,6 +3,7 @@
 
 import type { AiToolResult } from '../../../../types';
 import type { ToolCapability, ToolResultEnvelope } from './types';
+import { createExecutionSummary } from './executionSummary';
 
 const DEFAULT_DURATION_MS = 0;
 const MODEL_OUTPUT_MAX_CHARS = 12000;
@@ -32,6 +33,7 @@ export function createToolResultEnvelope<TData = unknown>(input: {
   output?: string;
   rawOutput?: string;
   outputPreview?: ToolResultEnvelope['outputPreview'];
+  execution?: ToolResultEnvelope['execution'];
   data?: TData;
   warnings?: string[];
   error?: ToolResultEnvelope['error'];
@@ -59,6 +61,7 @@ export function createToolResultEnvelope<TData = unknown>(input: {
     output: input.output ?? input.summary,
     ...(input.rawOutput !== undefined ? { rawOutput: input.rawOutput } : {}),
     ...(input.outputPreview ? { outputPreview: input.outputPreview } : {}),
+    ...(input.execution ? { execution: createExecutionSummary(input.execution) } : {}),
     ...(input.warnings && input.warnings.length > 0 ? { warnings: input.warnings } : {}),
     ...(input.error ? { error: input.error } : {}),
     ...(input.observations && input.observations.length > 0 ? { observations: input.observations } : {}),
@@ -72,7 +75,11 @@ export function createToolResultEnvelope<TData = unknown>(input: {
       ...(input.capability ? { capability: input.capability } : {}),
       ...(input.targetId ? { targetId: input.targetId } : {}),
       durationMs: input.durationMs ?? DEFAULT_DURATION_MS,
-      ...(input.truncated !== undefined ? { truncated: input.truncated } : {}),
+      ...(input.truncated !== undefined
+        ? { truncated: input.truncated }
+        : input.execution?.truncated !== undefined
+          ? { truncated: input.execution.truncated }
+          : {}),
       ...(input.verified !== undefined ? { verified: input.verified } : {}),
       ...(input.runtimeEpoch ? { runtimeEpoch: input.runtimeEpoch } : {}),
       ...(input.stateVersion ? { stateVersion: input.stateVersion } : {}),
@@ -149,6 +156,17 @@ export function formatToolResultForModel(result: AiToolResult): string {
     ok: envelope.ok,
     summary: summary.value,
     output: output.value,
+    truncated: envelope.meta.truncated === true
+      || envelope.execution?.truncated === true
+      || summary.truncated
+      || output.truncated
+      || errorMessage?.truncated === true,
+    ...(envelope.execution?.target ? { target: envelope.execution.target } : {}),
+    ...(envelope.execution?.cwd ? { cwd: envelope.execution.cwd } : {}),
+    ...(envelope.execution && Object.prototype.hasOwnProperty.call(envelope.execution, 'exitCode') ? { exitCode: envelope.execution.exitCode ?? null } : {}),
+    ...(envelope.execution?.timedOut !== undefined ? { timedOut: envelope.execution.timedOut } : {}),
+    ...(envelope.execution?.stderrSummary ? { stderrSummary: envelope.execution.stderrSummary } : {}),
+    ...(envelope.execution ? { execution: envelope.execution } : {}),
     ...(envelope.error ? { error: { ...envelope.error, message: errorMessage?.value ?? envelope.error.message } } : {}),
     ...(envelope.recoverable !== undefined ? { recoverable: envelope.recoverable } : {}),
     ...(envelope.waitingForInput !== undefined ? { waitingForInput: envelope.waitingForInput } : {}),
@@ -161,6 +179,7 @@ export function formatToolResultForModel(result: AiToolResult): string {
     meta: {
       ...envelope.meta,
       truncated: envelope.meta.truncated === true
+        || envelope.execution?.truncated === true
         || summary.truncated
         || output.truncated
         || errorMessage?.truncated === true,

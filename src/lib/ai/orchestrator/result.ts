@@ -3,7 +3,7 @@
 
 import type { AiToolResult } from '../../../types';
 import type { ToolCapability, ToolResultEnvelope } from '../tools/protocol';
-import { createToolResultEnvelope } from '../tools/protocol';
+import { createExecutionSummary, createToolResultEnvelope } from '../tools/protocol';
 import type { AiActionResult, AiActionRisk, AiTarget } from './types';
 import { getAiRuntimeEpoch } from './runtimeEpoch';
 
@@ -96,12 +96,30 @@ export function actionResultToToolResult(
     commandRecordId?: string;
     policyDecision?: ToolResultEnvelope['meta']['policyDecision'];
     profileId?: string;
+    execution?: ToolResultEnvelope['execution'];
   },
 ): AiToolResult {
   const rawOutput = result.output ?? result.summary;
   const preparedOutput = prepareToolOutput(rawOutput);
   const runtimeEpoch = result.runtimeEpoch ?? getAiRuntimeEpoch();
   const verified = result.verified ?? (result.ok && !result.error);
+  const resultData = result.data && typeof result.data === 'object'
+    ? result.data as { exitCode?: number | null; timedOut?: boolean }
+    : {};
+  const execution = meta?.execution
+    ? createExecutionSummary({
+        ...meta.execution,
+        target: meta.execution.target ?? (result.target ? { id: result.target.id, kind: result.target.kind, label: result.target.label } : undefined),
+        exitCode: Object.prototype.hasOwnProperty.call(meta.execution, 'exitCode')
+          ? meta.execution.exitCode
+          : Object.prototype.hasOwnProperty.call(resultData, 'exitCode')
+            ? resultData.exitCode ?? null
+            : undefined,
+        timedOut: meta.execution.timedOut ?? resultData.timedOut,
+        truncated: meta.execution.truncated ?? preparedOutput.truncated,
+        errorMessage: result.error?.message,
+      })
+    : undefined;
   const targets = [
     ...(result.target ? [result.target] : []),
     ...(result.targets ?? []),
@@ -113,6 +131,7 @@ export function actionResultToToolResult(
     output: preparedOutput.output,
     rawOutput: preparedOutput.rawOutput,
     outputPreview: preparedOutput.outputPreview,
+    execution,
     data: result.data,
     warnings: [
       ...(result.output && preparedOutput.truncated && !preparedOutput.rawOutput

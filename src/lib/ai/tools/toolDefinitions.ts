@@ -1991,11 +1991,15 @@ export const COMMAND_DENY_LIST: RegExp[] = [
   // ── Destructive filesystem ──
   /\brm\s+.*\s+\/(\s|$|\*)/,            // rm ... / or rm ... /*
   /\brm\s+(-[a-zA-Z]*)*\s*--no-preserve-root/, // rm --no-preserve-root
+  /\brm\s+-[^\n]*[rf][^\n]*\s+/,        // rm -rf / rm -fr against any path
   /\bmkfs\b/,                           // mkfs (format disk)
   /\bdd\s+if=/,                         // dd if= (raw disk write)
   /\bfdisk\b/,                          // fdisk (partition table)
   /\bchmod\s+777\s+\//,                 // chmod 777 /
+  /\bchmod\s+-[^\n]*R[^\n]*\s+/,        // chmod -R (recursive permission rewrite)
   /\bchown\s+-R\s+.*\s+\//,            // chown -R ... /
+  /\bchown\s+-[^\n]*R[^\n]*\s+/,        // chown -R against any path
+  /\bgit\s+clean\s+-[^\n]*[fd][^\n]*[dx]?[^\n]*/, // git clean -fd/-fdx deletes untracked files
 
   // ── Privilege escalation ──
   /\bsudo\b/,                           // sudo
@@ -2013,6 +2017,17 @@ export const COMMAND_DENY_LIST: RegExp[] = [
   /\bhalt\b/,                           // halt
   /\bpoweroff\b/,                       // poweroff
   /\bsystemctl\s+(disable|mask)\b/,     // systemctl disable/mask
+  /\bsystemctl\s+(?:restart|stop|kill|reload|try-restart|isolate)\b/, // service-impacting systemctl
+  /\bservice\s+\S+\s+(?:restart|stop|reload)\b/, // legacy service control
+
+  // ── Container / orchestration destructive actions ──
+  /\bdocker\s+(?:rm|rmi)\b/,             // docker rm/rmi
+  /\bdocker\s+(?:container|image|volume|network)\s+rm\b/, // docker subresource rm
+  /\bdocker\s+(?:system|container|image|volume|network)\s+prune\b/, // docker prune
+  /\bdocker\s+compose\s+down\b[^\n]*\s-v\b/, // docker compose down -v
+  /\bkubectl\s+delete\b/,               // kubectl delete
+  /\bkubectl\s+drain\b/,                // kubectl drain
+  /\bkubectl\s+scale\b[^\n]*--replicas\s*=\s*0\b/, // scale workloads to zero
 
   // ── Resource exhaustion ──
   /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;?\s*:/, // fork bomb

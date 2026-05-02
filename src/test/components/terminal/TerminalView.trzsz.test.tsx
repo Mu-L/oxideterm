@@ -173,6 +173,7 @@ vi.mock('@xterm/xterm', () => ({
     element = document.createElement('div');
     parser = {
       registerOscHandler: vi.fn(() => ({ dispose: vi.fn() })),
+      registerCsiHandler: vi.fn(() => ({ dispose: vi.fn() })),
     };
     unicode = { activeVersion: '11' };
     buffer = {

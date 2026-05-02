@@ -262,7 +262,8 @@
       "clear_confirm_title": "清除目前回滾緩衝區？",
       "clear_confirm_description": "歸檔歷史不會被刪除。",
       "clear_confirm_action": "清除回滾",
-      "minimap": "歷史熱力圖"
+      "minimap": "歷史熱力圖",
+      "limited_live_hint": "正在顯示最近 {{shown}} 行即時回滾（可用 {{available}} 行）。更早內容請使用完整歷史搜尋/歸檔摘錄。"
     },
     "quick_commands": {
       "title": "快捷命令",

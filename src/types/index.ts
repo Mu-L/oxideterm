@@ -1021,6 +1021,30 @@ export interface BufferStats {
   memory_usage_mb: number;
 }
 
+export interface ProcessMemoryDiagnostics {
+  rssBytes?: number | null;
+  virtualBytes?: number | null;
+  threadCount?: number | null;
+  unavailableReason?: string | null;
+}
+
+export interface TerminalBufferDiagnostics {
+  sessionId: string;
+  terminalType: 'remote' | 'local' | string;
+  currentLines: number;
+  totalLines: number;
+  maxLines: number;
+  memoryUsageMb: number;
+}
+
+export interface MemoryDiagnosticsBackendSnapshot {
+  capturedAt: number;
+  process: ProcessMemoryDiagnostics;
+  remoteSessionCount: number;
+  localTerminalCount: number;
+  scrollBuffers: TerminalBufferDiagnostics[];
+}
+
 /** Response from get_all_buffer_lines with truncation metadata */
 export interface BufferLinesResponse {
   lines: TerminalLine[];

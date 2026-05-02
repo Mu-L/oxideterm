@@ -40,6 +40,7 @@ import {
   PersistedForwardInfo,
   TerminalLine,
   BufferStats,
+  MemoryDiagnosticsBackendSnapshot,
   CommandFact,
   CommandFactLedgerDiagnosticsSnapshot,
   CommandFactOutputResponse,
@@ -1539,6 +1540,19 @@ export const api = {
   getAllBufferLines: async (sessionId: string): Promise<import('../types').BufferLinesResponse> => {
     if (USE_MOCK) return { lines: [], total_lines: 0, returned_lines: 0, truncated: false };
     return invoke('get_all_buffer_lines', { sessionId });
+  },
+
+  getMemoryDiagnostics: async (): Promise<MemoryDiagnosticsBackendSnapshot> => {
+    if (USE_MOCK) {
+      return {
+        capturedAt: Date.now(),
+        process: { rssBytes: null, virtualBytes: null, threadCount: null, unavailableReason: 'mock' },
+        remoteSessionCount: 0,
+        localTerminalCount: 0,
+        scrollBuffers: [],
+      };
+    }
+    return invoke('get_memory_diagnostics');
   },
 
   createCommandFact: async (

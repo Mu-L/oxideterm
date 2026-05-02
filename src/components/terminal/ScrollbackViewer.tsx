@@ -27,6 +27,7 @@ import {
   type ScrollbackMinimapVisibleRange,
 } from '../../lib/gpu';
 import { GpuChartCanvas } from '../gpu/GpuChartCanvas';
+import { registerMemoryDiagnosticsProvider } from '../../lib/diagnostics/memoryDiagnosticsRegistry';
 import type {
   ArchivedHistoryExcerpt,
   BufferStats,
@@ -39,6 +40,12 @@ import type {
 
 const PAGE_SIZE = 800;
 const MAX_CACHED_PAGES = 10;
+// Scrollback Viewer is a live hot-buffer browser, not a full-history renderer.
+// Large AI/TUI outputs can push the backend hot buffer into hundreds of
+// thousands of rows; exposing all of those rows to the virtualizer creates huge
+// scroll ranges and makes accidental memory growth harder to reason about.
+// Older history remains available through full-history search/archive excerpts.
+const MAX_VIEWER_LIVE_LINES = 50_000;
 const PROTECTED_VIEWPORT_PAGES = 1;
 const STATS_REFRESH_MS = 2000;
 const SEARCH_POLL_MS = 250;
@@ -91,6 +98,24 @@ function getBaseGlobalLine(stats: BufferStats): number {
   return Math.max(0, Number(stats.total_lines) - stats.current_lines);
 }
 
+function getViewerLineCount(stats: BufferStats): number {
+  return Math.min(stats.current_lines, MAX_VIEWER_LIVE_LINES);
+}
+
+function getViewerBaseGlobalLine(stats: BufferStats): number {
+  const rawBase = getBaseGlobalLine(stats);
+  return rawBase + Math.max(0, stats.current_lines - getViewerLineCount(stats));
+}
+
+function getViewerWindowStats(stats: BufferStats): BufferStats {
+  const currentLines = getViewerLineCount(stats);
+  return {
+    ...stats,
+    current_lines: currentLines,
+    total_lines: getViewerBaseGlobalLine(stats) + currentLines,
+  };
+}
+
 function getPageKey(globalLine: number): number {
   return Math.floor(globalLine / PAGE_SIZE) * PAGE_SIZE;
 }
@@ -137,8 +162,9 @@ function historyMatchKey(match: HistorySearchMatch): string {
 
 function isHotMatchInWindow(match: HistorySearchMatch, stats: BufferStats | null): boolean {
   if (!stats || match.source !== 'hot') return false;
-  const baseGlobalLine = getBaseGlobalLine(stats);
-  return match.line_number >= baseGlobalLine && match.line_number < baseGlobalLine + stats.current_lines;
+  const baseGlobalLine = getViewerBaseGlobalLine(stats);
+  const lineCount = getViewerLineCount(stats);
+  return match.line_number >= baseGlobalLine && match.line_number < baseGlobalLine + lineCount;
 }
 
 function splitSpanByHighlights(span: ParsedAnsiSpan, ranges: HighlightRange[]): Array<{
@@ -294,7 +320,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   );
 
   const rowVirtualizer = useVirtualizer({
-    count: stats?.current_lines ?? 0,
+    count: stats ? getViewerLineCount(stats) : 0,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight || DEFAULT_ROW_HEIGHT,
     overscan: 40,
@@ -302,7 +328,10 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   const rowVirtualizerRef = useRef(rowVirtualizer);
   rowVirtualizerRef.current = rowVirtualizer;
 
-  const baseGlobalLine = stats ? getBaseGlobalLine(stats) : 0;
+  const baseGlobalLine = stats ? getViewerBaseGlobalLine(stats) : 0;
+  const viewerLineCount = stats ? getViewerLineCount(stats) : 0;
+  const viewerStats = stats ? getViewerWindowStats(stats) : null;
+  const viewerClipped = stats ? stats.current_lines > viewerLineCount : false;
 
   const setPageState = useCallback((updater: (current: Map<number, CachedPage>) => Map<number, CachedPage>) => {
     setPages((current) => {
@@ -330,14 +359,15 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   }, []);
 
   const loadCommandFactsForStats = useCallback(async (nextStats: BufferStats) => {
-    if (nextStats.current_lines <= 0) {
+    const lineCount = getViewerLineCount(nextStats);
+    if (lineCount <= 0) {
       commandFactsRef.current = [];
       setCommandFacts([]);
       setSelectedCommandFactId(null);
       return;
     }
-    const base = getBaseGlobalLine(nextStats);
-    const end = base + nextStats.current_lines - 1;
+    const base = getViewerBaseGlobalLine(nextStats);
+    const end = base + lineCount - 1;
     try {
       const facts = await api.getCommandFacts(sessionId, base, end);
       commandFactsRef.current = facts;
@@ -382,12 +412,13 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
           if (resetWindow) {
             setLoadingPageState(() => new Set());
           }
-          const nextEnd = nextBase + nextStats.current_lines;
+          const nextViewerBase = getViewerBaseGlobalLine(nextStats);
+          const nextEnd = nextViewerBase + getViewerLineCount(nextStats);
           setPageState((current) => {
             if (resetWindow) return new Map();
             const pruned = new Map<number, CachedPage>();
             for (const [key, page] of current) {
-              if (page.endGlobalLine > nextBase && page.startGlobalLine < nextEnd) {
+              if (page.endGlobalLine > nextViewerBase && page.startGlobalLine < nextEnd) {
                 pruned.set(key, page);
               }
             }
@@ -403,8 +434,9 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
         return nextStats;
       });
 
-      if (wasNearBottom && nextStats.current_lines > 0) {
-        requestAnimationFrame(() => rowVirtualizerRef.current.scrollToIndex(nextStats.current_lines - 1, { align: 'end' }));
+      const nextLineCount = getViewerLineCount(nextStats);
+      if (wasNearBottom && nextLineCount > 0) {
+        requestAnimationFrame(() => rowVirtualizerRef.current.scrollToIndex(nextLineCount - 1, { align: 'end' }));
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -416,18 +448,19 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   const loadPageForGlobalLine = useCallback(async (globalLine: number) => {
     const currentStats = statsRef.current;
     if (!currentStats || currentStats.current_lines <= 0) return;
-    const base = getBaseGlobalLine(currentStats);
-    const end = base + currentStats.current_lines;
-    if (globalLine < base || globalLine >= end) return;
+    const rawBase = getBaseGlobalLine(currentStats);
+    const viewerBase = getViewerBaseGlobalLine(currentStats);
+    const viewerEnd = viewerBase + getViewerLineCount(currentStats);
+    if (globalLine < viewerBase || globalLine >= viewerEnd) return;
 
     const pageKey = getPageKey(globalLine);
     if (pagesRef.current.has(pageKey) || loadingPagesRef.current.has(pageKey)) return;
 
-    const requestStartGlobal = Math.max(pageKey, base);
-    const hotStart = requestStartGlobal - base;
+    const requestStartGlobal = Math.max(pageKey, viewerBase);
+    const hotStart = requestStartGlobal - rawBase;
     if (hotStart < 0 || hotStart >= currentStats.current_lines) return;
 
-    const requestEndGlobal = Math.min(pageKey + PAGE_SIZE, end);
+    const requestEndGlobal = Math.min(pageKey + PAGE_SIZE, viewerEnd);
     const count = Math.min(PAGE_SIZE, currentStats.current_lines - hotStart, requestEndGlobal - requestStartGlobal);
     if (count <= 0) return;
 
@@ -440,8 +473,9 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
 
       const latestStats = statsRef.current;
       if (!latestStats) return;
-      const latestBase = getBaseGlobalLine(latestStats);
-      if (requestStartGlobal < latestBase || requestStartGlobal >= latestBase + latestStats.current_lines) return;
+      const latestBase = getViewerBaseGlobalLine(latestStats);
+      const latestEnd = latestBase + getViewerLineCount(latestStats);
+      if (requestStartGlobal < latestBase || requestStartGlobal >= latestEnd) return;
 
       const cachedLines = lines.map((line, index) => ({
         globalLine: requestStartGlobal + index,
@@ -479,6 +513,26 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     return page.lines[globalLine - page.startGlobalLine] ?? null;
   }, [pages]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    return registerMemoryDiagnosticsProvider(`scrollback.viewer.${sessionId}`, () => {
+      const cachedLines = Array.from(pagesRef.current.values()).reduce((sum, page) => sum + page.lines.length, 0);
+      return {
+        id: `scrollback.viewer.${sessionId}`,
+        label: 'Scrollback Viewer page cache',
+        category: 'scrollback',
+        objectCount: pagesRef.current.size,
+        estimatedBytes: cachedLines * 512,
+        risk: pagesRef.current.size > 10 ? 'medium' : 'low',
+        details: {
+          sessionId,
+          pages: pagesRef.current.size,
+          cachedLines,
+        },
+      };
+    });
+  }, [isOpen, sessionId]);
+
   const cancelActiveSearch = useCallback(() => {
     const activeSearchId = searchIdRef.current;
     if (activeSearchId) {
@@ -503,7 +557,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     if (!activeMatch || activeMatch.source !== 'hot') return;
     const currentStats = statsRef.current;
     if (!currentStats || !isHotMatchInWindow(activeMatch, currentStats)) return;
-    const rowIndex = activeMatch.line_number - getBaseGlobalLine(currentStats);
+    const rowIndex = activeMatch.line_number - getViewerBaseGlobalLine(currentStats);
     void loadPageForGlobalLine(activeMatch.line_number);
     requestAnimationFrame(() => rowVirtualizerRef.current.scrollToIndex(rowIndex, { align: 'center' }));
   }, [loadPageForGlobalLine, sessionId]);
@@ -545,7 +599,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     setExcerpt(null);
     const currentStats = statsRef.current;
     if (!currentStats || !isHotMatchInWindow(match, currentStats)) return;
-    const rowIndex = match.line_number - getBaseGlobalLine(currentStats);
+    const rowIndex = match.line_number - getViewerBaseGlobalLine(currentStats);
     void loadPageForGlobalLine(match.line_number);
     requestAnimationFrame(() => rowVirtualizerRef.current.scrollToIndex(rowIndex, { align: 'center' }));
   }, [loadExcerptForMatch, loadPageForGlobalLine]);
@@ -577,7 +631,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     setExcerpt(null);
     const currentStats = statsRef.current;
     if (!currentStats || !isHotMatchInWindow(initialMatch, currentStats)) return;
-    const rowIndex = initialMatch.line_number - getBaseGlobalLine(currentStats);
+    const rowIndex = initialMatch.line_number - getViewerBaseGlobalLine(currentStats);
     void loadPageForGlobalLine(initialMatch.line_number);
     requestAnimationFrame(() => rowVirtualizerRef.current.scrollToIndex(rowIndex, { align: 'center' }));
   }, [cancelActiveSearch, initialMatch, isOpen, loadExcerptForMatch, loadPageForGlobalLine, stats]);
@@ -717,9 +771,9 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (!isOpen || !stats || stats.current_lines === 0) return;
-    void loadPageForGlobalLine(baseGlobalLine + stats.current_lines - 1);
-  }, [baseGlobalLine, isOpen, loadPageForGlobalLine, stats]);
+    if (!isOpen || !stats || viewerLineCount === 0) return;
+    void loadPageForGlobalLine(baseGlobalLine + viewerLineCount - 1);
+  }, [baseGlobalLine, isOpen, loadPageForGlobalLine, stats, viewerLineCount]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
   const visibleRangeSignature = virtualItems.map((item) => item.index).join(',');
@@ -732,7 +786,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
   }, [visibleRangeSignature]);
 
   useEffect(() => {
-    if (!isOpen || !stats || stats.current_lines === 0) return;
+    if (!isOpen || !stats || viewerLineCount === 0) return;
     const visiblePageKeys = new Set<number>();
     for (const item of virtualItems) {
       const globalLine = baseGlobalLine + item.index;
@@ -755,7 +809,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
       const limited = enforceScrollbackPageCacheLimit(touched, protectedKeys);
       return changed || limited.size !== current.size ? limited : current;
     });
-  }, [baseGlobalLine, isOpen, loadPageForGlobalLine, setPageState, stats, visibleRangeSignature]);
+  }, [baseGlobalLine, isOpen, loadPageForGlobalLine, setPageState, stats, viewerLineCount, visibleRangeSignature]);
 
   const hotMatchesByLine = useMemo(() => {
     const map = new Map<number, HighlightRange[]>();
@@ -773,9 +827,9 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
 
   const commandFactsByLine = useMemo(() => {
     const map = new Map<number, CommandFactRowMarker>();
-    if (!stats || stats.current_lines <= 0) return map;
-    const hotStart = getBaseGlobalLine(stats);
-    const hotEnd = hotStart + stats.current_lines - 1;
+    if (!stats || viewerLineCount <= 0) return map;
+    const hotStart = getViewerBaseGlobalLine(stats);
+    const hotEnd = hotStart + viewerLineCount - 1;
 
     for (const fact of commandFacts) {
       if (fact.status === 'open' || typeof fact.endGlobalLine !== 'number') continue;
@@ -793,7 +847,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
     }
 
     return map;
-  }, [commandFacts, selectedCommandFactId, stats]);
+  }, [commandFacts, selectedCommandFactId, stats, viewerLineCount]);
 
   const liveMatchCount = matches.filter((match) => match.source === 'hot').length;
   const archiveMatchCount = matches.filter((match) => match.source === 'cold').length;
@@ -815,7 +869,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
             {stats && (
               <span className="text-[11px] text-theme-text-muted tabular-nums">
                 {t('terminal.scrollback_viewer.stats', {
-                  current: stats.current_lines,
+                  current: viewerLineCount,
                   total: stats.total_lines,
                   max: stats.max_lines,
                   memory: stats.memory_usage_mb.toFixed(1),
@@ -824,7 +878,12 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
             )}
           </div>
           <p className="text-[11px] text-theme-text-muted leading-tight">
-            {t('terminal.scrollback_viewer.live_hint')}
+            {viewerClipped
+              ? t('terminal.scrollback_viewer.limited_live_hint', {
+                  shown: viewerLineCount,
+                  available: stats?.current_lines ?? 0,
+                })
+              : t('terminal.scrollback_viewer.live_hint')}
           </p>
         </div>
 
@@ -1020,7 +1079,7 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
         </div>
         <ScrollbackMinimap
           enabled={gpuCanvasEnabled}
-          stats={stats}
+          stats={viewerStats}
           visibleRange={visibleRange}
           matches={matches}
           activeMatchIndex={activeMatchIndex}

@@ -83,7 +83,11 @@ export const GpuChartCanvas: React.FC<GpuChartCanvasProps> = ({
       }
       rendererRef.current = renderer;
       setStatus(renderer.status);
-      renderWithRenderer(renderer, kind, bins, lanes);
+      if (kind === 'horizontal') {
+        fallbackDraw(canvas, kind, bins, lanes);
+      } else {
+        renderWithRenderer(renderer, kind, bins, lanes);
+      }
     });
 
     return () => {
@@ -100,7 +104,7 @@ export const GpuChartCanvas: React.FC<GpuChartCanvasProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const renderer = rendererRef.current;
-    if (enabled && renderer) {
+    if (enabled && renderer && kind !== 'horizontal') {
       renderWithRenderer(renderer, kind, bins, lanes);
     } else {
       fallbackDraw(canvas, kind, bins, lanes);

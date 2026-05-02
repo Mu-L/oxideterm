@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { getVersion } from '@tauri-apps/api/app';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { ArrowDownToLine, ArrowRight, BookOpen, CheckCircle2, ExternalLink, FolderOpen, Github, HelpCircle, Keyboard, Loader2, RefreshCw, RotateCw, Shield, SkipForward, X } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowRight, BookOpen, CheckCircle2, ExternalLink, FolderOpen, Github, HelpCircle, Keyboard, Loader2, RefreshCw, RotateCw, Shield, SkipForward, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import { platform } from '@/lib/platform';
 import { getShortcutCategories } from '@/lib/shortcuts';
 import { APP_AUTHOR, APP_GITHUB } from '@/lib/identity';
+import { MemoryDiagnosticsPanel } from './MemoryDiagnosticsPanel';
 
 type HelpAboutSectionProps = {
     isPortableMode?: boolean | null;
@@ -45,6 +46,7 @@ const formatEta = (seconds: number): string => {
 export const HelpAboutSection = ({ isPortableMode = null }: HelpAboutSectionProps) => {
     const { t } = useTranslation();
     const [appVersion, setAppVersion] = useState<string>('...');
+    const [memoryDiagnosticsOpen, setMemoryDiagnosticsOpen] = useState(false);
     const updater = useUpdateStore();
     const updateChannel = useSettingsStore((state) => state.settings.general.updateChannel);
     const updateGeneral = useSettingsStore((state) => state.updateGeneral);
@@ -287,6 +289,24 @@ export const HelpAboutSection = ({ isPortableMode = null }: HelpAboutSectionProp
                             {t('settings_view.help.open')}
                         </Button>
                     </div>
+                    <div className="flex items-center justify-between border-t border-theme-border/50 pt-3">
+                        <div>
+                            <span className="text-theme-text">{t('settings_view.help.memory_diagnostics_title')}</span>
+                            <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.help.memory_diagnostics_hint')}</p>
+                        </div>
+                        <Button
+                            variant={memoryDiagnosticsOpen ? 'ghost' : 'outline'}
+                            size="sm"
+                            className="gap-2 shrink-0"
+                            onClick={() => setMemoryDiagnosticsOpen((open) => !open)}
+                        >
+                            <Activity className="h-3.5 w-3.5" />
+                            {memoryDiagnosticsOpen ? t('settings_view.help.memory_close') : t('settings_view.help.memory_open')}
+                        </Button>
+                    </div>
+                    {memoryDiagnosticsOpen && (
+                        <MemoryDiagnosticsPanel onClose={() => setMemoryDiagnosticsOpen(false)} />
+                    )}
                 </div>
             </div>
 

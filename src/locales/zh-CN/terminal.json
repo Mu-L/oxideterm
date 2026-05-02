@@ -262,7 +262,8 @@
       "clear_confirm_title": "清除当前回滚缓冲区？",
       "clear_confirm_description": "归档历史不会被删除。",
       "clear_confirm_action": "清除回滚",
-      "minimap": "历史热力图"
+      "minimap": "历史热力图",
+      "limited_live_hint": "正在显示最近 {{shown}} 行实时回滚（可用 {{available}} 行）。更早内容请用完整历史搜索/归档摘录。"
     },
     "quick_commands": {
       "title": "快捷命令",

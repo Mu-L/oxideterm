@@ -27,6 +27,7 @@ vi.mock('react-i18next', () => ({
         'terminal.scrollback_viewer.title': 'Scrollback Viewer',
         'terminal.scrollback_viewer.open': 'Open Scrollback Viewer',
         'terminal.scrollback_viewer.live_hint': 'Showing live scrollback. Archived matches open as excerpts.',
+        'terminal.scrollback_viewer.limited_live_hint': `Showing the latest ${params?.shown ?? ''} live scrollback lines out of ${params?.available ?? ''} available.`,
         'terminal.scrollback_viewer.search_placeholder': 'Search live and archived history...',
         'terminal.scrollback_viewer.search': 'Search',
         'terminal.scrollback_viewer.clear': 'Clear scrollback',
@@ -55,6 +56,9 @@ vi.mock('@/store/settingsStore', () => ({
         customFontFamily: '',
         fontSize: 13,
         lineHeight: 1.2,
+      },
+      experimental: {
+        gpuCanvas: false,
       },
     },
   }),
@@ -411,6 +415,33 @@ describe('ScrollbackViewer', () => {
 
     await waitFor(() => {
       expect(apiMocks.getScrollBuffer).toHaveBeenCalledWith('session-1', 400, 400);
+    });
+  });
+
+  it('caps the live viewer window and translates capped rows to raw hot-buffer indexes', async () => {
+    apiMocks.getBufferStats.mockResolvedValue({
+      current_lines: 300_000,
+      total_lines: 400_000,
+      max_lines: 300_000,
+      memory_usage_mb: 128,
+    });
+
+    render(
+      <ScrollbackViewer
+        sessionId="session-1"
+        nodeId="node-1"
+        isOpen
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Showing the latest 50000 live scrollback lines out of 300000 available.')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(apiMocks.getCommandFacts).toHaveBeenCalledWith('session-1', 350_000, 399_999);
+    });
+    await waitFor(() => {
+      expect(apiMocks.getScrollBuffer).toHaveBeenCalledWith('session-1', 250_000, 400);
     });
   });
 

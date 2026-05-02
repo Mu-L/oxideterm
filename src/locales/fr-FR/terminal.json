@@ -262,7 +262,8 @@
       "clear_confirm_title": "Clear current scrollback buffer?",
       "clear_confirm_description": "Archived history is not removed.",
       "clear_confirm_action": "Clear scrollback",
-      "minimap": "History minimap"
+      "minimap": "History minimap",
+      "limited_live_hint": "Showing the latest {{shown}} live scrollback lines out of {{available}} available. Use full-history search/archive excerpts for older output."
     },
     "quick_commands": {
       "title": "Quick Commands",

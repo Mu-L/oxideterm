@@ -14,6 +14,12 @@ import {
 
 const mocks = vi.hoisted(() => ({
   writeText: vi.fn(() => Promise.resolve()),
+  commandMarksSettings: {
+    enabled: true,
+    userInputObserved: false,
+    heuristicDetection: false,
+    showHoverActions: true,
+  },
   t: vi.fn((key: string, params?: Record<string, unknown>) => {
     const translations: Record<string, string> = {
       'terminal.command_selection.actions': 'Command selection actions',
@@ -35,12 +41,7 @@ vi.mock('@/store/settingsStore', () => ({
     getState: () => ({
       settings: {
         terminal: {
-          commandMarks: {
-            enabled: true,
-            userInputObserved: false,
-            heuristicDetection: false,
-            showHoverActions: true,
-          },
+          commandMarks: mocks.commandMarksSettings,
         },
       },
     }),
@@ -179,6 +180,12 @@ function createMockTerminal(options: {
 describe('terminal command marks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(mocks.commandMarksSettings, {
+      enabled: true,
+      userInputObserved: false,
+      heuristicDetection: false,
+      showHoverActions: true,
+    });
     cleanupTerminalCommandMarks('pane-1');
   });
 
@@ -236,7 +243,21 @@ describe('terminal command marks', () => {
     expect(listTerminalCommandMarks('pane-1')).toEqual([]);
   });
 
+  it('keeps observed user input marks disabled by default', () => {
+    const term = createMockTerminal();
+
+    const mark = createTerminalCommandMark(term, 'pane-1', {
+      command: 'pwd',
+      source: 'user_input_observed',
+      sessionId: 'session-1',
+    });
+
+    expect(mark).toBeNull();
+    expect(listTerminalCommandMarks('pane-1')).toEqual([]);
+  });
+
   it('records observed user input marks and allows selecting the current open command range', () => {
+    mocks.commandMarksSettings.userInputObserved = true;
     const term = createMockTerminal();
 
     const mark = createTerminalCommandMark(term, 'pane-1', {
@@ -257,6 +278,7 @@ describe('terminal command marks', () => {
   });
 
   it('renders a localized real copy action without exposing fake actions', async () => {
+    mocks.commandMarksSettings.userInputObserved = true;
     const term = createMockTerminal();
 
     const mark = createTerminalCommandMark(term, 'pane-1', {
@@ -283,6 +305,7 @@ describe('terminal command marks', () => {
   });
 
   it('starts a mark at the prompt preamble so the previous mark excludes the next prompt', () => {
+    mocks.commandMarksSettings.userInputObserved = true;
     const term = createMockTerminal({
       lines: {
         12: '❯ pwd',
@@ -321,6 +344,7 @@ describe('terminal command marks', () => {
   });
 
   it('excludes the returned prompt preamble from an open mark selection and copied output', async () => {
+    mocks.commandMarksSettings.userInputObserved = true;
     const term = createMockTerminal({
       lines: {
         12: '❯ pwd',

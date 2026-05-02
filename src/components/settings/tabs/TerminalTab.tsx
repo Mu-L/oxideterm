@@ -507,28 +507,6 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                         onCheckedChange={(checked) => updateCommandMarks('showHoverActions', checked as boolean)}
                     />
                 </div>
-                <div className="flex items-center justify-between mt-4">
-                    <div>
-                        <Label className="text-theme-text">{t('settings_view.terminal.command_marks_user_input_observed')}</Label>
-                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.command_marks_user_input_observed_hint')}</p>
-                    </div>
-                    <Checkbox
-                        id="terminal-command-marks-user-input-observed"
-                        checked={terminal.commandMarks.userInputObserved}
-                        onCheckedChange={(checked) => updateCommandMarks('userInputObserved', checked as boolean)}
-                    />
-                </div>
-                <div className="flex items-center justify-between mt-4">
-                    <div>
-                        <Label className="text-theme-text">{t('settings_view.terminal.command_marks_heuristic')}</Label>
-                        <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.command_marks_heuristic_hint')}</p>
-                    </div>
-                    <Checkbox
-                        id="terminal-command-marks-heuristic"
-                        checked={terminal.commandMarks.heuristicDetection}
-                        onCheckedChange={(checked) => updateCommandMarks('heuristicDetection', checked as boolean)}
-                    />
-                </div>
             </div>
 
             <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">

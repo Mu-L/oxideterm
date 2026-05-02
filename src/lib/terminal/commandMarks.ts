@@ -750,6 +750,7 @@ export function createTerminalCommandMark(
   const settings = useSettingsStore.getState().settings.terminal.commandMarks;
   if (!settings?.enabled) return null;
   if (request.source === 'heuristic' && !settings.heuristicDetection) return null;
+  if (request.source === 'user_input_observed' && !settings.userInputObserved) return null;
   if (term.buffer.active.type === 'alternate' || term.modes.mouseTrackingMode !== 'none') return null;
 
   const commandLine = getAbsoluteCursorLine(term);

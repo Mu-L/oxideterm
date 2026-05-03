@@ -200,6 +200,15 @@ pub struct FileEntry {
     pub name: String,
     pub path: String,
     pub file_type: String,
+    /// True when the directory entry itself is a symbolic link. `file_type`
+    /// may still be "directory" when the symlink target is a directory, so
+    /// IDE/SFTP-style UIs can expand it while preserving symlink metadata.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub is_symlink: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symlink_target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_file_type: Option<String>,
     pub size: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mtime: Option<u64>,

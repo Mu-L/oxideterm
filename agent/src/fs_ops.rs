@@ -250,6 +250,49 @@ fn file_type_str(metadata: &fs::Metadata) -> &'static str {
     }
 }
 
+struct ClassifiedEntry {
+    file_type: &'static str,
+    is_symlink: bool,
+    symlink_target: Option<String>,
+    target_file_type: Option<&'static str>,
+}
+
+fn classify_entry(path: &Path, metadata: &fs::Metadata) -> ClassifiedEntry {
+    let entry_file_type = file_type_str(metadata);
+    let is_symlink = metadata.file_type().is_symlink();
+
+    if !is_symlink {
+        return ClassifiedEntry {
+            file_type: entry_file_type,
+            is_symlink: false,
+            symlink_target: None,
+            target_file_type: None,
+        };
+    }
+
+    let symlink_target = fs::read_link(path)
+        .ok()
+        .map(|target| target.to_string_lossy().to_string());
+    let target_file_type = fs::metadata(path)
+        .ok()
+        .map(|target_metadata| file_type_str(&target_metadata));
+
+    // Symlink-to-directory entries should behave like directories in IDE and
+    // SFTP trees, while still carrying symlink metadata for badges/tooltips.
+    let file_type = if target_file_type == Some("directory") {
+        "directory"
+    } else {
+        entry_file_type
+    };
+
+    ClassifiedEntry {
+        file_type,
+        is_symlink: true,
+        symlink_target,
+        target_file_type,
+    }
+}
+
 fn map_io_error(e: &io::Error) -> (i32, String) {
     match e.kind() {
         io::ErrorKind::NotFound => (ERR_NOT_FOUND, e.to_string()),
@@ -497,11 +540,15 @@ pub fn list_dir(params: ListDirParams) -> Result<Vec<FileEntry>, (i32, String)> 
             Ok(m) => m,
             Err(_) => continue,
         };
+        let classified = classify_entry(&entry_path, &metadata);
 
         entries.push(FileEntry {
             name,
             path: entry_path.to_string_lossy().to_string(),
-            file_type: file_type_str(&metadata).to_string(),
+            file_type: classified.file_type.to_string(),
+            is_symlink: classified.is_symlink,
+            symlink_target: classified.symlink_target,
+            target_file_type: classified.target_file_type.map(str::to_string),
             size: metadata.len(),
             mtime: Some(mtime_secs(&metadata)),
             permissions: Some(perms_octal(&metadata)),
@@ -568,11 +615,15 @@ fn list_tree_recursive(
             // Still include the entry, but don't recurse into it
             let entry_path = entry.path();
             if let Ok(metadata) = fs::symlink_metadata(&entry_path) {
+                let classified = classify_entry(&entry_path, &metadata);
                 *count += 1;
                 entries.push(FileEntry {
                     name,
                     path: entry_path.to_string_lossy().to_string(),
-                    file_type: file_type_str(&metadata).to_string(),
+                    file_type: classified.file_type.to_string(),
+                    is_symlink: classified.is_symlink,
+                    symlink_target: classified.symlink_target,
+                    target_file_type: classified.target_file_type.map(str::to_string),
                     size: metadata.len(),
                     mtime: Some(mtime_secs(&metadata)),
                     permissions: Some(perms_octal(&metadata)),
@@ -588,6 +639,7 @@ fn list_tree_recursive(
             Ok(m) => m,
             Err(_) => continue,
         };
+        let classified = classify_entry(&entry_path, &metadata);
 
         *count += 1;
 
@@ -608,7 +660,10 @@ fn list_tree_recursive(
         entries.push(FileEntry {
             name,
             path: entry_path.to_string_lossy().to_string(),
-            file_type: file_type_str(&metadata).to_string(),
+            file_type: classified.file_type.to_string(),
+            is_symlink: classified.is_symlink,
+            symlink_target: classified.symlink_target,
+            target_file_type: classified.target_file_type.map(str::to_string),
             size: metadata.len(),
             mtime: Some(mtime_secs(&metadata)),
             permissions: Some(perms_octal(&metadata)),
@@ -899,6 +954,65 @@ mod tests {
         let dir = std::env::temp_dir().join(unique);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn list_dir_classifies_symlink_to_directory_as_expandable_directory() {
+        use std::os::unix::fs::symlink;
+
+        let dir = create_temp_dir("symlink-dir");
+        let target_dir = dir.join("target");
+        let link_dir = dir.join("linked-target");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::write(target_dir.join("nested.txt"), "hello").unwrap();
+        symlink(&target_dir, &link_dir).unwrap();
+
+        let entries = list_dir(ListDirParams {
+            path: dir.to_string_lossy().to_string(),
+        })
+        .unwrap();
+
+        let linked = entries
+            .iter()
+            .find(|entry| entry.name == "linked-target")
+            .expect("symlink directory entry should be listed");
+
+        assert_eq!(linked.file_type, "directory");
+        assert!(linked.is_symlink);
+        assert_eq!(linked.target_file_type.as_deref(), Some("directory"));
+        assert!(linked.symlink_target.is_some());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn list_dir_preserves_symlink_to_file_as_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let dir = create_temp_dir("symlink-file");
+        let target_file = dir.join("target.txt");
+        let link_file = dir.join("linked-file");
+        fs::write(&target_file, "hello").unwrap();
+        symlink(&target_file, &link_file).unwrap();
+
+        let entries = list_dir(ListDirParams {
+            path: dir.to_string_lossy().to_string(),
+        })
+        .unwrap();
+
+        let linked = entries
+            .iter()
+            .find(|entry| entry.name == "linked-file")
+            .expect("symlink file entry should be listed");
+
+        assert_eq!(linked.file_type, "symlink");
+        assert!(linked.is_symlink);
+        assert_eq!(linked.target_file_type.as_deref(), Some("file"));
+        assert!(linked.symlink_target.is_some());
+
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

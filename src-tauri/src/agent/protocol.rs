@@ -130,6 +130,10 @@ pub struct FileEntry {
     pub name: String,
     pub path: String,
     pub file_type: String,
+    #[serde(default)]
+    pub is_symlink: bool,
+    pub symlink_target: Option<String>,
+    pub target_file_type: Option<String>,
     pub size: u64,
     pub mtime: Option<u64>,
     pub permissions: Option<String>,

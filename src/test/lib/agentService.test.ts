@@ -217,6 +217,44 @@ describe('agentService.listDir', () => {
     ]);
   });
 
+  it('preserves agent symlink directory metadata without extra SFTP stat calls', async () => {
+    apiMocks.nodeAgentStatus.mockResolvedValue({ type: 'ready', version: '1.0.0', arch: 'x86_64', pid: 42 });
+    apiMocks.nodeAgentListDir.mockResolvedValue([
+      {
+        name: 'linked-src',
+        path: '/srv/app/linked-src',
+        file_type: 'directory',
+        is_symlink: true,
+        symlink_target: 'src',
+        target_file_type: 'directory',
+        size: 0,
+        mtime: 123,
+        permissions: '777',
+      },
+      {
+        name: 'readme.md',
+        path: '/srv/app/readme.md',
+        file_type: 'file',
+        size: 12,
+        mtime: 124,
+        permissions: '644',
+      },
+    ]);
+
+    const files = await listDir('node-1', '/srv/app');
+
+    expect(files[0]).toMatchObject({
+      name: 'linked-src',
+      file_type: 'Directory',
+      is_symlink: true,
+      symlink_target: 'src',
+    });
+    expect(files[1]).toMatchObject({
+      name: 'readme.md',
+      file_type: 'File',
+    });
+  });
+
   it('falls back to SFTP list_dir if the agent directory listing fails', async () => {
     apiMocks.nodeAgentStatus.mockResolvedValue({ type: 'ready', version: '1.0.0', arch: 'x86_64', pid: 42 });
     apiMocks.nodeAgentListDir.mockRejectedValueOnce(new Error('channel closed'));

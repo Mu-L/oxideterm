@@ -429,14 +429,18 @@ export async function symbolDefinitions(
  * Convert agent FileEntry[] to the SFTP FileInfo[] format for compatibility.
  */
 function agentEntriesToFileInfoList(entries: AgentFileEntry[]): FileInfo[] {
-  return entries.map((e) => ({
-    name: e.name,
-    path: e.path,
-    file_type: agentFileTypeToSftp(e.file_type),
-    size: e.size,
-    modified: e.mtime ?? null,
-    permissions: e.permissions ?? null,
-  }));
+  return entries.map((e) => {
+    const isSymlink = e.is_symlink ?? e.file_type === 'symlink';
+    return {
+      name: e.name,
+      path: e.path,
+      file_type: agentFileTypeToSftp(e.file_type),
+      size: e.size,
+      modified: e.mtime ?? null,
+      permissions: e.permissions ?? null,
+      ...(isSymlink ? { is_symlink: true, symlink_target: e.symlink_target ?? null } : {}),
+    };
+  });
 }
 
 function agentFileTypeToSftp(

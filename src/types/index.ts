@@ -747,6 +747,8 @@ export interface FileInfo {
   size: number;
   modified: number | null;
   permissions: string | null;
+  is_symlink?: boolean;
+  symlink_target?: string | null;
 }
 
 // SFTP Sort Order
@@ -1989,6 +1991,9 @@ export type AgentFileEntry = {
   name: string;
   path: string;
   file_type: string;
+  is_symlink?: boolean;
+  symlink_target?: string | null;
+  target_file_type?: string | null;
   size: number;
   mtime?: number;
   permissions?: string;

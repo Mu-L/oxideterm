@@ -106,7 +106,9 @@ pub async fn get_memory_diagnostics(
     let mut scroll_buffers = Vec::new();
 
     for session in registry.list() {
-        let Some(scroll_buffer) = registry.with_session(&session.id, |entry| entry.scroll_buffer.clone()) else {
+        let Some(scroll_buffer) =
+            registry.with_session(&session.id, |entry| entry.scroll_buffer.clone())
+        else {
             continue;
         };
         let stats = scroll_buffer.stats().await;

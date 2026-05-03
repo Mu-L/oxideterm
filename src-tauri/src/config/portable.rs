@@ -220,7 +220,7 @@ fn resolve_candidate_info(
                 data_dir_name = portable_relative_data_dir(data_dir)?;
             }
         }
-    } else if marker_path.exists() {
+    } else if is_portable_marker_file(&marker_path) {
         activation = PortableActivationKind::Marker;
     }
 
@@ -237,6 +237,14 @@ fn resolve_candidate_info(
         instance_lock_path: data_dir.join(PORTABLE_INSTANCE_LOCK_FILENAME),
         data_dir,
     })
+}
+
+fn is_portable_marker_file(marker_path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(marker_path) else {
+        return false;
+    };
+
+    metadata.is_file() && metadata.len() == 0
 }
 
 pub fn detect_portable_info_from_exe(exe_path: &Path) -> Result<PortableInfo, PortableError> {
@@ -395,6 +403,23 @@ mod tests {
             info.data_dir,
             temp.path().join(PORTABLE_DEFAULT_DATA_DIRNAME)
         );
+    }
+
+    #[test]
+    fn non_empty_portable_file_does_not_enable_portable_mode() {
+        let temp = tempdir().unwrap();
+        let exe_path = temp.path().join("oxideterm");
+        std::fs::write(&exe_path, b"").unwrap();
+        std::fs::write(
+            temp.path().join(PORTABLE_MARKER_FILENAME),
+            b"#!/usr/bin/env sh\n",
+        )
+        .unwrap();
+
+        let info = detect_portable_info_from_exe(&exe_path).unwrap();
+
+        assert!(!info.is_portable);
+        assert_eq!(info.activation, PortableActivationKind::Disabled);
     }
 
     #[test]

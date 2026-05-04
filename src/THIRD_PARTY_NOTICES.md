@@ -1,7 +1,7 @@
 # Third-Party Notices (Frontend)
 
 This file lists third-party components used by the frontend (including transitive production dependencies) and their declared licenses.
-Generated: 2026-04-21T17:39:16.804Z
+Generated: 2026-05-04T10:22:26.962Z
 
 ## Summary
 - MIT: 229
@@ -64,7 +64,7 @@ Generated: 2026-04-21T17:39:16.804Z
 | @floating-ui/utils | 0.2.10 | MIT | https://floating-ui.com |
 | @iconify/types | 2.0.0 | MIT | https://github.com/iconify/iconify |
 | @iconify/utils | 3.1.0 | MIT | https://iconify.design/docs/libraries/utils/ |
-| @lezer/common | 1.5.0, 1.5.2 | MIT | https://github.com/lezer-parser/common#readme |
+| @lezer/common | 1.5.2 | MIT | https://github.com/lezer-parser/common#readme |
 | @lezer/cpp | 1.1.5 | MIT | https://github.com/lezer-parser/cpp#readme |
 | @lezer/css | 1.3.0 | MIT | https://github.com/lezer-parser/css#readme |
 | @lezer/go | 1.0.1 | MIT | https://github.com/lezer-parser/go#readme |
@@ -167,13 +167,13 @@ Generated: 2026-04-21T17:39:16.804Z
 | @types/d3-transition | 3.0.9 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-transition |
 | @types/d3-zoom | 3.0.8 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-zoom |
 | @types/geojson | 7946.0.16 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/geojson |
-| @types/react | 19.2.8 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react |
+| @types/react | 19.2.14 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react |
 | @types/react-dom | 19.2.3 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-dom |
 | @types/trusted-types | 2.0.7 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/trusted-types |
-| @xmldom/xmldom | 0.8.11 | MIT | https://github.com/xmldom/xmldom |
+| @xmldom/xmldom | 0.8.13 | MIT | https://github.com/xmldom/xmldom |
 | @xterm/addon-attach | 0.12.0 | MIT | https://github.com/xtermjs/xterm.js/tree/master#readme |
 | @xterm/addon-canvas | 0.8.0-beta.48 | MIT | https://github.com/xtermjs/xterm.js/tree/master#readme |
-| @xterm/addon-clipboard | 0.1.0 | MIT | https://github.com/xtermjs/xterm.js/tree/master#readme |
+| @xterm/addon-clipboard | 0.2.0 | MIT | https://github.com/xtermjs/xterm.js/tree/master#readme |
 | @xterm/addon-fit | 0.11.0 | MIT | https://github.com/xtermjs/xterm.js/tree/master#readme |
 | @xterm/addon-image | 0.9.0 | MIT | https://github.com/xtermjs/xterm.js/tree/master#readme |
 | @xterm/addon-search | 0.16.0 | MIT | https://github.com/xtermjs/xterm.js/tree/master#readme |
@@ -260,7 +260,7 @@ Generated: 2026-04-21T17:39:16.804Z
 | isarray | 1.0.0 | MIT | https://github.com/juliangruber/isarray |
 | js-base64 | 3.7.8 | BSD-3-Clause | https://github.com/dankogai/js-base64#readme |
 | jszip | 3.10.1 | (MIT OR GPL-3.0-or-later) | https://github.com/Stuk/jszip#readme |
-| katex | 0.16.44 | MIT | https://katex.org |
+| katex | 0.16.45 | MIT | https://katex.org |
 | khroma | 2.1.0 | MIT | https://github.com/fabiospampinato/khroma#readme |
 | langium | 3.3.1 | MIT | https://langium.org |
 | layout-base | 1.0.2, 2.0.1 | MIT | https://github.com/iVis-at-Bilkent/layout-base#readme |
@@ -268,7 +268,7 @@ Generated: 2026-04-21T17:39:16.804Z
 | lodash-es | 4.17.21, 4.17.23 | MIT | https://lodash.com/custom-builds |
 | lop | 0.4.2 | BSD-2-Clause | https://github.com/mwilliamson/lop#readme |
 | lucide-react | 0.577.0 | ISC | https://lucide.dev |
-| mammoth | 1.11.0 | BSD-2-Clause | https://github.com/mwilliamson/mammoth.js#readme |
+| mammoth | 1.12.0 | BSD-2-Clause | https://github.com/mwilliamson/mammoth.js#readme |
 | marked | 16.4.2, 17.0.1 | MIT | https://marked.js.org |
 | mermaid | 11.12.2 | MIT | https://github.com/mermaid-js/mermaid#readme |
 | mlly | 1.8.0 | MIT | https://github.com/unjs/mlly#readme |
@@ -285,8 +285,8 @@ Generated: 2026-04-21T17:39:16.804Z
 | points-on-path | 0.2.1 | MIT | https://github.com/pshihn/points-on-path#readme |
 | prismjs | 1.30.0 | MIT | https://github.com/PrismJS/prism#readme |
 | process-nextick-args | 2.0.1 | MIT | https://github.com/calvinmetcalf/process-nextick-args |
-| react | 19.2.3 | MIT | https://react.dev/ |
-| react-dom | 19.2.3 | MIT | https://react.dev/ |
+| react | 19.2.5 | MIT | https://react.dev/ |
+| react-dom | 19.2.5 | MIT | https://react.dev/ |
 | react-i18next | 16.6.5 | MIT | https://github.com/i18next/react-i18next |
 | react-remove-scroll | 2.7.2 | MIT | https://github.com/theKashey/react-remove-scroll#readme |
 | react-remove-scroll-bar | 2.3.8 | MIT | https://github.com/theKashey/react-remove-scroll-bar#readme |
@@ -312,7 +312,7 @@ Generated: 2026-04-21T17:39:16.804Z
 | tslib | 2.8.1 | 0BSD | https://www.typescriptlang.org/ |
 | typescript | 5.9.3 | Apache-2.0 | https://www.typescriptlang.org/ |
 | ufo | 1.6.3 | MIT | https://github.com/unjs/ufo#readme |
-| underscore | 1.13.7 | MIT | https://underscorejs.org |
+| underscore | 1.13.8 | MIT | https://underscorejs.org |
 | use-callback-ref | 1.3.3 | MIT | https://github.com/theKashey/use-callback-ref#readme |
 | use-sidecar | 1.1.3 | MIT | https://github.com/theKashey/use-sidecar |
 | use-sync-external-store | 1.6.0 | MIT | https://github.com/facebook/react#readme |

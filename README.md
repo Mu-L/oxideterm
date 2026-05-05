@@ -465,6 +465,7 @@ Measured with `tokei`, excluding dependencies and build artifacts.
 - [ ] Audit logging
 - [ ] Agent enhancements
 - [ ] Session search & quick-switch
+- [ ] Rust-native migration
 
 ---
 

@@ -465,6 +465,7 @@ pnpm run tauri build
 - [ ] 감사 로깅
 - [ ] Agent 기능 강화
 - [ ] 세션 검색 및 빠른 전환
+- [ ] Rust 네이티브 전환
 
 ---
 

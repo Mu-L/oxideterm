@@ -465,6 +465,7 @@ Medido con `tokei`, excluyendo dependencias y artefactos de build.
 - [ ] Registro de auditoría
 - [ ] Mejoras del Agent
 - [ ] Búsqueda de sesiones y cambio rápido
+- [ ] Migración nativa a Rust
 
 ---
 

@@ -465,6 +465,7 @@ pnpm run tauri build
 - [ ] 稽核功能
 - [ ] Agent 增強
 - [ ] 工作階段搜尋與快速切換
+- [ ] Rust 原生遷移
 
 ---
 

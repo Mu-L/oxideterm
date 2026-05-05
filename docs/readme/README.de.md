@@ -465,6 +465,7 @@ Gemessen mit `tokei`, ohne Abhängigkeiten und Build-Artefakte.
 - [ ] Audit-Protokollierung
 - [ ] Agent-Verbesserungen
 - [ ] Sitzungssuche & Schnellwechsel
+- [ ] Rust-native Migration
 
 ---
 

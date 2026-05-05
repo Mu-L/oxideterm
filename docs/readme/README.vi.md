@@ -465,6 +465,7 @@ pnpm run tauri build
 - [ ] Nhật ký kiểm toán
 - [ ] Nâng cao Agent
 - [ ] Tìm kiếm phiên & chuyển đổi nhanh
+- [ ] Chuyển sang Rust native
 
 ---
 

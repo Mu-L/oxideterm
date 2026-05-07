@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.4.0-blue" alt="バージョン">
+  <img src="https://img.shields.io/badge/version-1.4.1-blue" alt="バージョン">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="プラットフォーム">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="ライセンス">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -465,7 +465,7 @@ pnpm run tauri build
 - [ ] 監査ログ
 - [ ] Agent 機能強化
 - [ ] セッション検索とクイック切替
-- [ ] Rustネイティブ移行
+- [x] GPUI（ZedのGPUアクセラレーションフレームワーク）によるRustネイティブ移行 — [進行中]
 
 ---
 

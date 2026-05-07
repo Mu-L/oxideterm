@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.4.0-blue" alt="Phiên bản">
+  <img src="https://img.shields.io/badge/version-1.4.1-blue" alt="Phiên bản">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Nền tảng">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Giấy phép">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -465,7 +465,7 @@ pnpm run tauri build
 - [ ] Nhật ký kiểm toán
 - [ ] Nâng cao Agent
 - [ ] Tìm kiếm phiên & chuyển đổi nhanh
-- [ ] Chuyển sang Rust native
+- [x] Chuyển sang Rust native qua GPUI — [đang tiến hành]
 
 ---
 

@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.4.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.4.1-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Plattform">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Lizenz">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -465,7 +465,7 @@ Gemessen mit `tokei`, ohne Abhängigkeiten und Build-Artefakte.
 - [ ] Audit-Protokollierung
 - [ ] Agent-Verbesserungen
 - [ ] Sitzungssuche & Schnellwechsel
-- [ ] Rust-native Migration
+- [x] Rust-native Migration via GPUI (Zed's GPU-beschleunigtem Framework) — [in Arbeit]
 
 ---
 

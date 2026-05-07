@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.4.0-blue" alt="버전">
+  <img src="https://img.shields.io/badge/version-1.4.1-blue" alt="버전">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="플랫폼">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="라이선스">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -465,7 +465,7 @@ pnpm run tauri build
 - [ ] 감사 로깅
 - [ ] Agent 기능 강화
 - [ ] 세션 검색 및 빠른 전환
-- [ ] Rust 네이티브 전환
+- [x] GPUI(Zed의 GPU 가속 프레임워크)를 통한 Rust 네이티브 전환 — [진행 중]
 
 ---
 

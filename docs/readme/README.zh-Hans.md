@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.4.0-blue" alt="版本">
+  <img src="https://img.shields.io/badge/version-1.4.1-blue" alt="版本">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="平台">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="许可证">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -465,7 +465,7 @@ pnpm run tauri build
 - [ ] 审计功能
 - [ ] Agent 增强
 - [ ] 会话搜索与快速切换
-- [ ] Rust 原生迁移
+- [x] 通过 GPUI（Zed 的 GPU 加速框架）进行 Rust 原生迁移 — [进行中]
 
 ---
 

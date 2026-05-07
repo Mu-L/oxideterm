@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.4.0-blue" alt="Versão">
+  <img src="https://img.shields.io/badge/version-1.4.1-blue" alt="Versão">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Plataforma">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Licença">
   <img src="https://img.shields.io/badge/rust-1.85+-orange" alt="Rust">
@@ -465,7 +465,7 @@ Medido com `tokei`, excluindo dependências e artefatos de build.
 - [ ] Registro de auditoria
 - [ ] Melhorias no Agent
 - [ ] Busca de sessões e troca rápida
-- [ ] Migração nativa para Rust
+- [x] Migração nativa para Rust via GPUI — [em andamento]
 
 ---
 

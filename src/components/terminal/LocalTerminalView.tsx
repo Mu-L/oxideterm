@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon, ISearchOptions } from '@xterm/addon-search';
-import { ImageAddon } from '@xterm/addon-image';
+import type { ImageAddon } from '@xterm/addon-image';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import '@xterm/xterm/css/xterm.css';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -100,6 +100,7 @@ import {
   type TerminalEncoding,
 } from '../../lib/terminalEncoding';
 import { createTerminalResizeScheduler, type TerminalResizeScheduler } from '../../lib/terminal/resizeScheduler';
+import { createTerminalImageAddon } from '../../lib/terminal/imageAddon';
 
 interface LocalTerminalViewProps {
   sessionId: string;
@@ -345,50 +346,6 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     term.loadAddon(addon);
     searchAddonRef.current = addon;
     return addon;
-  }, []);
-
-  const maybeLoadImageAddon = useCallback((payload: Uint8Array) => {
-    if (imageAddonRef.current || !terminalRef.current) return;
-    for (let i = 0; i < payload.length - 2; i++) {
-      if (payload[i] !== 0x1b) continue;
-      const next = payload[i + 1];
-      if (next === 0x5d) {
-        // ESC ] 1337 ;
-        if (
-          i + 6 < payload.length &&
-          payload[i + 2] === 0x31 &&
-          payload[i + 3] === 0x33 &&
-          payload[i + 4] === 0x33 &&
-          payload[i + 5] === 0x37 &&
-          payload[i + 6] === 0x3b
-        ) {
-          const addon = new ImageAddon({
-            enableSizeReports: true,
-            pixelLimit: 16777216,
-            storageLimit: 32,
-            showPlaceholder: true,
-            sixelSupport: true,
-            iipSupport: true,
-          });
-          terminalRef.current.loadAddon(addon);
-          imageAddonRef.current = addon;
-          return;
-        }
-      } else if (next === 0x50 && payload[i + 2] === 0x71) {
-        // ESC P q (SIXEL)
-        const addon = new ImageAddon({
-          enableSizeReports: true,
-          pixelLimit: 16777216,
-          storageLimit: 32,
-          showPlaceholder: true,
-          sixelSupport: true,
-          iipSupport: true,
-        });
-        terminalRef.current.loadAddon(addon);
-        imageAddonRef.current = addon;
-        return;
-      }
-    }
   }, []);
 
   // ── Session Recording ──────────────────────────────────────────────────────
@@ -728,7 +685,12 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
     webLinksAddonRef.current = webLinksAddon;
-    // SearchAddon and ImageAddon are loaded lazily to reduce memory usage
+    // Load image support before any app output so tools like yazi can probe
+    // SIXEL/IIP capabilities during startup.
+    const imageAddon = createTerminalImageAddon();
+    term.loadAddon(imageAddon);
+    imageAddonRef.current = imageAddon;
+    // SearchAddon is loaded lazily to reduce memory usage.
     
     // Unicode11Addon for proper Nerd Font icons and CJK wide character rendering
     // Required for Oh My Posh, Starship, and other modern prompts
@@ -1234,7 +1196,6 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       if (!mounted || !isMountedRef.current || !terminalRef.current) return;
       const data = new Uint8Array(event.payload.data);
       
-      maybeLoadImageAddon(data);
       maybeSuggestTerminalEncoding(data);
       const displayData = terminalOutputDecoderRef.current.transform(data).bytes;
       if (recorderRef.current) {
@@ -1319,7 +1280,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
         frontendOutputListenerReady: false,
       });
     };
-  }, [feedOutput, fontOpenReady, maybeLoadImageAddon, maybeSuggestTerminalEncoding, recorderRef, sessionId, updateTerminalState]);
+  }, [feedOutput, fontOpenReady, maybeSuggestTerminalEncoding, recorderRef, sessionId, updateTerminalState]);
 
   // Listen for AI insert command events (only when this terminal is active)
   useEffect(() => {

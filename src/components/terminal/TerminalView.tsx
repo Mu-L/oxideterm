@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon, ISearchOptions } from '@xterm/addon-search';
-import { ImageAddon } from '@xterm/addon-image';
+import type { ImageAddon } from '@xterm/addon-image';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import '@xterm/xterm/css/xterm.css';
 import { useAppStore } from '../../store/appStore';
@@ -123,6 +123,7 @@ import {
   type TerminalEncoding,
 } from '../../lib/terminalEncoding';
 import { createTerminalResizeScheduler, type TerminalResizeScheduler } from '../../lib/terminal/resizeScheduler';
+import { createTerminalImageAddon } from '../../lib/terminal/imageAddon';
 
 const PREFILL_REPLAY_LINE_COUNT = 50; // Keep aligned with backend replay count
 const TRZSZ_MAGIC_PREFIX = '::TRZSZ:TRANSFER:';
@@ -522,50 +523,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     return addon;
   }, []);
 
-  const maybeLoadImageAddon = useCallback((payload: Uint8Array) => {
-    if (imageAddonRef.current || !terminalRef.current) return;
-    for (let i = 0; i < payload.length - 2; i++) {
-      if (payload[i] !== 0x1b) continue;
-      const next = payload[i + 1];
-      if (next === 0x5d) {
-        // ESC ] 1337 ;
-        if (
-          i + 6 < payload.length &&
-          payload[i + 2] === 0x31 &&
-          payload[i + 3] === 0x33 &&
-          payload[i + 4] === 0x33 &&
-          payload[i + 5] === 0x37 &&
-          payload[i + 6] === 0x3b
-        ) {
-          const addon = new ImageAddon({
-            enableSizeReports: true,
-            pixelLimit: 16777216,
-            storageLimit: 16,
-            showPlaceholder: true,
-            sixelSupport: true,
-            iipSupport: true,
-          });
-          terminalRef.current.loadAddon(addon);
-          imageAddonRef.current = addon;
-          return;
-        }
-      } else if (next === 0x50 && payload[i + 2] === 0x71) {
-        // ESC P q (SIXEL)
-        const addon = new ImageAddon({
-          enableSizeReports: true,
-          pixelLimit: 16777216,
-          storageLimit: 16,
-          showPlaceholder: true,
-          sixelSupport: true,
-          iipSupport: true,
-        });
-        terminalRef.current.loadAddon(addon);
-        imageAddonRef.current = addon;
-        return;
-      }
-    }
-  }, []);
-  
   // Subscribe to session changes (including ws_url updates after reconnect)
   const session = useAppStore((state) => state.sessions.get(sessionId));
   const sessionRef = useRef<SessionInfo | undefined>(session);
@@ -968,12 +925,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           && !inBandTransferEnabledRef.current
           && !trzszDisabledToastShownRef.current;
         const shouldRunOutputPipeline = hasOutputProcessorsRef.current;
-        const shouldTryImageAddon = !imageAddonRef.current && Boolean(terminalRef.current);
         const shouldRecordOutput = recorderRef.current !== null;
 
         if (
           !shouldRunOutputPipeline
-          && !shouldTryImageAddon
           && !shouldRecordOutput
           && !shouldCheckTrzszDisabled
           && !controllerRuntimePending
@@ -987,10 +942,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
         if (shouldRunOutputPipeline) {
           payloadCopy = runOutputPipeline(payloadCopy, sessionId, nodeId);
-        }
-
-        if (shouldTryImageAddon) {
-          maybeLoadImageAddon(payloadCopy);
         }
 
         if (shouldRecordOutput) {
@@ -1038,7 +989,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         break;
       }
     }
-  }, [decodeTerminalBytes, feedOutput, maybeLoadImageAddon, maybeSuggestTerminalEncoding, nodeId, recorderRef, sessionId, transformTerminalOutput, writeServerOutputToTerminal]);
+  }, [decodeTerminalBytes, feedOutput, maybeSuggestTerminalEncoding, nodeId, recorderRef, sessionId, transformTerminalOutput, writeServerOutputToTerminal]);
 
   // Keep a stable ref to handleWsMessage so WebSocket onmessage handlers
   // (bound once in the init effect) always call the latest version.
@@ -1733,7 +1684,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
-    // SearchAddon and ImageAddon are loaded lazily to reduce memory usage
+    // Load image support before any app output so tools like yazi can probe
+    // SIXEL/IIP capabilities during startup.
+    const imageAddon = createTerminalImageAddon();
+    term.loadAddon(imageAddon);
+    imageAddonRef.current = imageAddon;
+    // SearchAddon is loaded lazily to reduce memory usage.
     
     // Unicode11Addon for proper Nerd Font icons and CJK wide character rendering
     // Required for Oh My Posh, Starship, and other modern prompts

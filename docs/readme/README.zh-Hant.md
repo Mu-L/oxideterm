@@ -9,7 +9,7 @@
     <img src="https://img.shields.io/github/stars/AnalyseDeCircuit/oxideterm?style=social" alt="GitHub stars">
   </a>
   <br>
-  <em>如果您喜歡 OxideTerm，請在 GitHub 上點個 Star ⭐️！</em>
+  <em>如果你想要一個沒有 Electron、遙測或訂閱的本地優先 SSH 工作區，請給 OxideTerm 點個 Star，讓更多 SSH 使用者找到它。</em>
 </p>
 
 
@@ -17,6 +17,8 @@
   <strong>OxideTerm 是本地優先的 SSH 工作區，不只是終端。</strong>
   <br>
   <em>開啟一次遠端節點（伺服器連線），就圍繞它使用 Shell、SFTP、連接埠轉發、trzsz、輕量編輯和 BYOK AI。</em>
+  <br>
+  <em>開啟一個 SSH 節點，就能在同一個本地工作區管理它的 Shell、檔案、連接埠、編輯器和 AI 上下文。</em>
   <br>
   <strong>零 Electron。零 OpenSSL。零遙測。零訂閱。BYOK 優先。純 Rust SSH。</strong>
 </p>

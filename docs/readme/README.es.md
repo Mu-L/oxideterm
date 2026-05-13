@@ -9,7 +9,7 @@
     <img src="https://img.shields.io/github/stars/AnalyseDeCircuit/oxideterm?style=social" alt="GitHub stars">
   </a>
   <br>
-  <em>¡Si te gusta OxideTerm, por favor dale una estrella en GitHub! ⭐️</em>
+  <em>Si quieres un workspace SSH local-first sin Electron, telemetría ni suscripciones, dale una estrella a OxideTerm para que más usuarios de SSH lo encuentren.</em>
 </p>
 
 
@@ -17,6 +17,8 @@
   <strong>OxideTerm es un workspace SSH local-first, no solo un terminal.</strong>
   <br>
   <em>Abre un nodo remoto (conexión de servidor) una vez y trabaja alrededor de él: shell, SFTP, reenvío de puertos, trzsz, edición ligera y BYOK AI.</em>
+  <br>
+  <em>Abre un nodo SSH y gestiona su shell, archivos, puertos, editor y contexto de IA desde un workspace local.</em>
   <br>
   <strong>Cero Electron. Cero OpenSSL. Cero telemetría. Cero suscripción. BYOK-first. SSH puro en Rust.</strong>
 </p>

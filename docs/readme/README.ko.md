@@ -9,7 +9,7 @@
     <img src="https://img.shields.io/github/stars/AnalyseDeCircuit/oxideterm?style=social" alt="GitHub stars">
   </a>
   <br>
-  <em>OxideTerm이 마음에 드신다면 GitHub에서 별 ⭐️을 눌러주세요!</em>
+  <em>Electron, 텔레메트리, 구독 없는 local-first SSH 워크스페이스를 원하신다면 OxideTerm에 Star를 눌러 더 많은 SSH 사용자가 찾을 수 있게 도와주세요.</em>
 </p>
 
 
@@ -17,6 +17,8 @@
   <strong>OxideTerm은 local-first SSH 워크스페이스이며, 단순한 터미널이 아닙니다.</strong>
   <br>
   <em>원격 노드(서버 연결)를 한 번 열고 그 주변에서 shell, SFTP, 포트 포워딩, trzsz, 경량 편집, BYOK AI를 사용하세요.</em>
+  <br>
+  <em>SSH 노드 하나를 열고, 같은 로컬 워크스페이스에서 shell, 파일, 포트, 에디터, AI 컨텍스트를 관리하세요.</em>
   <br>
   <strong>Electron 제로. OpenSSL 제로. 텔레메트리 제로. 구독 제로. BYOK-first. 순수 Rust SSH.</strong>
 </p>

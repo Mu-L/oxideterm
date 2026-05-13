@@ -9,7 +9,7 @@
     <img src="https://img.shields.io/github/stars/AnalyseDeCircuit/oxideterm?style=social" alt="GitHub stars">
   </a>
   <br>
-  <em>Nếu bạn thích OxideTerm, vui lòng cho dự án một sao trên GitHub! ⭐️</em>
+  <em>Nếu bạn muốn một workspace SSH ưu tiên cục bộ, không Electron, không telemetry và không đăng ký ứng dụng, hãy star OxideTerm để nhiều người dùng SSH hơn tìm thấy nó.</em>
 </p>
 
 
@@ -17,6 +17,8 @@
   <strong>OxideTerm là workspace SSH ưu tiên cục bộ, không chỉ là terminal.</strong>
   <br>
   <em>Mở một node từ xa (kết nối máy chủ) một lần, rồi làm việc quanh nó: shell, SFTP, chuyển tiếp cổng, trzsz, chỉnh sửa nhẹ và AI BYOK.</em>
+  <br>
+  <em>Mở một node SSH, rồi quản lý shell, tệp, cổng, editor và ngữ cảnh AI của nó từ một workspace cục bộ.</em>
   <br>
   <strong>Không Electron. Không OpenSSL. Không telemetry. Không đăng ký ứng dụng. BYOK-first. SSH thuần Rust.</strong>
 </p>

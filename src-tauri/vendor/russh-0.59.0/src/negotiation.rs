@@ -110,6 +110,9 @@ const SAFE_KEX_ORDER: &[kex::Name] = &[
     kex::DH_G16_SHA512,
     kex::DH_G15_SHA512,
     kex::DH_G14_SHA256,
+    kex::ECDH_SHA2_NISTP256,
+    kex::ECDH_SHA2_NISTP384,
+    kex::ECDH_SHA2_NISTP521,
     kex::EXTENSION_SUPPORT_AS_CLIENT,
     kex::EXTENSION_SUPPORT_AS_SERVER,
     kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
@@ -526,4 +529,23 @@ pub(crate) fn write_kex(
         0u32.encode(w)?; // reserved
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_kex_keeps_nistp_compatibility_fallbacks() {
+        assert!(Preferred::DEFAULT.kex.contains(&kex::ECDH_SHA2_NISTP256));
+        assert!(Preferred::DEFAULT.kex.contains(&kex::ECDH_SHA2_NISTP384));
+        assert!(Preferred::DEFAULT.kex.contains(&kex::ECDH_SHA2_NISTP521));
+    }
+
+    #[test]
+    fn default_kex_does_not_enable_sha1_dh_fallbacks() {
+        assert!(!Preferred::DEFAULT.kex.contains(&kex::DH_GEX_SHA1));
+        assert!(!Preferred::DEFAULT.kex.contains(&kex::DH_G14_SHA1));
+        assert!(!Preferred::DEFAULT.kex.contains(&kex::DH_G1_SHA1));
+    }
 }

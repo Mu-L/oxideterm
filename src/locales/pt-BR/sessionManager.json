@@ -18,7 +18,11 @@
       "rename_group": "Renomear grupo",
       "delete_group": "Excluir grupo",
       "new_subgroup": "Novo subgrupo",
-      "confirm_delete_group": "Excluir grupo \"{{name}}\"? As conexões serão movidas para Sem grupo."
+      "confirm_delete_group": "Excluir grupo \"{{name}}\"? As conexões serão movidas para Sem grupo.",
+      "nested_hint_title": "Grupos aninhados",
+      "nested_hint_description": "Use / no nome do grupo para criar uma árvore de pastas.",
+      "nested_hint_example": "Produção/Núcleo/Banco de dados",
+      "new_group_nested_hint": "Use / para criar grupos aninhados, por exemplo"
     },
     "table": {
       "name": "Nome",

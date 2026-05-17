@@ -18,7 +18,11 @@
       "rename_group": "Rename Group",
       "delete_group": "Delete Group",
       "new_subgroup": "New Subgroup",
-      "confirm_delete_group": "Delete group \"{{name}}\"? Connections will be moved to Ungrouped."
+      "confirm_delete_group": "Delete group \"{{name}}\"? Connections will be moved to Ungrouped.",
+      "nested_hint_title": "Nested groups",
+      "nested_hint_description": "Use / in a group name to create a folder tree.",
+      "nested_hint_example": "Production/Core/Database",
+      "new_group_nested_hint": "Use / to create nested groups, for example"
     },
     "table": {
       "name": "Name",

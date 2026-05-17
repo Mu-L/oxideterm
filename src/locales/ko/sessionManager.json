@@ -18,7 +18,11 @@
       "rename_group": "그룹 이름 변경",
       "delete_group": "그룹 삭제",
       "new_subgroup": "하위 그룹 만들기",
-      "confirm_delete_group": "그룹 \"{{name}}\"을(를) 삭제하시겠습니까? 연결은 미분류로 이동됩니다."
+      "confirm_delete_group": "그룹 \"{{name}}\"을(를) 삭제하시겠습니까? 연결은 미분류로 이동됩니다.",
+      "nested_hint_title": "중첩 그룹",
+      "nested_hint_description": "그룹 이름에 / 를 사용해 폴더 트리를 만들 수 있습니다.",
+      "nested_hint_example": "프로덕션/코어/데이터베이스",
+      "new_group_nested_hint": "/ 를 사용해 중첩 그룹을 만들 수 있습니다. 예:"
     },
     "table": {
       "name": "이름",

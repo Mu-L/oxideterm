@@ -18,7 +18,11 @@
       "rename_group": "重命名分组",
       "delete_group": "删除分组",
       "new_subgroup": "新建子分组",
-      "confirm_delete_group": "删除分组 \"{{name}}\"？连接将被移至未分组。"
+      "confirm_delete_group": "删除分组 \"{{name}}\"？连接将被移至未分组。",
+      "nested_hint_title": "嵌套分组",
+      "nested_hint_description": "在分组名中使用 / 即可创建目录树。",
+      "nested_hint_example": "生产环境/核心/数据库",
+      "new_group_nested_hint": "使用 / 创建嵌套分组，例如"
     },
     "table": {
       "name": "名称",

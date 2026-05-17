@@ -18,7 +18,11 @@
       "rename_group": "Gruppe umbenennen",
       "delete_group": "Gruppe löschen",
       "new_subgroup": "Neue Untergruppe",
-      "confirm_delete_group": "Gruppe \"{{name}}\" löschen? Verbindungen werden in Nicht gruppiert verschoben."
+      "confirm_delete_group": "Gruppe \"{{name}}\" löschen? Verbindungen werden in Nicht gruppiert verschoben.",
+      "nested_hint_title": "Verschachtelte Gruppen",
+      "nested_hint_description": "Verwenden Sie / im Gruppennamen, um einen Ordnerbaum zu erstellen.",
+      "nested_hint_example": "Produktion/Kern/Datenbank",
+      "new_group_nested_hint": "Verwenden Sie / für verschachtelte Gruppen, zum Beispiel"
     },
     "table": {
       "name": "Name",

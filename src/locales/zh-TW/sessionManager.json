@@ -18,7 +18,11 @@
       "rename_group": "重新命名群組",
       "delete_group": "刪除群組",
       "new_subgroup": "新建子群組",
-      "confirm_delete_group": "刪除群組 \"{{name}}\"？連線將被移至未分組。"
+      "confirm_delete_group": "刪除群組 \"{{name}}\"？連線將被移至未分組。",
+      "nested_hint_title": "巢狀群組",
+      "nested_hint_description": "在群組名稱中使用 / 即可建立目錄樹。",
+      "nested_hint_example": "正式環境/核心/資料庫",
+      "new_group_nested_hint": "使用 / 建立巢狀群組，例如"
     },
     "table": {
       "name": "名稱",

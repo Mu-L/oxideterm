@@ -18,7 +18,11 @@
       "rename_group": "グループ名を変更",
       "delete_group": "グループを削除",
       "new_subgroup": "サブグループを作成",
-      "confirm_delete_group": "グループ \"{{name}}\" を削除しますか？接続は未分類に移動されます。"
+      "confirm_delete_group": "グループ \"{{name}}\" を削除しますか？接続は未分類に移動されます。",
+      "nested_hint_title": "入れ子グループ",
+      "nested_hint_description": "グループ名に / を使うとフォルダツリーを作成できます。",
+      "nested_hint_example": "本番/コア/データベース",
+      "new_group_nested_hint": "/ を使って入れ子グループを作成できます。例:"
     },
     "table": {
       "name": "名前",

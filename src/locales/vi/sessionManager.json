@@ -18,7 +18,11 @@
       "rename_group": "Đổi tên nhóm",
       "delete_group": "Xóa nhóm",
       "new_subgroup": "Nhóm con mới",
-      "confirm_delete_group": "Xóa nhóm \"{{name}}\"? Các kết nối sẽ được chuyển sang Chưa phân nhóm."
+      "confirm_delete_group": "Xóa nhóm \"{{name}}\"? Các kết nối sẽ được chuyển sang Chưa phân nhóm.",
+      "nested_hint_title": "Nhóm lồng nhau",
+      "nested_hint_description": "Dùng / trong tên nhóm để tạo cây thư mục.",
+      "nested_hint_example": "Sản xuất/Cốt lõi/Cơ sở dữ liệu",
+      "new_group_nested_hint": "Dùng / để tạo nhóm lồng nhau, ví dụ"
     },
     "table": {
       "name": "Tên",
@@ -36,12 +40,14 @@
       "select_all": "Chọn tất cả",
       "selected_count": "Đã chọn {{count}}",
       "never_used": "Chưa dùng"
-    },    "time": {
+    },
+    "time": {
       "just_now": "Vừa xong",
       "minutes_ago": "{{count}} phút trước",
       "hours_ago": "{{count}} giờ trước",
       "days_ago": "{{count}} ngày trước"
-    },    "actions": {
+    },
+    "actions": {
       "connect": "Kết nối",
       "edit": "Sửa",
       "duplicate": "Nhân bản",

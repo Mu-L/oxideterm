@@ -18,7 +18,11 @@
       "rename_group": "Rinomina gruppo",
       "delete_group": "Elimina gruppo",
       "new_subgroup": "Nuovo sottogruppo",
-      "confirm_delete_group": "Eliminare il gruppo \"{{name}}\"? Le connessioni verranno spostate in Senza gruppo."
+      "confirm_delete_group": "Eliminare il gruppo \"{{name}}\"? Le connessioni verranno spostate in Senza gruppo.",
+      "nested_hint_title": "Gruppi annidati",
+      "nested_hint_description": "Usa / nel nome del gruppo per creare un albero di cartelle.",
+      "nested_hint_example": "Produzione/Nucleo/Database",
+      "new_group_nested_hint": "Usa / per creare gruppi annidati, ad esempio"
     },
     "table": {
       "name": "Nome",

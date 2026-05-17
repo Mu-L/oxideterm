@@ -607,6 +607,12 @@ export const SessionManagerPanel = () => {
               }}
               placeholder={t('sessionManager.folder_tree.new_group_placeholder')}
             />
+            <div className="rounded-md border border-theme-border/60 bg-theme-bg-sunken/60 px-3 py-2 text-xs text-theme-text-muted">
+              <span>{t('sessionManager.folder_tree.new_group_nested_hint')}</span>
+              <code className="ml-1 rounded bg-theme-bg px-1.5 py-0.5 font-mono text-[11px] text-theme-text">
+                {t('sessionManager.folder_tree.nested_hint_example')}
+              </code>
+            </div>
           </div>
           <DialogFooter>
             <Button

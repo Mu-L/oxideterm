@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Clock, Inbox, Plus } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Clock, Inbox, Plus, GitBranch } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import {
@@ -134,6 +134,16 @@ export const FolderTree = ({
               <Plus className="h-4 w-4 shrink-0" />
               <span className="truncate">{t('sessionManager.folder_tree.new_group')}</span>
             </Button>
+            <div className="rounded-md border border-theme-border/60 bg-theme-bg-sunken/60 px-2.5 py-2 text-[11px] leading-relaxed text-theme-text-muted">
+              <div className="mb-1 flex items-center gap-1.5 font-medium text-theme-text">
+                <GitBranch className="h-3.5 w-3.5 text-theme-accent" />
+                {t('sessionManager.folder_tree.nested_hint_title')}
+              </div>
+              <div>{t('sessionManager.folder_tree.nested_hint_description')}</div>
+              <code className="mt-1.5 block truncate rounded bg-theme-bg px-1.5 py-1 font-mono text-[10px] text-theme-text">
+                {t('sessionManager.folder_tree.nested_hint_example')}
+              </code>
+            </div>
           </div>
 
           {/* Scrollable middle: Group tree + Ungrouped */}

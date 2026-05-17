@@ -18,7 +18,11 @@
       "rename_group": "Renommer le groupe",
       "delete_group": "Supprimer le groupe",
       "new_subgroup": "Nouveau sous-groupe",
-      "confirm_delete_group": "Supprimer le groupe \"{{name}}\" ? Les connexions seront déplacées dans Non groupées."
+      "confirm_delete_group": "Supprimer le groupe \"{{name}}\" ? Les connexions seront déplacées dans Non groupées.",
+      "nested_hint_title": "Groupes imbriqués",
+      "nested_hint_description": "Utilisez / dans le nom du groupe pour créer une arborescence.",
+      "nested_hint_example": "Production/Noyau/Base de données",
+      "new_group_nested_hint": "Utilisez / pour créer des groupes imbriqués, par exemple"
     },
     "table": {
       "name": "Nom",

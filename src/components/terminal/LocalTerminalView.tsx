@@ -38,7 +38,7 @@ import {
   shouldAutoFocusTerminal,
   shouldFocusTerminalFromClick,
 } from '../../lib/terminalHelpers';
-import { formatTerminalTextInput } from '../../lib/terminalInput';
+import { formatTerminalPasteInput, formatTerminalTextInput } from '../../lib/terminalInput';
 import { 
   registerTerminalBuffer, 
   unregisterTerminalBuffer,
@@ -1510,7 +1510,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
   // Paste protection: handle pending paste confirm
   const handlePasteConfirm = useCallback(() => {
     if (pendingPaste && isRunning) {
-      writeEncodedTerminalInput(formatTerminalTextInput(pendingPaste));
+      writeEncodedTerminalInput(formatTerminalPasteInput(pendingPaste, terminalRef.current?.modes.bracketedPasteMode === true));
     }
     setPendingPaste(null);
     requestAnimationFrame(() => {
@@ -1549,7 +1549,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
       return true;
     }
 
-    writeEncodedTerminalInput(formatTerminalTextInput(text));
+    writeEncodedTerminalInput(formatTerminalPasteInput(text, terminalRef.current.modes.bracketedPasteMode === true));
     return true;
   }, [writeEncodedTerminalInput]);
 

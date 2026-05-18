@@ -12,6 +12,20 @@ export function shouldUseBracketedPaste(content: string): boolean {
   return normalizeTerminalLineEndings(content).includes('\n');
 }
 
+export function prepareTerminalPasteText(content: string): string {
+  return content.replace(/\r\n/g, '\r').replace(/\n/g, '\r');
+}
+
+export function formatTerminalPasteInput(content: string, bracketedPasteMode: boolean): string {
+  const prepared = prepareTerminalPasteText(content);
+
+  if (!bracketedPasteMode || !prepared.includes('\r')) {
+    return prepared;
+  }
+
+  return `${BRACKETED_PASTE_START}${prepared}${BRACKETED_PASTE_END}`;
+}
+
 export function formatTerminalTextInput(content: string): string {
   const normalized = normalizeTerminalLineEndings(content);
 

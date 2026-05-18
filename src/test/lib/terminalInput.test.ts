@@ -5,8 +5,10 @@ import {
   BRACKETED_PASTE_START,
   encodeTerminalExecuteInput,
   encodeTerminalTextInput,
+  formatTerminalPasteInput,
   formatTerminalTextInput,
   normalizeTerminalLineEndings,
+  prepareTerminalPasteText,
   shouldUseBracketedPaste,
 } from '@/lib/terminalInput';
 
@@ -53,6 +55,36 @@ describe('formatTerminalTextInput', () => {
 
   it('preserves empty input', () => {
     expect(formatTerminalTextInput('')).toBe('');
+  });
+});
+
+describe('prepareTerminalPasteText', () => {
+  it('converts LF line endings to CR for terminal paste', () => {
+    expect(prepareTerminalPasteText('line 1\nline 2')).toBe('line 1\rline 2');
+  });
+
+  it('converts CRLF line endings to CR for terminal paste', () => {
+    expect(prepareTerminalPasteText('line 1\r\nline 2')).toBe('line 1\rline 2');
+  });
+
+  it('preserves existing CR line endings', () => {
+    expect(prepareTerminalPasteText('line 1\rline 2')).toBe('line 1\rline 2');
+  });
+});
+
+describe('formatTerminalPasteInput', () => {
+  it('does not wrap multiline paste when bracketed paste mode is disabled', () => {
+    expect(formatTerminalPasteInput('git status\ngit diff', false)).toBe('git status\rgit diff');
+  });
+
+  it('wraps multiline paste when bracketed paste mode is enabled', () => {
+    expect(formatTerminalPasteInput('git status\ngit diff', true)).toBe(
+      `${BRACKETED_PASTE_START}git status\rgit diff${BRACKETED_PASTE_END}`
+    );
+  });
+
+  it('keeps single-line paste unwrapped even when bracketed paste mode is enabled', () => {
+    expect(formatTerminalPasteInput('pwd', true)).toBe('pwd');
   });
 });
 

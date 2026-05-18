@@ -113,7 +113,7 @@ import {
 import { notifyTrzszTransferEvent } from '../../lib/terminal/trzsz/notifications';
 import { TrzszController } from '../../lib/terminal/trzsz/controller';
 import { createRemoteTerminalTransport, type RemoteTerminalTransport } from '../../lib/terminal/trzsz/transport';
-import { formatTerminalTextInput } from '../../lib/terminalInput';
+import { formatTerminalPasteInput, formatTerminalTextInput } from '../../lib/terminalInput';
 import {
   encodeTerminalInput,
   formatTerminalEncodingLabel,
@@ -2583,6 +2583,24 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     return true;
   }, [sendEncodedTerminalInput]);
 
+  const sendFormattedTerminalInput = useCallback((input: string): boolean => {
+    const controller = trzszControllerRef.current;
+    if (controller) {
+      return controller.processTerminalInput(input);
+    }
+
+    if (controllerRuntimePendingRef.current || !transportRef.current) {
+      return false;
+    }
+
+    sendEncodedTerminalInput(input);
+    return true;
+  }, [sendEncodedTerminalInput]);
+
+  const formatCurrentTerminalPasteInput = useCallback((text: string): string => {
+    return formatTerminalPasteInput(text, terminalRef.current?.modes.bracketedPasteMode === true);
+  }, []);
+
   // Listen for AI insert command events (only when this terminal is active and connected)
   useEffect(() => {
     if (!isActive) return;
@@ -2963,13 +2981,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const handlePasteConfirm = useCallback(() => {
     if (inputLockedRef.current) return; // Respect standby mode
     if (pendingPaste) {
-      sendProgrammaticTerminalInput(pendingPaste);
+      sendFormattedTerminalInput(formatCurrentTerminalPasteInput(pendingPaste));
     }
     setPendingPaste(null);
     requestAnimationFrame(() => {
       focusTerminal('strong');
     });
-  }, [focusTerminal, pendingPaste, sendProgrammaticTerminalInput]);
+  }, [focusTerminal, formatCurrentTerminalPasteInput, pendingPaste, sendFormattedTerminalInput]);
 
   const handlePasteCancel = useCallback(() => {
     setPendingPaste(null);
@@ -2998,8 +3016,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return false;
     }
 
-    return sendProgrammaticTerminalInput(text);
-  }, [sendProgrammaticTerminalInput]);
+    return sendFormattedTerminalInput(formatCurrentTerminalPasteInput(text));
+  }, [formatCurrentTerminalPasteInput, sendFormattedTerminalInput]);
 
   const handlePasteShortcut = useCallback(() => {
     armTerminalPasteShortcutSuppression(pasteShortcutSuppressionRef);

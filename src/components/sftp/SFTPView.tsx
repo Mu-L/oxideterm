@@ -166,7 +166,7 @@ const formatFileSize = (bytes: number): string => {
 type SortField = 'name' | 'size' | 'modified';
 type SortDirection = 'asc' | 'desc';
 
-const FileList = ({ 
+export const FileList = ({
   title, 
   path, 
   files, 
@@ -280,6 +280,14 @@ const FileList = ({
     
     const selectedFiles = Array.from(selected);
     const isLocalPane = !isRemote;
+
+    // F5 is the expected file-manager refresh shortcut. In WebView it also
+    // maps to page reload, so always consume it for the active SFTP pane.
+    if (e.key === 'F5') {
+      e.preventDefault();
+      onRefresh();
+      return;
+    }
     
     // Ctrl/Cmd + A: Select all
     if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
@@ -358,7 +366,7 @@ const FileList = ({
       }
       return;
     }
-  }, [active, selected, files, isRemote, path, onNavigate, onPreview, onTransfer, onDelete, onRename, setSelected, setLastSelected]);
+  }, [active, selected, files, isRemote, path, onNavigate, onRefresh, onPreview, onTransfer, onDelete, onRename, setSelected, setLastSelected]);
 
   // Context menu handler
   const handleContextMenu = (e: React.MouseEvent, file?: FileInfo) => {
@@ -543,6 +551,8 @@ const FileList = ({
       <div 
         ref={listRef}
         className="flex-1 overflow-y-auto outline-none" 
+        role="listbox"
+        aria-label={title}
         tabIndex={0} 
         onClick={() => setSelected(new Set())}
         onKeyDown={handleKeyDown}
@@ -1199,6 +1209,33 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
     refreshLocalFiles();
   }, [refreshLocalFiles]);
 
+  const refreshRemoteFiles = useCallback(async () => {
+    if (!remotePath) return;
+    const files = await nodeSftpListDir(nodeId, remotePath);
+    setRemoteFiles(files);
+  }, [nodeId, remotePath]);
+
+  const refreshLocalFilesRef = useRef(refreshLocalFiles);
+  refreshLocalFilesRef.current = refreshLocalFiles;
+  const refreshRemoteFilesRef = useRef(refreshRemoteFiles);
+  refreshRemoteFilesRef.current = refreshRemoteFiles;
+
+  useEffect(() => {
+    const handleRefreshKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.key !== 'F5') return;
+
+      e.preventDefault();
+      if (activePaneRef.current === 'local') {
+        void refreshLocalFilesRef.current();
+      } else {
+        void refreshRemoteFilesRef.current();
+      }
+    };
+
+    window.addEventListener('keydown', handleRefreshKey);
+    return () => window.removeEventListener('keydown', handleRefreshKey);
+  }, []);
+
   // Cross-platform path utilities
   const getParentPath = useCallback((currentPath: string, isRemote: boolean): string => {
     if (isRemote) {
@@ -1336,11 +1373,6 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
 
   // Get transfer store actions
   const { addTransfer, updateProgress, setTransferState, getAllTransfers, upsertTransferSnapshot, upsertTransferSnapshots } = useTransferStore();
-  const refreshLocalFilesRef = useRef(refreshLocalFiles);
-
-  useEffect(() => {
-    refreshLocalFilesRef.current = refreshLocalFiles;
-  }, [refreshLocalFiles]);
 
   useEffect(() => {
     previewFileRef.current = previewFile;
@@ -2140,7 +2172,7 @@ export const SFTPView = ({ nodeId }: { nodeId: string }) => {
              files={displayRemoteFiles}
              isRemote={true}
              onNavigate={handleRemoteNavigate}
-             onRefresh={() => nodeSftpListDir(nodeId, remotePath).then(setRemoteFiles)}
+             onRefresh={refreshRemoteFiles}
              active={activePane === 'remote'}
              onActivate={() => setActivePane('remote')}
              onPreview={handlePreview}

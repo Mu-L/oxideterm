@@ -787,6 +787,54 @@ mod tests {
 
         assert!(matches!(auth, AuthMethod::KeyboardInteractive));
     }
+
+    #[test]
+    fn test_take_stale_runtime_for_retry_clears_failed_node_runtime_ids() {
+        let mut tree = SessionTree::new();
+        let node_id = tree.add_root_node(
+            NodeConnection::new("example.com", 22, "alice"),
+            NodeOrigin::Direct,
+        );
+        tree.set_ssh_connection_id(&node_id, "stale-ssh".to_string())
+            .unwrap();
+        tree.set_terminal_session_id(&node_id, "stale-terminal".to_string())
+            .unwrap();
+        tree.set_sftp_session_id(&node_id, "stale-sftp".to_string())
+            .unwrap();
+        tree.update_state(
+            &node_id,
+            NodeState::Failed {
+                error: "network unreachable".to_string(),
+            },
+        )
+        .unwrap();
+
+        let stale = take_stale_runtime_for_retry(&mut tree, &node_id).unwrap();
+
+        assert_eq!(stale.as_deref(), Some("stale-ssh"));
+        let node = tree.get_node(&node_id).unwrap();
+        assert!(node.ssh_connection_id.is_none());
+        assert!(node.terminal_session_id.is_none());
+        assert!(node.sftp_session_id.is_none());
+    }
+
+    #[test]
+    fn test_take_stale_runtime_for_retry_rejects_connected_node() {
+        let mut tree = SessionTree::new();
+        let node_id = tree.add_root_node(
+            NodeConnection::new("example.com", 22, "alice"),
+            NodeOrigin::Direct,
+        );
+        tree.set_ssh_connection_id(&node_id, "active-ssh".to_string())
+            .unwrap();
+        tree.update_state(&node_id, NodeState::Connected).unwrap();
+
+        let error = take_stale_runtime_for_retry(&mut tree, &node_id).unwrap_err();
+
+        assert_eq!(error, format!("Node {} is already connected", node_id));
+        let node = tree.get_node(&node_id).unwrap();
+        assert_eq!(node.ssh_connection_id.as_deref(), Some("active-ssh"));
+    }
 }
 
 /// 连接会话树节点请求
@@ -946,6 +994,26 @@ pub async fn preflight_tree_node(
     }
 }
 
+fn take_stale_runtime_for_retry(
+    tree: &mut SessionTree,
+    node_id: &str,
+) -> Result<Option<String>, String> {
+    let node = tree
+        .get_node_mut(node_id)
+        .ok_or_else(|| format!("Node not found: {}", node_id))?;
+
+    match &node.state {
+        NodeState::Pending | NodeState::Disconnected | NodeState::Failed { .. } => {
+            let stale_ssh_connection_id = node.ssh_connection_id.take();
+            node.terminal_session_id = None;
+            node.sftp_session_id = None;
+            Ok(stale_ssh_connection_id)
+        }
+        NodeState::Connecting => Err(format!("Node {} is already connecting", node_id)),
+        NodeState::Connected => Err(format!("Node {} is already connected", node_id)),
+    }
+}
+
 /// 连接会话树中的节点
 ///
 /// 此命令负责建立实际的 SSH 连接：
@@ -1021,11 +1089,36 @@ pub async fn connect_tree_node(
         (config, node.parent_id.clone())
     };
 
-    // 2. 更新节点状态为 Connecting
-    {
+    // 2. 清理失败/断开节点上遗留的 runtime 连接，然后更新节点状态为 Connecting
+    let stale_ssh_connection_id = {
         let mut tree = state.tree.write().await;
+        let stale_ssh_connection_id =
+            take_stale_runtime_for_retry(&mut tree, &node_id).map_err(|e| {
+                trace.emit(&app, "preparing", "failed", 15, Some(e.clone()));
+                e
+            })?;
         tree.update_state(&node_id, NodeState::Connecting)
             .map_err(|e| e.to_string())?;
+        stale_ssh_connection_id
+    };
+
+    if let Some(stale_ssh_connection_id) = stale_ssh_connection_id {
+        tracing::info!(
+            "Cleaning stale SSH connection {} before retrying node {}",
+            stale_ssh_connection_id,
+            node_id
+        );
+        if let Err(e) = connection_registry
+            .disconnect(&stale_ssh_connection_id)
+            .await
+        {
+            tracing::warn!(
+                "Failed to clean stale SSH connection {} before retrying node {}: {}",
+                stale_ssh_connection_id,
+                node_id,
+                e
+            );
+        }
     }
     trace.emit(&app, "opening_transport", "running", 28, None);
 

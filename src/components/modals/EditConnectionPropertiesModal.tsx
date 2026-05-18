@@ -264,7 +264,11 @@ export const EditConnectionPropertiesModal = ({
                       id="edit-password"
                       type={passwordVisible ? 'text' : 'password'}
                       value={passwordLoaded ? password : ''}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setPasswordLoaded(true);
+                        setPasswordError('');
+                      }}
                       placeholder={t('sessionManager.edit_properties.password_placeholder')}
                       className="pr-11"
                     />

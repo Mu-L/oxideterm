@@ -115,6 +115,40 @@ describe('EditConnectionPropertiesModal', () => {
     });
   });
 
+  it('allows setting a new password when no saved password was loaded', async () => {
+    render(
+      <EditConnectionPropertiesModal
+        open={true}
+        onOpenChange={vi.fn()}
+        connection={{
+          id: 'conn-imported',
+          name: 'Imported Password Host',
+          host: 'imported.example.com',
+          port: 22,
+          username: 'tester',
+          auth_type: 'password',
+        } as never}
+      />,
+    );
+
+    const passwordInput = screen.getByLabelText('sessionManager.edit_properties.saved_password') as HTMLInputElement;
+
+    fireEvent.change(passwordInput, { target: { value: 'new-imported-secret' } });
+
+    expect(passwordInput.value).toBe('new-imported-secret');
+    expect(api.getConnectionPassword).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'sessionManager.edit_properties.save' }));
+
+    await waitFor(() => {
+      expect(api.saveConnection).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'conn-imported',
+        auth_type: 'password',
+        password: 'new-imported-secret',
+      }));
+    });
+  });
+
   it('shows an inline error when loading the saved password fails', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     api.getConnectionPassword.mockRejectedValueOnce(new Error('Keychain unavailable'));

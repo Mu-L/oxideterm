@@ -118,7 +118,6 @@ export const SessionManagerPanel = () => {
         setConnectPromptConnectionId(id);
         return;
       }
-      setEditingConnectionId(id);
     },
     onHostKeyChallenge: ({
       pendingPlan,

@@ -243,15 +243,37 @@ describe('connectToSaved', () => {
   it('suppresses onError for lock-busy style failures', async () => {
     apiMocks.getSavedConnectionForConnect.mockRejectedValue(new Error('CHAIN_LOCK_BUSY'));
     const onError = vi.fn();
+    const toast = vi.fn();
 
     await connectToSaved('saved-4', {
       createTab: vi.fn(),
-      toast: vi.fn(),
+      toast,
       t: (key: string) => key,
       onError,
     });
 
     expect(onError).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('shows the connection failure reason without requiring callers to open the editor', async () => {
+    apiMocks.getSavedConnectionForConnect.mockRejectedValue(new Error('network unreachable'));
+    const onError = vi.fn();
+    const toast = vi.fn();
+
+    await connectToSaved('saved-network-down', {
+      createTab: vi.fn(),
+      toast,
+      t: (key: string) => key,
+      onError,
+    });
+
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'connection.errors.generic_title',
+      description: 'Error: network unreachable',
+      variant: 'error',
+    }));
+    expect(onError).toHaveBeenCalledWith('saved-network-down', 'connect-failed');
   });
 
   it('requests a password prompt instead of attempting a fresh connection when password is missing', async () => {

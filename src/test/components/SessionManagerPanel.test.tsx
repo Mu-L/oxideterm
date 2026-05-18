@@ -265,6 +265,21 @@ describe('SessionManagerPanel', () => {
     expect(screen.queryByTestId('properties-modal')).toBeNull();
   });
 
+  it('does not open connection details for ordinary connect failures', async () => {
+    connectToSavedMock.mockImplementation(async (_id: string, options: { onError?: (id: string, reason?: 'missing-password' | 'connect-failed') => void }) => {
+      options.onError?.('conn-1', 'connect-failed');
+    });
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('connect-row'));
+
+    await waitFor(() => {
+      expect(connectToSavedMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId('connect-modal')).toBeNull();
+    expect(screen.queryByTestId('properties-modal')).toBeNull();
+  });
+
   it('opens the password modal in test mode when testing a saved password connection without a stored password', async () => {
     vi.mocked(api.getSavedConnectionForConnect).mockResolvedValue({
       name: 'Test Conn',

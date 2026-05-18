@@ -697,7 +697,11 @@ export const Sidebar = () => {
       createTab,
       toast,
       t,
-      onError: openConnectionEditor,
+      onError: (id, reason) => {
+        if (reason === 'missing-password') {
+          openConnectionEditor(id);
+        }
+      },
     });
   }, [openConnectionEditor, createTab, toast, t]);
 

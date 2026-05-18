@@ -127,7 +127,7 @@ async function handleSavedConnectionFailure(
   options: ConnectToSavedOptions,
   pendingPlan?: PendingSavedConnectionPlan,
 ): Promise<null> {
-  const { t, onError } = options;
+  const { t, toast, onError } = options;
   const errorMsg = String(error);
 
   console.error('Failed to connect to saved connection:', error);
@@ -139,8 +139,14 @@ async function handleSavedConnectionFailure(
   }
 
   if (!shouldSuppressSavedConnectionError(errorMsg)) {
+    const title = t('connection.errors.generic_title', { defaultValue: 'Connection Error' });
+    toast({
+      title,
+      description: errorMsg,
+      variant: 'error',
+    });
     notifyConnectionIssue({
-      title: t('connection.errors.generic_title', { defaultValue: 'Connection Error' }),
+      title,
       body: errorMsg,
       severity: 'error',
       dedupeKey: `saved-connection-failed:${connectionId}`,

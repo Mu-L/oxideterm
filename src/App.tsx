@@ -12,6 +12,7 @@ import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { useConnectionEvents } from './hooks/useConnectionEvents';
 import { useCliEvents } from './hooks/useCliEvents';
 import { useEventLogCapture } from './hooks/useEventLogCapture';
+import { useNativeContextMenuGuard } from './hooks/useNativeContextMenuGuard';
 import { setupTreeStoreSubscriptions, cleanupTreeStoreSubscriptions } from './store/sessionTreeStore';
 import { useSessionTreeStore } from './store/sessionTreeStore';
 import { useLocalTerminalStore } from './store/localTerminalStore';
@@ -57,6 +58,7 @@ function AppContent({ updatesEnabled }: AppContentProps) {
   useConnectionEvents();
   useCliEvents();
   useEventLogCapture();
+  useNativeContextMenuGuard();
 
   useEffect(() => {
     return initializeConnectionTraceToastManager();

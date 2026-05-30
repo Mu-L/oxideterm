@@ -167,6 +167,25 @@ pub struct OxideImportProgressEvent {
     pub total: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct OxideCredentialImportOptions {
+    // Keep legacy imports portable while allowing callers to opt out of managed-key restore.
+    restore_managed_keys: bool,
+    restore_managed_key_passphrases: bool,
+}
+
+impl OxideCredentialImportOptions {
+    fn from_args(
+        restore_managed_keys: Option<bool>,
+        restore_managed_key_passphrases: Option<bool>,
+    ) -> Self {
+        Self {
+            restore_managed_keys: restore_managed_keys.unwrap_or(true),
+            restore_managed_key_passphrases: restore_managed_key_passphrases.unwrap_or(false),
+        }
+    }
+}
+
 fn emit_import_progress(
     on_progress: Option<&Channel<OxideImportProgressEvent>>,
     stage: &str,
@@ -1300,6 +1319,8 @@ pub async fn import_from_oxide(
     conflict_strategy: Option<String>,
     import_forwards: Option<bool>,
     import_portable_secrets: Option<bool>,
+    restore_managed_keys: Option<bool>,
+    restore_managed_key_passphrases: Option<bool>,
     config_state: State<'_, Arc<ConfigState>>,
     forwarding_registry: State<'_, Arc<ForwardingRegistry>>,
 ) -> Result<ImportResultEnvelope, String> {
@@ -1310,6 +1331,8 @@ pub async fn import_from_oxide(
         conflict_strategy,
         import_forwards,
         import_portable_secrets,
+        restore_managed_keys,
+        restore_managed_key_passphrases,
         config_state,
         forwarding_registry,
         None,
@@ -1325,6 +1348,8 @@ pub async fn import_from_oxide_with_progress(
     conflict_strategy: Option<String>,
     import_forwards: Option<bool>,
     import_portable_secrets: Option<bool>,
+    restore_managed_keys: Option<bool>,
+    restore_managed_key_passphrases: Option<bool>,
     on_progress: Channel<OxideImportProgressEvent>,
     config_state: State<'_, Arc<ConfigState>>,
     forwarding_registry: State<'_, Arc<ForwardingRegistry>>,
@@ -1336,6 +1361,8 @@ pub async fn import_from_oxide_with_progress(
         conflict_strategy,
         import_forwards,
         import_portable_secrets,
+        restore_managed_keys,
+        restore_managed_key_passphrases,
         config_state,
         forwarding_registry,
         Some(on_progress),
@@ -1350,6 +1377,8 @@ async fn import_from_oxide_inner(
     conflict_strategy: Option<String>,
     import_forwards: Option<bool>,
     import_portable_secrets: Option<bool>,
+    restore_managed_keys: Option<bool>,
+    restore_managed_key_passphrases: Option<bool>,
     config_state: State<'_, Arc<ConfigState>>,
     forwarding_registry: State<'_, Arc<ForwardingRegistry>>,
     on_progress: Option<Channel<OxideImportProgressEvent>>,
@@ -1358,6 +1387,10 @@ async fn import_from_oxide_inner(
     let conflict_strategy = ImportConflictStrategy::parse(conflict_strategy)?;
     let should_import_forwards = import_forwards.unwrap_or(true);
     let should_import_portable_secrets = import_portable_secrets.unwrap_or(false);
+    let credential_options = OxideCredentialImportOptions::from_args(
+        restore_managed_keys,
+        restore_managed_key_passphrases,
+    );
 
     // 1. Parse file
     let oxide_file = crate::oxide_file::OxideFile::from_bytes(&file_data)
@@ -1580,6 +1613,7 @@ async fn import_from_oxide_inner(
         id: &str,
         config_snapshot: &crate::config::types::ConfigFile,
         restored_managed_keys: &mut HashMap<String, String>,
+        credential_options: OxideCredentialImportOptions,
     ) -> Result<
         (
             SavedAuth,
@@ -1611,11 +1645,16 @@ async fn import_from_oxide_inner(
                 embedded_key,
                 managed_key,
             } => {
-                if managed_key.is_some() {
+                if managed_key.is_some() && credential_options.restore_managed_keys {
+                    let managed_passphrase = if credential_options.restore_managed_key_passphrases {
+                        passphrase
+                    } else {
+                        None
+                    };
                     let Some((auth, keychain_entries, pending_managed_entries)) =
                         prepare_managed_key_restore(
                             key_path.clone(),
-                            passphrase,
+                            managed_passphrase,
                             embedded_key,
                             managed_key,
                             id,
@@ -1711,6 +1750,7 @@ async fn import_from_oxide_inner(
         base_id: &str,
         config_snapshot: &crate::config::types::ConfigFile,
         restored_managed_keys: &mut HashMap<String, String>,
+        credential_options: OxideCredentialImportOptions,
     ) -> Result<
         (
             Vec<ProxyHopConfig>,
@@ -1730,6 +1770,7 @@ async fn import_from_oxide_inner(
                 &hop_id,
                 config_snapshot,
                 restored_managed_keys,
+                credential_options,
             )?;
             all_entries.extend(entries);
             all_managed_entries.extend(managed_entries);
@@ -1806,6 +1847,7 @@ async fn import_from_oxide_inner(
             &credential_base_id,
             &config_snapshot,
             &mut restored_managed_keys,
+            credential_options,
         )?;
 
         // Prepare proxy_chain auth
@@ -1814,6 +1856,7 @@ async fn import_from_oxide_inner(
             &credential_base_id,
             &config_snapshot,
             &mut restored_managed_keys,
+            credential_options,
         )?;
         keychain_entries.extend(hop_entries);
         managed_key_entries.extend(hop_managed_entries);

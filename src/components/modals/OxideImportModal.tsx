@@ -95,6 +95,8 @@ export function OxideImportModal({ isOpen, onClose, mode = 'default' }: OxideImp
   const [selectedPluginIds, setSelectedPluginIds] = useState<Set<string>>(new Set());
   const [importForwards, setImportForwards] = useState(true);
   const [importPortableSecrets, setImportPortableSecrets] = useState(mode === 'portableMigration');
+  const [restoreManagedKeys, setRestoreManagedKeys] = useState(true);
+  const [restoreManagedKeyPassphrases, setRestoreManagedKeyPassphrases] = useState(mode === 'portableMigration');
   const [conflictStrategy, setConflictStrategy] = useState<ImportConflictStrategy>('rename');
   const [expandedAppSettingsSections, setExpandedAppSettingsSections] = useState<Set<string>>(new Set());
   const plugins = usePluginStore((state) => state.plugins);
@@ -189,6 +191,8 @@ export function OxideImportModal({ isOpen, onClose, mode = 'default' }: OxideImp
     setSelectedPluginIds(new Set());
     setImportForwards(true);
     setImportPortableSecrets(mode === 'portableMigration');
+    setRestoreManagedKeys(true);
+    setRestoreManagedKeyPassphrases(mode === 'portableMigration');
     setConflictStrategy('rename');
     setExpandedAppSettingsSections(new Set());
     setActiveOperation(null);
@@ -429,6 +433,8 @@ export function OxideImportModal({ isOpen, onClose, mode = 'default' }: OxideImp
       setSelectedPluginIds(getSelectablePluginIds(previewResult));
       setImportQuickCommands(previewResult.hasQuickCommands);
       setImportPortableSecrets(mode === 'portableMigration');
+      setRestoreManagedKeys(true);
+      setRestoreManagedKeyPassphrases(mode === 'portableMigration');
       setExpandedAppSettingsSections(new Set());
     } catch (err) {
       console.error('Preview failed:', err);
@@ -471,6 +477,8 @@ export function OxideImportModal({ isOpen, onClose, mode = 'default' }: OxideImp
           : [],
         importForwards,
         importPortableSecrets,
+        restoreManagedKeys,
+        restoreManagedKeyPassphrases,
         onProgress: handleImportProgress('import'),
       });
 
@@ -1003,6 +1011,49 @@ export function OxideImportModal({ isOpen, onClose, mode = 'default' }: OxideImp
                   </div>
                 )}
 
+                {typeof metadata?.managed_key_count === 'number' && metadata.managed_key_count > 0 && (
+                  <div className="rounded-md border border-theme-border bg-theme-bg-elevated/60 p-3 space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setRestoreManagedKeys((prev) => !prev)}
+                      className="flex w-full items-start gap-2 text-left"
+                    >
+                      {restoreManagedKeys
+                        ? <CheckSquare className="mt-0.5 h-4 w-4 flex-shrink-0 text-theme-accent" />
+                        : <Square className="mt-0.5 h-4 w-4 flex-shrink-0 text-theme-text-muted" />}
+                      <div>
+                        <p className="text-sm font-semibold text-theme-text">
+                          {t('modals.import.section_managed_keys', { count: metadata.managed_key_count })}
+                        </p>
+                        <p className="text-xs text-theme-text-muted">
+                          {restoreManagedKeys
+                            ? t('modals.import.toggle_managed_keys_restore')
+                            : t('modals.import.toggle_managed_keys_extract')}
+                        </p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!restoreManagedKeys}
+                      onClick={() => setRestoreManagedKeyPassphrases((prev) => !prev)}
+                      className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-theme-bg disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {restoreManagedKeyPassphrases
+                        ? <CheckSquare className="mt-0.5 h-4 w-4 flex-shrink-0 text-theme-accent" />
+                        : <Square className="mt-0.5 h-4 w-4 flex-shrink-0 text-theme-text-muted" />}
+                      <div>
+                        <p className="text-sm font-medium text-theme-text">
+                          {t('modals.import.restore_managed_key_passphrases')}
+                        </p>
+                        <p className="text-xs text-theme-text-muted">
+                          {t('modals.import.restore_managed_key_passphrases_description')}
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+
                 {preview.pluginSettingsCount > 0 && (
                   hasStructuredPluginPreview ? (
                     <div className="rounded-md border border-theme-border bg-theme-bg-elevated/60 p-3 space-y-3">
@@ -1191,6 +1242,9 @@ export function OxideImportModal({ isOpen, onClose, mode = 'default' }: OxideImp
                     )}
                     {typeof metadata.portable_secret_count === 'number' && metadata.portable_secret_count > 0 && (
                       <p><span className="text-theme-text-muted">{t('modals.import.contains_portable_secrets')}</span> {t('modals.import.portable_secrets_count', { count: metadata.portable_secret_count })}</p>
+                    )}
+                    {typeof metadata.managed_key_count === 'number' && metadata.managed_key_count > 0 && (
+                      <p><span className="text-theme-text-muted">{t('modals.import.contains_managed_keys')}</span> {t('modals.import.managed_keys_count', { count: metadata.managed_key_count })}</p>
                     )}
                   </div>
 

@@ -25,6 +25,10 @@ type ExportOxideRequest = {
   password: string;
   description?: string | null;
   embedKeys?: boolean | null;
+  includePasswords?: boolean | null;
+  includeKeyPassphrases?: boolean | null;
+  includeManagedKeys?: boolean | null;
+  includeManagedKeyPassphrases?: boolean | null;
   includePortableSecrets?: boolean;
   includeAppSettings?: boolean;
   includeQuickCommands?: boolean;
@@ -65,6 +69,8 @@ type ImportOxideOptions = PreviewImportOptions & {
   selectedPluginIds?: string[];
   importForwards?: boolean;
   importPortableSecrets?: boolean;
+  restoreManagedKeys?: boolean;
+  restoreManagedKeyPassphrases?: boolean;
 };
 
 type ImportFromOxideEnvelope = Omit<ImportResult, 'importedAppSettings' | 'importedPluginSettings'> & {
@@ -93,12 +99,23 @@ async function buildClientStatePayload(options?: {
 
 export async function preflightOxideExport(
   connectionIds: string[],
-  options?: { embedKeys?: boolean; includePortableSecrets?: boolean },
+  options?: {
+    embedKeys?: boolean;
+    includePortableSecrets?: boolean;
+    includePasswords?: boolean;
+    includeKeyPassphrases?: boolean;
+    includeManagedKeys?: boolean;
+    includeManagedKeyPassphrases?: boolean;
+  },
 ): Promise<ExportPreflightResult> {
   return invoke<ExportPreflightResult>('preflight_export', {
     connectionIds,
     embedKeys: options?.embedKeys ?? null,
     includePortableSecrets: options?.includePortableSecrets ?? null,
+    ...(options?.includePasswords ? { includePasswords: true } : {}),
+    ...(options?.includeKeyPassphrases === false ? { includeKeyPassphrases: false } : {}),
+    ...(options?.includeManagedKeys === false ? { includeManagedKeys: false } : {}),
+    ...(options?.includeManagedKeyPassphrases ? { includeManagedKeyPassphrases: true } : {}),
   });
 }
 
@@ -129,6 +146,10 @@ export async function exportOxideWithClientState(
     description: request.description ?? null,
     embedKeys: request.embedKeys ?? null,
     includePortableSecrets: request.includePortableSecrets ?? null,
+    ...(request.includePasswords ? { includePasswords: true } : {}),
+    ...(request.includeKeyPassphrases === false ? { includeKeyPassphrases: false } : {}),
+    ...(request.includeManagedKeys === false ? { includeManagedKeys: false } : {}),
+    ...(request.includeManagedKeyPassphrases ? { includeManagedKeyPassphrases: true } : {}),
     selectedForwardIds: request.selectedForwardIds ?? null,
     appSettingsJson: includeAppSettings ? clientState.appSettingsJson : null,
     quickCommandsJson: includeQuickCommands ? clientState.quickCommandsJson : null,
@@ -205,6 +226,8 @@ export async function importOxideWithClientState(
     conflictStrategy: options?.conflictStrategy ?? null,
     importForwards: options?.importForwards ?? null,
     importPortableSecrets: options?.importPortableSecrets ?? null,
+    ...(options?.restoreManagedKeys === false ? { restoreManagedKeys: false } : {}),
+    ...(options?.restoreManagedKeyPassphrases ? { restoreManagedKeyPassphrases: true } : {}),
   };
   const envelope = options?.onProgress
     ? await (async () => {

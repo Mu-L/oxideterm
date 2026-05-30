@@ -96,6 +96,10 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
   const [confirmPassword, setConfirmPassword] = useState('');
   const [description, setDescription] = useState('');
   const [embedKeys, setEmbedKeys] = useState(false);
+  const [includePasswords, setIncludePasswords] = useState(false);
+  const [includeKeyPassphrases, setIncludeKeyPassphrases] = useState(true);
+  const [includeManagedKeys, setIncludeManagedKeys] = useState(true);
+  const [includeManagedKeyPassphrases, setIncludeManagedKeyPassphrases] = useState(mode === 'portableMigration');
   const [includePortableSecrets, setIncludePortableSecrets] = useState(mode === 'portableMigration');
   const [exporting, setExporting] = useState(false);
   const [exportStage, setExportStage] = useState<ExportStage>('idle');
@@ -216,6 +220,10 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
     setConfirmPassword('');
     setDescription('');
     setEmbedKeys(mode === 'portableMigration');
+    setIncludePasswords(false);
+    setIncludeKeyPassphrases(true);
+    setIncludeManagedKeys(true);
+    setIncludeManagedKeyPassphrases(mode === 'portableMigration');
     setIncludePortableSecrets(mode === 'portableMigration');
     setError(null);
     setPreflight(null);
@@ -236,7 +244,17 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
     setSelectedPluginIds(new Set(Object.keys(pluginGroups)));
   }, [allSavedForwards, isOpen, mode, pluginGroups, savedConnections]);
 
-  const runPreflight = useCallback(async (ids: string[], embed: boolean, includeSecrets: boolean) => {
+  const runPreflight = useCallback(async (
+    ids: string[],
+    embed: boolean,
+    includeSecrets: boolean,
+    credentialOptions: {
+      includePasswords: boolean;
+      includeKeyPassphrases: boolean;
+      includeManagedKeys: boolean;
+      includeManagedKeyPassphrases: boolean;
+    },
+  ) => {
     if (ids.length === 0 && !includeSecrets) {
       setPreflight(null);
       return;
@@ -248,6 +266,10 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
         connectionIds: ids,
         embedKeys: embed || null,
         includePortableSecrets: includeSecrets || null,
+        ...(credentialOptions.includePasswords ? { includePasswords: true } : {}),
+        ...(credentialOptions.includeKeyPassphrases === false ? { includeKeyPassphrases: false } : {}),
+        ...(credentialOptions.includeManagedKeys === false ? { includeManagedKeys: false } : {}),
+        ...(credentialOptions.includeManagedKeyPassphrases ? { includeManagedKeyPassphrases: true } : {}),
       });
       setPreflight(result);
     } catch (err) {
@@ -259,10 +281,24 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      void runPreflight(effectiveConnectionIds, embedKeys, includePortableSecrets);
+      void runPreflight(effectiveConnectionIds, embedKeys, includePortableSecrets, {
+        includePasswords,
+        includeKeyPassphrases,
+        includeManagedKeys,
+        includeManagedKeyPassphrases,
+      });
     }, 300);
     return () => clearTimeout(timer);
-  }, [effectiveConnectionIds, embedKeys, includePortableSecrets, runPreflight]);
+  }, [
+    effectiveConnectionIds,
+    embedKeys,
+    includeKeyPassphrases,
+    includeManagedKeyPassphrases,
+    includeManagedKeys,
+    includePasswords,
+    includePortableSecrets,
+    runPreflight,
+  ]);
 
   const handleSelectAll = () => {
     if (selectedIds.length === savedConnections.length) {
@@ -410,6 +446,11 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
       return;
     }
 
+    if (preflight && !preflight.canExport) {
+      setError(t('modals.export.error_managed_keys_required'));
+      return;
+    }
+
     setExporting(true);
     setExportProgress(null);
 
@@ -426,6 +467,10 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
         password,
         description: description || null,
         embedKeys: embedKeys || null,
+        includePasswords,
+        includeKeyPassphrases,
+        includeManagedKeys,
+        includeManagedKeyPassphrases,
         includePortableSecrets,
         includeAppSettings,
         includeQuickCommands,
@@ -752,7 +797,26 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
 
                 {preflight.connectionsWithPasswords > 0 && (
                   <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 px-2 py-1.5 rounded text-xs">
-                    {t('modals.export.warning_passwords_excluded', { count: preflight.connectionsWithPasswords })}
+                    {includePasswords
+                      ? t('modals.export.warning_passwords_included', { count: preflight.connectionsWithPasswords })
+                      : t('modals.export.warning_passwords_excluded', { count: preflight.connectionsWithPasswords })}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 text-xs text-theme-text-muted">
+                  <span>{t('modals.export.summary_key_passphrases', { count: preflight.keyPassphraseCount })}</span>
+                  <span>{t('modals.export.summary_managed_keys', { count: preflight.managedKeyCount })}</span>
+                  <span>{t('modals.export.summary_managed_key_passphrases', { count: preflight.managedKeyPassphraseCount })}</span>
+                </div>
+
+                {!preflight.canExport && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-2 py-1.5 rounded text-xs">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <AlertTriangle className="h-3 w-3" />
+                      {t('modals.export.warning_managed_keys_required', {
+                        count: preflight.blockedManagedKeyConnections.length,
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -789,20 +853,69 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
             />
           </div>
 
-          <div className="flex items-start space-x-2">
-            <Checkbox
-              id="embedKeys"
-              checked={embedKeys}
-              onCheckedChange={(checked) => setEmbedKeys(checked === true)}
-              className="mt-0.5 border-theme-text-muted data-[state=checked]:bg-theme-accent data-[state=checked]:border-theme-accent"
-            />
-            <div className="flex flex-col">
-              <Label htmlFor="embedKeys" className="cursor-pointer text-theme-text">
-                {t('modals.export.embed_keys')}
-              </Label>
-              <p className="text-xs text-theme-text-muted mt-0.5">
-                {t('modals.export.embed_keys_description')}
-              </p>
+          <div className="border border-theme-border rounded-md p-3 bg-theme-bg space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-theme-text">
+              <Key className="h-4 w-4" />
+              {t('modals.export.credential_material_title')}
+            </div>
+
+            <div className="grid gap-3">
+              {[
+                {
+                  id: 'includePasswords',
+                  checked: includePasswords,
+                  onChange: setIncludePasswords,
+                  label: t('modals.export.include_passwords'),
+                  description: t('modals.export.include_passwords_description'),
+                },
+                {
+                  id: 'embedKeys',
+                  checked: embedKeys,
+                  onChange: setEmbedKeys,
+                  label: t('modals.export.embed_keys'),
+                  description: t('modals.export.embed_keys_description'),
+                },
+                {
+                  id: 'includeKeyPassphrases',
+                  checked: includeKeyPassphrases,
+                  onChange: setIncludeKeyPassphrases,
+                  label: t('modals.export.include_key_passphrases'),
+                  description: t('modals.export.include_key_passphrases_description'),
+                },
+                {
+                  id: 'includeManagedKeys',
+                  checked: includeManagedKeys,
+                  onChange: setIncludeManagedKeys,
+                  label: t('modals.export.include_managed_keys'),
+                  description: t('modals.export.include_managed_keys_description'),
+                },
+                {
+                  id: 'includeManagedKeyPassphrases',
+                  checked: includeManagedKeyPassphrases,
+                  onChange: setIncludeManagedKeyPassphrases,
+                  disabled: !includeManagedKeys,
+                  label: t('modals.export.include_managed_key_passphrases'),
+                  description: t('modals.export.include_managed_key_passphrases_description'),
+                },
+              ].map((item) => (
+                <div key={item.id} className="flex items-start space-x-2">
+                  <Checkbox
+                    id={item.id}
+                    checked={item.checked}
+                    disabled={item.disabled}
+                    onCheckedChange={(checked) => item.onChange(checked === true)}
+                    className="mt-0.5 border-theme-text-muted data-[state=checked]:bg-theme-accent data-[state=checked]:border-theme-accent"
+                  />
+                  <div className="flex flex-col">
+                    <Label htmlFor={item.id} className="cursor-pointer text-theme-text">
+                      {item.label}
+                    </Label>
+                    <p className="text-xs text-theme-text-muted mt-0.5">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -834,6 +947,22 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
               )}
               {embedKeys && (
                 <li>{t('modals.export.content_summary_embed_keys')}</li>
+              )}
+              {includePasswords && (
+                <li>{t('modals.export.content_summary_passwords')}</li>
+              )}
+              {includeKeyPassphrases && (
+                <li>{t('modals.export.content_summary_key_passphrases')}</li>
+              )}
+              {includeManagedKeys && (preflight?.managedKeyCount ?? 0) > 0 && (
+                <li>{t('modals.export.content_summary_managed_keys', {
+                  count: preflight?.managedKeyCount ?? 0,
+                })}</li>
+              )}
+              {includeManagedKeyPassphrases && (preflight?.managedKeyPassphraseCount ?? 0) > 0 && (
+                <li>{t('modals.export.content_summary_managed_key_passphrases', {
+                  count: preflight?.managedKeyPassphraseCount ?? 0,
+                })}</li>
               )}
             </ul>
           </div>
@@ -891,7 +1020,9 @@ export function OxideExportModal({ isOpen, onClose, mode = 'default' }: OxideExp
               <li>• {t('modals.export.security_portable_secrets', {
                 portable: includePortableSecrets ? t('common.yes') : t('common.no'),
               })}</li>
-              <li>• {t('modals.export.security_passwords_excluded')}</li>
+              <li>• {includePasswords
+                ? t('modals.export.security_passwords_included')
+                : t('modals.export.security_passwords_excluded')}</li>
               <li>• <strong>{t('modals.export.security_no_session')}</strong></li>
               <li>• {t('modals.export.security_keep_safe')}</li>
             </ul>

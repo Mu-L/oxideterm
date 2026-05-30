@@ -602,6 +602,7 @@ export interface OxideMetadata {
   quick_command_categories_count?: number;
   plugin_settings_count?: number;
   portable_secret_count?: number;
+  managed_key_count?: number;
 }
 
 export interface ImportResult {
@@ -711,6 +712,14 @@ export interface ExportPreflightResult {
   connectionsWithPasswords: number;
   /** Connections using SSH agent */
   connectionsWithAgent: number;
+  /** External key/certificate passphrases that can be included */
+  keyPassphraseCount: number;
+  /** Managed SSH keys referenced by selected connections */
+  managedKeyCount: number;
+  /** Saved managed-key passphrases that can be included */
+  managedKeyPassphraseCount: number;
+  /** Connections blocked when managed keys are excluded */
+  blockedManagedKeyConnections: string[];
   /** Total bytes of key files (if embed_keys is enabled) */
   totalKeyBytes: number;
   /** Whether all connections can be exported */

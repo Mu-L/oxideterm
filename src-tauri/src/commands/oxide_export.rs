@@ -35,12 +35,50 @@ pub struct ExportPreflightResult {
     pub connections_with_passwords: usize,
     /// Connections using SSH agent
     pub connections_with_agent: usize,
+    /// External key/certificate passphrases that can be included
+    pub key_passphrase_count: usize,
+    /// Managed SSH keys referenced by selected connections
+    pub managed_key_count: usize,
+    /// Saved managed-key passphrases that can be included
+    pub managed_key_passphrase_count: usize,
+    /// Connections that cannot be exported if managed keys are excluded
+    pub blocked_managed_key_connections: Vec<String>,
     /// Total bytes of key files (if embed_keys is enabled)
     pub total_key_bytes: u64,
     /// Whether all connections can be exported
     pub can_export: bool,
     /// Portable secrets that can be bundled for migration (for example AI provider keys)
     pub portable_secret_count: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct OxideCredentialExportOptions {
+    include_passwords: bool,
+    include_key_passphrases: bool,
+    include_external_key_files: bool,
+    include_managed_keys: bool,
+    include_managed_key_passphrases: bool,
+    include_portable_secrets: bool,
+}
+
+impl OxideCredentialExportOptions {
+    fn from_legacy_args(
+        embed_keys: Option<bool>,
+        include_portable_secrets: Option<bool>,
+        include_passwords: Option<bool>,
+        include_key_passphrases: Option<bool>,
+        include_managed_keys: Option<bool>,
+        include_managed_key_passphrases: Option<bool>,
+    ) -> Self {
+        Self {
+            include_passwords: include_passwords.unwrap_or(false),
+            include_key_passphrases: include_key_passphrases.unwrap_or(true),
+            include_external_key_files: embed_keys.unwrap_or(false),
+            include_managed_keys: include_managed_keys.unwrap_or(true),
+            include_managed_key_passphrases: include_managed_key_passphrases.unwrap_or(false),
+            include_portable_secrets: include_portable_secrets.unwrap_or(false),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -140,6 +178,22 @@ fn check_key_file_exists(path: &str) -> Option<u64> {
     fs::metadata(&expanded_path).ok().map(|m| m.len())
 }
 
+fn has_saved_passphrase(auth: &SavedAuth) -> bool {
+    match auth {
+        SavedAuth::Key {
+            has_passphrase,
+            passphrase_keychain_id,
+            ..
+        }
+        | SavedAuth::Certificate {
+            has_passphrase,
+            passphrase_keychain_id,
+            ..
+        } => *has_passphrase && passphrase_keychain_id.is_some(),
+        _ => false,
+    }
+}
+
 fn export_forward(forward: &crate::state::PersistedForward) -> EncryptedForward {
     EncryptedForward {
         forward_type: forward.forward_type.as_str().to_string(),
@@ -176,6 +230,10 @@ pub async fn preflight_export(
     connection_ids: Vec<String>,
     embed_keys: Option<bool>,
     include_portable_secrets: Option<bool>,
+    include_passwords: Option<bool>,
+    include_key_passphrases: Option<bool>,
+    include_managed_keys: Option<bool>,
+    include_managed_key_passphrases: Option<bool>,
     config_state: State<'_, Arc<ConfigState>>,
 ) -> Result<ExportPreflightResult, String> {
     info!(
@@ -184,14 +242,25 @@ pub async fn preflight_export(
     );
 
     let config = config_state.get_config_snapshot();
-    let should_embed_keys = embed_keys.unwrap_or(false);
+    let credential_options = OxideCredentialExportOptions::from_legacy_args(
+        embed_keys,
+        include_portable_secrets,
+        include_passwords,
+        include_key_passphrases,
+        include_managed_keys,
+        include_managed_key_passphrases,
+    );
 
     let mut missing_keys: Vec<(String, String)> = Vec::new();
     let mut connections_with_keys = 0;
     let mut connections_with_passwords = 0;
     let mut connections_with_agent = 0;
+    let mut key_passphrase_count = 0;
+    let mut managed_key_ids = HashSet::new();
+    let mut managed_key_passphrase_count = 0;
+    let mut blocked_managed_key_connections = Vec::new();
     let mut total_key_bytes: u64 = 0;
-    let portable_secret_count = if include_portable_secrets.unwrap_or(false) {
+    let portable_secret_count = if credential_options.include_portable_secrets {
         config_state.count_exportable_ai_provider_keys(&app_handle)?
     } else {
         0
@@ -210,7 +279,10 @@ pub async fn preflight_export(
             }
             SavedAuth::Key { key_path, .. } => {
                 connections_with_keys += 1;
-                if should_embed_keys {
+                if has_saved_passphrase(&saved_conn.auth) {
+                    key_passphrase_count += 1;
+                }
+                if credential_options.include_external_key_files {
                     if let Some(size) = check_key_file_exists(key_path) {
                         total_key_bytes += size;
                     } else {
@@ -224,7 +296,10 @@ pub async fn preflight_export(
                 ..
             } => {
                 connections_with_keys += 1;
-                if should_embed_keys {
+                if has_saved_passphrase(&saved_conn.auth) {
+                    key_passphrase_count += 1;
+                }
+                if credential_options.include_external_key_files {
                     if let Some(size) = check_key_file_exists(key_path) {
                         total_key_bytes += size;
                     } else {
@@ -237,8 +312,18 @@ pub async fn preflight_export(
                     }
                 }
             }
-            SavedAuth::ManagedKey { .. } => {
+            SavedAuth::ManagedKey {
+                key_id,
+                passphrase_keychain_id,
+            } => {
                 connections_with_keys += 1;
+                managed_key_ids.insert(key_id.clone());
+                if passphrase_keychain_id.is_some() {
+                    managed_key_passphrase_count += 1;
+                }
+                if !credential_options.include_managed_keys {
+                    blocked_managed_key_connections.push(saved_conn.name.clone());
+                }
             }
             SavedAuth::Agent => {
                 connections_with_agent += 1;
@@ -252,7 +337,10 @@ pub async fn preflight_export(
                     // Don't double count, proxy passwords are fine
                 }
                 SavedAuth::Key { key_path, .. } => {
-                    if should_embed_keys {
+                    if has_saved_passphrase(&hop.auth) {
+                        key_passphrase_count += 1;
+                    }
+                    if credential_options.include_external_key_files {
                         if let Some(size) = check_key_file_exists(key_path) {
                             total_key_bytes += size;
                         } else {
@@ -266,7 +354,10 @@ pub async fn preflight_export(
                     cert_path,
                     ..
                 } => {
-                    if should_embed_keys {
+                    if has_saved_passphrase(&hop.auth) {
+                        key_passphrase_count += 1;
+                    }
+                    if credential_options.include_external_key_files {
                         if let Some(size) = check_key_file_exists(key_path) {
                             total_key_bytes += size;
                         } else {
@@ -281,7 +372,19 @@ pub async fn preflight_export(
                         }
                     }
                 }
-                SavedAuth::ManagedKey { .. } => {}
+                SavedAuth::ManagedKey {
+                    key_id,
+                    passphrase_keychain_id,
+                } => {
+                    managed_key_ids.insert(key_id.clone());
+                    if passphrase_keychain_id.is_some() {
+                        managed_key_passphrase_count += 1;
+                    }
+                    if !credential_options.include_managed_keys {
+                        blocked_managed_key_connections
+                            .push(format!("{} (proxy)", saved_conn.name));
+                    }
+                }
                 SavedAuth::Agent => {}
             }
         }
@@ -293,8 +396,12 @@ pub async fn preflight_export(
         connections_with_keys,
         connections_with_passwords,
         connections_with_agent,
+        key_passphrase_count,
+        managed_key_count: managed_key_ids.len(),
+        managed_key_passphrase_count,
+        blocked_managed_key_connections,
         total_key_bytes,
-        can_export: true, // We can always export, missing keys just won't be embedded
+        can_export: credential_options.include_managed_keys || managed_key_ids.is_empty(),
         portable_secret_count,
     })
 }
@@ -308,6 +415,10 @@ pub async fn export_to_oxide(
     description: Option<String>,
     embed_keys: Option<bool>,
     include_portable_secrets: Option<bool>,
+    include_passwords: Option<bool>,
+    include_key_passphrases: Option<bool>,
+    include_managed_keys: Option<bool>,
+    include_managed_key_passphrases: Option<bool>,
     selected_forward_ids: Option<Vec<String>>,
     app_settings_json: Option<String>,
     quick_commands_json: Option<String>,
@@ -322,6 +433,10 @@ pub async fn export_to_oxide(
         description,
         embed_keys,
         include_portable_secrets,
+        include_passwords,
+        include_key_passphrases,
+        include_managed_keys,
+        include_managed_key_passphrases,
         selected_forward_ids,
         app_settings_json,
         quick_commands_json,
@@ -341,6 +456,10 @@ pub async fn export_to_oxide_with_progress(
     description: Option<String>,
     embed_keys: Option<bool>,
     include_portable_secrets: Option<bool>,
+    include_passwords: Option<bool>,
+    include_key_passphrases: Option<bool>,
+    include_managed_keys: Option<bool>,
+    include_managed_key_passphrases: Option<bool>,
     selected_forward_ids: Option<Vec<String>>,
     app_settings_json: Option<String>,
     quick_commands_json: Option<String>,
@@ -356,6 +475,10 @@ pub async fn export_to_oxide_with_progress(
         description,
         embed_keys,
         include_portable_secrets,
+        include_passwords,
+        include_key_passphrases,
+        include_managed_keys,
+        include_managed_key_passphrases,
         selected_forward_ids,
         app_settings_json,
         quick_commands_json,
@@ -374,6 +497,10 @@ async fn export_to_oxide_inner(
     description: Option<String>,
     embed_keys: Option<bool>,
     include_portable_secrets: Option<bool>,
+    include_passwords: Option<bool>,
+    include_key_passphrases: Option<bool>,
+    include_managed_keys: Option<bool>,
+    include_managed_key_passphrases: Option<bool>,
     selected_forward_ids: Option<Vec<String>>,
     app_settings_json: Option<String>,
     quick_commands_json: Option<String>,
@@ -382,8 +509,16 @@ async fn export_to_oxide_inner(
     forwarding_registry: State<'_, Arc<ForwardingRegistry>>,
     on_progress: Option<Channel<OxideExportProgressEvent>>,
 ) -> Result<Vec<u8>, String> {
-    let should_embed_keys = embed_keys.unwrap_or(false);
-    let should_include_portable_secrets = include_portable_secrets.unwrap_or(false);
+    let credential_options = OxideCredentialExportOptions::from_legacy_args(
+        embed_keys,
+        include_portable_secrets,
+        include_passwords,
+        include_key_passphrases,
+        include_managed_keys,
+        include_managed_key_passphrases,
+    );
+    let should_embed_keys = credential_options.include_external_key_files;
+    let should_include_portable_secrets = credential_options.include_portable_secrets;
     info!(
         "Exporting {} connections to .oxide file (embed_keys={})",
         connection_ids.len(),
@@ -415,16 +550,31 @@ async fn export_to_oxide_inner(
         // Helper function to convert SavedAuth to EncryptedAuth
         let convert_auth = |auth: &SavedAuth, context: &str| -> Result<EncryptedAuth, String> {
             match auth {
-                SavedAuth::Password { .. } => Ok(EncryptedAuth::Password {
-                    password: Zeroizing::new(String::new()),
-                }),
+                SavedAuth::Password { keychain_id } => {
+                    let password = if credential_options.include_passwords {
+                        keychain_id
+                            .as_ref()
+                            .map(|kc_id| {
+                                config_state.get_keychain_value(kc_id).map_err(|e| {
+                                    format!("Password keychain error for {}: {}", context, e)
+                                })
+                            })
+                            .transpose()?
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+                    Ok(EncryptedAuth::Password {
+                        password: Zeroizing::new(password),
+                    })
+                }
                 SavedAuth::Key {
                     key_path,
                     has_passphrase,
                     passphrase_keychain_id,
                 } => {
                     let passphrase =
-                        if *has_passphrase {
+                        if credential_options.include_key_passphrases && *has_passphrase {
                             if let Some(kc_id) = passphrase_keychain_id {
                                 Some(config_state.get_keychain_value(kc_id).map_err(|e| {
                                     format!("Keychain error for {}: {}", context, e)
@@ -459,7 +609,7 @@ async fn export_to_oxide_inner(
                     passphrase_keychain_id,
                 } => {
                     let passphrase =
-                        if *has_passphrase {
+                        if credential_options.include_key_passphrases && *has_passphrase {
                             if let Some(kc_id) = passphrase_keychain_id {
                                 Some(config_state.get_keychain_value(kc_id).map_err(|e| {
                                     format!("Keychain error for {}: {}", context, e)
@@ -500,20 +650,30 @@ async fn export_to_oxide_inner(
                     key_id,
                     passphrase_keychain_id,
                 } => {
+                    if !credential_options.include_managed_keys {
+                        return Err(format!(
+                            "Managed key export is disabled for {}. Include managed keys or skip this connection.",
+                            context
+                        ));
+                    }
                     let metadata = config_state
                         .get_managed_ssh_key_metadata(key_id)
                         .map_err(|e| format!("Managed key error for {}: {}", context, e))?;
                     let private_key = config_state
                         .resolve_managed_ssh_key_private_key(key_id)
                         .map_err(|e| format!("Managed key secret error for {}: {}", context, e))?;
-                    let passphrase = passphrase_keychain_id
-                        .as_ref()
-                        .map(|kc_id| {
-                            config_state.get_keychain_value(kc_id).map_err(|e| {
-                                format!("Managed key passphrase error for {}: {}", context, e)
+                    let passphrase = if credential_options.include_managed_key_passphrases {
+                        passphrase_keychain_id
+                            .as_ref()
+                            .map(|kc_id| {
+                                config_state.get_keychain_value(kc_id).map_err(|e| {
+                                    format!("Managed key passphrase error for {}: {}", context, e)
+                                })
                             })
-                        })
-                        .transpose()?;
+                            .transpose()?
+                    } else {
+                        None
+                    };
 
                     Ok(EncryptedAuth::Key {
                         key_path: managed_key_fallback_filename(&metadata.fingerprint),

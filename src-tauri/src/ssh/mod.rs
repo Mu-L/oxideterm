@@ -33,6 +33,7 @@ mod proxy_integration_tests;
 mod session;
 
 pub use agent::{SshAgentClient, is_agent_available};
+pub(crate) use auth::ManagedKeyResolver;
 pub use client::{ClientHandler, SshClient};
 pub use config::{AuthMethod, ProxyHopConfig, SshConfig};
 pub use connection_registry::{
@@ -53,7 +54,8 @@ pub use preflight::{
 pub use proxy::{
     ProxyChain, ProxyConnectEndpoint, ProxyConnectEndpointKind, ProxyConnectError,
     ProxyConnectOperation, ProxyConnection, ProxyHop, connect_via_proxy,
-    connect_via_proxy_for_test, connect_via_single_hop,
+    connect_via_proxy_for_test, connect_via_proxy_for_test_with_managed_key_resolver,
+    connect_via_single_hop,
 };
 pub use session::{
     DEFAULT_PTY_MODES, ExtendedSessionHandle, SessionCommand, SessionHandle, SshSession,

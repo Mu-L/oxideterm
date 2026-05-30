@@ -389,6 +389,8 @@ export type SavedConnectionSnapshot = Readonly<{
   auth_type: ConnectionInfo['auth_type'];
   key_path: ConnectionInfo['key_path'];
   cert_path: ConnectionInfo['cert_path'];
+  managed_key_id?: ConnectionInfo['managed_key_id'];
+  managed_key_name?: ConnectionInfo['managed_key_name'];
   created_at: ConnectionInfo['created_at'];
   last_used_at: ConnectionInfo['last_used_at'];
   color: ConnectionInfo['color'];

@@ -227,6 +227,9 @@ pub async fn preflight_export(
                     }
                 }
             }
+            SavedAuth::ManagedKey { .. } => {
+                connections_with_keys += 1;
+            }
             SavedAuth::Agent => {
                 connections_with_agent += 1;
             }
@@ -268,6 +271,7 @@ pub async fn preflight_export(
                         }
                     }
                 }
+                SavedAuth::ManagedKey { .. } => {}
                 SavedAuth::Agent => {}
             }
         }
@@ -478,6 +482,9 @@ async fn export_to_oxide_inner(
                         embedded_key,
                         embedded_cert,
                     })
+                }
+                SavedAuth::ManagedKey { .. } => {
+                    Err("Managed key .oxide export is not implemented in this slice".to_string())
                 }
                 SavedAuth::Agent => Ok(EncryptedAuth::Agent),
             }

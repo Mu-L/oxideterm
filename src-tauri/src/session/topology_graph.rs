@@ -173,6 +173,7 @@ impl NetworkTopology {
                 crate::config::types::SavedAuth::Password { .. } => "password",
                 crate::config::types::SavedAuth::Key { .. } => "key",
                 crate::config::types::SavedAuth::Certificate { .. } => "certificate",
+                crate::config::types::SavedAuth::ManagedKey { .. } => "managed_key",
                 crate::config::types::SavedAuth::Agent => "agent",
             };
 
@@ -279,6 +280,7 @@ impl NetworkTopology {
             crate::config::types::SavedAuth::Password { .. } => "password",
             crate::config::types::SavedAuth::Key { .. } => "key",
             crate::config::types::SavedAuth::Certificate { .. } => "certificate",
+            crate::config::types::SavedAuth::ManagedKey { .. } => "managed_key",
             crate::config::types::SavedAuth::Agent => "agent",
         };
 

@@ -12,11 +12,11 @@ use russh::*;
 use tracing::{debug, info, warn};
 
 use super::auth::{
-    DEFAULT_AUTH_TIMEOUT_SECS, authenticate_certificate_best_algo,
+    DEFAULT_AUTH_TIMEOUT_SECS, ManagedKeyResolver, authenticate_certificate_best_algo,
     authenticate_keyboard_interactive, authenticate_password, authenticate_publickey_best_algo,
     build_client_config, ensure_auth_success, load_certificate_auth_material,
-    load_private_key_material, try_kbi_auth_chain, try_none_auth_probe,
-    try_password_as_kbi_fallback,
+    load_private_key_from_memory, load_private_key_material, try_kbi_auth_chain,
+    try_none_auth_probe, try_password_as_kbi_fallback,
 };
 use super::config::{AuthMethod, SshConfig};
 use super::error::SshError;
@@ -95,6 +95,15 @@ impl SshClient {
     pub async fn connect(
         self,
         app_handle: Option<&tauri::AppHandle>,
+    ) -> Result<SshSession, SshError> {
+        self.connect_with_managed_key_resolver(app_handle, None)
+            .await
+    }
+
+    pub async fn connect_with_managed_key_resolver(
+        self,
+        app_handle: Option<&tauri::AppHandle>,
+        managed_key_resolver: Option<ManagedKeyResolver>,
     ) -> Result<SshSession, SshError> {
         let addr = format!("{}:{}", self.config.host, self.config.port);
 
@@ -184,6 +193,22 @@ impl SshClient {
                         .authenticate(&mut handle, self.config.username.clone())
                         .await?;
                     client::AuthResult::Success
+                }
+                AuthMethod::ManagedKey { key_id, passphrase } => {
+                    let Some(resolve_managed_key) = managed_key_resolver.as_ref() else {
+                        return Err(SshError::AuthenticationFailed(
+                            "Managed key authentication requires a key resolver".to_string(),
+                        ));
+                    };
+                    // The managed private key is materialized only for this auth attempt.
+                    // SessionConfig keeps the key id; key text is dropped after russh decodes it.
+                    let private_key = resolve_managed_key(key_id)?;
+                    let key = load_private_key_from_memory(
+                        private_key.as_str(),
+                        passphrase.as_ref().map(|p| p.as_str()),
+                    )?;
+                    authenticate_publickey_best_algo(&mut handle, &self.config.username, key)
+                        .await?
                 }
                 AuthMethod::Certificate {
                     key_path,

@@ -123,6 +123,7 @@ async fn list_saved_connections(app: &tauri::AppHandle) -> Result<Value, (i32, S
                 crate::config::SavedAuth::Certificate { key_path, .. } => {
                     ("certificate", Some(key_path.as_str()))
                 }
+                crate::config::SavedAuth::ManagedKey { .. } => ("managed_key", None),
                 crate::config::SavedAuth::Agent => ("agent", None),
             };
             json!({
@@ -455,6 +456,7 @@ async fn config_get(app: &tauri::AppHandle, params: Value) -> Result<Value, (i32
         crate::config::SavedAuth::Certificate { key_path, .. } => {
             ("certificate", Some(key_path.as_str()))
         }
+        crate::config::SavedAuth::ManagedKey { .. } => ("managed_key", None),
         crate::config::SavedAuth::Agent => ("agent", None),
     };
 

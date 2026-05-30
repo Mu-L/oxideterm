@@ -5,6 +5,7 @@
 //!
 //! Tauri commands for managing saved connections and SSH config import.
 
+use crate::config::types::{ManagedSshKey, ManagedSshKeyOrigin};
 use crate::config::{
     AiProviderVault, CONFIG_ENCRYPTION_KEY_LEN, ConfigFile, ConfigStorage, ConfigStorageFormat,
     Keychain, KeychainError, PortableBootstrapStatus, ProxyHopConfig, ResolvedProxyJumpHost,
@@ -15,9 +16,11 @@ use crate::config::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use parking_lot::RwLock;
 use rand::RngCore;
+use russh::keys::{PrivateKey, PublicKeyBase64};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{Emitter, State};
 use zeroize::Zeroizing;
@@ -27,6 +30,7 @@ use super::forwarding::ForwardingRegistry;
 /// Service name for AI provider API keys in system keychain
 const AI_KEYCHAIN_SERVICE: &str = "com.oxideterm.ai";
 const CONFIG_KEYCHAIN_SERVICE: &str = "com.oxideterm.config";
+const MANAGED_SSH_KEYCHAIN_SERVICE: &str = "com.oxideterm.managed-ssh-keys";
 const CONFIG_KEYCHAIN_ID: &str = "local-config-master-key";
 
 enum ConfigEncryptionKeyLookup {
@@ -112,6 +116,7 @@ pub struct ConfigState {
     bootstrap_status: RwLock<PortableBootstrapStatus>,
     config_keychain: Keychain,
     keychain: Keychain,
+    managed_keychain: Keychain,
     pub(crate) ai_keychain: Keychain,
     /// In-memory cache for AI provider API keys.
     /// Populated after the first successful Touch ID authentication so
@@ -131,6 +136,7 @@ impl ConfigState {
             bootstrap_status: RwLock::new(initial_status),
             config_keychain: Keychain::with_service(CONFIG_KEYCHAIN_SERVICE),
             keychain: Keychain::new(),
+            managed_keychain: Keychain::with_service(MANAGED_SSH_KEYCHAIN_SERVICE),
             ai_keychain: Keychain::with_biometrics(AI_KEYCHAIN_SERVICE),
             api_key_cache: RwLock::new(HashMap::new()),
             ai_providers: RwLock::new((Vec::new(), None)),
@@ -486,6 +492,28 @@ impl ConfigState {
         self.keychain.delete(key).map_err(|e| e.to_string())
     }
 
+    pub(crate) fn resolve_managed_ssh_key_private_key(
+        &self,
+        key_id: &str,
+    ) -> Result<Zeroizing<String>, String> {
+        self.ensure_ready()?;
+        let secret_id = self
+            .config
+            .read()
+            .managed_ssh_keys
+            .iter()
+            .find(|key| key.id == key_id)
+            .map(|key| key.secret_id.clone())
+            .ok_or_else(|| "Managed SSH key not found".to_string())?;
+
+        // Secret material leaves the managed keychain only at the SSH auth boundary.
+        // Callers must decode/use it immediately and must not persist this value.
+        self.managed_keychain
+            .get(&secret_id)
+            .map(Zeroizing::new)
+            .map_err(|e| e.to_string())
+    }
+
     /// Public API: Save config to disk
     pub async fn save_config(&self) -> Result<(), String> {
         self.save().await
@@ -501,6 +529,10 @@ pub struct ProxyHopInfo {
     pub auth_type: String, // "password", "key", "agent"
     pub key_path: Option<String>,
     pub cert_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed_key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed_key_name: Option<String>,
     pub agent_forwarding: bool,
 }
 
@@ -541,6 +573,10 @@ pub struct ConnectionInfo {
     pub auth_type: String, // "password", "key", "agent", "certificate"
     pub key_path: Option<String>,
     pub cert_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed_key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed_key_name: Option<String>,
     pub created_at: String,
     pub last_used_at: Option<String>,
     pub color: Option<String>,
@@ -586,21 +622,104 @@ pub struct LocalSyncMetadata {
     pub saved_connections_updated_at: String,
 }
 
-/// Helper to convert SavedAuth to (auth_type, key_path, cert_path) tuple
-fn auth_to_info(auth: &SavedAuth) -> (String, Option<String>, Option<String>) {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSshKeyInfo {
+    pub id: String,
+    pub name: String,
+    pub fingerprint: String,
+    pub public_key: String,
+    pub requires_passphrase: bool,
+    pub origin: ManagedSshKeyOrigin,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSshKeyUsageItem {
+    pub connection_id: String,
+    pub connection_name: String,
+    pub location: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSshKeyUsage {
+    pub key_id: String,
+    pub count: usize,
+    pub items: Vec<ManagedSshKeyUsageItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSshKeyDeleteResult {
+    pub deleted: bool,
+    pub key_id: String,
+    pub usage: ManagedSshKeyUsage,
+}
+
+impl From<&ManagedSshKey> for ManagedSshKeyInfo {
+    fn from(key: &ManagedSshKey) -> Self {
+        Self {
+            id: key.id.clone(),
+            name: key.name.clone(),
+            fingerprint: key.fingerprint.clone(),
+            public_key: key.public_key.clone(),
+            requires_passphrase: key.requires_passphrase,
+            origin: key.origin.clone(),
+            created_at: key.created_at.to_rfc3339(),
+            updated_at: key.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+struct AuthInfo {
+    auth_type: String,
+    key_path: Option<String>,
+    cert_path: Option<String>,
+    managed_key_id: Option<String>,
+    managed_key_name: Option<String>,
+}
+
+/// Helper to convert SavedAuth into non-sensitive frontend metadata.
+fn auth_to_info(auth: &SavedAuth) -> AuthInfo {
     match auth {
-        SavedAuth::Password { .. } => ("password".to_string(), None, None),
-        SavedAuth::Key { key_path, .. } => ("key".to_string(), Some(key_path.clone()), None),
+        SavedAuth::Password { .. } => AuthInfo {
+            auth_type: "password".to_string(),
+            key_path: None,
+            cert_path: None,
+            managed_key_id: None,
+            managed_key_name: None,
+        },
+        SavedAuth::Key { key_path, .. } => AuthInfo {
+            auth_type: "key".to_string(),
+            key_path: Some(key_path.clone()),
+            cert_path: None,
+            managed_key_id: None,
+            managed_key_name: None,
+        },
         SavedAuth::Certificate {
             key_path,
             cert_path,
             ..
-        } => (
-            "certificate".to_string(),
-            Some(key_path.clone()),
-            Some(cert_path.clone()),
-        ),
-        SavedAuth::Agent => ("agent".to_string(), None, None),
+        } => AuthInfo {
+            auth_type: "certificate".to_string(),
+            key_path: Some(key_path.clone()),
+            cert_path: Some(cert_path.clone()),
+            managed_key_id: None,
+            managed_key_name: None,
+        },
+        SavedAuth::ManagedKey { key_id, .. } => AuthInfo {
+            auth_type: "managed_key".to_string(),
+            key_path: None,
+            cert_path: None,
+            managed_key_id: Some(key_id.clone()),
+            managed_key_name: None,
+        },
+        SavedAuth::Agent => AuthInfo {
+            auth_type: "agent".to_string(),
+            key_path: None,
+            cert_path: None,
+            managed_key_id: None,
+            managed_key_name: None,
+        },
     }
 }
 
@@ -613,6 +732,7 @@ fn auth_to_connect_info(
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
 ) {
     match auth {
         SavedAuth::Password { keychain_id } => (
@@ -620,6 +740,7 @@ fn auth_to_connect_info(
             keychain_id
                 .as_ref()
                 .and_then(|kc_id| keychain.get(kc_id).ok()),
+            None,
             None,
             None,
             None,
@@ -643,6 +764,7 @@ fn auth_to_connect_info(
                 Some(key_path.clone()),
                 None,
                 passphrase,
+                None,
             )
         }
         SavedAuth::Certificate {
@@ -665,10 +787,152 @@ fn auth_to_connect_info(
                 Some(key_path.clone()),
                 Some(cert_path.clone()),
                 passphrase,
+                None,
             )
         }
-        SavedAuth::Agent => ("agent".to_string(), None, None, None, None),
+        SavedAuth::ManagedKey { key_id, .. } => (
+            "managed_key".to_string(),
+            None,
+            None,
+            None,
+            None,
+            Some(key_id.clone()),
+        ),
+        SavedAuth::Agent => ("agent".to_string(), None, None, None, None, None),
     }
+}
+
+fn managed_key_display_name(name: Option<String>, fallback: &str) -> String {
+    name.as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn decode_managed_private_key(
+    private_key: &str,
+    passphrase: Option<&str>,
+) -> Result<PrivateKey, String> {
+    russh::keys::decode_secret_key(private_key, passphrase).map_err(|error| {
+        let normalized = error.to_string().to_ascii_lowercase();
+        if normalized.contains("encrypted")
+            || normalized.contains("decrypt")
+            || normalized.contains("password")
+            || normalized.contains("passphrase")
+            || normalized.contains("bcrypt")
+            || normalized.contains("kdf")
+        {
+            if passphrase.is_some() {
+                "Invalid SSH key passphrase".to_string()
+            } else {
+                "SSH key requires a passphrase".to_string()
+            }
+        } else {
+            "Invalid SSH private key".to_string()
+        }
+    })
+}
+
+fn public_key_line_from_private_key(private_key: &PrivateKey) -> String {
+    let public_key = private_key.public_key();
+    format!(
+        "{} {}",
+        public_key.algorithm(),
+        BASE64.encode(public_key.public_key_bytes())
+    )
+}
+
+fn managed_key_requires_passphrase(
+    private_key: &str,
+    passphrase: Option<&Zeroizing<String>>,
+) -> bool {
+    passphrase.is_some()
+        || private_key.contains("ENCRYPTED")
+        || private_key.contains("Proc-Type: 4,ENCRYPTED")
+}
+
+fn create_managed_key_metadata(
+    config: &mut ConfigFile,
+    keychain: &Keychain,
+    private_key: Zeroizing<String>,
+    name: Option<String>,
+    passphrase: Option<Zeroizing<String>>,
+    origin: ManagedSshKeyOrigin,
+    fallback_name: &str,
+) -> Result<ManagedSshKeyInfo, String> {
+    let passphrase_ref = passphrase.as_ref().map(|value| value.as_str());
+    let decoded_key = decode_managed_private_key(&private_key, passphrase_ref)?;
+    let fingerprint = crate::ssh::KnownHostsStore::fingerprint(decoded_key.public_key());
+    let public_key = public_key_line_from_private_key(&decoded_key);
+
+    if let Some(existing) = config
+        .managed_ssh_keys
+        .iter()
+        .find(|key| key.fingerprint == fingerprint)
+    {
+        return Err(format!("Managed SSH key already exists: {}", existing.name));
+    }
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let secret_id = format!("managed-key-{}", id);
+    // Secret material crosses into the keychain here; ConfigFile stores only metadata.
+    keychain
+        .store(&secret_id, private_key.as_str())
+        .map_err(|error| error.to_string())?;
+
+    let now = chrono::Utc::now();
+    let key = ManagedSshKey {
+        id,
+        secret_id,
+        name: managed_key_display_name(name, fallback_name),
+        fingerprint,
+        public_key,
+        requires_passphrase: managed_key_requires_passphrase(&private_key, passphrase.as_ref()),
+        origin,
+        created_at: now,
+        updated_at: now,
+    };
+    let info = ManagedSshKeyInfo::from(&key);
+    config.managed_ssh_keys.push(key);
+    Ok(info)
+}
+
+fn managed_key_usage_from_config(config: &ConfigFile, key_id: &str) -> ManagedSshKeyUsage {
+    let mut items = Vec::new();
+    for connection in &config.connections {
+        if matches!(&connection.auth, SavedAuth::ManagedKey { key_id: id, .. } if id == key_id) {
+            items.push(ManagedSshKeyUsageItem {
+                connection_id: connection.id.clone(),
+                connection_name: connection.name.clone(),
+                location: "connection".to_string(),
+            });
+        }
+
+        for (index, hop) in connection.proxy_chain.iter().enumerate() {
+            if matches!(&hop.auth, SavedAuth::ManagedKey { key_id: id, .. } if id == key_id) {
+                items.push(ManagedSshKeyUsageItem {
+                    connection_id: connection.id.clone(),
+                    connection_name: connection.name.clone(),
+                    location: format!("proxy_chain[{}]", index),
+                });
+            }
+        }
+    }
+
+    ManagedSshKeyUsage {
+        key_id: key_id.to_string(),
+        count: items.len(),
+        items,
+    }
+}
+
+fn fallback_name_from_path(path: &Path) -> String {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("Managed SSH Key")
+        .to_string()
 }
 
 pub(crate) fn collect_keychain_ids_for_auth(auth: &SavedAuth) -> Vec<String> {
@@ -682,6 +946,10 @@ pub(crate) fn collect_keychain_ids_for_auth(auth: &SavedAuth) -> Vec<String> {
             ..
         }
         | SavedAuth::Certificate {
+            passphrase_keychain_id,
+            ..
+        }
+        | SavedAuth::ManagedKey {
             passphrase_keychain_id,
             ..
         } => passphrase_keychain_id.iter().cloned().collect(),
@@ -699,21 +967,23 @@ pub(crate) fn collect_connection_keychain_ids(connection: &SavedConnection) -> V
 
 impl From<&SavedConnection> for ConnectionInfo {
     fn from(conn: &SavedConnection) -> Self {
-        let (auth_type, key_path, cert_path) = auth_to_info(&conn.auth);
+        let auth = auth_to_info(&conn.auth);
 
         // Convert proxy_chain to ProxyHopInfo (without sensitive data)
         let proxy_chain: Vec<ProxyHopInfo> = conn
             .proxy_chain
             .iter()
             .map(|hop| {
-                let (hop_auth_type, hop_key_path, hop_cert_path) = auth_to_info(&hop.auth);
+                let hop_auth = auth_to_info(&hop.auth);
                 ProxyHopInfo {
                     host: hop.host.clone(),
                     port: hop.port,
                     username: hop.username.clone(),
-                    auth_type: hop_auth_type,
-                    key_path: hop_key_path,
-                    cert_path: hop_cert_path,
+                    auth_type: hop_auth.auth_type,
+                    key_path: hop_auth.key_path,
+                    cert_path: hop_auth.cert_path,
+                    managed_key_id: hop_auth.managed_key_id,
+                    managed_key_name: hop_auth.managed_key_name,
                     agent_forwarding: hop.agent_forwarding,
                 }
             })
@@ -726,9 +996,11 @@ impl From<&SavedConnection> for ConnectionInfo {
             host: conn.host.clone(),
             port: conn.port,
             username: conn.username.clone(),
-            auth_type,
-            key_path,
-            cert_path,
+            auth_type: auth.auth_type,
+            key_path: auth.key_path,
+            cert_path: auth.cert_path,
+            managed_key_id: auth.managed_key_id,
+            managed_key_name: auth.managed_key_name,
             created_at: conn.created_at.to_rfc3339(),
             last_used_at: conn.last_used_at.map(|t| t.to_rfc3339()),
             color: conn.color.clone(),
@@ -1026,6 +1298,7 @@ fn build_synced_proxy_chain(
                     None,
                     hop.key_path.as_deref(),
                     hop.cert_path.as_deref(),
+                    hop.managed_key_id.as_deref(),
                     None,
                     keychain,
                 )?
@@ -1035,6 +1308,7 @@ fn build_synced_proxy_chain(
                     None,
                     hop.key_path.as_deref(),
                     hop.cert_path.as_deref(),
+                    hop.managed_key_id.as_deref(),
                     None,
                     keychain,
                 )?
@@ -1065,6 +1339,7 @@ fn build_saved_connection_from_sync_payload(
             None,
             payload.key_path.as_deref(),
             payload.cert_path.as_deref(),
+            payload.managed_key_id.as_deref(),
             None,
             keychain,
         )?
@@ -1074,6 +1349,7 @@ fn build_saved_connection_from_sync_payload(
             None,
             payload.key_path.as_deref(),
             payload.cert_path.as_deref(),
+            payload.managed_key_id.as_deref(),
             None,
             keychain,
         )?
@@ -1267,6 +1543,7 @@ pub struct SaveConnectionRequest {
     pub password: Option<Zeroizing<String>>,   // Only for password auth
     pub key_path: Option<String>,              // Only for key auth
     pub cert_path: Option<String>,             // Only for certificate auth
+    pub managed_key_id: Option<String>,        // Only for managed key auth
     pub passphrase: Option<Zeroizing<String>>, // Only for key/certificate auth
     pub color: Option<String>,
     #[serde(default)]
@@ -1323,6 +1600,7 @@ pub struct ProxyHopRequest {
     pub password: Option<Zeroizing<String>>, // Only for password auth
     pub key_path: Option<String>, // Only for key auth
     pub cert_path: Option<String>, // Only for certificate auth
+    pub managed_key_id: Option<String>, // Only for managed key auth
     pub passphrase: Option<Zeroizing<String>>, // Passphrase for encrypted keys
     #[serde(default)]
     pub agent_forwarding: Option<bool>,
@@ -1454,6 +1732,7 @@ fn build_saved_auth(
     password: Option<&str>,
     key_path: Option<&str>,
     cert_path: Option<&str>,
+    managed_key_id: Option<&str>,
     passphrase: Option<&str>,
     keychain: &crate::config::keychain::Keychain,
 ) -> Result<SavedAuth, String> {
@@ -1528,6 +1807,14 @@ fn build_saved_auth(
                 passphrase_keychain_id,
             })
         }
+        "managed_key" => {
+            let key_id =
+                managed_key_id.ok_or("Managed key ID required for managed key authentication")?;
+            Ok(SavedAuth::ManagedKey {
+                key_id: key_id.to_string(),
+                passphrase_keychain_id: None,
+            })
+        }
         _ => Ok(SavedAuth::Agent),
     }
 }
@@ -1538,6 +1825,7 @@ fn build_saved_auth_for_update(
     password: Option<&str>,
     key_path: Option<&str>,
     cert_path: Option<&str>,
+    managed_key_id: Option<&str>,
     passphrase: Option<&str>,
     keychain: &crate::config::keychain::Keychain,
 ) -> Result<SavedAuth, String> {
@@ -1560,6 +1848,7 @@ fn build_saved_auth_for_update(
                         Some(pwd),
                         key_path,
                         cert_path,
+                        managed_key_id,
                         passphrase,
                         keychain,
                     )
@@ -1594,7 +1883,15 @@ fn build_saved_auth_for_update(
                         passphrase_keychain_id.clone()
                     },
                 }),
-                _ => build_saved_auth(auth_type, None, Some(kp), cert_path, passphrase, keychain),
+                _ => build_saved_auth(
+                    auth_type,
+                    None,
+                    Some(kp),
+                    cert_path,
+                    managed_key_id,
+                    passphrase,
+                    keychain,
+                ),
             }
         }
         "certificate" => {
@@ -1624,10 +1921,48 @@ fn build_saved_auth_for_update(
                         },
                     })
                 }
-                _ => build_saved_auth(auth_type, None, Some(kp), Some(cp), passphrase, keychain),
+                _ => build_saved_auth(
+                    auth_type,
+                    None,
+                    Some(kp),
+                    Some(cp),
+                    managed_key_id,
+                    passphrase,
+                    keychain,
+                ),
             }
         }
-        "default_key" => build_saved_auth(auth_type, None, None, None, passphrase, keychain),
+        "managed_key" => {
+            let key_id =
+                managed_key_id.ok_or("Managed key ID required for managed key authentication")?;
+            match existing_auth {
+                SavedAuth::ManagedKey {
+                    key_id: existing_key_id,
+                    passphrase_keychain_id,
+                } if existing_key_id == key_id => Ok(SavedAuth::ManagedKey {
+                    key_id: key_id.to_string(),
+                    passphrase_keychain_id: passphrase_keychain_id.clone(),
+                }),
+                _ => build_saved_auth(
+                    auth_type,
+                    None,
+                    None,
+                    None,
+                    Some(key_id),
+                    passphrase,
+                    keychain,
+                ),
+            }
+        }
+        "default_key" => build_saved_auth(
+            auth_type,
+            None,
+            None,
+            None,
+            managed_key_id,
+            passphrase,
+            keychain,
+        ),
         _ => Ok(SavedAuth::Agent),
     }
 }
@@ -1771,6 +2106,16 @@ pub async fn save_connection(
                                 passphrase_keychain_id,
                             }
                         }
+                        "managed_key" => {
+                            let key_id = hop_req
+                                .managed_key_id
+                                .as_ref()
+                                .ok_or("Managed key ID required for proxy hop")?;
+                            SavedAuth::ManagedKey {
+                                key_id: key_id.clone(),
+                                passphrase_keychain_id: None,
+                            }
+                        }
                         "default_key" => {
                             use crate::session::KeyAuth;
                             let key_auth = KeyAuth::from_default_locations(
@@ -1820,6 +2165,7 @@ pub async fn save_connection(
                 request.password.as_ref().map(|s| s.as_str()),
                 request.key_path.as_deref(),
                 request.cert_path.as_deref(),
+                request.managed_key_id.as_deref(),
                 request.passphrase.as_ref().map(|s| s.as_str()),
                 &state.keychain,
             )?;
@@ -1849,6 +2195,7 @@ pub async fn save_connection(
                 request.password.as_ref().map(|s| s.as_str()),
                 request.key_path.as_deref(),
                 request.cert_path.as_deref(),
+                request.managed_key_id.as_deref(),
                 request.passphrase.as_ref().map(|s| s.as_str()),
                 &state.keychain,
             )?;
@@ -1921,6 +2268,16 @@ pub async fn save_connection(
                                 cert_path: cert_path.clone(),
                                 has_passphrase: hop_req.passphrase.is_some(),
                                 passphrase_keychain_id,
+                            }
+                        }
+                        "managed_key" => {
+                            let key_id = hop_req
+                                .managed_key_id
+                                .as_ref()
+                                .ok_or("Managed key ID required for proxy hop")?;
+                            SavedAuth::ManagedKey {
+                                key_id: key_id.clone(),
+                                passphrase_keychain_id: None,
                             }
                         }
                         "default_key" => {
@@ -1997,6 +2354,23 @@ pub async fn save_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::rngs::OsRng;
+    use russh::keys::ssh_key::LineEnding;
+    use russh::keys::{Algorithm, PrivateKey};
+    use tempfile::tempdir;
+
+    fn generated_private_key_text(passphrase: Option<&str>) -> String {
+        let temp_dir = tempdir().unwrap();
+        let key_path = temp_dir.path().join("id_ed25519");
+        let mut rng = OsRng;
+        let key = PrivateKey::random(&mut rng, Algorithm::Ed25519).unwrap();
+        let key = match passphrase {
+            Some(passphrase) => key.encrypt(&mut rng, passphrase).unwrap(),
+            None => key,
+        };
+        key.write_openssh_file(&key_path, LineEnding::LF).unwrap();
+        std::fs::read_to_string(key_path).unwrap()
+    }
 
     #[test]
     fn validate_group_name_rejects_empty_path_segments() {
@@ -2031,6 +2405,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &Keychain::with_service("com.oxideterm.test"),
         )
         .unwrap();
@@ -2058,6 +2433,7 @@ mod tests {
             Some("/tmp/id_ed25519"),
             None,
             None,
+            None,
             &Keychain::with_service("com.oxideterm.test"),
         )
         .unwrap();
@@ -2078,6 +2454,7 @@ mod tests {
             "key",
             None,
             Some("/tmp/id_rsa"),
+            None,
             None,
             None,
             &Keychain::with_service("com.oxideterm.test"),
@@ -2110,6 +2487,7 @@ mod tests {
             Some("/tmp/id_ed25519"),
             Some("/tmp/id_ed25519-cert.pub"),
             None,
+            None,
             &Keychain::with_service("com.oxideterm.test"),
         )
         .unwrap();
@@ -2125,6 +2503,7 @@ mod tests {
             None,
             Some("/tmp/id_ed25519"),
             Some("/tmp/id_ed25519-cert.pub"),
+            None,
             Some("secret-passphrase"),
             &keychain,
         )
@@ -2159,6 +2538,7 @@ mod tests {
             None,
             Some("/tmp/id_ed25519"),
             None,
+            None,
             Some("fresh-passphrase"),
             &keychain,
         )
@@ -2179,6 +2559,207 @@ mod tests {
     }
 
     #[test]
+    fn build_saved_auth_accepts_managed_key_reference_without_keychain_secret() {
+        let keychain = Keychain::in_memory_for_tests("com.oxideterm.test");
+        let auth = build_saved_auth(
+            "managed_key",
+            None,
+            None,
+            None,
+            Some("managed-key-1"),
+            None,
+            &keychain,
+        )
+        .unwrap();
+
+        assert_eq!(
+            auth,
+            SavedAuth::ManagedKey {
+                key_id: "managed-key-1".to_string(),
+                passphrase_keychain_id: None,
+            }
+        );
+    }
+
+    #[test]
+    fn managed_key_connection_keychain_cleanup_keeps_managed_secret_id_out_of_connection_ids() {
+        let connection = SavedConnection {
+            id: "conn-1".to_string(),
+            version: crate::config::CONFIG_VERSION,
+            name: "Managed".to_string(),
+            group: None,
+            host: "example.com".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            auth: SavedAuth::ManagedKey {
+                key_id: "managed-key-1".to_string(),
+                passphrase_keychain_id: Some("kc-managed-pass".to_string()),
+            },
+            options: Default::default(),
+            created_at: chrono::Utc::now(),
+            last_used_at: None,
+            updated_at: Some(chrono::Utc::now()),
+            color: None,
+            tags: Vec::new(),
+            proxy_chain: Vec::new(),
+        };
+
+        let ids = collect_connection_keychain_ids(&connection);
+
+        assert_eq!(ids, vec!["kc-managed-pass".to_string()]);
+        assert!(!ids.contains(&"managed-key-1".to_string()));
+    }
+
+    #[test]
+    fn create_managed_key_metadata_stores_secret_and_returns_metadata_only() {
+        let keychain = Keychain::in_memory_for_tests("com.oxideterm.managed-test");
+        let mut config = ConfigFile::default();
+        let private_key = generated_private_key_text(None);
+
+        let info = create_managed_key_metadata(
+            &mut config,
+            &keychain,
+            Zeroizing::new(private_key.clone()),
+            Some("Deploy Key".to_string()),
+            None,
+            ManagedSshKeyOrigin::PastedText,
+            "Managed SSH Key",
+        )
+        .unwrap();
+
+        assert_eq!(info.name, "Deploy Key");
+        assert_eq!(info.origin, ManagedSshKeyOrigin::PastedText);
+        assert!(!info.requires_passphrase);
+        assert!(info.public_key.starts_with("ssh-ed25519 "));
+        assert_eq!(config.managed_ssh_keys.len(), 1);
+        assert_eq!(
+            keychain.get(&config.managed_ssh_keys[0].secret_id).unwrap(),
+            private_key
+        );
+    }
+
+    #[test]
+    fn create_managed_key_metadata_rejects_invalid_key_without_echoing_secret() {
+        let keychain = Keychain::in_memory_for_tests("com.oxideterm.managed-test");
+        let mut config = ConfigFile::default();
+        let marker = "not-a-private-key-secret-marker";
+
+        let error = create_managed_key_metadata(
+            &mut config,
+            &keychain,
+            Zeroizing::new(marker.to_string()),
+            None,
+            None,
+            ManagedSshKeyOrigin::PastedText,
+            "Managed SSH Key",
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "Invalid SSH private key");
+        assert!(!error.contains(marker));
+        assert!(config.managed_ssh_keys.is_empty());
+    }
+
+    #[test]
+    fn create_managed_key_metadata_detects_passphrase_protected_key() {
+        let keychain = Keychain::in_memory_for_tests("com.oxideterm.managed-test");
+        let mut config = ConfigFile::default();
+        let private_key = generated_private_key_text(Some("secret-passphrase"));
+
+        let info = create_managed_key_metadata(
+            &mut config,
+            &keychain,
+            Zeroizing::new(private_key),
+            None,
+            Some(Zeroizing::new("secret-passphrase".to_string())),
+            ManagedSshKeyOrigin::ImportedFile,
+            "id_ed25519",
+        )
+        .unwrap();
+
+        assert!(info.requires_passphrase);
+        assert_eq!(info.name, "id_ed25519");
+    }
+
+    #[test]
+    fn managed_key_usage_counts_direct_and_proxy_references() {
+        let mut config = ConfigFile::default();
+        config.add_connection(SavedConnection {
+            id: "conn-1".to_string(),
+            version: crate::config::CONFIG_VERSION,
+            name: "Prod".to_string(),
+            group: None,
+            host: "prod.example.com".to_string(),
+            port: 22,
+            username: "root".to_string(),
+            auth: SavedAuth::ManagedKey {
+                key_id: "managed-key-1".to_string(),
+                passphrase_keychain_id: None,
+            },
+            options: Default::default(),
+            created_at: chrono::Utc::now(),
+            last_used_at: None,
+            updated_at: Some(chrono::Utc::now()),
+            color: None,
+            tags: Vec::new(),
+            proxy_chain: vec![ProxyHopConfig {
+                host: "jump.example.com".to_string(),
+                port: 22,
+                username: "jump".to_string(),
+                auth: SavedAuth::ManagedKey {
+                    key_id: "managed-key-1".to_string(),
+                    passphrase_keychain_id: None,
+                },
+                agent_forwarding: false,
+            }],
+        });
+
+        let usage = managed_key_usage_from_config(&config, "managed-key-1");
+
+        assert_eq!(usage.count, 2);
+        assert_eq!(usage.items[0].location, "connection");
+        assert_eq!(usage.items[1].location, "proxy_chain[0]");
+    }
+
+    #[test]
+    fn auth_to_info_exposes_managed_key_reference_only() {
+        let auth = SavedAuth::ManagedKey {
+            key_id: "managed-key-1".to_string(),
+            passphrase_keychain_id: Some("kc-managed-pass".to_string()),
+        };
+
+        let info = auth_to_info(&auth);
+
+        assert_eq!(info.auth_type, "managed_key");
+        assert_eq!(info.managed_key_id.as_deref(), Some("managed-key-1"));
+        assert!(info.key_path.is_none());
+        assert!(info.cert_path.is_none());
+        assert!(info.managed_key_name.is_none());
+    }
+
+    #[test]
+    fn auth_to_connect_info_exposes_managed_key_reference_only() {
+        let keychain = Keychain::in_memory_for_tests("com.oxideterm.test");
+        keychain
+            .store("kc-managed-pass", "secret-passphrase")
+            .unwrap();
+        let auth = SavedAuth::ManagedKey {
+            key_id: "managed-key-1".to_string(),
+            passphrase_keychain_id: Some("kc-managed-pass".to_string()),
+        };
+
+        let (auth_type, password, key_path, cert_path, passphrase, managed_key_id) =
+            auth_to_connect_info(&auth, &keychain);
+
+        assert_eq!(auth_type, "managed_key");
+        assert!(password.is_none());
+        assert!(key_path.is_none());
+        assert!(cert_path.is_none());
+        assert!(passphrase.is_none());
+        assert_eq!(managed_key_id.as_deref(), Some("managed-key-1"));
+    }
+
+    #[test]
     fn auth_to_connect_info_includes_certificate_paths() {
         let keychain = Keychain::with_service("com.oxideterm.test");
         let auth = SavedAuth::Certificate {
@@ -2188,7 +2769,7 @@ mod tests {
             passphrase_keychain_id: None,
         };
 
-        let (auth_type, password, key_path, cert_path, passphrase) =
+        let (auth_type, password, key_path, cert_path, passphrase, managed_key_id) =
             auth_to_connect_info(&auth, &keychain);
 
         assert_eq!(auth_type, "certificate");
@@ -2196,6 +2777,7 @@ mod tests {
         assert_eq!(key_path.as_deref(), Some("/tmp/id_ed25519"));
         assert_eq!(cert_path.as_deref(), Some("/tmp/id_ed25519-cert.pub"));
         assert!(passphrase.is_none());
+        assert!(managed_key_id.is_none());
     }
 
     #[test]
@@ -2333,6 +2915,8 @@ mod tests {
                     auth_type: "password".to_string(),
                     key_path: None,
                     cert_path: None,
+                    managed_key_id: None,
+                    managed_key_name: None,
                     created_at: chrono::Utc::now().to_rfc3339(),
                     last_used_at: None,
                     color: Some("#ff0000".to_string()),
@@ -2428,6 +3012,8 @@ mod tests {
                     auth_type: "agent".to_string(),
                     key_path: None,
                     cert_path: None,
+                    managed_key_id: None,
+                    managed_key_name: None,
                     created_at: chrono::Utc::now().to_rfc3339(),
                     last_used_at: None,
                     color: None,
@@ -2441,6 +3027,8 @@ mod tests {
                         auth_type: "password".to_string(),
                         key_path: None,
                         cert_path: None,
+                        managed_key_id: None,
+                        managed_key_name: None,
                         agent_forwarding: false,
                     }],
                 }),
@@ -2484,6 +3072,8 @@ mod tests {
                     auth_type: "agent".to_string(),
                     key_path: None,
                     cert_path: None,
+                    managed_key_id: None,
+                    managed_key_name: None,
                     created_at: chrono::Utc::now().to_rfc3339(),
                     last_used_at: None,
                     color: None,
@@ -2497,6 +3087,8 @@ mod tests {
                         auth_type: "certificate".to_string(),
                         key_path: Some("/tmp/id_jump".to_string()),
                         cert_path: Some("/tmp/id_jump-cert.pub".to_string()),
+                        managed_key_id: None,
+                        managed_key_name: None,
                         agent_forwarding: true,
                     }],
                 }),
@@ -2568,6 +3160,8 @@ mod tests {
                     auth_type: "agent".to_string(),
                     key_path: None,
                     cert_path: None,
+                    managed_key_id: None,
+                    managed_key_name: None,
                     created_at: chrono::Utc::now().to_rfc3339(),
                     last_used_at: None,
                     color: None,
@@ -2788,6 +3382,185 @@ pub async fn get_connection_password(
         }
         _ => Err("Connection does not use password auth".to_string()),
     }
+}
+
+#[tauri::command]
+pub async fn create_managed_ssh_key_from_text(
+    state: State<'_, Arc<ConfigState>>,
+    private_key: Zeroizing<String>,
+    name: Option<String>,
+    passphrase: Option<Zeroizing<String>>,
+) -> Result<ManagedSshKeyInfo, String> {
+    state.ensure_ready()?;
+    let (info, secret_id) = {
+        let mut config = state.config.write();
+        let info = create_managed_key_metadata(
+            &mut config,
+            &state.managed_keychain,
+            private_key,
+            name,
+            passphrase,
+            ManagedSshKeyOrigin::PastedText,
+            "Managed SSH Key",
+        )?;
+        let secret_id = config
+            .managed_ssh_keys
+            .iter()
+            .find(|key| key.id == info.id)
+            .map(|key| key.secret_id.clone())
+            .ok_or_else(|| "Managed SSH key metadata was not stored".to_string())?;
+        (info, secret_id)
+    };
+
+    if let Err(error) = state.save().await {
+        let _ = state.managed_keychain.delete(&secret_id);
+        state
+            .config
+            .write()
+            .managed_ssh_keys
+            .retain(|key| key.id != info.id);
+        return Err(error);
+    }
+
+    Ok(info)
+}
+
+#[tauri::command]
+pub async fn create_managed_ssh_key_from_file(
+    state: State<'_, Arc<ConfigState>>,
+    path: String,
+    name: Option<String>,
+    passphrase: Option<Zeroizing<String>>,
+) -> Result<ManagedSshKeyInfo, String> {
+    state.ensure_ready()?;
+    let expanded_path = crate::path_utils::expand_tilde_path(PathBuf::from(path).as_path());
+    let fallback_name = fallback_name_from_path(&expanded_path);
+    let private_key = Zeroizing::new(
+        std::fs::read_to_string(&expanded_path)
+            .map_err(|error| format!("Failed to read SSH private key file: {}", error))?,
+    );
+
+    let (info, secret_id) = {
+        let mut config = state.config.write();
+        let info = create_managed_key_metadata(
+            &mut config,
+            &state.managed_keychain,
+            private_key,
+            name,
+            passphrase,
+            ManagedSshKeyOrigin::ImportedFile,
+            &fallback_name,
+        )?;
+        let secret_id = config
+            .managed_ssh_keys
+            .iter()
+            .find(|key| key.id == info.id)
+            .map(|key| key.secret_id.clone())
+            .ok_or_else(|| "Managed SSH key metadata was not stored".to_string())?;
+        (info, secret_id)
+    };
+
+    if let Err(error) = state.save().await {
+        let _ = state.managed_keychain.delete(&secret_id);
+        state
+            .config
+            .write()
+            .managed_ssh_keys
+            .retain(|key| key.id != info.id);
+        return Err(error);
+    }
+
+    Ok(info)
+}
+
+#[tauri::command]
+pub async fn list_managed_ssh_keys(
+    state: State<'_, Arc<ConfigState>>,
+) -> Result<Vec<ManagedSshKeyInfo>, String> {
+    state.ensure_ready()?;
+    let config = state.config.read();
+    Ok(config
+        .managed_ssh_keys
+        .iter()
+        .map(ManagedSshKeyInfo::from)
+        .collect())
+}
+
+#[tauri::command]
+pub async fn rename_managed_ssh_key(
+    state: State<'_, Arc<ConfigState>>,
+    id: String,
+    name: String,
+) -> Result<ManagedSshKeyInfo, String> {
+    state.ensure_ready()?;
+    let info = {
+        let mut config = state.config.write();
+        let key = config
+            .managed_ssh_keys
+            .iter_mut()
+            .find(|key| key.id == id)
+            .ok_or_else(|| "Managed SSH key not found".to_string())?;
+        key.name = managed_key_display_name(Some(name), "Managed SSH Key");
+        key.updated_at = chrono::Utc::now();
+        ManagedSshKeyInfo::from(&*key)
+    };
+    state.save().await?;
+    Ok(info)
+}
+
+#[tauri::command]
+pub async fn get_managed_ssh_key_usage(
+    state: State<'_, Arc<ConfigState>>,
+    id: String,
+) -> Result<ManagedSshKeyUsage, String> {
+    state.ensure_ready()?;
+    let config = state.config.read();
+    if !config.managed_ssh_keys.iter().any(|key| key.id == id) {
+        return Err("Managed SSH key not found".to_string());
+    }
+    Ok(managed_key_usage_from_config(&config, &id))
+}
+
+#[tauri::command]
+pub async fn delete_managed_ssh_key(
+    state: State<'_, Arc<ConfigState>>,
+    id: String,
+    force: Option<bool>,
+) -> Result<ManagedSshKeyDeleteResult, String> {
+    state.ensure_ready()?;
+    let force = force.unwrap_or(false);
+    let (removed, usage) = {
+        let mut config = state.config.write();
+        let usage = managed_key_usage_from_config(&config, &id);
+        if usage.count > 0 && !force {
+            return Err(format!(
+                "Managed SSH key is used by {} saved connection entries",
+                usage.count
+            ));
+        }
+        let index = config
+            .managed_ssh_keys
+            .iter()
+            .position(|key| key.id == id)
+            .ok_or_else(|| "Managed SSH key not found".to_string())?;
+        (config.managed_ssh_keys.remove(index), usage)
+    };
+
+    if let Err(error) = state.save().await {
+        state.config.write().managed_ssh_keys.push(removed);
+        return Err(error);
+    }
+
+    state
+        .managed_keychain
+        .delete(&removed.secret_id)
+        .map_err(|error| error.to_string())?;
+
+    Ok(ManagedSshKeyDeleteResult {
+        deleted: true,
+        key_id: id,
+        usage,
+    })
 }
 
 /// Import hosts from SSH config
@@ -3071,6 +3844,7 @@ pub struct SavedConnectionForConnect {
     pub key_path: Option<String>,
     pub cert_path: Option<String>,
     pub passphrase: Option<String>,
+    pub managed_key_id: Option<String>,
     pub name: String,
     pub agent_forwarding: bool,
     pub post_connect_command: Option<String>,
@@ -3087,6 +3861,7 @@ pub struct ProxyHopForConnect {
     pub key_path: Option<String>,
     pub cert_path: Option<String>,
     pub passphrase: Option<String>,
+    pub managed_key_id: Option<String>,
     pub agent_forwarding: bool,
 }
 
@@ -3101,7 +3876,7 @@ pub async fn get_saved_connection_for_connect(
     let conn = config.get_connection(&id).ok_or("Connection not found")?;
 
     // Convert main auth
-    let (auth_type, password, key_path, cert_path, passphrase) =
+    let (auth_type, password, key_path, cert_path, passphrase, managed_key_id) =
         auth_to_connect_info(&conn.auth, &state.keychain);
 
     // Convert proxy_chain
@@ -3109,8 +3884,14 @@ pub async fn get_saved_connection_for_connect(
         .proxy_chain
         .iter()
         .map(|hop| {
-            let (hop_auth_type, hop_password, hop_key_path, hop_cert_path, hop_passphrase) =
-                auth_to_connect_info(&hop.auth, &state.keychain);
+            let (
+                hop_auth_type,
+                hop_password,
+                hop_key_path,
+                hop_cert_path,
+                hop_passphrase,
+                hop_managed_key_id,
+            ) = auth_to_connect_info(&hop.auth, &state.keychain);
 
             ProxyHopForConnect {
                 host: hop.host.clone(),
@@ -3121,6 +3902,7 @@ pub async fn get_saved_connection_for_connect(
                 key_path: hop_key_path,
                 cert_path: hop_cert_path,
                 passphrase: hop_passphrase,
+                managed_key_id: hop_managed_key_id,
                 agent_forwarding: hop.agent_forwarding,
             }
         })
@@ -3135,6 +3917,7 @@ pub async fn get_saved_connection_for_connect(
         key_path,
         cert_path,
         passphrase,
+        managed_key_id,
         name: conn.name.clone(),
         agent_forwarding: conn.options.agent_forwarding,
         post_connect_command: conn.options.post_connect_command.clone(),

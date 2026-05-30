@@ -1,7 +1,7 @@
 import type { SavedConnectionProxyHopForConnect } from './api';
 import type { ProxyHopConfig } from '@/types';
 
-export type SupportedProxyHopAuthType = 'password' | 'key' | 'default_key' | 'agent' | 'certificate';
+export type SupportedProxyHopAuthType = 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate';
 
 export type UnsupportedProxyHopAuth = {
   hopIndex: number;
@@ -20,6 +20,7 @@ export function isSupportedProxyHopAuthType(authType: string): authType is Suppo
   return authType === 'password'
     || authType === 'key'
     || authType === 'default_key'
+    || authType === 'managed_key'
     || authType === 'agent'
     || authType === 'certificate';
 }

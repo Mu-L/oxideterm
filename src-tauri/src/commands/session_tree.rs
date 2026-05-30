@@ -88,6 +88,7 @@ pub struct ConnectServerRequest {
     pub auth_type: String,
     pub password: Option<String>,
     pub key_path: Option<String>,
+    pub managed_key_id: Option<String>,
     pub cert_path: Option<String>,
     pub passphrase: Option<String>,
     pub display_name: Option<String>,
@@ -111,6 +112,7 @@ pub struct DrillDownRequest {
     pub auth_type: String,
     pub password: Option<String>,
     pub key_path: Option<String>,
+    pub managed_key_id: Option<String>,
     pub cert_path: Option<String>,
     pub passphrase: Option<String>,
     pub display_name: Option<String>,
@@ -138,6 +140,7 @@ pub struct HopInfo {
     pub auth_type: String,
     pub password: Option<String>,
     pub key_path: Option<String>,
+    pub managed_key_id: Option<String>,
     pub cert_path: Option<String>,
     pub passphrase: Option<String>,
     #[serde(default)]
@@ -162,6 +165,7 @@ fn build_auth(
     auth_type: &str,
     password: Option<String>,
     key_path: Option<String>,
+    managed_key_id: Option<String>,
     cert_path: Option<String>,
     passphrase: Option<String>,
 ) -> Result<AuthMethod, String> {
@@ -199,6 +203,14 @@ fn build_auth(
             })
         }
         "agent" => Ok(AuthMethod::Agent),
+        "managed_key" => {
+            let key_id =
+                managed_key_id.ok_or("Managed key ID required for managed key authentication")?;
+            Ok(AuthMethod::ManagedKey {
+                key_id,
+                passphrase: passphrase.map(Zeroizing::new),
+            })
+        }
         _ => Err(format!("Unknown auth type: {}", auth_type)),
     }
 }
@@ -214,6 +226,7 @@ fn build_root_auth(request: &ConnectServerRequest) -> Result<AuthMethod, String>
         &request.auth_type,
         request.password.clone(),
         request.key_path.clone(),
+        request.managed_key_id.clone(),
         request.cert_path.clone(),
         request.passphrase.clone(),
     )
@@ -310,6 +323,7 @@ pub async fn tree_drill_down(
         &request.auth_type,
         request.password,
         request.key_path,
+        request.managed_key_id,
         request.cert_path,
         request.passphrase,
     )?;
@@ -368,6 +382,7 @@ pub async fn expand_manual_preset(
             &hop.auth_type,
             hop.password.clone(),
             hop.key_path.clone(),
+            hop.managed_key_id.clone(),
             hop.cert_path.clone(),
             hop.passphrase.clone(),
         )?;
@@ -385,6 +400,7 @@ pub async fn expand_manual_preset(
         &request.target.auth_type,
         request.target.password.clone(),
         request.target.key_path.clone(),
+        request.target.managed_key_id.clone(),
         request.target.cert_path.clone(),
         request.target.passphrase.clone(),
     )?;
@@ -708,7 +724,15 @@ mod tests {
 
     #[test]
     fn test_build_auth_supports_password_authentication() {
-        let auth = build_auth("password", Some("secret".to_string()), None, None, None).unwrap();
+        let auth = build_auth(
+            "password",
+            Some("secret".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert!(matches!(
             auth,
@@ -722,6 +746,7 @@ mod tests {
             "key",
             None,
             Some("/tmp/id_ed25519".to_string()),
+            None,
             None,
             Some("pp".to_string()),
         )
@@ -740,6 +765,7 @@ mod tests {
             "certificate",
             None,
             Some("/tmp/id_ed25519".to_string()),
+            None,
             Some("/tmp/id_ed25519-cert.pub".to_string()),
             Some("pp".to_string()),
         )
@@ -759,21 +785,40 @@ mod tests {
 
     #[test]
     fn test_build_auth_supports_agent_authentication() {
-        let auth = build_auth("agent", None, None, None, None).unwrap();
+        let auth = build_auth("agent", None, None, None, None, None).unwrap();
 
         assert!(matches!(auth, AuthMethod::Agent));
     }
 
     #[test]
+    fn test_build_auth_supports_managed_key_authentication() {
+        let auth = build_auth(
+            "managed_key",
+            None,
+            None,
+            Some("managed-key-1".to_string()),
+            None,
+            Some("pp".to_string()),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            auth,
+            AuthMethod::ManagedKey { key_id, passphrase }
+                if key_id == "managed-key-1" && passphrase.as_ref().map(|p| p.as_str()) == Some("pp")
+        ));
+    }
+
+    #[test]
     fn test_build_auth_requires_password_for_password_authentication() {
-        let error = build_auth("password", None, None, None, None).unwrap_err();
+        let error = build_auth("password", None, None, None, None, None).unwrap_err();
 
         assert_eq!(error, "Password required for password authentication");
     }
 
     #[test]
     fn test_build_auth_requires_key_path_for_key_authentication() {
-        let error = build_auth("key", None, None, None, None).unwrap_err();
+        let error = build_auth("key", None, None, None, None, None).unwrap_err();
 
         assert_eq!(error, "Key path required for key authentication");
     }
@@ -784,6 +829,7 @@ mod tests {
             "certificate",
             None,
             Some("/tmp/id_ed25519".to_string()),
+            None,
             None,
             None,
         )
@@ -797,7 +843,7 @@ mod tests {
 
     #[test]
     fn test_build_auth_rejects_unknown_authentication_type() {
-        let error = build_auth("keyboard_interactive", None, None, None, None).unwrap_err();
+        let error = build_auth("keyboard_interactive", None, None, None, None, None).unwrap_err();
 
         assert_eq!(error, "Unknown auth type: keyboard_interactive");
     }
@@ -811,6 +857,7 @@ mod tests {
             auth_type: "keyboard_interactive".to_string(),
             password: None,
             key_path: None,
+            managed_key_id: None,
             cert_path: None,
             passphrase: None,
             display_name: Some("Example".to_string()),
@@ -1417,6 +1464,7 @@ pub async fn connect_manual_preset(
             &hop.auth_type,
             hop.password.clone(),
             hop.key_path.clone(),
+            hop.managed_key_id.clone(),
             hop.cert_path.clone(),
             hop.passphrase.clone(),
         )?;
@@ -1434,6 +1482,7 @@ pub async fn connect_manual_preset(
         &request.target.auth_type,
         request.target.password.clone(),
         request.target.key_path.clone(),
+        request.target.managed_key_id.clone(),
         request.target.cert_path.clone(),
         request.target.passphrase.clone(),
     )?;

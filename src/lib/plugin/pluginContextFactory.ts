@@ -286,9 +286,11 @@ function toSavedConnectionSnapshot(connection: {
   host: string;
   port: number;
   username: string;
-  auth_type: 'password' | 'key' | 'agent' | 'certificate';
+  auth_type: 'password' | 'key' | 'managed_key' | 'agent' | 'certificate';
   key_path: string | null;
   cert_path: string | null;
+  managed_key_id?: string | null;
+  managed_key_name?: string | null;
   created_at: string;
   last_used_at: string | null;
   color: string | null;
@@ -299,9 +301,11 @@ function toSavedConnectionSnapshot(connection: {
     host: string;
     port: number;
     username: string;
-    auth_type: 'password' | 'key' | 'agent' | 'certificate';
+    auth_type: 'password' | 'key' | 'managed_key' | 'agent' | 'certificate';
     key_path?: string;
     cert_path?: string;
+    managed_key_id?: string;
+    managed_key_name?: string;
     agent_forwarding?: boolean;
   }>;
 }): SavedConnectionSnapshot {
@@ -315,6 +319,8 @@ function toSavedConnectionSnapshot(connection: {
     auth_type: connection.auth_type,
     key_path: connection.key_path,
     cert_path: connection.cert_path,
+    managed_key_id: connection.managed_key_id ?? null,
+    managed_key_name: connection.managed_key_name ?? null,
     created_at: connection.created_at,
     last_used_at: connection.last_used_at,
     color: connection.color,

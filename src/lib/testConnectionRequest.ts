@@ -15,10 +15,11 @@ type ManualTestConnectionInput = {
   port: number;
   username: string;
   name?: string;
-  authType: 'password' | 'key' | 'default_key' | 'agent' | 'certificate';
+  authType: 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate';
   password?: string | null;
   keyPath?: string | null;
   certPath?: string | null;
+  managedKeyId?: string | null;
   passphrase?: string | null;
   trustHostKey?: boolean;
   expectedHostKeyFingerprint?: string;
@@ -29,10 +30,11 @@ type ManualProxyHopInput = {
   host: string;
   port: number;
   username: string;
-  authType: 'password' | 'key' | 'default_key' | 'agent' | 'certificate';
+  authType: 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate';
   password?: string | null;
   keyPath?: string | null;
   certPath?: string | null;
+  managedKeyId?: string | null;
   passphrase?: string | null;
 };
 
@@ -92,6 +94,18 @@ function buildProxyHopRequest(input: ManualProxyHopInput): TestConnectionProxyHo
         passphrase: input.passphrase ?? undefined,
       };
     }
+    case 'managed_key':
+      if (!input.managedKeyId) {
+        throw new Error(`Managed SSH key is required for proxy hop ${input.username}@${input.host}`);
+      }
+      return {
+        host: input.host,
+        port: input.port,
+        username: input.username,
+        auth_type: 'managed_key',
+        managed_key_id: input.managedKeyId,
+        passphrase: input.passphrase ?? undefined,
+      };
     case 'agent':
       return {
         host: input.host,
@@ -108,6 +122,7 @@ function normalizeProxyHopInput(
   proxyHop: ProxyHopConfig | SavedConnectionProxyHopForConnect,
 ): ManualProxyHopInput {
   const certPath = 'cert_path' in proxyHop ? proxyHop.cert_path : undefined;
+  const managedKeyId = 'managed_key_id' in proxyHop ? proxyHop.managed_key_id : undefined;
 
   return {
     host: proxyHop.host,
@@ -117,6 +132,7 @@ function normalizeProxyHopInput(
     password: proxyHop.password,
     keyPath: proxyHop.key_path,
     certPath,
+    managedKeyId,
     passphrase: proxyHop.passphrase,
   };
 }
@@ -184,6 +200,16 @@ export function buildTestConnectionRequest(
         passphrase: input.passphrase ?? undefined,
       };
     }
+    case 'managed_key':
+      if (!input.managedKeyId) {
+        throw new Error('Managed SSH key is required for managed-key authentication');
+      }
+      return {
+        ...base,
+        auth_type: 'managed_key',
+        managed_key_id: input.managedKeyId,
+        passphrase: input.passphrase ?? undefined,
+      };
     case 'agent':
     default:
       return {
@@ -216,6 +242,7 @@ export function buildSavedConnectionTestRequest(
     password: connection.password,
     keyPath: connection.key_path,
     certPath: connection.cert_path,
+    managedKeyId: connection.managed_key_id,
     passphrase: connection.passphrase,
     proxyChain: connection.proxy_chain.map(normalizeProxyHopInput),
   });

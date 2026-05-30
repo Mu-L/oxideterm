@@ -55,6 +55,14 @@ pub enum SavedAuth {
         /// Keychain entry ID for passphrase (if any)
         passphrase_keychain_id: Option<String>,
     },
+    /// OxideTerm-managed SSH private key stored in the OS keychain
+    ManagedKey {
+        /// Managed key metadata ID
+        key_id: String,
+        /// Keychain entry ID for the managed key passphrase, if remembered
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        passphrase_keychain_id: Option<String>,
+    },
 }
 
 /// Connection options
@@ -147,6 +155,34 @@ pub struct SavedConnection {
 pub struct DeletedConnectionTombstone {
     pub id: String,
     pub deleted_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagedSshKeyOrigin {
+    ImportedFile,
+    PastedText,
+    OxideImport,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSshKey {
+    /// Stable metadata ID referenced by saved connections
+    pub id: String,
+    /// OS keychain account containing the private key material
+    pub secret_id: String,
+    /// User-facing display name
+    pub name: String,
+    /// Public fingerprint used for display and future deduplication
+    pub fingerprint: String,
+    /// Public key text, never private key material
+    pub public_key: String,
+    /// Whether the managed private key is encrypted
+    pub requires_passphrase: bool,
+    /// How OxideTerm first took custody of this key
+    pub origin: ManagedSshKeyOrigin,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 fn default_port() -> u16 {
@@ -251,6 +287,10 @@ pub struct ConfigFile {
     /// Saved-connection tombstones retained for multi-device delete propagation
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub connection_tombstones: Vec<DeletedConnectionTombstone>,
+
+    /// Metadata for OxideTerm-managed SSH keys. Private key material lives in keychain.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub managed_ssh_keys: Vec<ManagedSshKey>,
 }
 
 impl Default for ConfigFile {
@@ -261,6 +301,7 @@ impl Default for ConfigFile {
             groups: Vec::new(),
             recent: Vec::new(),
             connection_tombstones: Vec::new(),
+            managed_ssh_keys: Vec::new(),
         }
     }
 }
@@ -508,6 +549,66 @@ mod tests {
         let value = serde_json::to_value(&conn).unwrap();
 
         assert_eq!(value["options"]["post_connect_command"], "cd /srv/app");
+    }
+
+    #[test]
+    fn test_config_file_deserializes_missing_managed_keys_as_empty() {
+        let value = json!({
+            "version": CONFIG_VERSION,
+            "connections": [],
+            "groups": [],
+            "recent": []
+        });
+
+        let config: ConfigFile = serde_json::from_value(value).unwrap();
+
+        assert!(config.managed_ssh_keys.is_empty());
+    }
+
+    #[test]
+    fn test_managed_ssh_key_metadata_round_trips_without_private_key() {
+        let now = Utc::now();
+        let config = ConfigFile {
+            managed_ssh_keys: vec![ManagedSshKey {
+                id: "managed-key-1".to_string(),
+                secret_id: "managed-key-secret-1".to_string(),
+                name: "Production deploy key".to_string(),
+                fingerprint: "SHA256:test".to_string(),
+                public_key: "ssh-ed25519 AAAATEST".to_string(),
+                requires_passphrase: true,
+                origin: ManagedSshKeyOrigin::ImportedFile,
+                created_at: now,
+                updated_at: now,
+            }],
+            ..ConfigFile::default()
+        };
+
+        let value = serde_json::to_value(&config).unwrap();
+
+        assert_eq!(value["managed_ssh_keys"][0]["id"], "managed-key-1");
+        assert_eq!(value["managed_ssh_keys"][0]["origin"], "imported_file");
+        assert!(value.to_string().contains("ssh-ed25519 AAAATEST"));
+        assert!(!value.to_string().contains("PRIVATE KEY"));
+
+        let round_trip: ConfigFile = serde_json::from_value(value).unwrap();
+        assert_eq!(round_trip.managed_ssh_keys, config.managed_ssh_keys);
+    }
+
+    #[test]
+    fn test_managed_key_auth_deserializes_without_passphrase_reference() {
+        let auth: SavedAuth = serde_json::from_value(json!({
+            "type": "managed_key",
+            "key_id": "managed-key-1"
+        }))
+        .unwrap();
+
+        assert_eq!(
+            auth,
+            SavedAuth::ManagedKey {
+                key_id: "managed-key-1".to_string(),
+                passphrase_keychain_id: None,
+            }
+        );
     }
 
     #[test]
@@ -778,12 +879,17 @@ mod tests {
             has_passphrase: true,
             passphrase_keychain_id: Some("kc-pass".to_string()),
         };
+        let managed_key = SavedAuth::ManagedKey {
+            key_id: "managed-key-1".to_string(),
+            passphrase_keychain_id: Some("kc-managed-pass".to_string()),
+        };
 
         // Test equality
         assert_eq!(password.clone(), password);
         assert_ne!(password, key);
         assert_ne!(key, agent);
         assert_ne!(agent, cert);
+        assert_ne!(cert, managed_key);
     }
 
     #[test]

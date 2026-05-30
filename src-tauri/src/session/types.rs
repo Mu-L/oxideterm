@@ -373,6 +373,7 @@ impl From<&SessionEntry> for SessionInfo {
                 ("certificate".to_string(), Some(key_path.clone()))
             }
             AuthMethod::Agent => ("agent".to_string(), None),
+            AuthMethod::ManagedKey { .. } => ("managed_key".to_string(), None),
             AuthMethod::KeyboardInteractive => ("keyboard_interactive".to_string(), None),
         };
 

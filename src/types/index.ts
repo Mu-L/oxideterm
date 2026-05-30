@@ -23,7 +23,7 @@ export type { ToolResultEnvelope } from '../lib/ai/tools/protocol/types';
 
 // Session Types
 export type SessionState = 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting';
-export type AuthType = 'password' | 'key' | 'default_key' | 'agent' | 'certificate' | 'keyboard_interactive';
+export type AuthType = 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate' | 'keyboard_interactive';
 
 export type HighlightRuleRenderMode = 'background' | 'underline' | 'outline';
 
@@ -529,9 +529,11 @@ export interface ProxyHopInfo {
   host: string;
   port: number;
   username: string;
-  auth_type: 'password' | 'key' | 'agent' | 'certificate';
+  auth_type: 'password' | 'key' | 'managed_key' | 'agent' | 'certificate';
   key_path?: string;
   cert_path?: string;
+  managed_key_id?: string;
+  managed_key_name?: string;
   agent_forwarding?: boolean;
 }
 
@@ -542,9 +544,11 @@ export interface ConnectionInfo {
   host: string;
   port: number;
   username: string;
-  auth_type: 'password' | 'key' | 'agent' | 'certificate';
+  auth_type: 'password' | 'key' | 'managed_key' | 'agent' | 'certificate';
   key_path: string | null;
   cert_path: string | null;
+  managed_key_id?: string | null;
+  managed_key_name?: string | null;
   created_at: string;
   last_used_at: string | null;
   color: string | null;
@@ -552,6 +556,37 @@ export interface ConnectionInfo {
   agent_forwarding?: boolean;
   post_connect_command?: string | null;
   proxy_chain?: ProxyHopInfo[];
+}
+
+export type ManagedSshKeyOrigin = 'imported_file' | 'pasted_text' | 'oxide_import';
+
+export interface ManagedSshKeyInfo {
+  id: string;
+  name: string;
+  fingerprint: string;
+  public_key: string;
+  requires_passphrase: boolean;
+  origin: ManagedSshKeyOrigin;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManagedSshKeyUsageItem {
+  connection_id: string;
+  connection_name: string;
+  location: string;
+}
+
+export interface ManagedSshKeyUsage {
+  key_id: string;
+  count: number;
+  items: ManagedSshKeyUsageItem[];
+}
+
+export interface ManagedSshKeyDeleteResult {
+  deleted: boolean;
+  key_id: string;
+  usage: ManagedSshKeyUsage;
 }
 
 export interface OxideMetadata {
@@ -690,10 +725,11 @@ export interface SaveConnectionRequest {
   host: string;
   port: number;
   username: string;
-  auth_type: 'password' | 'key' | 'default_key' | 'agent' | 'certificate';
+  auth_type: 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate';
   password?: string;
   key_path?: string;
   cert_path?: string;
+  managed_key_id?: string;
   passphrase?: string;
   color?: string;
   tags?: string[];
@@ -711,6 +747,7 @@ export interface SaveProxyHopRequest {
   password?: string;
   key_path?: string;
   cert_path?: string;
+  managed_key_id?: string;
   passphrase?: string;
   agent_forwarding?: boolean;
 }
@@ -1487,10 +1524,11 @@ export interface ConnectServerRequest {
   host: string;
   port: number;
   username: string;
-  authType?: 'password' | 'key' | 'default_key' | 'agent' | 'certificate' | 'keyboard_interactive';
+  authType?: 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate' | 'keyboard_interactive';
   password?: string;
   keyPath?: string;
   certPath?: string;
+  managedKeyId?: string;
   passphrase?: string;
   displayName?: string;
   agentForwarding?: boolean;
@@ -1504,10 +1542,11 @@ export interface DrillDownRequest {
   host: string;
   port: number;
   username: string;
-  authType?: 'password' | 'key' | 'default_key' | 'agent' | 'certificate';
+  authType?: 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate';
   password?: string;
   keyPath?: string;
   certPath?: string;
+  managedKeyId?: string;
   passphrase?: string;
   displayName?: string;
   agentForwarding?: boolean;
@@ -1520,10 +1559,11 @@ export interface HopInfo {
   host: string;
   port: number;
   username: string;
-  authType?: 'password' | 'key' | 'default_key' | 'agent' | 'certificate';
+  authType?: 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate';
   password?: string;
   keyPath?: string;
   certPath?: string;
+  managedKeyId?: string;
   passphrase?: string;
   agentForwarding?: boolean;
 }
@@ -1593,7 +1633,7 @@ export interface TopologyNodeInfo {
   /** Username */
   username: string;
   /** Auth type */
-  authType: "password" | "key" | "agent";
+  authType: "password" | "key" | "managed_key" | "agent";
   /** Is local node (start point) */
   isLocal: boolean;
   /** Neighbor nodes (reachable next hops) */

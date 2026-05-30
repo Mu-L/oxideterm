@@ -41,14 +41,16 @@ use std::time::Duration;
 use std::time::Instant;
 
 use super::auth::{
-    DEFAULT_AUTH_TIMEOUT_SECS, authenticate_certificate_best_algo, authenticate_password,
-    authenticate_publickey_best_algo, build_client_config, ensure_auth_success,
-    load_certificate_auth_material, load_private_key_material, try_kbi_auth_chain,
-    try_none_auth_probe, try_password_as_kbi_fallback,
+    DEFAULT_AUTH_TIMEOUT_SECS, ManagedKeyResolver, authenticate_certificate_best_algo,
+    authenticate_password, authenticate_publickey_best_algo, build_client_config,
+    ensure_auth_success, load_certificate_auth_material, load_private_key_from_memory,
+    load_private_key_material, try_kbi_auth_chain, try_none_auth_probe,
+    try_password_as_kbi_fallback,
 };
 use super::handle_owner::HandleController;
 use super::preflight::{HostKeyStatus, check_host_key_via_stream};
 use super::{AuthMethod as SshAuthMethod, SshClient, SshConfig};
+use crate::commands::config::ConfigState;
 use crate::session::{AuthMethod, RemoteEnvInfo, SessionConfig};
 use crate::sftp::error::SftpError;
 use crate::sftp::session::SftpSession;
@@ -76,6 +78,17 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// Heartbeat consecutive failure threshold → mark LinkDown
 const HEARTBEAT_FAIL_THRESHOLD: u32 = 2;
 const LOCK_PROFILE_ENV: &str = "OXIDETERM_PROFILE_LOCKS";
+
+fn managed_key_resolver_from_app_handle(app: Option<&AppHandle>) -> Option<ManagedKeyResolver> {
+    let config_state = app?.try_state::<Arc<ConfigState>>()?;
+    let config_state = Arc::clone(config_state.inner());
+
+    Some(Arc::new(move |key_id| {
+        config_state
+            .resolve_managed_ssh_key_private_key(key_id)
+            .map_err(super::error::SshError::KeyError)
+    }))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteEnvDetectionReason {
@@ -1189,6 +1202,10 @@ impl SshConnectionRegistry {
                     passphrase: passphrase.clone(),
                 },
                 AuthMethod::Agent => SshAuthMethod::Agent,
+                AuthMethod::ManagedKey { key_id, passphrase } => SshAuthMethod::ManagedKey {
+                    key_id: key_id.clone(),
+                    passphrase: passphrase.clone(),
+                },
                 AuthMethod::KeyboardInteractive => SshAuthMethod::KeyboardInteractive,
             },
             timeout_secs: 30,
@@ -1206,8 +1223,9 @@ impl SshConnectionRegistry {
         // Clone AppHandle and drop the read lock immediately to avoid holding it
         // during SSH handshake + potential KBI chain (which waits for user input).
         let app_clone = self.app_handle.read().await.clone();
+        let managed_key_resolver = managed_key_resolver_from_app_handle(app_clone.as_ref());
         let session = client
-            .connect(app_clone.as_ref())
+            .connect_with_managed_key_resolver(app_clone.as_ref(), managed_key_resolver)
             .await
             .map_err(|e| ConnectionRegistryError::ConnectionFailed(e.to_string()))?;
 
@@ -1385,6 +1403,8 @@ impl SshConnectionRegistry {
         // 部分网关（如 cnb.space）直接接受 none auth，不做此探测会导致超时。
         // 详见: https://github.com/AnalyseDeCircuit/oxideterm/issues/95
         let auth_scope = format!("Tunnel auth to {}", target_config.host);
+        let app_clone = self.app_handle.read().await.clone();
+        let managed_key_resolver = managed_key_resolver_from_app_handle(app_clone.as_ref());
         let authenticated = if let Some(result) =
             try_none_auth_probe(&mut handle, &target_config.username, &auth_scope).await
         {
@@ -1467,6 +1487,30 @@ impl SshConnectionRegistry {
                         })?;
                     russh::client::AuthResult::Success
                 }
+                AuthMethod::ManagedKey { key_id, passphrase } => {
+                    let Some(resolve_managed_key) = managed_key_resolver.as_ref() else {
+                        return Err(ConnectionRegistryError::ConnectionFailed(
+                            "Managed key authentication requires a key resolver".to_string(),
+                        ));
+                    };
+                    // Tunneling keeps node config reference-only; key text is
+                    // loaded from the managed keychain only for this auth attempt.
+                    let private_key = resolve_managed_key(key_id)
+                        .map_err(|e| ConnectionRegistryError::ConnectionFailed(e.to_string()))?;
+                    let key = load_private_key_from_memory(
+                        private_key.as_str(),
+                        passphrase.as_ref().map(|p| p.as_str()),
+                    )
+                    .map_err(|e| ConnectionRegistryError::ConnectionFailed(e.to_string()))?;
+                    authenticate_publickey_best_algo(&mut handle, &target_config.username, key)
+                        .await
+                        .map_err(|e| {
+                            ConnectionRegistryError::ConnectionFailed(format!(
+                                "Authentication failed: {}",
+                                e
+                            ))
+                        })?
+                }
                 AuthMethod::KeyboardInteractive => {
                     // KBI via proxy chain is not supported in MVP
                     return Err(ConnectionRegistryError::ConnectionFailed(
@@ -1476,8 +1520,6 @@ impl SshConnectionRegistry {
                 }
             }
         };
-
-        let app_clone = self.app_handle.read().await.clone();
 
         if !authenticated.success() {
             if let AuthMethod::Password { password } = &target_config.auth {
@@ -1841,6 +1883,11 @@ impl SshConnectionRegistry {
 
             // Agent 认证：总是兼容
             (AuthMethod::Agent, AuthMethod::Agent) => true,
+
+            (
+                AuthMethod::ManagedKey { key_id: k1, .. },
+                AuthMethod::ManagedKey { key_id: k2, .. },
+            ) => k1 == k2,
 
             // 不同类型不兼容
             _ => false,

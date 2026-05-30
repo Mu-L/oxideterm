@@ -42,6 +42,7 @@ import {
 import { buildTestConnectionRequest } from '../../lib/testConnectionRequest';
 import { AddJumpServerDialog } from './AddJumpServerDialog';
 import { HostKeyConfirmDialog } from './HostKeyConfirmDialog';
+import { ManagedSshKeySelector } from './ManagedSshKeySelector';
 import { Plus, Trash2, Key, Lock, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
 import { useToast } from '../../hooks/useToast';
@@ -63,6 +64,7 @@ type ConnectFormRequest = {
   password?: string;
   keyPath?: string;
   certPath?: string;
+  managedKeyId?: string;
   passphrase?: string;
   agentForwarding?: boolean;
   postConnectCommand?: string;
@@ -91,10 +93,11 @@ export const NewConnectionModal = () => {
   const [host, setHost] = useState('');
   const [port, setPort] = useState('22');
   const [username, setUsername] = useState('root');
-  const [authType, setAuthType] = useState<'password' | 'key' | 'default_key' | 'agent' | 'certificate' | 'keyboard_interactive'>('password');
+  const [authType, setAuthType] = useState<'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate' | 'keyboard_interactive'>('password');
   const [password, setPassword] = useState('');
   const [keyPath, setKeyPath] = useState('');
   const [certPath, setCertPath] = useState('');  // Certificate path
+  const [managedKeyId, setManagedKeyId] = useState('');
   const [passphrase, setPassphrase] = useState('');  // Key passphrase for certificate
   const [saveConnection, setSaveConnection] = useState(() => {
     try {
@@ -169,11 +172,12 @@ export const NewConnectionModal = () => {
           host: request.host,
           port: request.port,
           username: request.username,
-          auth_type: request.authType as 'password' | 'key' | 'default_key' | 'agent' | 'certificate',
+          auth_type: request.authType as 'password' | 'key' | 'default_key' | 'managed_key' | 'agent' | 'certificate',
           password: (authType === 'password' && savePassword) ? password : undefined,
           key_path: (authType === 'key' || authType === 'certificate') ? keyPath : undefined,
           cert_path: authType === 'certificate' ? certPath : undefined,
-          passphrase: (authType === 'key' || authType === 'certificate' || authType === 'default_key') && passphrase
+          managed_key_id: authType === 'managed_key' ? managedKeyId : undefined,
+          passphrase: (authType === 'key' || authType === 'certificate' || authType === 'default_key' || authType === 'managed_key') && passphrase
             ? passphrase
             : undefined,
           tags: [],
@@ -199,6 +203,7 @@ export const NewConnectionModal = () => {
     createTerminalForNode,
     group,
     keyPath,
+    managedKeyId,
     name,
     password,
     postConnectCommand,

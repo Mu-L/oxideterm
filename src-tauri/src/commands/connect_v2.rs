@@ -28,14 +28,15 @@ use tracing::{info, warn};
 
 use super::{ForwardingRegistry, HealthRegistry, ProfilerRegistry};
 use crate::bridge::BridgeManager;
+use crate::commands::config::ConfigState;
 use crate::session::{
     AuthMethod, KeyAuth, SessionConfig, SessionInfo, SessionRegistry, SessionStats,
 };
 use crate::sftp::session::SftpRegistry;
 use crate::ssh::{
-    ProxyChain, ProxyConnectEndpoint, ProxyConnectEndpointKind, ProxyConnectError,
-    ProxyConnectOperation, ProxyHop, SshClient, SshConfig, SshConnectionRegistry, SshError,
-    connect_via_proxy_for_test,
+    ManagedKeyResolver, ProxyChain, ProxyConnectEndpoint, ProxyConnectEndpointKind,
+    ProxyConnectError, ProxyConnectOperation, ProxyHop, SshClient, SshConfig,
+    SshConnectionRegistry, SshError, connect_via_proxy_for_test_with_managed_key_resolver,
 };
 use zeroize::Zeroizing;
 
@@ -75,6 +76,10 @@ pub enum AuthRequest {
     Certificate {
         key_path: String,
         cert_path: String,
+        passphrase: Option<Zeroizing<String>>,
+    },
+    ManagedKey {
+        managed_key_id: String,
         passphrase: Option<Zeroizing<String>>,
     },
     Agent,
@@ -133,8 +138,23 @@ where
             cert_path,
             passphrase,
         }),
+        AuthRequest::ManagedKey {
+            managed_key_id,
+            passphrase,
+        } => Ok(AuthMethod::ManagedKey {
+            key_id: managed_key_id,
+            passphrase,
+        }),
         AuthRequest::Agent => Ok(AuthMethod::Agent),
     }
+}
+
+fn managed_key_resolver_from_config_state(state: Arc<ConfigState>) -> ManagedKeyResolver {
+    Arc::new(move |key_id| {
+        state
+            .resolve_managed_ssh_key_private_key(key_id)
+            .map_err(SshError::KeyError)
+    })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════
@@ -889,7 +909,10 @@ fn build_proxy_chain(requests: &[ProxyChainRequest]) -> Result<ProxyChain, (usiz
 /// disconnects. This verifies connectivity, authentication, and
 /// reports the round-trip time.
 #[tauri::command]
-pub async fn test_connection(request: ConnectRequest) -> Result<TestConnectionResponse, String> {
+pub async fn test_connection(
+    request: ConnectRequest,
+    config_state: State<'_, Arc<ConfigState>>,
+) -> Result<TestConnectionResponse, String> {
     info!(
         "Testing connection: {}@{}:{}",
         request.username, request.host, request.port
@@ -918,6 +941,8 @@ pub async fn test_connection(request: ConnectRequest) -> Result<TestConnectionRe
             ));
         }
     };
+    let managed_key_resolver =
+        managed_key_resolver_from_config_state(Arc::clone(config_state.inner()));
 
     let response = if let Some(proxy_chain_requests) = request
         .proxy_chain
@@ -954,13 +979,14 @@ pub async fn test_connection(request: ConnectRequest) -> Result<TestConnectionRe
             }
         };
 
-        match connect_via_proxy_for_test(
+        match connect_via_proxy_for_test_with_managed_key_resolver(
             &proxy_chain,
             &request.host,
             request.port,
             &request.username,
             &auth,
             30,
+            Some(Arc::clone(&managed_key_resolver)),
         )
         .await
         {
@@ -993,7 +1019,10 @@ pub async fn test_connection(request: ConnectRequest) -> Result<TestConnectionRe
             agent_forwarding: false,
         };
 
-        match SshClient::new(config).connect(None).await {
+        match SshClient::new(config)
+            .connect_with_managed_key_resolver(None, Some(managed_key_resolver))
+            .await
+        {
             Ok(session) => {
                 drop(session);
                 build_success_test_connection_response(
@@ -1086,6 +1115,21 @@ mod tests {
         let auth = build_session_auth(AuthRequest::Agent).unwrap();
 
         assert!(matches!(auth, AuthMethod::Agent));
+    }
+
+    #[test]
+    fn test_build_session_auth_managed_key() {
+        let auth = build_session_auth(AuthRequest::ManagedKey {
+            managed_key_id: "managed-key-1".to_string(),
+            passphrase: Some(Zeroizing::new("pp".to_string())),
+        })
+        .unwrap();
+
+        assert!(matches!(
+            auth,
+            AuthMethod::ManagedKey { key_id, passphrase }
+                if key_id == "managed-key-1" && passphrase.as_deref().map(|s| s.as_str()) == Some("pp")
+        ));
     }
 
     #[test]

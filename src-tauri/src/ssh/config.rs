@@ -96,6 +96,18 @@ pub enum AuthMethod {
     /// SSH agent authentication
     Agent,
 
+    /// Managed private key stored in OxideTerm's keychain.
+    ///
+    /// This variant intentionally keeps only the metadata reference in
+    /// serializable session/config state. The private key is resolved at the
+    /// SSH authentication boundary and never persisted in SessionConfig.
+    ManagedKey {
+        /// Managed key metadata ID from ConfigFile.managed_ssh_keys.
+        key_id: String,
+        /// Optional passphrase for encrypted managed keys.
+        passphrase: Option<Zeroizing<String>>,
+    },
+
     /// SSH certificate authentication (OpenSSH certificates)
     Certificate {
         /// Path to private key file
@@ -133,6 +145,13 @@ impl AuthMethod {
         Self::Certificate {
             key_path: key_path.into(),
             cert_path: cert_path.into(),
+            passphrase: passphrase.map(Zeroizing::new),
+        }
+    }
+
+    pub fn managed_key(key_id: impl Into<String>, passphrase: Option<String>) -> Self {
+        Self::ManagedKey {
+            key_id: key_id.into(),
             passphrase: passphrase.map(Zeroizing::new),
         }
     }
@@ -210,6 +229,10 @@ mod tests {
                 passphrase: Some(Zeroizing::new("pp".to_string())),
             },
             AuthMethod::Agent,
+            AuthMethod::ManagedKey {
+                key_id: "managed-key-1".to_string(),
+                passphrase: Some(Zeroizing::new("pp".to_string())),
+            },
             AuthMethod::Certificate {
                 key_path: "/tmp/id_ed25519".to_string(),
                 cert_path: "/tmp/id_ed25519-cert.pub".to_string(),

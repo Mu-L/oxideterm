@@ -32,6 +32,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { api } from '../../lib/api';
 import type { ConnectionInfo, SaveConnectionRequest } from '../../types';
 
+type EditableAuthType = 'password' | 'key' | 'managed_key' | 'agent' | 'certificate';
+
 export type DuplicateConnectionDraft = {
   connection: ConnectionInfo;
   saveRequest: SaveConnectionRequest;
@@ -60,9 +62,10 @@ export const EditConnectionPropertiesModal = ({
   const [host, setHost] = useState('');
   const [port, setPort] = useState('22');
   const [username, setUsername] = useState('');
-  const [authType, setAuthType] = useState<'password' | 'key' | 'agent' | 'certificate'>('password');
+  const [authType, setAuthType] = useState<EditableAuthType>('password');
   const [keyPath, setKeyPath] = useState('');
   const [certPath, setCertPath] = useState('');
+  const [managedKeyId, setManagedKeyId] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [password, setPassword] = useState('');
   const [passwordLoaded, setPasswordLoaded] = useState(false);
@@ -92,6 +95,7 @@ export const EditConnectionPropertiesModal = ({
       setAuthType(activeConnection.auth_type || 'password');
       setKeyPath(activeConnection.key_path || '');
       setCertPath(activeConnection.cert_path || '');
+      setManagedKeyId(activeConnection.managed_key_id || '');
       setPassphrase('');
       setPassword('');
       setPasswordLoaded(false);
@@ -166,7 +170,13 @@ export const EditConnectionPropertiesModal = ({
   };
 
   const handleAuthTypeChange = (value: string) => {
-    if (value === 'password' || value === 'key' || value === 'agent' || value === 'certificate') {
+    if (
+      value === 'password'
+      || value === 'key'
+      || value === 'managed_key'
+      || value === 'agent'
+      || value === 'certificate'
+    ) {
       setAuthType(value);
     }
   };
@@ -193,6 +203,7 @@ export const EditConnectionPropertiesModal = ({
           : undefined,
         key_path: usesKeyMaterial ? keyPath : undefined,
         cert_path: authType === 'certificate' ? certPath : undefined,
+        managed_key_id: authType === 'managed_key' ? managedKeyId : undefined,
         passphrase: usesKeyMaterial ? (passphrase || draftRequest?.passphrase) : undefined,
         color: color || undefined,
         tags: conn.tags,

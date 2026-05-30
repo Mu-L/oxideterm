@@ -33,9 +33,10 @@ use russh::client::{self, Handle};
 use tracing::{debug, info};
 
 use super::auth::{
-    DEFAULT_AUTH_TIMEOUT_SECS, authenticate_certificate_best_algo, authenticate_password,
-    authenticate_publickey_best_algo, build_client_config, ensure_auth_success,
-    load_certificate_auth_material, load_private_key_material, try_none_auth_probe,
+    DEFAULT_AUTH_TIMEOUT_SECS, ManagedKeyResolver, authenticate_certificate_best_algo,
+    authenticate_password, authenticate_publickey_best_algo, build_client_config,
+    ensure_auth_success, load_certificate_auth_material, load_private_key_from_memory,
+    load_private_key_material, try_none_auth_probe,
 };
 use super::client::ClientHandler;
 use super::config::AuthMethod;
@@ -260,6 +261,7 @@ async fn authenticate_proxy_hop(
     handle: &mut Handle<ClientHandler>,
     hop: &ProxyHop,
     auth_path: ProxyAuthPath,
+    managed_key_resolver: Option<&ManagedKeyResolver>,
 ) -> Result<(), SshError> {
     // Implicit "none" auth probe before configured method.
     // See try_none_auth_probe() doc and issue #95 for rationale.
@@ -321,6 +323,21 @@ async fn authenticate_proxy_hop(
                 agent.authenticate(handle, hop.username.clone()).await?;
                 client::AuthResult::Success
             }
+            AuthMethod::ManagedKey { key_id, passphrase } => {
+                let Some(resolve_managed_key) = managed_key_resolver else {
+                    return Err(SshError::AuthenticationFailed(
+                        "Managed key authentication requires a key resolver".to_string(),
+                    ));
+                };
+                // Proxy hops also keep only a key id in the chain config; the
+                // private key is pulled from keychain for this auth attempt only.
+                let private_key = resolve_managed_key(key_id)?;
+                let key = load_private_key_from_memory(
+                    private_key.as_str(),
+                    passphrase.as_ref().map(|p| p.as_str()),
+                )?;
+                authenticate_publickey_best_algo(handle, &hop.username, key).await?
+            }
             AuthMethod::KeyboardInteractive => {
                 return Err(SshError::AuthenticationFailed(
                     "KeyboardInteractive authentication not supported for proxy chain hops"
@@ -379,6 +396,7 @@ async fn direct_connect(
     hop: &ProxyHop,
     timeout_secs: u64,
     trust_unknown_host: Option<bool>,
+    managed_key_resolver: Option<&ManagedKeyResolver>,
 ) -> Result<Handle<ClientHandler>, SshError> {
     let addr = format!("{}:{}", hop.host, hop.port);
     let socket_addr = resolve_socket_addr(&addr)?;
@@ -403,7 +421,13 @@ async fn direct_connect(
     debug!("SSH handshake with jump host completed");
 
     // Authenticate
-    authenticate_proxy_hop(&mut handle, hop, ProxyAuthPath::Direct).await?;
+    authenticate_proxy_hop(
+        &mut handle,
+        hop,
+        ProxyAuthPath::Direct,
+        managed_key_resolver,
+    )
+    .await?;
 
     info!("Authenticated to jump host {}", hop.host);
     Ok(handle)
@@ -428,6 +452,7 @@ async fn connect_via_stream(
     stream: russh::ChannelStream<russh::client::Msg>,
     timeout_secs: u64,
     trust_unknown_host: Option<bool>,
+    managed_key_resolver: Option<&ManagedKeyResolver>,
 ) -> Result<Handle<ClientHandler>, SshError> {
     use russh::client;
 
@@ -466,7 +491,13 @@ async fn connect_via_stream(
     debug!("SSH handshake via stream completed");
 
     // Authenticate
-    authenticate_proxy_hop(&mut handle, hop, ProxyAuthPath::Stream).await?;
+    authenticate_proxy_hop(
+        &mut handle,
+        hop,
+        ProxyAuthPath::Stream,
+        managed_key_resolver,
+    )
+    .await?;
 
     info!("Authenticated via stream to {}", hop.host);
     Ok(handle)
@@ -563,6 +594,7 @@ pub async fn connect_via_proxy(
         target_auth,
         timeout_secs,
         None,
+        None,
     )
     .await
 }
@@ -574,6 +606,27 @@ pub async fn connect_via_proxy_for_test(
     target_username: &str,
     target_auth: &AuthMethod,
     timeout_secs: u64,
+) -> Result<ProxyConnection, ProxyConnectError> {
+    connect_via_proxy_for_test_with_managed_key_resolver(
+        chain,
+        target_host,
+        target_port,
+        target_username,
+        target_auth,
+        timeout_secs,
+        None,
+    )
+    .await
+}
+
+pub async fn connect_via_proxy_for_test_with_managed_key_resolver(
+    chain: &ProxyChain,
+    target_host: &str,
+    target_port: u16,
+    target_username: &str,
+    target_auth: &AuthMethod,
+    timeout_secs: u64,
+    managed_key_resolver: Option<ManagedKeyResolver>,
 ) -> Result<ProxyConnection, ProxyConnectError> {
     if chain.is_empty() {
         return Err(ProxyConnectError::InvalidChain {
@@ -601,9 +654,22 @@ pub async fn connect_via_proxy_for_test(
         let endpoint = jump_host_endpoint(hop, hop_number, num_hops);
 
         let handle = if let Some(stream) = current_stream.take() {
-            connect_via_stream_for_test(hop, stream, timeout_secs, endpoint.clone()).await?
+            connect_via_stream_for_test(
+                hop,
+                stream,
+                timeout_secs,
+                endpoint.clone(),
+                managed_key_resolver.as_ref(),
+            )
+            .await?
         } else {
-            direct_connect_for_test(hop, timeout_secs, endpoint.clone()).await?
+            direct_connect_for_test(
+                hop,
+                timeout_secs,
+                endpoint.clone(),
+                managed_key_resolver.as_ref(),
+            )
+            .await?
         };
 
         if index < num_hops - 1 {
@@ -670,6 +736,7 @@ pub async fn connect_via_proxy_for_test(
         stream,
         timeout_secs,
         target_endpoint(target_host, target_port, target_username, num_hops),
+        managed_key_resolver.as_ref(),
     )
     .await?;
 
@@ -683,6 +750,7 @@ async fn direct_connect_for_test(
     hop: &ProxyHop,
     timeout_secs: u64,
     endpoint: ProxyConnectEndpoint,
+    managed_key_resolver: Option<&ManagedKeyResolver>,
 ) -> Result<Handle<ClientHandler>, ProxyConnectError> {
     let addr = format!("{}:{}", hop.host, hop.port);
     let socket_addr = resolve_socket_addr(&addr).map_err(|source| {
@@ -716,11 +784,16 @@ async fn direct_connect_for_test(
         )
     })?;
 
-    authenticate_proxy_hop(&mut handle, hop, ProxyAuthPath::Direct)
-        .await
-        .map_err(|source| {
-            ProxyConnectError::step(ProxyConnectOperation::Authenticate, endpoint, source)
-        })?;
+    authenticate_proxy_hop(
+        &mut handle,
+        hop,
+        ProxyAuthPath::Direct,
+        managed_key_resolver,
+    )
+    .await
+    .map_err(|source| {
+        ProxyConnectError::step(ProxyConnectOperation::Authenticate, endpoint, source)
+    })?;
 
     Ok(handle)
 }
@@ -730,6 +803,7 @@ async fn connect_via_stream_for_test(
     stream: russh::ChannelStream<russh::client::Msg>,
     timeout_secs: u64,
     endpoint: ProxyConnectEndpoint,
+    managed_key_resolver: Option<&ManagedKeyResolver>,
 ) -> Result<Handle<ClientHandler>, ProxyConnectError> {
     let ssh_config = build_client_config();
     let handler = build_proxy_client_handler(hop.host.clone(), hop.port, Some(false));
@@ -761,11 +835,16 @@ async fn connect_via_stream_for_test(
         )
     })?;
 
-    authenticate_proxy_hop(&mut handle, hop, ProxyAuthPath::Stream)
-        .await
-        .map_err(|source| {
-            ProxyConnectError::step(ProxyConnectOperation::Authenticate, endpoint, source)
-        })?;
+    authenticate_proxy_hop(
+        &mut handle,
+        hop,
+        ProxyAuthPath::Stream,
+        managed_key_resolver,
+    )
+    .await
+    .map_err(|source| {
+        ProxyConnectError::step(ProxyConnectOperation::Authenticate, endpoint, source)
+    })?;
 
     Ok(handle)
 }
@@ -778,6 +857,7 @@ async fn connect_via_proxy_internal(
     target_auth: &AuthMethod,
     timeout_secs: u64,
     trust_unknown_host: Option<bool>,
+    managed_key_resolver: Option<ManagedKeyResolver>,
 ) -> Result<ProxyConnection, SshError> {
     if chain.is_empty() {
         return Err(SshError::ConnectionFailed("Proxy chain is empty".into()));
@@ -808,9 +888,22 @@ async fn connect_via_proxy_internal(
         );
 
         let handle = if let Some(stream) = current_stream.take() {
-            connect_via_stream(hop, stream, timeout_secs, trust_unknown_host).await?
+            connect_via_stream(
+                hop,
+                stream,
+                timeout_secs,
+                trust_unknown_host,
+                managed_key_resolver.as_ref(),
+            )
+            .await?
         } else {
-            direct_connect(hop, timeout_secs, trust_unknown_host).await?
+            direct_connect(
+                hop,
+                timeout_secs,
+                trust_unknown_host,
+                managed_key_resolver.as_ref(),
+            )
+            .await?
         };
 
         if i < num_hops - 1 {
@@ -875,8 +968,14 @@ async fn connect_via_proxy_internal(
         SshError::ConnectionFailed("No stream available for target connection".into())
     })?;
 
-    let target_handle =
-        connect_via_stream(&target_hop, stream, timeout_secs, trust_unknown_host).await?;
+    let target_handle = connect_via_stream(
+        &target_hop,
+        stream,
+        timeout_secs,
+        trust_unknown_host,
+        managed_key_resolver.as_ref(),
+    )
+    .await?;
 
     info!("Target connection established");
 

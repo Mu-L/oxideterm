@@ -20,6 +20,7 @@ use ssh_encoding::Encode;
 use tauri::AppHandle;
 use thiserror::Error;
 use tracing::{debug, info, warn};
+use zeroize::Zeroizing;
 
 use super::client::ClientHandler;
 use super::error::SshError;
@@ -30,6 +31,8 @@ use super::keyboard_interactive::{
 use crate::path_utils::expand_tilde;
 
 pub(crate) const DEFAULT_AUTH_TIMEOUT_SECS: u64 = 30;
+pub(crate) type ManagedKeyResolver =
+    Arc<dyn Fn(&str) -> Result<Zeroizing<String>, SshError> + Send + Sync>;
 
 /// Timeout for the implicit "none" auth probe (see `try_none_auth_probe`).
 /// Kept short (5s) so that normal servers that reject "none" don't noticeably
@@ -619,6 +622,16 @@ pub(crate) fn load_private_key_material(
 ) -> Result<Arc<PrivateKey>, SshError> {
     let expanded_key_path = expand_tilde(key_path);
     let key = russh::keys::load_secret_key(&expanded_key_path, passphrase)
+        .map_err(|e| SshError::KeyError(e.to_string()))?;
+
+    Ok(Arc::new(key))
+}
+
+pub(crate) fn load_private_key_from_memory(
+    private_key: &str,
+    passphrase: Option<&str>,
+) -> Result<Arc<PrivateKey>, SshError> {
+    let key = russh::keys::decode_secret_key(private_key, passphrase)
         .map_err(|e| SshError::KeyError(e.to_string()))?;
 
     Ok(Arc::new(key))

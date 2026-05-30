@@ -86,6 +86,9 @@ import {
   RagCollectionStats,
   RagPendingEmbedding,
   RagSearchResult,
+  ManagedSshKeyInfo,
+  ManagedSshKeyUsage,
+  ManagedSshKeyDeleteResult,
 } from '../types';
 import type { PluginManifest, UrlInstallResult } from '../types/plugin';
 
@@ -192,6 +195,14 @@ export type TestConnectionProxyHop =
       host: string;
       port: number;
       username: string;
+      auth_type: 'managed_key';
+      managed_key_id: string;
+      passphrase?: string;
+    }
+  | {
+      host: string;
+      port: number;
+      username: string;
       auth_type: 'agent';
     }
   | {
@@ -228,6 +239,15 @@ export type TestConnectionRequest = TestConnectionRequestOptions & (
       username: string;
       name?: string;
       auth_type: 'default_key';
+      passphrase?: string;
+    }
+  | {
+      host: string;
+      port: number;
+      username: string;
+      name?: string;
+      auth_type: 'managed_key';
+      managed_key_id: string;
       passphrase?: string;
     }
   | {
@@ -305,6 +325,7 @@ export type SavedConnectionProxyHopForConnect = {
   key_path?: string;
   cert_path?: string;
   passphrase?: string;
+  managed_key_id?: string;
   agent_forwarding: boolean;
 };
 
@@ -312,11 +333,12 @@ export type SavedConnectionForConnect = {
   host: string;
   port: number;
   username: string;
-  auth_type: 'password' | 'key' | 'agent' | 'certificate';
+  auth_type: 'password' | 'key' | 'managed_key' | 'agent' | 'certificate';
   password?: string;
   key_path?: string;
   cert_path?: string;
   passphrase?: string;
+  managed_key_id?: string;
   name: string;
   agent_forwarding: boolean;
   post_connect_command?: string | null;
@@ -642,6 +664,49 @@ export const api = {
   getConnectionPassword: async (id: string): Promise<string> => {
     if (USE_MOCK) return 'mock-password';
     return invoke('get_connection_password', { id });
+  },
+
+  createManagedSshKeyFromText: async (
+    privateKey: string,
+    name?: string,
+    passphrase?: string,
+  ): Promise<ManagedSshKeyInfo> => {
+    return invoke('create_managed_ssh_key_from_text', {
+      privateKey,
+      name: name ?? null,
+      passphrase: passphrase ?? null,
+    });
+  },
+
+  createManagedSshKeyFromFile: async (
+    path: string,
+    name?: string,
+    passphrase?: string,
+  ): Promise<ManagedSshKeyInfo> => {
+    return invoke('create_managed_ssh_key_from_file', {
+      path,
+      name: name ?? null,
+      passphrase: passphrase ?? null,
+    });
+  },
+
+  listManagedSshKeys: async (): Promise<ManagedSshKeyInfo[]> => {
+    return invoke('list_managed_ssh_keys');
+  },
+
+  renameManagedSshKey: async (id: string, name: string): Promise<ManagedSshKeyInfo> => {
+    return invoke('rename_managed_ssh_key', { id, name });
+  },
+
+  getManagedSshKeyUsage: async (id: string): Promise<ManagedSshKeyUsage> => {
+    return invoke('get_managed_ssh_key_usage', { id });
+  },
+
+  deleteManagedSshKey: async (
+    id: string,
+    force = false,
+  ): Promise<ManagedSshKeyDeleteResult> => {
+    return invoke('delete_managed_ssh_key', { id, force });
   },
 
   /**

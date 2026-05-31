@@ -112,12 +112,12 @@ export const AddJumpServerDialog: React.FC<AddJumpServerDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="grid max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{t('modals.jump_server.title')}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 p-4">
+        <div className="min-h-0 space-y-4 overflow-y-auto p-4">
           <div className="grid grid-cols-4 gap-4">
             <div className="col-span-3 space-y-2">
               <Label htmlFor="jump-host">{t('modals.jump_server.host')} *</Label>
@@ -159,13 +159,26 @@ export const AddJumpServerDialog: React.FC<AddJumpServerDialogProps> = ({
               onValueChange={handleAuthTypeChange}
               className="w-full"
             >
-                <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="default_key">{t('modals.jump_server.auth_default_key')}</TabsTrigger>
-          <TabsTrigger value="key">{t('modals.jump_server.auth_ssh_key')}</TabsTrigger>
-          <TabsTrigger value="managed_key">{t('modals.new_connection.auth_managed_key')}</TabsTrigger>
-              <TabsTrigger value="certificate">{t('modals.new_connection.auth_certificate')}</TabsTrigger>
-          <TabsTrigger value="password">{t('modals.jump_server.auth_password')}</TabsTrigger>
-          <TabsTrigger value="agent">{t('modals.jump_server.auth_agent')}</TabsTrigger>
+              {/* Split jump auth tabs into two rows so translated labels do not overlap. */}
+              <TabsList className="grid h-auto w-full grid-cols-3 gap-1">
+                <TabsTrigger value="default_key" className="min-h-9 whitespace-normal px-2 text-center leading-tight">
+                  {t('modals.jump_server.auth_default_key')}
+                </TabsTrigger>
+                <TabsTrigger value="key" className="min-h-9 whitespace-normal px-2 text-center leading-tight">
+                  {t('modals.jump_server.auth_ssh_key')}
+                </TabsTrigger>
+                <TabsTrigger value="managed_key" className="min-h-9 whitespace-normal px-2 text-center leading-tight">
+                  {t('modals.new_connection.auth_managed_key')}
+                </TabsTrigger>
+                <TabsTrigger value="certificate" className="min-h-9 whitespace-normal px-2 text-center leading-tight">
+                  {t('modals.new_connection.auth_certificate')}
+                </TabsTrigger>
+                <TabsTrigger value="password" className="min-h-9 whitespace-normal px-2 text-center leading-tight">
+                  {t('modals.jump_server.auth_password')}
+                </TabsTrigger>
+                <TabsTrigger value="agent" className="min-h-9 whitespace-normal px-2 text-center leading-tight">
+                  {t('modals.jump_server.auth_agent')}
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="default_key">

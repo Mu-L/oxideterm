@@ -195,8 +195,8 @@
       "password_strength_strong": "강함",
       "error_export_failed": "내보내기 실패",
       "success": "내보내기 성공: {{count}}개 연결이 {{path}}에 저장됨",
-      "include_quick_commands": "Include Quick Commands ({{count}})",
-      "include_quick_commands_description": "Quick Commands may contain hostnames, paths, or secrets embedded in commands."
+      "include_quick_commands": "빠른 명령 포함({{count}})",
+      "include_quick_commands_description": "빠른 명령에는 호스트 이름, 경로 또는 명령 안에 포함된 비밀 정보가 들어 있을 수 있습니다."
     },
     "import": {
       "title": ".oxide 파일에서 구성 가져오기",
@@ -260,9 +260,9 @@
       "preview_portable_secrets": "이 파일에는 AI 제공업체 키와 같은 포터블 비밀 항목 {{count}}개도 들어 있습니다.",
       "section_app_settings": "앱 설정",
       "app_settings_sections_title": "설정 섹션 ({{count}})",
-      "app_settings_legacy_title": "Legacy Application Settings",
-      "app_settings_legacy_description": "This file was exported before sectioned settings support. Only full settings import is available.",
-      "app_settings_contains_env_vars": "Includes local terminal environment variable names",
+      "app_settings_legacy_title": "레거시 앱 설정",
+      "app_settings_legacy_description": "이 파일은 섹션별 설정 지원 전에 내보낸 것입니다. 전체 설정 가져오기만 사용할 수 있습니다.",
+      "app_settings_contains_env_vars": "로컬 터미널 환경 변수 이름 포함",
       "app_settings_field_recent_shells": "최근 셸",
       "section_plugin_settings": "플러그인 환경설정 ({{count}}개 플러그인)",
       "section_portable_secrets": "포터블 비밀 항목 ({{count}}개)",
@@ -306,12 +306,12 @@
       "error_password": "비밀번호가 잘못되어 파일을 복호화할 수 없습니다",
       "error_tampered": "파일 검증 실패, 데이터가 변조되었을 수 있습니다",
       "error_enter_password": "복호화 비밀번호를 입력하세요",
-      "contains_quick_commands": "Quick Commands:",
-      "quick_commands_count": "{{count}} command(s)",
-      "section_quick_commands": "Quick Commands ({{count}} commands)",
-      "toggle_quick_commands": "Import {{categories}} Quick Command group(s). Existing conflicts follow the selected conflict strategy; Replace only replaces conflicting items.",
-      "imported_quick_commands": "Imported {{count}} Quick Command item(s).",
-      "skipped_quick_commands": "Quick Commands skipped"
+      "contains_quick_commands": "빠른 명령:",
+      "quick_commands_count": "명령 {{count}}개",
+      "section_quick_commands": "빠른 명령({{count}}개)",
+      "toggle_quick_commands": "{{categories}}개의 빠른 명령 그룹을 가져옵니다. 기존 충돌은 선택한 충돌 전략을 따르며, 바꾸기는 충돌 항목만 대체합니다.",
+      "imported_quick_commands": "빠른 명령 항목 {{count}}개를 가져왔습니다.",
+      "skipped_quick_commands": "빠른 명령 건너뜀"
     },
     "reconnect": {
       "title": "세션 재연결",
@@ -457,9 +457,9 @@
       "save_connection_hint": "처음 사용 시 기본값은 꺼짐입니다. 이후 선택이 기억됩니다.",
       "agent_forwarding": "SSH Agent 포워딩 활성화",
       "agent_forwarding_hint": "신뢰할 수 있는 서버에서만 활성화하세요. 악성 서버가 로컬 SSH Agent를 사용하여 다른 호스트에 인증할 수 있습니다.",
-      "post_connect_command": "Run after connect",
+      "post_connect_command": "연결 후 실행",
       "post_connect_command_placeholder": "cd /srv/app",
-      "post_connect_command_hint": "Optional. Runs once after the interactive shell opens.",
+      "post_connect_command_hint": "선택 사항입니다. 대화형 셸이 열린 뒤 한 번 실행됩니다.",
       "proxy_chain": {
         "title": "프록시 체인",
         "add_jump": "점프 서버 추가",
@@ -485,7 +485,7 @@
       "connecting": "연결 중...",
       "connect_failed": "연결 실패",
       "save_failed": "연결 저장 실패",
-      "auth_managed_key": "Managed Key",
+      "auth_managed_key": "관리형 키",
       "transport_ssh": "SSH",
       "transport_serial": "시리얼",
       "serial_description": "로컬 시리얼 장치를 터미널로 엽니다.",
@@ -683,28 +683,28 @@
         "label": "관리 SSH 키",
         "placeholder": "관리 키 선택",
         "loading": "관리 키를 불러오는 중...",
-        "refresh": "Refresh"
+        "refresh": "새로고침"
       },
-      "display_name": "Display name (optional)",
-      "passphrase": "Passphrase (optional)",
-      "passphrase_placeholder": "Passphrase for encrypted key",
-      "passphrase_hint": "Only needed when the managed key is encrypted. It is used for this connection and saved only when the connection is saved with a passphrase.",
+      "display_name": "표시 이름(선택 사항)",
+      "passphrase": "패스프레이즈(선택 사항)",
+      "passphrase_placeholder": "암호화된 키의 패스프레이즈",
+      "passphrase_hint": "관리형 키가 암호화된 경우에만 필요합니다. 이 연결에 사용되며, 연결을 패스프레이즈와 함께 저장할 때만 저장됩니다.",
       "custody_hint": "관리 키는 OxideTerm의 로컬 키체인/포터블 키스토어에 저장됩니다. 연결 설정에는 키 참조만 저장됩니다.",
-      "cancel": "Cancel",
-      "import": "Import",
-      "importing": "Importing...",
+      "cancel": "취소",
+      "import": "가져오기",
+      "importing": "가져오는 중...",
       "import_file": {
         "open": "키 파일 가져오기",
-        "browse_title": "Select SSH Private Key",
-        "title": "Import managed SSH key",
+        "browse_title": "SSH 개인 키 선택",
+        "title": "관리형 SSH 키 가져오기",
         "description": "기존 개인 키를 OxideTerm의 로컬 관리 키 저장소로 복사합니다.",
         "path": "개인 키 파일"
       },
       "paste": {
         "open": "개인 키 붙여넣기",
-        "title": "Paste managed SSH key",
+        "title": "관리형 SSH 키 붙여넣기",
         "description": "OpenSSH 개인 키를 붙여넣습니다. 검증을 위해 줄바꿈은 유지됩니다.",
-        "private_key": "Private key"
+        "private_key": "개인 키"
       }
     }
   }

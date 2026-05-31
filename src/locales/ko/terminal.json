@@ -37,12 +37,12 @@
       "showing_first": "{{total}}개 중 처음 100개 표시",
       "partial_results": "부분 결과: 일부 보관된 청크는 검색할 수 없습니다.",
       "no_matches_in_history": "세션 기록에서 일치 항목을 찾을 수 없습니다",
-      "visible_terminal": "Visible terminal",
-      "full_history": "Full history",
-      "visible_terminal_hint": "Search the main terminal visible scrollback.",
-      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer.",
-      "results_map": "Results map",
-      "results_map_hint": "Click to jump"
+      "visible_terminal": "표시 중인 터미널",
+      "full_history": "전체 기록",
+      "visible_terminal_hint": "기본 터미널의 표시 중인 스크롤백에서 검색합니다.",
+      "full_history_hint": "백엔드 최신 기록과 보관된 발췌를 검색합니다. 결과는 스크롤백 뷰어에서 열립니다.",
+      "results_map": "결과 지도",
+      "results_map_hint": "클릭하여 이동"
     },
     "ai": {
       "title": "OxideSens",

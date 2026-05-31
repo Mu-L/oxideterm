@@ -195,8 +195,8 @@
       "password_strength_strong": "Stark",
       "error_export_failed": "Export fehlgeschlagen",
       "success": "Export erfolgreich: {{count}} Verbindungen gespeichert unter {{path}}",
-      "include_quick_commands": "Include Quick Commands ({{count}})",
-      "include_quick_commands_description": "Quick Commands may contain hostnames, paths, or secrets embedded in commands."
+      "include_quick_commands": "Schnellbefehle einschließen ({{count}})",
+      "include_quick_commands_description": "Schnellbefehle können Hostnamen, Pfade oder in Befehle eingebettete Geheimnisse enthalten."
     },
     "import": {
       "title": "Konfiguration aus .oxide-Datei importieren",
@@ -260,9 +260,9 @@
       "preview_portable_secrets": "Diese Datei enthält außerdem {{count}} portable Geheimniselement(e), z. B. KI-Anbieterschlüssel.",
       "section_app_settings": "Anwendungseinstellungen",
       "app_settings_sections_title": "Einstellungsbereiche ({{count}})",
-      "app_settings_legacy_title": "Legacy Application Settings",
-      "app_settings_legacy_description": "This file was exported before sectioned settings support. Only full settings import is available.",
-      "app_settings_contains_env_vars": "Includes local terminal environment variable names",
+      "app_settings_legacy_title": "Ältere Anwendungseinstellungen",
+      "app_settings_legacy_description": "Diese Datei wurde exportiert, bevor Abschnittsunterstützung für Einstellungen verfügbar war. Es ist nur der vollständige Import der Einstellungen möglich.",
+      "app_settings_contains_env_vars": "Enthält Namen lokaler Terminal-Umgebungsvariablen",
       "app_settings_field_recent_shells": "Zuletzt verwendete Shells",
       "section_plugin_settings": "Plugin-Einstellungen ({{count}} Plugins)",
       "section_portable_secrets": "Portable Geheimnisse ({{count}} Elemente)",
@@ -306,12 +306,12 @@
       "error_password": "Falsches Passwort, Datei kann nicht entschlüsselt werden",
       "error_tampered": "Dateiüberprüfung fehlgeschlagen, Daten könnten manipuliert worden sein",
       "error_enter_password": "Bitte Entschlüsselungspasswort eingeben",
-      "contains_quick_commands": "Quick Commands:",
-      "quick_commands_count": "{{count}} command(s)",
-      "section_quick_commands": "Quick Commands ({{count}} commands)",
-      "toggle_quick_commands": "Import {{categories}} Quick Command group(s). Existing conflicts follow the selected conflict strategy; Replace only replaces conflicting items.",
-      "imported_quick_commands": "Imported {{count}} Quick Command item(s).",
-      "skipped_quick_commands": "Quick Commands skipped"
+      "contains_quick_commands": "Schnellbefehle:",
+      "quick_commands_count": "{{count}} Befehl(e)",
+      "section_quick_commands": "Schnellbefehle ({{count}} Befehle)",
+      "toggle_quick_commands": "{{categories}} Schnellbefehlsgruppe(n) importieren. Bestehende Konflikte folgen der ausgewählten Konfliktstrategie; Ersetzen ersetzt nur konflikthafte Einträge.",
+      "imported_quick_commands": "{{count}} Schnellbefehl(e) importiert.",
+      "skipped_quick_commands": "Schnellbefehle übersprungen"
     },
     "reconnect": {
       "title": "Sitzung erneut verbinden",
@@ -457,9 +457,9 @@
       "save_connection_hint": "Beim ersten Mal standardmäßig deaktiviert. Ihre Auswahl wird gespeichert.",
       "agent_forwarding": "SSH-Agent-Weiterleitung aktivieren",
       "agent_forwarding_hint": "Nur bei vertrauenswürdigen Servern aktivieren. Ein bösartiger Server könnte Ihren lokalen SSH-Agent verwenden, um sich bei anderen Hosts zu authentifizieren.",
-      "post_connect_command": "Run after connect",
+      "post_connect_command": "Nach Verbindung ausführen",
       "post_connect_command_placeholder": "cd /srv/app",
-      "post_connect_command_hint": "Optional. Runs once after the interactive shell opens.",
+      "post_connect_command_hint": "Optional. Wird einmal ausgeführt, nachdem die interaktive Shell geöffnet wurde.",
       "proxy_chain": {
         "title": "Proxy-Kette",
         "add_jump": "Jump-Server hinzufügen",
@@ -485,7 +485,7 @@
       "connecting": "Verbindung wird hergestellt...",
       "connect_failed": "Verbindung fehlgeschlagen",
       "save_failed": "Verbindung speichern fehlgeschlagen",
-      "auth_managed_key": "Managed Key",
+      "auth_managed_key": "Verwalteter Schlüssel",
       "transport_ssh": "SSH",
       "transport_serial": "Seriell",
       "serial_description": "Ein lokales serielles Gerät als Terminal öffnen.",
@@ -683,28 +683,28 @@
         "label": "Verwalteter SSH-Schlüssel",
         "placeholder": "Verwalteten Schlüssel auswählen",
         "loading": "Verwaltete Schlüssel werden geladen...",
-        "refresh": "Refresh"
+        "refresh": "Aktualisieren"
       },
-      "display_name": "Display name (optional)",
+      "display_name": "Anzeigename (optional)",
       "passphrase": "Passphrase (optional)",
-      "passphrase_placeholder": "Passphrase for encrypted key",
-      "passphrase_hint": "Only needed when the managed key is encrypted. It is used for this connection and saved only when the connection is saved with a passphrase.",
+      "passphrase_placeholder": "Passphrase für verschlüsselten Schlüssel",
+      "passphrase_hint": "Nur erforderlich, wenn der verwaltete Schlüssel verschlüsselt ist. Sie wird für diese Verbindung verwendet und nur gespeichert, wenn die Verbindung mit Passphrase gespeichert wird.",
       "custody_hint": "Verwaltete Schlüssel werden im lokalen Keychain/portablen Keystore von OxideTerm gespeichert. Verbindungskonfigurationen speichern nur eine Schlüsselreferenz.",
-      "cancel": "Cancel",
-      "import": "Import",
-      "importing": "Importing...",
+      "cancel": "Abbrechen",
+      "import": "Importieren",
+      "importing": "Importieren...",
       "import_file": {
         "open": "Schlüsseldatei importieren",
-        "browse_title": "Select SSH Private Key",
-        "title": "Import managed SSH key",
+        "browse_title": "SSH-Privatschlüssel auswählen",
+        "title": "Verwalteten SSH-Schlüssel importieren",
         "description": "Kopiert einen vorhandenen privaten Schlüssel in den lokalen verwalteten Schlüsselspeicher von OxideTerm.",
         "path": "Private Schlüsseldatei"
       },
       "paste": {
         "open": "Privaten Schlüssel einfügen",
-        "title": "Paste managed SSH key",
+        "title": "Verwalteten SSH-Schlüssel einfügen",
         "description": "Füge einen OpenSSH-Privatschlüssel ein. Zeilenumbrüche bleiben für die Validierung erhalten.",
-        "private_key": "Private key"
+        "private_key": "Privater Schlüssel"
       }
     }
   }

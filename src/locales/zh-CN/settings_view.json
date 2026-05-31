@@ -524,7 +524,7 @@
       "privacy_text": "所有请求均从本地发起。API 密钥存储在系统钥匙串中。仅将选定的终端上下文发送到配置的端点。",
       "provider_settings": "提供商设置",
       "provider_settings_summary": "已配置 {{count}} 个提供商",
-      "base_url": "Base URL",
+      "base_url": "基础 URL",
       "model": "模型",
       "api_key": "API 密钥",
       "api_key_stored": "存储在系统钥匙串中。",

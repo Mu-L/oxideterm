@@ -15,6 +15,7 @@ use crate::config::{
     resolve_ssh_config_host, resolve_ssh_config_host_content,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use chacha20poly1305::{ChaCha20Poly1305, KeyInit, Nonce, aead::Aead};
 use parking_lot::RwLock;
 use rand::RngCore;
 use russh::keys::{PrivateKey, PublicKeyBase64};
@@ -33,6 +34,24 @@ const AI_KEYCHAIN_SERVICE: &str = "com.oxideterm.ai";
 const CONFIG_KEYCHAIN_SERVICE: &str = "com.oxideterm.config";
 const MANAGED_SSH_KEYCHAIN_SERVICE: &str = "com.oxideterm.managed-ssh-keys";
 const CONFIG_KEYCHAIN_ID: &str = "local-config-master-key";
+const MANAGED_SSH_KEY_SECRET_DIR: &str = "managed-ssh-key-secrets";
+const MANAGED_SSH_KEY_SECRET_FILE_FORMAT: &str = "oxideterm.managed-ssh-key-secret.encrypted";
+const MANAGED_SSH_KEY_SECRET_FILE_VERSION: u32 = 1;
+const MANAGED_SSH_KEY_SECRET_FILE_ALGORITHM: &str = "chacha20poly1305";
+const MANAGED_SSH_KEY_SECRET_NONCE_LEN: usize = 12;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ManagedSshKeySecretEnvelope {
+    format: String,
+    version: u32,
+    algorithm: String,
+    nonce: String,
+    ciphertext: String,
+}
+
+struct ManagedSshKeySecretWrite {
+    created_config_key: bool,
+}
 
 enum ConfigEncryptionKeyLookup {
     Found([u8; CONFIG_ENCRYPTION_KEY_LEN]),
@@ -100,6 +119,137 @@ fn rollback_new_config_key(keychain: &Keychain) {
             "Failed to roll back newly created local config key after save failure: {}",
             err
         );
+    }
+}
+
+fn validate_managed_ssh_key_secret_id(secret_id: &str) -> Result<(), String> {
+    let valid = !secret_id.is_empty()
+        && secret_id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_');
+
+    if valid {
+        Ok(())
+    } else {
+        Err("Invalid managed SSH key secret ID".to_string())
+    }
+}
+
+fn managed_ssh_key_secret_file_path(data_dir: &Path, secret_id: &str) -> Result<PathBuf, String> {
+    validate_managed_ssh_key_secret_id(secret_id)?;
+    Ok(data_dir
+        .join(MANAGED_SSH_KEY_SECRET_DIR)
+        .join(format!("{}.json", secret_id)))
+}
+
+fn encrypt_managed_ssh_key_secret(
+    private_key: &str,
+    config_key: &[u8; CONFIG_ENCRYPTION_KEY_LEN],
+) -> Result<ManagedSshKeySecretEnvelope, String> {
+    let mut nonce = [0u8; MANAGED_SSH_KEY_SECRET_NONCE_LEN];
+    rand::rngs::OsRng.fill_bytes(&mut nonce);
+
+    let cipher = ChaCha20Poly1305::new_from_slice(config_key)
+        .map_err(|_| "Invalid local config encryption key".to_string())?;
+    let ciphertext = cipher
+        .encrypt(Nonce::from_slice(&nonce), private_key.as_bytes())
+        .map_err(|_| "Failed to encrypt managed SSH key secret".to_string())?;
+
+    Ok(ManagedSshKeySecretEnvelope {
+        format: MANAGED_SSH_KEY_SECRET_FILE_FORMAT.to_string(),
+        version: MANAGED_SSH_KEY_SECRET_FILE_VERSION,
+        algorithm: MANAGED_SSH_KEY_SECRET_FILE_ALGORITHM.to_string(),
+        nonce: BASE64.encode(nonce),
+        ciphertext: BASE64.encode(ciphertext),
+    })
+}
+
+fn decrypt_managed_ssh_key_secret(
+    envelope: ManagedSshKeySecretEnvelope,
+    config_key: &[u8; CONFIG_ENCRYPTION_KEY_LEN],
+) -> Result<Zeroizing<String>, String> {
+    if envelope.format != MANAGED_SSH_KEY_SECRET_FILE_FORMAT
+        || envelope.version != MANAGED_SSH_KEY_SECRET_FILE_VERSION
+        || envelope.algorithm != MANAGED_SSH_KEY_SECRET_FILE_ALGORITHM
+    {
+        return Err("Invalid managed SSH key secret file".to_string());
+    }
+
+    let nonce = BASE64
+        .decode(envelope.nonce)
+        .map_err(|_| "Invalid managed SSH key secret nonce".to_string())?;
+    let nonce: [u8; MANAGED_SSH_KEY_SECRET_NONCE_LEN] = nonce
+        .try_into()
+        .map_err(|_| "Invalid managed SSH key secret nonce".to_string())?;
+    let ciphertext = BASE64
+        .decode(envelope.ciphertext)
+        .map_err(|_| "Invalid managed SSH key secret ciphertext".to_string())?;
+
+    let cipher = ChaCha20Poly1305::new_from_slice(config_key)
+        .map_err(|_| "Invalid local config encryption key".to_string())?;
+    let plaintext = Zeroizing::new(
+        cipher
+            .decrypt(Nonce::from_slice(&nonce), ciphertext.as_ref())
+            .map_err(|_| "Failed to decrypt managed SSH key secret".to_string())?,
+    );
+
+    String::from_utf8(plaintext.to_vec())
+        .map(Zeroizing::new)
+        .map_err(|_| "Managed SSH key secret is not valid UTF-8".to_string())
+}
+
+fn write_managed_ssh_key_secret_file(
+    data_dir: &Path,
+    secret_id: &str,
+    private_key: &str,
+    config_key: &[u8; CONFIG_ENCRYPTION_KEY_LEN],
+) -> Result<(), String> {
+    let path = managed_ssh_key_secret_file_path(data_dir, secret_id)?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Invalid managed SSH key secret path".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|error| {
+        format!(
+            "Failed to create managed SSH key secret directory: {}",
+            error
+        )
+    })?;
+
+    // Large private keys cannot reliably fit in every OS keychain backend.
+    // The fallback file stores only encrypted ciphertext under the app data directory.
+    let envelope = encrypt_managed_ssh_key_secret(private_key, config_key)?;
+    let json = serde_json::to_vec_pretty(&envelope)
+        .map_err(|error| format!("Failed to serialize managed SSH key secret: {}", error))?;
+    let temp_path = path.with_extension("json.tmp");
+    std::fs::write(&temp_path, json)
+        .map_err(|error| format!("Failed to write managed SSH key secret: {}", error))?;
+    std::fs::rename(&temp_path, &path)
+        .map_err(|error| format!("Failed to finalize managed SSH key secret: {}", error))?;
+    Ok(())
+}
+
+fn read_managed_ssh_key_secret_file(
+    data_dir: &Path,
+    secret_id: &str,
+    config_key: &[u8; CONFIG_ENCRYPTION_KEY_LEN],
+) -> Result<Zeroizing<String>, String> {
+    let path = managed_ssh_key_secret_file_path(data_dir, secret_id)?;
+    let json = std::fs::read(&path)
+        .map_err(|error| format!("Failed to read managed SSH key secret: {}", error))?;
+    let envelope: ManagedSshKeySecretEnvelope = serde_json::from_slice(&json)
+        .map_err(|error| format!("Failed to parse managed SSH key secret: {}", error))?;
+    decrypt_managed_ssh_key_secret(envelope, config_key)
+}
+
+fn delete_managed_ssh_key_secret_file(data_dir: &Path, secret_id: &str) -> Result<(), String> {
+    let path = managed_ssh_key_secret_file_path(data_dir, secret_id)?;
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "Failed to delete managed SSH key secret: {}",
+            error
+        )),
     }
 }
 
@@ -501,16 +651,69 @@ impl ConfigState {
         self.keychain.delete(key).map_err(|e| e.to_string())
     }
 
-    pub(crate) fn set_managed_keychain_value(&self, key: &str, value: &str) -> Result<(), String> {
+    fn config_data_dir(&self) -> Result<PathBuf, String> {
+        self.storage
+            .path()
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "Invalid local config path".to_string())
+    }
+
+    fn store_managed_ssh_key_secret(
+        &self,
+        key: &str,
+        value: &str,
+    ) -> Result<ManagedSshKeySecretWrite, String> {
         self.ensure_ready()?;
-        self.managed_keychain
-            .store(key, value)
-            .map_err(|e| e.to_string())
+        match self.managed_keychain.store(key, value) {
+            Ok(()) => Ok(ManagedSshKeySecretWrite {
+                created_config_key: false,
+            }),
+            Err(keychain_error) => {
+                tracing::warn!(
+                    "Managed SSH keychain store failed for id={}; falling back to encrypted local secret file: {}",
+                    key,
+                    keychain_error
+                );
+                let _ = self.managed_keychain.delete(key);
+                let (config_key, created_config_key) =
+                    get_or_create_config_encryption_key(&self.config_keychain)?;
+                write_managed_ssh_key_secret_file(
+                    &self.config_data_dir()?,
+                    key,
+                    value,
+                    &config_key,
+                )?;
+                Ok(ManagedSshKeySecretWrite { created_config_key })
+            }
+        }
+    }
+
+    pub(crate) fn set_managed_keychain_value(&self, key: &str, value: &str) -> Result<(), String> {
+        self.store_managed_ssh_key_secret(key, value).map(|_| ())
     }
 
     pub(crate) fn delete_managed_keychain_value(&self, key: &str) -> Result<(), String> {
         self.ensure_ready()?;
-        self.managed_keychain.delete(key).map_err(|e| e.to_string())
+        let keychain_result = self.managed_keychain.delete(key).map_err(|e| e.to_string());
+        let file_result = delete_managed_ssh_key_secret_file(&self.config_data_dir()?, key);
+
+        match (keychain_result, file_result) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(keychain_error), Ok(())) => {
+                tracing::debug!(
+                    "Managed SSH keychain delete skipped for id={}: {}",
+                    key,
+                    keychain_error
+                );
+                Ok(())
+            }
+            (Ok(()), Err(file_error)) => Err(file_error),
+            (Err(keychain_error), Err(file_error)) => Err(format!(
+                "Failed to delete managed SSH key secret from keychain ({}) and encrypted file ({})",
+                keychain_error, file_error
+            )),
+        }
     }
 
     pub(crate) fn get_managed_ssh_key_metadata(
@@ -534,12 +737,39 @@ impl ConfigState {
         self.ensure_ready()?;
         let secret_id = self.get_managed_ssh_key_metadata(key_id)?.secret_id;
 
-        // Secret material leaves the managed keychain only at the SSH auth boundary.
+        // Secret material leaves the managed backend only at the SSH auth boundary.
         // Callers must decode/use it immediately and must not persist this value.
-        self.managed_keychain
-            .get(&secret_id)
-            .map(Zeroizing::new)
-            .map_err(|e| e.to_string())
+        match self.managed_keychain.get(&secret_id) {
+            Ok(secret) => Ok(Zeroizing::new(secret)),
+            Err(keychain_error) => {
+                let config_key = match load_config_encryption_key(&self.config_keychain)? {
+                    ConfigEncryptionKeyLookup::Found(key) => key,
+                    ConfigEncryptionKeyLookup::Locked => {
+                        return Err(
+                            "Portable mode is locked. Unlock the portable keystore first"
+                                .to_string(),
+                        );
+                    }
+                    ConfigEncryptionKeyLookup::Missing => {
+                        return Err(format!(
+                            "Managed SSH key secret unavailable from keychain ({}) and local config key is missing",
+                            keychain_error
+                        ));
+                    }
+                };
+                read_managed_ssh_key_secret_file(
+                    &self.config_data_dir()?,
+                    &secret_id,
+                    &config_key,
+                )
+                .map_err(|file_error| {
+                    format!(
+                        "Managed SSH key secret unavailable from keychain ({}) or encrypted file ({})",
+                        keychain_error, file_error
+                    )
+                })
+            }
+        }
     }
 
     /// Public API: Save config to disk
@@ -926,12 +1156,12 @@ fn managed_key_requires_passphrase(
 
 fn create_managed_key_metadata(
     config: &mut ConfigFile,
-    keychain: &Keychain,
     private_key: Zeroizing<String>,
     name: Option<String>,
     passphrase: Option<Zeroizing<String>>,
     origin: ManagedSshKeyOrigin,
     fallback_name: &str,
+    store_secret: impl FnOnce(&str, &str) -> Result<(), String>,
 ) -> Result<ManagedSshKeyInfo, String> {
     let passphrase_ref = passphrase.as_ref().map(|value| value.as_str());
     let decoded_key = decode_managed_private_key(&private_key, passphrase_ref)?;
@@ -948,10 +1178,8 @@ fn create_managed_key_metadata(
 
     let id = uuid::Uuid::new_v4().to_string();
     let secret_id = format!("managed-key-{}", id);
-    // Secret material crosses into the keychain here; ConfigFile stores only metadata.
-    keychain
-        .store(&secret_id, private_key.as_str())
-        .map_err(|error| error.to_string())?;
+    // Secret material crosses into the managed backend here; ConfigFile stores only metadata.
+    store_secret(&secret_id, private_key.as_str())?;
 
     let now = chrono::Utc::now();
     let key = ManagedSshKey {
@@ -2850,12 +3078,16 @@ mod tests {
 
         let info = create_managed_key_metadata(
             &mut config,
-            &keychain,
             Zeroizing::new(private_key.clone()),
             Some("Deploy Key".to_string()),
             None,
             ManagedSshKeyOrigin::PastedText,
             "Managed SSH Key",
+            |secret_id, secret| {
+                keychain
+                    .store(secret_id, secret)
+                    .map_err(|error| error.to_string())
+            },
         )
         .unwrap();
 
@@ -2871,6 +3103,33 @@ mod tests {
     }
 
     #[test]
+    fn managed_key_secret_file_round_trips_large_private_key_material() {
+        let temp_dir = tempdir().unwrap();
+        let config_key = [42u8; CONFIG_ENCRYPTION_KEY_LEN];
+        let secret_id = "managed-key-large-rsa";
+        let private_key = Zeroizing::new(format!(
+            "-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----\n",
+            "A".repeat(4096)
+        ));
+
+        write_managed_ssh_key_secret_file(
+            temp_dir.path(),
+            secret_id,
+            private_key.as_str(),
+            &config_key,
+        )
+        .unwrap();
+
+        let secret_path = managed_ssh_key_secret_file_path(temp_dir.path(), secret_id).unwrap();
+        let secret_file = std::fs::read_to_string(secret_path).unwrap();
+        assert!(!secret_file.contains(private_key.as_str()));
+
+        let restored =
+            read_managed_ssh_key_secret_file(temp_dir.path(), secret_id, &config_key).unwrap();
+        assert_eq!(restored.as_str(), private_key.as_str());
+    }
+
+    #[test]
     fn create_managed_key_metadata_rejects_invalid_key_without_echoing_secret() {
         let keychain = Keychain::in_memory_for_tests("com.oxideterm.managed-test");
         let mut config = ConfigFile::default();
@@ -2878,12 +3137,16 @@ mod tests {
 
         let error = create_managed_key_metadata(
             &mut config,
-            &keychain,
             Zeroizing::new(marker.to_string()),
             None,
             None,
             ManagedSshKeyOrigin::PastedText,
             "Managed SSH Key",
+            |secret_id, secret| {
+                keychain
+                    .store(secret_id, secret)
+                    .map_err(|error| error.to_string())
+            },
         )
         .unwrap_err();
 
@@ -2900,12 +3163,16 @@ mod tests {
 
         let info = create_managed_key_metadata(
             &mut config,
-            &keychain,
             Zeroizing::new(private_key),
             None,
             Some(Zeroizing::new("secret-passphrase".to_string())),
             ManagedSshKeyOrigin::ImportedFile,
             "id_ed25519",
+            |secret_id, secret| {
+                keychain
+                    .store(secret_id, secret)
+                    .map_err(|error| error.to_string())
+            },
         )
         .unwrap();
 
@@ -3624,16 +3891,21 @@ pub async fn create_managed_ssh_key_from_text(
     passphrase: Option<Zeroizing<String>>,
 ) -> Result<ManagedSshKeyInfo, String> {
     state.ensure_ready()?;
+    let mut created_managed_secret_config_key = false;
     let (info, secret_id) = {
         let mut config = state.config.write();
         let info = create_managed_key_metadata(
             &mut config,
-            &state.managed_keychain,
             private_key,
             name,
             passphrase,
             ManagedSshKeyOrigin::PastedText,
             "Managed SSH Key",
+            |secret_id, secret| {
+                let result = state.store_managed_ssh_key_secret(secret_id, secret)?;
+                created_managed_secret_config_key |= result.created_config_key;
+                Ok(())
+            },
         )?;
         let secret_id = config
             .managed_ssh_keys
@@ -3646,6 +3918,10 @@ pub async fn create_managed_ssh_key_from_text(
 
     if let Err(error) = state.save().await {
         let _ = state.managed_keychain.delete(&secret_id);
+        let _ = delete_managed_ssh_key_secret_file(&state.config_data_dir()?, &secret_id);
+        if created_managed_secret_config_key {
+            rollback_new_config_key(&state.config_keychain);
+        }
         state
             .config
             .write()
@@ -3672,16 +3948,21 @@ pub async fn create_managed_ssh_key_from_file(
             .map_err(|error| format!("Failed to read SSH private key file: {}", error))?,
     );
 
+    let mut created_managed_secret_config_key = false;
     let (info, secret_id) = {
         let mut config = state.config.write();
         let info = create_managed_key_metadata(
             &mut config,
-            &state.managed_keychain,
             private_key,
             name,
             passphrase,
             ManagedSshKeyOrigin::ImportedFile,
             &fallback_name,
+            |secret_id, secret| {
+                let result = state.store_managed_ssh_key_secret(secret_id, secret)?;
+                created_managed_secret_config_key |= result.created_config_key;
+                Ok(())
+            },
         )?;
         let secret_id = config
             .managed_ssh_keys
@@ -3694,6 +3975,10 @@ pub async fn create_managed_ssh_key_from_file(
 
     if let Err(error) = state.save().await {
         let _ = state.managed_keychain.delete(&secret_id);
+        let _ = delete_managed_ssh_key_secret_file(&state.config_data_dir()?, &secret_id);
+        if created_managed_secret_config_key {
+            rollback_new_config_key(&state.config_keychain);
+        }
         state
             .config
             .write()
@@ -3783,10 +4068,7 @@ pub async fn delete_managed_ssh_key(
         return Err(error);
     }
 
-    state
-        .managed_keychain
-        .delete(&removed.secret_id)
-        .map_err(|error| error.to_string())?;
+    state.delete_managed_keychain_value(&removed.secret_id)?;
 
     Ok(ManagedSshKeyDeleteResult {
         deleted: true,

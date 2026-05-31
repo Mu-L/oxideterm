@@ -55,7 +55,7 @@ pub enum SavedAuth {
         /// Keychain entry ID for passphrase (if any)
         passphrase_keychain_id: Option<String>,
     },
-    /// OxideTerm-managed SSH private key stored in the OS keychain
+    /// OxideTerm-managed SSH private key stored in the managed secret backend
     ManagedKey {
         /// Managed key metadata ID
         key_id: String,
@@ -169,7 +169,7 @@ pub enum ManagedSshKeyOrigin {
 pub struct ManagedSshKey {
     /// Stable metadata ID referenced by saved connections
     pub id: String,
-    /// OS keychain account containing the private key material
+    /// Managed secret ID containing the private key material
     pub secret_id: String,
     /// User-facing display name
     pub name: String,

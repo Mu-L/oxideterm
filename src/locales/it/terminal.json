@@ -37,12 +37,12 @@
       "showing_first": "Prime 100 di {{total}} corrispondenze",
       "partial_results": "Risultati parziali: non è stato possibile cercare in alcuni blocchi archiviati.",
       "no_matches_in_history": "Nessuna corrispondenza nella cronologia della sessione",
-      "visible_terminal": "Visible terminal",
-      "full_history": "Full history",
-      "visible_terminal_hint": "Search the main terminal visible scrollback.",
-      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer.",
-      "results_map": "Results map",
-      "results_map_hint": "Click to jump"
+      "visible_terminal": "Terminale visibile",
+      "full_history": "Cronologia completa",
+      "visible_terminal_hint": "Cerca nello scrollback visibile del terminale principale.",
+      "full_history_hint": "Cerca nella cronologia attiva del backend e negli estratti archiviati. I risultati si aprono nel visualizzatore dello scrollback.",
+      "results_map": "Mappa dei risultati",
+      "results_map_hint": "Clicca per saltare"
     },
     "ai": {
       "title": "OxideSens",

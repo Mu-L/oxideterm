@@ -37,12 +37,12 @@
       "showing_first": "Mostrando primeras 100 de {{total}}",
       "partial_results": "Resultados parciales: no se pudieron buscar algunos fragmentos archivados.",
       "no_matches_in_history": "No se encontraron coincidencias en el historial de sesión",
-      "visible_terminal": "Visible terminal",
-      "full_history": "Full history",
-      "visible_terminal_hint": "Search the main terminal visible scrollback.",
-      "full_history_hint": "Search backend hot history and archived excerpts. Results open in Scrollback Viewer.",
-      "results_map": "Results map",
-      "results_map_hint": "Click to jump"
+      "visible_terminal": "Terminal visible",
+      "full_history": "Historial completo",
+      "visible_terminal_hint": "Buscar en el scrollback visible del terminal principal.",
+      "full_history_hint": "Buscar en el historial activo del backend y fragmentos archivados. Los resultados se abren en el visor de scrollback.",
+      "results_map": "Mapa de resultados",
+      "results_map_hint": "Haz clic para saltar"
     },
     "ai": {
       "title": "OxideSens",

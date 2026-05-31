@@ -605,7 +605,7 @@
         "config": {
           "title": "API 配置",
           "description": "OpenAI 兼容端点设置。",
-          "base_url": "Base URL",
+          "base_url": "基础 URL",
           "base_url_placeholder": "https://api.openai.com/v1",
           "base_url_hint": "支持 OpenAI、Ollama、OneAPI 或任何兼容端点。",
           "model": "模型",

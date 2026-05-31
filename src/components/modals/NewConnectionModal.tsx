@@ -979,14 +979,15 @@ export const NewConnectionModal = () => {
                 onValueChange={handleAuthTypeChange}
                 className="w-full"
               >
-                <TabsList className="grid w-full grid-cols-7">
-                  <TabsTrigger value="password">{t('modals.new_connection.auth_password')}</TabsTrigger>
-                  <TabsTrigger value="default_key">{t('modals.new_connection.auth_default_key')}</TabsTrigger>
-                  <TabsTrigger value="key">{t('modals.new_connection.auth_key')}</TabsTrigger>
-                  <TabsTrigger value="managed_key">{t('modals.new_connection.auth_managed_key')}</TabsTrigger>
-                  <TabsTrigger value="certificate">{t('modals.new_connection.auth_certificate')}</TabsTrigger>
-                  <TabsTrigger value="agent">{t('modals.new_connection.auth_agent')}</TabsTrigger>
-                  <TabsTrigger value="keyboard_interactive" disabled={kbiDisabledForProxyChain}>{t('modals.new_connection.auth_2fa')}</TabsTrigger>
+                {/* Split auth tabs into 3+4 so translated labels do not overlap. */}
+                <TabsList className="grid h-auto w-full grid-cols-12 gap-1">
+                  <TabsTrigger className="col-span-4 min-h-9 whitespace-normal px-2 text-center leading-tight" value="password">{t('modals.new_connection.auth_password')}</TabsTrigger>
+                  <TabsTrigger className="col-span-4 min-h-9 whitespace-normal px-2 text-center leading-tight" value="default_key">{t('modals.new_connection.auth_default_key')}</TabsTrigger>
+                  <TabsTrigger className="col-span-4 min-h-9 whitespace-normal px-2 text-center leading-tight" value="key">{t('modals.new_connection.auth_key')}</TabsTrigger>
+                  <TabsTrigger className="col-span-3 min-h-9 whitespace-normal px-2 text-center leading-tight" value="managed_key">{t('modals.new_connection.auth_managed_key')}</TabsTrigger>
+                  <TabsTrigger className="col-span-3 min-h-9 whitespace-normal px-2 text-center leading-tight" value="certificate">{t('modals.new_connection.auth_certificate')}</TabsTrigger>
+                  <TabsTrigger className="col-span-3 min-h-9 whitespace-normal px-2 text-center leading-tight" value="agent">{t('modals.new_connection.auth_agent')}</TabsTrigger>
+                  <TabsTrigger className="col-span-3 min-h-9 whitespace-normal px-2 text-center leading-tight" value="keyboard_interactive" disabled={kbiDisabledForProxyChain}>{t('modals.new_connection.auth_2fa')}</TabsTrigger>
                 </TabsList>
                 {kbiDisabledForProxyChain && (
                   <p className="pt-2 text-xs text-yellow-600">

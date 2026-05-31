@@ -163,6 +163,8 @@ vi.mock('@/store/broadcastStore', () => ({
 vi.mock('@/store/localTerminalStore', () => ({
   useLocalTerminalStore: (selector: (state: unknown) => unknown) => selector({
     createTerminal: vi.fn(),
+    // Keep the mock aligned with the local terminal store contract.
+    getTerminal: vi.fn(() => undefined),
   }),
 }));
 

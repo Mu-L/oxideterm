@@ -40,6 +40,8 @@ const localTerminalStoreState = vi.hoisted(() => ({
   checkChildProcesses: vi.fn().mockResolvedValue(false),
   closeTerminal: vi.fn().mockResolvedValue(undefined),
   detachTerminal: vi.fn().mockResolvedValue(undefined),
+  // Keep the mock aligned with the local terminal store contract.
+  getTerminal: vi.fn(() => undefined),
 }));
 
 const pluginStoreState = vi.hoisted(() => ({

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMutableSelectorStore } from '@/test/helpers/mockStore';
+import type { SerialProfile } from '@/types';
 
 const connectToSavedMock = vi.hoisted(() => vi.fn());
 const continueConnectToSavedPlanMock = vi.hoisted(() => vi.fn());
@@ -39,6 +40,8 @@ const sessionManagerState = vi.hoisted(() => ({
     tags: [],
     proxy_chain: [],
   }],
+  serialProfiles: [] as SerialProfile[],
+  allSerialProfiles: [] as SerialProfile[],
   groups: [],
   loading: false,
   folderTree: [],
@@ -64,6 +67,10 @@ const appStoreState = vi.hoisted(() => ({
   createTab: vi.fn(),
 }));
 
+const localTerminalState = vi.hoisted(() => ({
+  createSerialTerminal: vi.fn(),
+}));
+
 vi.mock('@/components/sessionManager/useSessionManager', () => ({
   useSessionManager: () => sessionManagerState,
 }));
@@ -85,6 +92,10 @@ vi.mock('@/hooks/useTabBackground', () => ({
 
 vi.mock('@/store/appStore', () => ({
   useAppStore: createMutableSelectorStore(appStoreState),
+}));
+
+vi.mock('@/store/localTerminalStore', () => ({
+  useLocalTerminalStore: createMutableSelectorStore(localTerminalState),
 }));
 
 vi.mock('@/lib/connectToSaved', () => ({
@@ -183,6 +194,8 @@ vi.mock('@/lib/api', () => ({
     sshPreflight: vi.fn(),
     sshRemoveHostKey: vi.fn(),
     testConnection: vi.fn(),
+    deleteSerialProfile: vi.fn(),
+    markSerialProfileUsed: vi.fn(),
   },
 }));
 
@@ -199,7 +212,10 @@ import { api } from '@/lib/api';
 describe('SessionManagerPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionManagerState.serialProfiles = [];
+    sessionManagerState.allSerialProfiles = [];
     vi.mocked(api.sshPreflight).mockResolvedValue({ status: 'verified' });
+    localTerminalState.createSerialTerminal.mockResolvedValue({ id: 'serial-1' });
   });
 
   it('shows saved-connection host key confirmation and resumes via continueConnectToSavedPlan', async () => {
@@ -634,6 +650,65 @@ describe('SessionManagerPanel', () => {
       expect(sessionManagerState.expandPath).toHaveBeenCalledWith('Production/Core');
       expect(sessionManagerState.setSelectedGroup).toHaveBeenCalledWith('Production/Core');
       expect(dispatchEventSpy).toHaveBeenCalled();
+    });
+  });
+
+  it('shows saved serial profiles and opens them without SSH connection handling', async () => {
+    sessionManagerState.serialProfiles = [{
+      id: 'serial-profile-1',
+      name: 'Lab console',
+      group: null,
+      portPath: '/dev/ttyUSB0',
+      baudRate: 115200,
+      dataBits: 8,
+      stopBits: 1,
+      parity: 'none',
+      flowControl: 'none',
+      connectOnOpen: false,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      lastUsedAt: null,
+    }];
+    sessionManagerState.allSerialProfiles = sessionManagerState.serialProfiles;
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('sessionManager.serial_profiles.open'));
+
+    await waitFor(() => {
+      expect(localTerminalState.createSerialTerminal).toHaveBeenCalledWith(expect.objectContaining({
+        portPath: '/dev/ttyUSB0',
+        baudRate: 115200,
+      }));
+      expect(appStoreState.createTab).toHaveBeenCalledWith('local_terminal', 'serial-1');
+      expect(api.markSerialProfileUsed).toHaveBeenCalledWith('serial-profile-1');
+    });
+    expect(connectToSavedMock).not.toHaveBeenCalledWith('serial-profile-1', expect.anything());
+  });
+
+  it('deletes saved serial profiles through the serial profile API', async () => {
+    sessionManagerState.serialProfiles = [{
+      id: 'serial-profile-1',
+      name: 'Lab console',
+      group: null,
+      portPath: '/dev/ttyUSB0',
+      baudRate: 115200,
+      dataBits: 8,
+      stopBits: 1,
+      parity: 'none',
+      flowControl: 'none',
+      connectOnOpen: false,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      lastUsedAt: null,
+    }];
+    sessionManagerState.allSerialProfiles = sessionManagerState.serialProfiles;
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('sessionManager.serial_profiles.delete'));
+
+    await waitFor(() => {
+      expect(api.deleteSerialProfile).toHaveBeenCalledWith('serial-profile-1');
+      expect(sessionManagerState.refresh).toHaveBeenCalled();
     });
   });
 });

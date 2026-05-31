@@ -762,9 +762,22 @@ export interface SerialProfile {
   parity: SerialParity;
   flowControl: SerialFlowControl;
   connectOnOpen?: boolean;
-  createdAt: number;
-  updatedAt: number;
-  lastUsedAt?: number;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt?: string | null;
+}
+
+export interface SaveSerialProfileRequest {
+  id?: string;
+  name: string;
+  group?: string | null;
+  portPath: string;
+  baudRate?: number;
+  dataBits?: 5 | 6 | 7 | 8;
+  stopBits?: 1 | 2;
+  parity?: SerialParity;
+  flowControl?: SerialFlowControl;
+  connectOnOpen?: boolean;
 }
 
 export type SerialErrorCode =

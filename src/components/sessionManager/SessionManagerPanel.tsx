@@ -24,6 +24,7 @@ import {
 import { findUnsupportedProxyHopAuth } from '../../lib/proxyHopSupport';
 import { cleanupSessionTreeConnectPlan } from '../../lib/sessionTreeConnectPlan';
 import { useAppStore } from '../../store/appStore';
+import { useLocalTerminalStore } from '../../store/localTerminalStore';
 import { useToast } from '../../hooks/useToast';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useTabBgActive } from '../../hooks/useTabBackground';
@@ -44,7 +45,7 @@ import {
   buildTestConnectionRequest,
   requiresSavedConnectionPasswordPrompt,
 } from '../../lib/testConnectionRequest';
-import type { ConnectionInfo, HostKeyStatus } from '../../types';
+import type { ConnectionInfo, HostKeyStatus, SerialProfile } from '../../types';
 import type { EditConnectionSubmitPayload } from '../modals/EditConnectionModal';
 
 const DUPLICATE_NAME_MARKER = 'Copy';
@@ -78,16 +79,67 @@ const buildDuplicateConnectionName = (sourceName: string, existingNames: string[
   }
 };
 
+type SerialProfileSectionProps = {
+  profiles: SerialProfile[];
+  onOpen: (profile: SerialProfile) => void;
+  onDelete: (profile: SerialProfile) => void;
+};
+
+const SerialProfileSection = ({ profiles, onOpen, onDelete }: SerialProfileSectionProps) => {
+  const { t } = useTranslation();
+
+  if (profiles.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="border-b border-theme-border bg-theme-bg-secondary/60 px-3 py-2">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs font-semibold uppercase tracking-wide text-theme-text-muted">
+          {t('sessionManager.serial_profiles.title')}
+        </div>
+        <div className="text-[11px] text-theme-text-muted">
+          {t('sessionManager.serial_profiles.count', { count: profiles.length })}
+        </div>
+      </div>
+      <div className="space-y-1">
+        {profiles.map((profile) => (
+          <div
+            key={profile.id}
+            className="flex items-center gap-2 rounded-md border border-theme-border/60 bg-theme-bg px-2 py-1.5 text-xs"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium text-theme-text">{profile.name}</div>
+              <div className="truncate font-mono text-[11px] text-theme-text-muted">
+                {profile.portPath} · {profile.baudRate}
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => onOpen(profile)}>
+              {t('sessionManager.serial_profiles.open')}
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 text-red-400" onClick={() => onDelete(profile)}>
+              {t('sessionManager.serial_profiles.delete')}
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const SessionManagerPanel = () => {
   const { t } = useTranslation();
   const bgActive = useTabBgActive('session_manager');
   const { toast } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const createTab = useAppStore(s => s.createTab);
+  const createSerialTerminal = useLocalTerminalStore(s => s.createSerialTerminal);
 
   const {
     connections,
     allConnections,
+    serialProfiles,
+    allSerialProfiles,
     groups,
     loading,
     folderTree,
@@ -513,6 +565,53 @@ export const SessionManagerPanel = () => {
     }
   }, [expandPath, newGroupName, notifySavedConnectionsChanged, refresh, setSelectedGroup, t, toast]);
 
+  const handleOpenSerialProfile = useCallback(async (profile: SerialProfile) => {
+    try {
+      const info = await createSerialTerminal({
+        portPath: profile.portPath,
+        baudRate: profile.baudRate,
+        dataBits: profile.dataBits,
+        stopBits: profile.stopBits,
+        parity: profile.parity,
+        flowControl: profile.flowControl,
+        cols: 120,
+        rows: 40,
+      });
+      createTab('local_terminal', info.id);
+      await api.markSerialProfileUsed(profile.id);
+      await refresh();
+    } catch (error) {
+      toast({
+        title: t('sessionManager.serial_profiles.open_failed'),
+        description: String(error),
+        variant: 'error',
+      });
+    }
+  }, [createSerialTerminal, createTab, refresh, t, toast]);
+
+  const handleDeleteSerialProfile = useCallback(async (profile: SerialProfile) => {
+    const confirmed = await confirm({
+      title: t('sessionManager.serial_profiles.confirm_delete', { name: profile.name }),
+      confirmLabel: t('sessionManager.serial_profiles.delete'),
+      variant: 'danger',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await api.deleteSerialProfile(profile.id);
+      await refresh();
+      notifySavedConnectionsChanged();
+    } catch (error) {
+      toast({
+        title: t('sessionManager.serial_profiles.delete_failed'),
+        description: String(error),
+        variant: 'error',
+      });
+    }
+  }, [confirm, notifySavedConnectionsChanged, refresh, t, toast]);
+
   return (
     <div className={`h-full w-full flex flex-col text-theme-text ${bgActive ? '' : 'bg-theme-bg'}`} data-bg-active={bgActive || undefined}>
       {/* Toolbar */}
@@ -536,7 +635,7 @@ export const SessionManagerPanel = () => {
             folderTree={folderTree}
             selectedGroup={selectedGroup}
             expandedGroups={expandedGroups}
-            totalCount={allConnections.length}
+            totalCount={allConnections.length + allSerialProfiles.length}
             ungroupedCount={ungroupedCount}
             onSelectGroup={setSelectedGroup}
             onToggleExpand={toggleExpand}
@@ -545,26 +644,35 @@ export const SessionManagerPanel = () => {
         </div>
 
         {/* Right: Connection Table */}
-        <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
           {loading ? (
             <div className="flex items-center justify-center h-full text-theme-text-muted">
               <div className="animate-pulse">{t('common.loading', { defaultValue: 'Loading...' })}</div>
             </div>
           ) : (
-            <ConnectionTable
-              connections={connections}
-              selectedIds={selectedIds}
-              sortField={sortField}
-              sortDirection={sortDirection}
-              onToggleSort={toggleSort}
-              onToggleSelect={toggleSelect}
-              onToggleSelectAll={toggleSelectAll}
-              onConnect={handleConnect}
-              onEdit={handleEdit}
-              onDuplicate={handleDuplicate}
-              onDelete={handleDelete}
-              onTestConnection={handleTestConnection}
-            />
+            <>
+              <SerialProfileSection
+                profiles={serialProfiles}
+                onOpen={handleOpenSerialProfile}
+                onDelete={handleDeleteSerialProfile}
+              />
+              <div className="min-h-0 flex-1">
+                <ConnectionTable
+                  connections={connections}
+                  selectedIds={selectedIds}
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onToggleSort={toggleSort}
+                  onToggleSelect={toggleSelect}
+                  onToggleSelectAll={toggleSelectAll}
+                  onConnect={handleConnect}
+                  onEdit={handleEdit}
+                  onDuplicate={handleDuplicate}
+                  onDelete={handleDelete}
+                  onTestConnection={handleTestConnection}
+                />
+              </div>
+            </>
           )}
         </div>
       </div>

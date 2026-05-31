@@ -6,6 +6,7 @@
 //! Tauri commands for managing saved connections and SSH config import.
 
 use crate::config::types::{ManagedSshKey, ManagedSshKeyOrigin};
+use crate::config::types::{SerialFlowControl, SerialParity, SerialProfile};
 use crate::config::{
     AiProviderVault, CONFIG_ENCRYPTION_KEY_LEN, ConfigFile, ConfigStorage, ConfigStorageFormat,
     Keychain, KeychainError, PortableBootstrapStatus, ProxyHopConfig, ResolvedProxyJumpHost,
@@ -605,6 +606,45 @@ pub struct ConnectionInfo {
     pub post_connect_command: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub proxy_chain: Vec<ProxyHopInfo>,
+}
+
+/// Serial profile info for frontend. Kept separate from SSH saved connections.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SerialProfileInfo {
+    pub id: String,
+    pub name: String,
+    pub group: Option<String>,
+    pub port_path: String,
+    pub baud_rate: u32,
+    pub data_bits: u8,
+    pub stop_bits: u8,
+    pub parity: SerialParity,
+    pub flow_control: SerialFlowControl,
+    pub connect_on_open: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_used_at: Option<String>,
+}
+
+impl From<&SerialProfile> for SerialProfileInfo {
+    fn from(profile: &SerialProfile) -> Self {
+        Self {
+            id: profile.id.clone(),
+            name: profile.name.clone(),
+            group: profile.group.clone(),
+            port_path: profile.port_path.clone(),
+            baud_rate: profile.baud_rate,
+            data_bits: profile.data_bits,
+            stop_bits: profile.stop_bits,
+            parity: profile.parity,
+            flow_control: profile.flow_control,
+            connect_on_open: profile.connect_on_open,
+            created_at: profile.created_at.to_rfc3339(),
+            updated_at: profile.updated_at.to_rfc3339(),
+            last_used_at: profile.last_used_at.map(|time| time.to_rfc3339()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1580,6 +1620,22 @@ pub struct SaveConnectionRequest {
     pub proxy_chain: Option<Vec<ProxyHopRequest>>, // Multi-hop proxy chain
 }
 
+/// Request to create/update a saved serial terminal profile.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSerialProfileRequest {
+    pub id: Option<String>,
+    pub name: String,
+    pub group: Option<String>,
+    pub port_path: String,
+    pub baud_rate: Option<u32>,
+    pub data_bits: Option<u8>,
+    pub stop_bits: Option<u8>,
+    pub parity: Option<SerialParity>,
+    pub flow_control: Option<SerialFlowControl>,
+    pub connect_on_open: Option<bool>,
+}
+
 #[tauri::command]
 pub async fn move_connections_to_group(
     state: State<'_, Arc<ConfigState>>,
@@ -1669,6 +1725,128 @@ pub async fn get_connections(
         .iter()
         .map(ConnectionInfo::from)
         .collect())
+}
+
+/// Get all saved serial profiles.
+#[tauri::command]
+pub async fn get_serial_profiles(
+    state: State<'_, Arc<ConfigState>>,
+) -> Result<Vec<SerialProfileInfo>, String> {
+    let config = state.config.read();
+    Ok(config
+        .serial_profiles
+        .iter()
+        .map(SerialProfileInfo::from)
+        .collect())
+}
+
+/// Save (create or update) a serial profile.
+#[tauri::command]
+pub async fn save_serial_profile(
+    app_handle: tauri::AppHandle,
+    state: State<'_, Arc<ConfigState>>,
+    request: SaveSerialProfileRequest,
+) -> Result<SerialProfileInfo, String> {
+    let normalized_group = normalize_optional_group_name(request.group.as_deref())?;
+    let now = chrono::Utc::now();
+
+    let profile_info = {
+        let mut config = state.config.write();
+        let profile = if let Some(id) = request.id {
+            let existing = config
+                .serial_profiles
+                .iter_mut()
+                .find(|profile| profile.id == id)
+                .ok_or("Serial profile not found")?;
+
+            let mut updated = existing.clone();
+            updated.name = request.name.trim().to_string();
+            updated.group = normalized_group;
+            updated.port_path = request.port_path.trim().to_string();
+            updated.baud_rate = request.baud_rate.unwrap_or(115_200);
+            updated.data_bits = request.data_bits.unwrap_or(8);
+            updated.stop_bits = request.stop_bits.unwrap_or(1);
+            updated.parity = request.parity.unwrap_or(SerialParity::None);
+            updated.flow_control = request.flow_control.unwrap_or(SerialFlowControl::None);
+            updated.connect_on_open = request.connect_on_open.unwrap_or(false);
+            updated.updated_at = now;
+            updated.validate()?;
+            *existing = updated;
+            existing
+        } else {
+            let mut new_profile = SerialProfile::new(request.name.trim(), request.port_path.trim());
+            new_profile.group = normalized_group;
+            new_profile.baud_rate = request.baud_rate.unwrap_or(115_200);
+            new_profile.data_bits = request.data_bits.unwrap_or(8);
+            new_profile.stop_bits = request.stop_bits.unwrap_or(1);
+            new_profile.parity = request.parity.unwrap_or(SerialParity::None);
+            new_profile.flow_control = request.flow_control.unwrap_or(SerialFlowControl::None);
+            new_profile.connect_on_open = request.connect_on_open.unwrap_or(false);
+            new_profile.created_at = now;
+            new_profile.updated_at = now;
+            new_profile.validate()?;
+            config.serial_profiles.push(new_profile);
+            config
+                .serial_profiles
+                .last_mut()
+                .expect("serial profile was just inserted")
+        };
+
+        SerialProfileInfo::from(&*profile)
+    };
+
+    state.save().await?;
+    app_handle
+        .emit("serial-profile:update", "saved")
+        .map_err(|e| format!("Failed to emit serial-profile:update: {}", e))?;
+
+    Ok(profile_info)
+}
+
+/// Delete a saved serial profile.
+#[tauri::command]
+pub async fn delete_serial_profile(
+    app_handle: tauri::AppHandle,
+    state: State<'_, Arc<ConfigState>>,
+    id: String,
+) -> Result<(), String> {
+    {
+        let mut config = state.config.write();
+        let index = config
+            .serial_profiles
+            .iter()
+            .position(|profile| profile.id == id)
+            .ok_or("Serial profile not found")?;
+        config.serial_profiles.remove(index);
+    }
+
+    state.save().await?;
+    app_handle
+        .emit("serial-profile:update", "deleted")
+        .map_err(|e| format!("Failed to emit serial-profile:update: {}", e))?;
+
+    Ok(())
+}
+
+/// Update last-used metadata for a saved serial profile.
+#[tauri::command]
+pub async fn mark_serial_profile_used(
+    state: State<'_, Arc<ConfigState>>,
+    id: String,
+) -> Result<(), String> {
+    {
+        let mut config = state.config.write();
+        let profile = config
+            .serial_profiles
+            .iter_mut()
+            .find(|profile| profile.id == id)
+            .ok_or("Serial profile not found")?;
+        let now = chrono::Utc::now();
+        profile.last_used_at = Some(now);
+        profile.updated_at = now;
+    }
+
+    state.save().await
 }
 
 /// Export a structured snapshot of saved connections for plugin-driven sync.

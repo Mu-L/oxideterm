@@ -89,6 +89,8 @@ import {
   ManagedSshKeyInfo,
   ManagedSshKeyUsage,
   ManagedSshKeyDeleteResult,
+  SaveSerialProfileRequest,
+  SerialProfile,
 } from '../types';
 import type { PluginManifest, UrlInstallResult } from '../types/plugin';
 
@@ -626,6 +628,11 @@ export const api = {
     return invoke('get_connections');
   },
 
+  getSerialProfiles: async (): Promise<SerialProfile[]> => {
+    if (USE_MOCK) return [];
+    return invoke('get_serial_profiles');
+  },
+
   getRecentConnections: async (limit?: number): Promise<ConnectionInfo[]> => {
     if (USE_MOCK) return mockConnections.slice(0, limit || 5);
     return invoke('get_recent_connections', { limit: limit || null });
@@ -646,9 +653,35 @@ export const api = {
     return invoke('save_connection', { request });
   },
 
+  saveSerialProfile: async (request: SaveSerialProfileRequest): Promise<SerialProfile> => {
+    if (USE_MOCK) {
+      return {
+        id: request.id ?? 'mock-serial-profile',
+        name: request.name,
+        group: request.group ?? null,
+        portPath: request.portPath,
+        baudRate: request.baudRate ?? 115200,
+        dataBits: request.dataBits ?? 8,
+        stopBits: request.stopBits ?? 1,
+        parity: request.parity ?? 'none',
+        flowControl: request.flowControl ?? 'none',
+        connectOnOpen: request.connectOnOpen ?? false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastUsedAt: null,
+      };
+    }
+    return invoke('save_serial_profile', { request });
+  },
+
   deleteConnection: async (id: string): Promise<void> => {
     if (USE_MOCK) return;
     return invoke('delete_connection', { id });
+  },
+
+  deleteSerialProfile: async (id: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('delete_serial_profile', { id });
   },
 
   deleteConnections: async (ids: string[]): Promise<number> => {
@@ -659,6 +692,11 @@ export const api = {
   markConnectionUsed: async (id: string): Promise<void> => {
     if (USE_MOCK) return;
     return invoke('mark_connection_used', { id });
+  },
+
+  markSerialProfileUsed: async (id: string): Promise<void> => {
+    if (USE_MOCK) return;
+    return invoke('mark_serial_profile_used', { id });
   },
 
   getConnectionPassword: async (id: string): Promise<string> => {

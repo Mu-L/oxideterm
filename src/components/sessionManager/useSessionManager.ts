@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../../lib/api';
-import type { ConnectionInfo } from '../../types';
+import type { ConnectionInfo, SerialProfile } from '../../types';
 
 export type SortField = 'name' | 'host' | 'port' | 'username' | 'auth_type' | 'group' | 'last_used_at';
 export type SortDirection = 'asc' | 'desc';
@@ -20,6 +20,7 @@ const RECENT_LIMIT = 20;
 export function useSessionManager() {
   // Data
   const [connections, setConnections] = useState<ConnectionInfo[]>([]);
+  const [serialProfiles, setSerialProfiles] = useState<SerialProfile[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -37,11 +38,13 @@ export function useSessionManager() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [conns, grps] = await Promise.all([
+      const [conns, grps, profiles] = await Promise.all([
         api.getConnections(),
         api.getGroups(),
+        api.getSerialProfiles(),
       ]);
       setConnections(conns);
+      setSerialProfiles(profiles);
       setGroups(grps);
     } catch (err) {
       console.error('Failed to load session manager data:', err);
@@ -57,11 +60,13 @@ export function useSessionManager() {
   // Refresh after mutations
   const refresh = useCallback(async () => {
     try {
-      const [conns, grps] = await Promise.all([
+      const [conns, grps, profiles] = await Promise.all([
         api.getConnections(),
         api.getGroups(),
+        api.getSerialProfiles(),
       ]);
       setConnections(conns);
+      setSerialProfiles(profiles);
       setGroups(grps);
       // Clear selection of deleted items
       setSelectedIds(prev => {
@@ -101,6 +106,10 @@ export function useSessionManager() {
       const g = conn.group || '';
       groupCounts.set(g, (groupCounts.get(g) || 0) + 1);
     }
+    for (const profile of serialProfiles) {
+      const g = profile.group || '';
+      groupCounts.set(g, (groupCounts.get(g) || 0) + 1);
+    }
 
     // Create nodes for all groups (support "/" nesting)
     const allPaths = new Set<string>();
@@ -116,6 +125,14 @@ export function useSessionManager() {
     for (const conn of connections) {
       if (conn.group) {
         const parts = conn.group.split('/');
+        for (let i = 1; i <= parts.length; i++) {
+          allPaths.add(parts.slice(0, i).join('/'));
+        }
+      }
+    }
+    for (const profile of serialProfiles) {
+      if (profile.group) {
+        const parts = profile.group.split('/');
         for (let i = 1; i <= parts.length; i++) {
           allPaths.add(parts.slice(0, i).join('/'));
         }
@@ -152,12 +169,12 @@ export function useSessionManager() {
     }
 
     return root;
-  }, [connections, groups]);
+  }, [connections, groups, serialProfiles]);
 
   // Ungrouped connection count
   const ungroupedCount = useMemo(() => {
-    return connections.filter(c => !c.group).length;
-  }, [connections]);
+    return connections.filter(c => !c.group).length + serialProfiles.filter(profile => !profile.group).length;
+  }, [connections, serialProfiles]);
 
   // Filter and sort connections
   const filteredConnections = useMemo(() => {
@@ -217,6 +234,34 @@ export function useSessionManager() {
 
     return result;
   }, [connections, selectedGroup, searchQuery, sortField, sortDirection]);
+
+  const filteredSerialProfiles = useMemo(() => {
+    let result = serialProfiles;
+
+    if (selectedGroup === '__ungrouped__') {
+      result = result.filter(profile => !profile.group);
+    } else if (selectedGroup === '__recent__') {
+      result = result
+        .filter(profile => profile.lastUsedAt)
+        .sort((a, b) => (b.lastUsedAt || '').localeCompare(a.lastUsedAt || ''))
+        .slice(0, RECENT_LIMIT);
+    } else if (selectedGroup) {
+      result = result.filter(profile =>
+        profile.group === selectedGroup || profile.group?.startsWith(selectedGroup + '/')
+      );
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(profile =>
+        profile.name.toLowerCase().includes(q) ||
+        profile.portPath.toLowerCase().includes(q) ||
+        (profile.group?.toLowerCase().includes(q))
+      );
+    }
+
+    return result;
+  }, [searchQuery, selectedGroup, serialProfiles]);
 
   // Sort toggle
   const toggleSort = useCallback((field: SortField) => {
@@ -278,6 +323,8 @@ export function useSessionManager() {
     // Data
     connections: filteredConnections,
     allConnections: connections,
+    serialProfiles: filteredSerialProfiles,
+    allSerialProfiles: serialProfiles,
     groups,
     loading,
     folderTree,

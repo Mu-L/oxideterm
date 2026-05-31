@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../../store/appStore';
+import { useLocalTerminalStore } from '../../store/localTerminalStore';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -30,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '../ui/select';
-import { ProxyHopConfig } from '../../types';
+import { ProxyHopConfig, type SerialPortInfo } from '../../types';
 import { api } from '../../lib/api';
 import type { HostKeyStatus } from '../../types';
 import type { TestConnectionRequest, TestConnectionResponse } from '../../lib/api';
@@ -43,7 +44,7 @@ import { buildTestConnectionRequest } from '../../lib/testConnectionRequest';
 import { AddJumpServerDialog } from './AddJumpServerDialog';
 import { HostKeyConfirmDialog } from './HostKeyConfirmDialog';
 import { ManagedSshKeySelector } from './ManagedSshKeySelector';
-import { Plus, Trash2, Key, Lock, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { Plus, Trash2, Key, Lock, ChevronDown, ChevronRight, Info, RefreshCw } from 'lucide-react';
 import { useSessionTreeStore } from '../../store/sessionTreeStore';
 import { useToast } from '../../hooks/useToast';
 import {
@@ -54,6 +55,10 @@ import {
 } from '../ui/tooltip';
 
 const SAVE_CONNECTION_KEY = 'oxideterm.saveConnection';
+
+type ConnectionTransport = 'ssh' | 'serial';
+type SerialDataBits = 5 | 6 | 7 | 8;
+type SerialStopBits = 1 | 2;
 
 type ConnectFormRequest = {
   displayName?: string;
@@ -84,9 +89,11 @@ export const NewConnectionModal = () => {
     createTerminalForNode,
     expandManualPreset,
   } = useSessionTreeStore();
+  const { createSerialTerminal } = useLocalTerminalStore();
   const { success: toastSuccess, error: toastError } = useToast();
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [transport, setTransport] = useState<ConnectionTransport>('ssh');
   
   // Form State
   const [name, setName] = useState('');
@@ -121,6 +128,16 @@ export const NewConnectionModal = () => {
   const [pendingProxyConnectPlan, setPendingProxyConnectPlan] = useState<SessionTreeConnectPlan | null>(null);
   const [testHostKeyStatus, setTestHostKeyStatus] = useState<HostKeyStatus | null>(null);
   const [pendingTestRequest, setPendingTestRequest] = useState<TestConnectionRequest | null>(null);
+  const [serialPorts, setSerialPorts] = useState<SerialPortInfo[]>([]);
+  const [serialPortsLoading, setSerialPortsLoading] = useState(false);
+  const [serialPortPath, setSerialPortPath] = useState('');
+  const [serialBaudRate, setSerialBaudRate] = useState('115200');
+  const [serialDataBits, setSerialDataBits] = useState<SerialDataBits>(8);
+  const [serialStopBits, setSerialStopBits] = useState<SerialStopBits>(1);
+  const [serialParity, setSerialParity] = useState<'none' | 'odd' | 'even'>('none');
+  const [serialFlowControl, setSerialFlowControl] = useState<'none' | 'software' | 'hardware'>('none');
+  const [saveSerialProfile, setSaveSerialProfile] = useState(false);
+  const [serialProfileName, setSerialProfileName] = useState('');
   const isComposingRef = useRef(false);
   const kbiDisabledForProxyChain = proxyServers.length > 0;
   const currentConnectStep = pendingProxyConnectPlan
@@ -128,6 +145,20 @@ export const NewConnectionModal = () => {
     : pendingConnectRequest
       ? { host: pendingConnectRequest.host, port: pendingConnectRequest.port }
       : null;
+
+  const loadSerialPorts = useCallback(async () => {
+    setSerialPortsLoading(true);
+    try {
+      const ports = await api.serialListPorts();
+      setSerialPorts(ports);
+      setSerialPortPath((current) => current || ports[0]?.portPath || '');
+    } catch (error) {
+      console.warn('Failed to list serial ports:', error);
+      toastError(t('modals.new_connection.serial_load_ports_failed'), String(error));
+    } finally {
+      setSerialPortsLoading(false);
+    }
+  }, [t, toastError]);
 
   const formatTestFailure = useCallback((result: TestConnectionResponse) => {
     const { summary, detail } = result.diagnostic;
@@ -298,6 +329,12 @@ export const NewConnectionModal = () => {
   }, [modals.newConnection, quickConnectData]);
 
   useEffect(() => {
+    if (modals.newConnection && transport === 'serial') {
+      void loadSerialPorts();
+    }
+  }, [loadSerialPorts, modals.newConnection, transport]);
+
+  useEffect(() => {
     if (kbiDisabledForProxyChain && authType === 'keyboard_interactive') {
       setAuthType('password');
     }
@@ -374,15 +411,74 @@ export const NewConnectionModal = () => {
     setProxyServers(newServers);
   };
 
+  const getSerialBaudRate = () => {
+    const parsed = Number.parseInt(serialBaudRate, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
   const canConnect = () => {
+    if (transport === 'serial') {
+      return Boolean(serialPortPath.trim() && getSerialBaudRate());
+    }
+
     if (proxyServers.length > 0) {
       return proxyServers.every(server => server.host && server.username)
         && (authType !== 'managed_key' || Boolean(managedKeyId));
     }
     return Boolean(host && username && (authType !== 'managed_key' || managedKeyId));
   };
+  const serialBaudRateInvalid = transport === 'serial'
+    && serialBaudRate.trim().length > 0
+    && !getSerialBaudRate();
 
   const handleConnect = async () => {
+    if (transport === 'serial') {
+      const baudRate = getSerialBaudRate();
+      const portPath = serialPortPath.trim();
+      if (!portPath || !baudRate) return;
+
+      setLoading(true);
+      try {
+        const info = await createSerialTerminal({
+          portPath,
+          baudRate,
+          dataBits: serialDataBits,
+          stopBits: serialStopBits,
+          parity: serialParity,
+          flowControl: serialFlowControl,
+          cols: 120,
+          rows: 40,
+        });
+        createTab('local_terminal', info.id);
+        toggleModal('newConnection', false);
+
+        if (saveSerialProfile) {
+          try {
+            await api.saveSerialProfile({
+              name: serialProfileName.trim() || portPath,
+              group: null,
+              portPath,
+              baudRate,
+              dataBits: serialDataBits,
+              stopBits: serialStopBits,
+              parity: serialParity,
+              flowControl: serialFlowControl,
+            });
+            window.dispatchEvent(new CustomEvent('saved-connections-changed'));
+          } catch (saveErr) {
+            console.error('Failed to save serial profile:', saveErr);
+            toastError(t('modals.new_connection.serial_save_failed'), String(saveErr));
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        toastError(t('modals.new_connection.connect_failed'), String(e));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (proxyServers.length > 0) {
       if (!proxyServers.every(server => server.host && server.username)) return;
     } else {
@@ -494,6 +590,7 @@ export const NewConnectionModal = () => {
   };
 
   const handleTestConnection = async () => {
+    if (transport === 'serial') return;
     if (!host || !username) return;
     if (authType === 'keyboard_interactive') {
       toastError(t('modals.new_connection.test_not_supported_kbi'));
@@ -767,12 +864,31 @@ export const NewConnectionModal = () => {
           <DialogHeader className="shrink-0">
             <DialogTitle>{t('modals.new_connection.title')}</DialogTitle>
             <DialogDescription id="new-connection-description">
-              {t('modals.new_connection.description')}
+              {transport === 'serial'
+                ? t('modals.new_connection.serial_description')
+                : t('modals.new_connection.description')}
             </DialogDescription>
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto min-h-0">
           <div className="space-y-6 p-4">
+            <Tabs
+              value={transport}
+              onValueChange={(value) => {
+                if (value === 'ssh' || value === 'serial') {
+                  setTransport(value);
+                }
+              }}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="ssh">{t('modals.new_connection.transport_ssh')}</TabsTrigger>
+                <TabsTrigger value="serial">{t('modals.new_connection.transport_serial')}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {transport === 'ssh' ? (
+              <>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">{t('modals.new_connection.name')}</Label>
@@ -1180,20 +1296,201 @@ export const NewConnectionModal = () => {
               </div>
             )}
           </div>
+              </>
+            ) : (
+              <div className="space-y-5">
+                <div className="rounded-lg border border-theme-border bg-theme-bg/40 p-3">
+                  <div className="text-sm font-medium text-theme-text">
+                    {t('modals.new_connection.serial_section_title')}
+                  </div>
+                  <p className="mt-1 text-xs text-theme-text-muted">
+                    {t('modals.new_connection.serial_connect_hint')}
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="serial-port-path">{t('modals.new_connection.serial_port')} *</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void loadSerialPorts()}
+                      disabled={serialPortsLoading}
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 mr-2 ${serialPortsLoading ? 'animate-spin' : ''}`} />
+                      {t('modals.new_connection.serial_refresh_ports')}
+                    </Button>
+                  </div>
+                  <Input
+                    id="serial-port-path"
+                    value={serialPortPath}
+                    onChange={(event) => setSerialPortPath(event.target.value)}
+                    placeholder={t('modals.new_connection.serial_port_placeholder')}
+                  />
+                  {serialPorts.length > 0 ? (
+                    <Select value={serialPortPath} onValueChange={setSerialPortPath}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('modals.new_connection.serial_select_detected_port')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {serialPorts.map((portInfo) => (
+                          <SelectItem key={portInfo.portPath} value={portInfo.portPath}>
+                            {portInfo.displayName || portInfo.portPath}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-xs text-theme-text-muted">
+                      {serialPortsLoading
+                        ? t('modals.new_connection.serial_loading_ports')
+                        : t('modals.new_connection.serial_no_ports')}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="serial-baud-rate">{t('modals.new_connection.serial_baud_rate')}</Label>
+                    <Input
+                      id="serial-baud-rate"
+                      inputMode="numeric"
+                      value={serialBaudRate}
+                      onChange={(event) => setSerialBaudRate(event.target.value)}
+                    />
+                    {serialBaudRateInvalid && (
+                      <p role="alert" className="text-xs text-red-400">
+                        {t('modals.new_connection.serial_invalid_baud_rate')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>{t('modals.new_connection.serial_data_bits')}</Label>
+                    <Select
+                      value={String(serialDataBits)}
+                      onValueChange={(value) => {
+                        const bits = Number.parseInt(value, 10);
+                        if (bits === 5 || bits === 6 || bits === 7 || bits === 8) {
+                          setSerialDataBits(bits);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[5, 6, 7, 8].map((bits) => (
+                          <SelectItem key={bits} value={String(bits)}>{bits}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="grid gap-2">
+                    <Label>{t('modals.new_connection.serial_stop_bits')}</Label>
+                    <Select
+                      value={String(serialStopBits)}
+                      onValueChange={(value) => {
+                        const bits = Number.parseInt(value, 10);
+                        if (bits === 1 || bits === 2) {
+                          setSerialStopBits(bits);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2].map((bits) => (
+                          <SelectItem key={bits} value={String(bits)}>{bits}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>{t('modals.new_connection.serial_parity')}</Label>
+                    <Select value={serialParity} onValueChange={(value) => {
+                      if (value === 'none' || value === 'odd' || value === 'even') {
+                        setSerialParity(value);
+                      }
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('modals.new_connection.serial_parity_none')}</SelectItem>
+                        <SelectItem value="odd">{t('modals.new_connection.serial_parity_odd')}</SelectItem>
+                        <SelectItem value="even">{t('modals.new_connection.serial_parity_even')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>{t('modals.new_connection.serial_flow_control')}</Label>
+                    <Select value={serialFlowControl} onValueChange={(value) => {
+                      if (value === 'none' || value === 'software' || value === 'hardware') {
+                        setSerialFlowControl(value);
+                      }
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('modals.new_connection.serial_flow_none')}</SelectItem>
+                        <SelectItem value="software">{t('modals.new_connection.serial_flow_software')}</SelectItem>
+                        <SelectItem value="hardware">{t('modals.new_connection.serial_flow_hardware')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-theme-border p-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="save-serial-profile"
+                      checked={saveSerialProfile}
+                      onCheckedChange={(checked) => setSaveSerialProfile(!!checked)}
+                    />
+                    <Label htmlFor="save-serial-profile">{t('modals.new_connection.save_serial_profile')}</Label>
+                  </div>
+                  {saveSerialProfile && (
+                    <div className="grid gap-2 pl-6">
+                      <Label htmlFor="serial-profile-name">
+                        {t('modals.new_connection.serial_profile_name')}
+                      </Label>
+                      <Input
+                        id="serial-profile-name"
+                        value={serialProfileName}
+                        onChange={(event) => setSerialProfileName(event.target.value)}
+                        placeholder={t('modals.new_connection.serial_profile_name_placeholder')}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
         </div>
         </div>
    
         <DialogFooter className="shrink-0">
            <Button variant="ghost" onClick={() => toggleModal('newConnection', false)}>{t('modals.new_connection.cancel')}</Button>
-           <Button
-              variant="outline"
-              onClick={handleTestConnection}
-              disabled={loading || testing || !canConnect()}
-           >
-              {testing ? t('modals.new_connection.testing') : t('modals.new_connection.test')}
-           </Button>
+           {transport === 'ssh' && (
+             <Button
+                variant="outline"
+                onClick={handleTestConnection}
+                disabled={loading || testing || !canConnect()}
+             >
+                {testing ? t('modals.new_connection.testing') : t('modals.new_connection.test')}
+             </Button>
+           )}
            <Button onClick={handleConnect} disabled={loading || testing || !canConnect()}>
-              {loading ? t('modals.new_connection.connecting') : t('modals.new_connection.connect')}
+              {loading
+                ? t('modals.new_connection.connecting')
+                : transport === 'serial'
+                  ? t('modals.new_connection.serial_open')
+                  : t('modals.new_connection.connect')}
            </Button>
         </DialogFooter>
       </DialogContent>

@@ -44,6 +44,10 @@ const sessionTreeState = vi.hoisted(() => ({
   removeNode: vi.fn(),
 }));
 
+const localTerminalState = vi.hoisted(() => ({
+  createSerialTerminal: vi.fn(),
+}));
+
 const toastState = vi.hoisted(() => ({
   error: vi.fn(),
   success: vi.fn(),
@@ -65,6 +69,9 @@ vi.mock('@/store/appStore', () => ({
 }));
 vi.mock('@/store/sessionTreeStore', () => ({
   useSessionTreeStore: createMutableSelectorStore(sessionTreeState),
+}));
+vi.mock('@/store/localTerminalStore', () => ({
+  useLocalTerminalStore: createMutableSelectorStore(localTerminalState),
 }));
 vi.mock('@/store/settingsStore', () => ({
   useSettingsStore: settingsStoreMock,

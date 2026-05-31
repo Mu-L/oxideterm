@@ -7,6 +7,8 @@ const apiMocks = vi.hoisted(() => ({
   isAgentAvailable: vi.fn().mockResolvedValue(true),
   saveConnection: vi.fn(),
   sshPreflight: vi.fn(),
+  serialListPorts: vi.fn(),
+  saveSerialProfile: vi.fn(),
 }));
 
 const appStoreState = vi.hoisted(() => ({
@@ -20,6 +22,10 @@ const sessionTreeState = vi.hoisted(() => ({
   addRootNode: vi.fn(),
   connectNode: vi.fn(),
   createTerminalForNode: vi.fn(),
+}));
+
+const localTerminalState = vi.hoisted(() => ({
+  createSerialTerminal: vi.fn(),
 }));
 
 const toastState = vi.hoisted(() => ({
@@ -42,6 +48,9 @@ vi.mock('@/store/appStore', () => ({
 }));
 vi.mock('@/store/sessionTreeStore', () => ({
   useSessionTreeStore: createMutableSelectorStore(sessionTreeState),
+}));
+vi.mock('@/store/localTerminalStore', () => ({
+  useLocalTerminalStore: createMutableSelectorStore(localTerminalState),
 }));
 vi.mock('@/store/settingsStore', () => ({
   useSettingsStore: settingsStoreMock,
@@ -69,9 +78,20 @@ describe('NewConnectionModal terminal creation flow', () => {
     apiMocks.getGroups.mockResolvedValue([]);
     apiMocks.isAgentAvailable.mockResolvedValue(true);
     apiMocks.sshPreflight.mockResolvedValue({ status: 'verified' });
+    apiMocks.serialListPorts.mockResolvedValue([]);
+    apiMocks.saveSerialProfile.mockResolvedValue({ id: 'profile-1' });
     sessionTreeState.addRootNode.mockResolvedValue('node-kbi');
     sessionTreeState.connectNode.mockResolvedValue(undefined);
     sessionTreeState.createTerminalForNode.mockResolvedValue('term-kbi');
+    localTerminalState.createSerialTerminal.mockResolvedValue({
+      id: 'serial-1',
+      shell: { id: 'serial', label: 'Serial /dev/ttyUSB0', path: '/dev/ttyUSB0', args: [] },
+      cols: 120,
+      rows: 40,
+      running: true,
+      detached: false,
+      transport: { type: 'serial', portPath: '/dev/ttyUSB0', baudRate: 115200 },
+    });
   });
 
   it('routes keyboard-interactive connects through SessionTree and creates a terminal', async () => {
@@ -143,5 +163,90 @@ describe('NewConnectionModal terminal creation flow', () => {
       expect(sessionTreeState.createTerminalForNode).toHaveBeenCalledWith('node-password', 120, 40);
       expect(appStoreState.createTab).toHaveBeenCalledWith('terminal', 'term-password');
     });
+  });
+
+  it('opens serial terminals from the transport selector', async () => {
+    await act(async () => {
+      render(<NewConnectionModal />);
+    });
+
+    const serialTab = screen.getByRole('tab', { name: 'modals.new_connection.transport_serial' });
+    fireEvent.mouseDown(serialTab);
+    fireEvent.click(serialTab);
+
+    fireEvent.change(screen.getByLabelText('modals.new_connection.serial_port *'), {
+      target: { value: '/dev/ttyUSB0' },
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'modals.new_connection.save_serial_profile' }));
+    fireEvent.change(screen.getByLabelText('modals.new_connection.serial_profile_name'), {
+      target: { value: 'Lab console' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'modals.new_connection.serial_open' }));
+
+    await waitFor(() => {
+      expect(localTerminalState.createSerialTerminal).toHaveBeenCalledWith(expect.objectContaining({
+        portPath: '/dev/ttyUSB0',
+        baudRate: 115200,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        flowControl: 'none',
+        cols: 120,
+        rows: 40,
+      }));
+      expect(apiMocks.saveSerialProfile).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Lab console',
+        portPath: '/dev/ttyUSB0',
+        baudRate: 115200,
+      }));
+      expect(appStoreState.createTab).toHaveBeenCalledWith('local_terminal', 'serial-1');
+      expect(appStoreState.toggleModal).toHaveBeenCalledWith('newConnection', false);
+    });
+  });
+
+  it('keeps SSH and Serial draft state when switching transport branches', async () => {
+    await act(async () => {
+      render(<NewConnectionModal />);
+    });
+
+    fireEvent.change(screen.getByLabelText('modals.new_connection.target_host *'), {
+      target: { value: 'ssh.example.com' },
+    });
+
+    const serialTab = screen.getByRole('tab', { name: 'modals.new_connection.transport_serial' });
+    fireEvent.mouseDown(serialTab);
+    fireEvent.click(serialTab);
+    fireEvent.change(screen.getByLabelText('modals.new_connection.serial_port *'), {
+      target: { value: '/dev/ttyUSB1' },
+    });
+
+    const sshTab = screen.getByRole('tab', { name: 'modals.new_connection.transport_ssh' });
+    fireEvent.mouseDown(sshTab);
+    fireEvent.click(sshTab);
+    expect(screen.getByLabelText('modals.new_connection.target_host *')).toHaveValue('ssh.example.com');
+
+    fireEvent.mouseDown(serialTab);
+    fireEvent.click(serialTab);
+    expect(screen.getByLabelText('modals.new_connection.serial_port *')).toHaveValue('/dev/ttyUSB1');
+  });
+
+  it('shows inline validation and disables connect for invalid serial baud rates', async () => {
+    await act(async () => {
+      render(<NewConnectionModal />);
+    });
+
+    const serialTab = screen.getByRole('tab', { name: 'modals.new_connection.transport_serial' });
+    fireEvent.mouseDown(serialTab);
+    fireEvent.click(serialTab);
+    fireEvent.change(screen.getByLabelText('modals.new_connection.serial_port *'), {
+      target: { value: '/dev/ttyUSB0' },
+    });
+    fireEvent.change(screen.getByLabelText('modals.new_connection.serial_baud_rate'), {
+      target: { value: '0' },
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('modals.new_connection.serial_invalid_baud_rate');
+    expect(screen.getByRole('button', { name: 'modals.new_connection.serial_open' })).toBeDisabled();
   });
 });

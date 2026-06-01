@@ -897,6 +897,8 @@ export const ScrollbackViewer: React.FC<ScrollbackViewerProps> = ({
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-theme-text-muted" />
             <input
+              autoCapitalize="off"
+              autoCorrect="off"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder={t('terminal.scrollback_viewer.search_placeholder')}

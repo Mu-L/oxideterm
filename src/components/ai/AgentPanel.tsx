@@ -310,6 +310,8 @@ const TaskInput = memo(({ onStart }: { onStart: (goal: string) => void }) => {
   return (
     <div className="flex flex-col gap-2">
       <textarea
+        autoCapitalize="off"
+        autoCorrect="off"
         ref={textareaRef}
         value={goal}
         onChange={(e) => setGoal(e.target.value)}

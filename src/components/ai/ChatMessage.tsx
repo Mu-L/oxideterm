@@ -376,6 +376,8 @@ export const ChatMessage = memo(function ChatMessage({
         {isUser && isEditing ? (
           <div className="flex flex-col gap-1.5">
             <textarea
+              autoCapitalize="off"
+              autoCorrect="off"
               ref={editTextareaRef}
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}

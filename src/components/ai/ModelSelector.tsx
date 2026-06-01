@@ -282,6 +282,8 @@ export const ModelSelector = ({ onOpenSettings, dropdownPlacement = 'up' }: Mode
             <div className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-theme-border/50 bg-theme-bg/50 px-2 py-1.5">
               <Search className="w-3 h-3 shrink-0 text-theme-text-muted" />
               <input
+                autoCapitalize="off"
+                autoCorrect="off"
                 value={modelSearchQuery}
                 onChange={(event) => setModelSearchQuery(event.target.value)}
                 placeholder={t('ai.model_selector.search_placeholder')}

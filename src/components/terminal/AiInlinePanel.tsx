@@ -498,6 +498,8 @@ export const AiInlinePanel: React.FC<AiInlinePanelProps> = ({
         <ModelSelector onOpenSettings={handleOpenSettings} dropdownPlacement="down" />
         
         <input
+          autoCapitalize="off"
+          autoCorrect="off"
           ref={inputRef}
           type="text"
           value={prompt}

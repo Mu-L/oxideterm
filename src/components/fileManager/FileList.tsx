@@ -405,6 +405,8 @@ export const FileList: React.FC<FileListProps> = ({
         >
           {isPathEditable && pathInputValue !== undefined ? (
             <input
+              autoCapitalize="off"
+              autoCorrect="off"
               type="text"
               value={pathInputValue}
               onChange={(e) => onPathInputChange?.(e.target.value)}
@@ -524,6 +526,8 @@ export const FileList: React.FC<FileListProps> = ({
         <div className="flex items-center gap-2 px-2 py-1 bg-theme-bg-panel border-b border-theme-border">
           <Search className="h-3 w-3 text-theme-text-muted" />
           <input
+            autoCapitalize="off"
+            autoCorrect="off"
             type="text"
             value={filter || ''}
             onChange={(e) => onFilterChange(e.target.value)}

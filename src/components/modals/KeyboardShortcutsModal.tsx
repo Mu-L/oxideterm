@@ -74,6 +74,8 @@ export const KeyboardShortcutsModal = ({ open, onOpenChange }: KeyboardShortcuts
         <div className="flex items-center border-b border-theme-border px-4">
           <Search className="h-4 w-4 text-theme-text-muted shrink-0" />
           <input
+            autoCapitalize="off"
+            autoCorrect="off"
             ref={inputRef}
             type="text"
             value={query}

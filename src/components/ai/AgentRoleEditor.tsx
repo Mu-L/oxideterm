@@ -101,6 +101,8 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
         <div>
           <label className="text-[10px] text-theme-text-muted block mb-0.5">{t('agent.customRoles.name')}</label>
           <input
+            autoCapitalize="off"
+            autoCorrect="off"
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder={t('agent.customRoles.nameHint')}
@@ -126,6 +128,8 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
       <div>
         <label className="text-[10px] text-theme-text-muted block mb-0.5">{t('agent.customRoles.description')}</label>
         <input
+          autoCapitalize="off"
+          autoCorrect="off"
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder={t('agent.customRoles.descriptionHint')}
@@ -150,6 +154,8 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
           </div>
         </div>
         <textarea
+          autoCapitalize="off"
+          autoCorrect="off"
           value={promptTemplate}
           onChange={e => setPromptTemplate(e.target.value)}
           rows={6}
@@ -209,6 +215,8 @@ const RoleEditorDialog = memo(({ role, onSave, onClose }: RoleEditorProps) => {
         <div>
           <label className="text-[10px] text-theme-text-muted block mb-0.5">{t('agent.customRoles.toolList')}</label>
           <input
+            autoCapitalize="off"
+            autoCorrect="off"
             value={typeof toolAllowlist === 'string' ? toolAllowlist : ''}
             onChange={e => setToolAllowlist(e.target.value)}
             placeholder={t('agent.customRoles.toolListHint')}

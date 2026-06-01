@@ -345,6 +345,8 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
           <ChevronRight className="h-4 w-4" />
         </span>
         <textarea
+          autoCapitalize="off"
+          autoCorrect="off"
           ref={inputRef}
           value={state.value}
           onChange={(event) => {
@@ -618,6 +620,8 @@ const QuickCommandsPopover: React.FC<QuickCommandsPopoverProps> = ({ targetLabel
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-theme-text-muted" />
             <input
+              autoCapitalize="off"
+              autoCorrect="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('terminal.quick_commands.search_placeholder')}
@@ -756,7 +760,7 @@ const QuickCommandCategoryEditor: React.FC<QuickCommandCategoryEditorProps> = ({
   return (
     <div className="border-b border-theme-border/60 bg-theme-bg/35 p-2">
       <div className="grid gap-2 md:grid-cols-[1fr_220px]">
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('terminal.quick_commands.group_name_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
+        <input autoCapitalize="off" autoCorrect="off" value={name} onChange={(event) => setName(event.target.value)} placeholder={t('terminal.quick_commands.group_name_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
         <Select value={icon} onValueChange={(value) => setIcon(value as QuickCommandIcon)}>
           <SelectTrigger className="h-8 border-theme-border/50 bg-theme-bg/70 px-2 text-sm">
             <SelectValue />
@@ -818,9 +822,9 @@ const QuickCommandEditor: React.FC<QuickCommandEditorProps> = ({ command, catego
   return (
     <div className="border-b border-theme-border/60 bg-theme-bg/35 p-2">
       <div className="grid gap-2 md:grid-cols-[1fr_1.2fr]">
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('terminal.quick_commands.name_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
-        <input value={commandText} onChange={(event) => setCommandText(event.target.value)} placeholder={t('terminal.quick_commands.command_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
-        <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t('terminal.quick_commands.description_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
+        <input autoCapitalize="off" autoCorrect="off" value={name} onChange={(event) => setName(event.target.value)} placeholder={t('terminal.quick_commands.name_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
+        <input autoCapitalize="off" autoCorrect="off" value={commandText} onChange={(event) => setCommandText(event.target.value)} placeholder={t('terminal.quick_commands.command_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
+        <input autoCapitalize="off" autoCorrect="off" value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t('terminal.quick_commands.description_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
         <div className="grid grid-cols-2 gap-2">
           <Select value={selectedCategory} onValueChange={setSelectedCategory}>
             <SelectTrigger className="h-8 border-theme-border/50 bg-theme-bg/70 px-2 text-sm">
@@ -834,7 +838,7 @@ const QuickCommandEditor: React.FC<QuickCommandEditorProps> = ({ command, catego
               ))}
             </SelectContent>
           </Select>
-          <input value={hostPattern} onChange={(event) => setHostPattern(event.target.value)} placeholder={t('terminal.quick_commands.host_pattern_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
+          <input autoCapitalize="off" autoCorrect="off" value={hostPattern} onChange={(event) => setHostPattern(event.target.value)} placeholder={t('terminal.quick_commands.host_pattern_placeholder')} className={quickCommandInputClass} style={terminalFontStyle} />
         </div>
       </div>
       <div className="mt-2 flex justify-end gap-2">

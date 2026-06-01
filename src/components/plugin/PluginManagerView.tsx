@@ -829,6 +829,8 @@ export function PluginManagerView() {
                   <div className="relative flex-1">
                     <Download className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" />
                     <input
+                      autoCapitalize="off"
+                      autoCorrect="off"
                       type="url"
                       value={urlInput}
                       onChange={(e) => { setUrlInput(e.target.value); setUrlError(null); }}
@@ -857,6 +859,8 @@ export function PluginManagerView() {
                     {t('plugin.url_checksum_label')}
                   </label>
                   <input
+                    autoCapitalize="off"
+                    autoCorrect="off"
                     type="text"
                     value={urlChecksumInput}
                     onChange={(e) => setUrlChecksumInput(e.target.value.trim())}
@@ -919,6 +923,8 @@ export function PluginManagerView() {
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" />
                       <input
+                        autoCapitalize="off"
+                        autoCorrect="off"
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -1017,6 +1023,8 @@ export function PluginManagerView() {
                   {t('plugin.create_plugin_id')}
                 </label>
                 <input
+                  autoCapitalize="off"
+                  autoCorrect="off"
                   type="text"
                   value={createId}
                   onChange={(e) => setCreateId(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
@@ -1032,6 +1040,8 @@ export function PluginManagerView() {
                   {t('plugin.create_plugin_name')}
                 </label>
                 <input
+                  autoCapitalize="off"
+                  autoCorrect="off"
                   type="text"
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}

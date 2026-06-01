@@ -433,6 +433,8 @@ export const TerminalTab = ({ terminal, buffer, experimental, updateTerminal, up
                         <p className="text-xs text-theme-text-muted mt-0.5">{t('settings_view.terminal.command_bar_focus_handoff_hint')}</p>
                     </div>
                     <textarea
+                        autoCapitalize="off"
+                        autoCorrect="off"
                         value={focusHandoffDraft}
                         onChange={(event) => {
                             const nextValue = event.target.value;

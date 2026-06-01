@@ -319,6 +319,8 @@ export function Input({
   const sizeClass = size === 'sm' ? 'h-7 text-xs' : 'h-8 text-sm';
   return (
     <input
+      autoCapitalize="off"
+      autoCorrect="off"
       type={type}
       value={value}
       defaultValue={defaultValue}

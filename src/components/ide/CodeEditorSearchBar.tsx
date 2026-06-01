@@ -205,6 +205,8 @@ export function CodeEditorSearchBar({ view, isOpen, onClose }: CodeEditorSearchB
                 <div className="relative flex-1">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted pointer-events-none" />
                     <input
+                        autoCapitalize="off"
+                        autoCorrect="off"
                         ref={searchInputRef}
                         type="text"
                         value={searchText}
@@ -302,6 +304,8 @@ export function CodeEditorSearchBar({ view, isOpen, onClose }: CodeEditorSearchB
                     {/* 替换输入框 */}
                     <div className="relative flex-1">
                         <input
+                            autoCapitalize="off"
+                            autoCorrect="off"
                             ref={replaceInputRef}
                             type="text"
                             value={replaceText}

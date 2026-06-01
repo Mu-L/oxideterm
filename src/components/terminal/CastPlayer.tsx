@@ -385,6 +385,8 @@ export const CastPlayer: React.FC<CastPlayerProps> = ({
           <div className="flex items-center gap-2 max-w-lg">
             <Search className="h-3.5 w-3.5 text-theme-text-muted shrink-0" />
             <input
+              autoCapitalize="off"
+              autoCorrect="off"
               type="text"
               value={searchQuery}
               onChange={e => handleSearch(e.target.value)}

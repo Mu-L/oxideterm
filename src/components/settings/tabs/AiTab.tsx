@@ -749,6 +749,8 @@ export const AiTab = ({
                         <div className="max-w-3xl grid gap-2">
                             <Label>{t('settings_view.ai.custom_system_prompt')}</Label>
                             <textarea
+                                autoCapitalize="off"
+                                autoCorrect="off"
                                 value={ai.customSystemPrompt || ''}
                                 onChange={(event) => updateAi('customSystemPrompt', event.target.value)}
                                 placeholder={t('settings_view.ai.system_prompt_placeholder')}
@@ -777,6 +779,8 @@ export const AiTab = ({
                                 />
                             </div>
                             <textarea
+                                autoCapitalize="off"
+                                autoCorrect="off"
                                 value={memory.content}
                                 onChange={(event) => updateAi('memory', { ...memory, content: event.target.value })}
                                 placeholder={t('settings_view.ai.memory_placeholder')}

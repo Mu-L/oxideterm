@@ -687,6 +687,8 @@ function ConversationItem({
       <div className="flex-1 min-w-0 pr-2">
         {isRenaming ? (
           <input
+            autoCapitalize="off"
+            autoCorrect="off"
             ref={renameInputRef}
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}

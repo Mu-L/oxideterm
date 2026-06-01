@@ -219,6 +219,8 @@ const ColorSwatch = ({
         <span className="text-[10px] text-theme-text-muted truncate leading-tight">{label}</span>
         {editing ? (
           <input
+            autoCapitalize="off"
+            autoCorrect="off"
             autoFocus
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}

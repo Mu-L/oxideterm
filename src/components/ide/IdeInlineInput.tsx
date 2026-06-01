@@ -141,6 +141,8 @@ export function IdeInlineInput({
   return (
     <div className="relative inline-block w-full">
       <input
+        autoCapitalize="off"
+        autoCorrect="off"
         ref={inputRef}
         type="text"
         value={value}

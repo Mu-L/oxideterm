@@ -416,6 +416,8 @@ export const FileList = ({
         >
           {isPathEditable && pathInputValue !== undefined ? (
             <input
+              autoCapitalize="off"
+              autoCorrect="off"
               type="text"
               value={pathInputValue}
               onChange={(e) => onPathInputChange?.(e.target.value)}
@@ -531,6 +533,8 @@ export const FileList = ({
           <Search className="h-3 w-3 text-theme-text-muted" />
           <input
             type="text"
+            autoCapitalize="off"
+            autoCorrect="off"
             value={filter || ''}
             onChange={(e) => onFilterChange(e.target.value)}
             placeholder={t('sftp.file_list.filter_placeholder')}

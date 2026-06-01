@@ -159,6 +159,8 @@ export const SavePathAsPresetDialog: React.FC<SavePathAsPresetDialogProps> = ({
           <div>
             <label className="block text-sm text-theme-text-muted mb-1">{t('modals.save_preset.connection_name')}</label>
             <input
+              autoCapitalize="off"
+              autoCorrect="off"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}

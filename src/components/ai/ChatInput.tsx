@@ -354,6 +354,8 @@ export function ChatInput({ onSend, onStop, isLoading, disabled, externalValue, 
         )}
 
         <textarea
+          autoCapitalize="off"
+          autoCorrect="off"
           ref={textareaRef}
           value={input}
           onChange={(e) => handleInputChange(e.target.value)}

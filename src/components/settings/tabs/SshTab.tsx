@@ -374,6 +374,8 @@ export const SshTab = () => {
                         <div className="space-y-2">
                             <Label>{t('modals.managed_key.paste.private_key')}</Label>
                             <textarea
+                                autoCapitalize="off"
+                                autoCorrect="off"
                                 value={pastedPrivateKey}
                                 onChange={(event) => setPastedPrivateKey(event.target.value)}
                                 spellCheck={false}

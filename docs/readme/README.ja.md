@@ -5,11 +5,11 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>ターミナルで暮らす人のための local-first SSH ワークスペース。</strong>
+  <strong>リモートサーバー向けの AI-native ワークスペース。</strong>
   <br>
-  リモートマシンに一度接続すれば、その shell、ファイル、ポート、転送、軽量エディター、BYOK AI を 1 か所で扱えます。
+  SSH でサーバーに接続し、terminal、ファイル、ポート、転送、軽量編集、autonomous OxideSens サイドバーを 1 つの local-first アプリで扱えます。
   <br>
-  ネイティブ Tauri アプリ · 純粋な Rust SSH · コア SSH ワークフローにアカウント不要
+  ネイティブ Tauri アプリ · 純粋な Rust SSH · BYOK autonomous AI · コア SSH ワークフローにアカウント不要
   <br>
   <strong>Electron ゼロ。OpenSSL ゼロ。テレメトリゼロ。サブスクゼロ。BYOK-first。純粋な Rust SSH。</strong>
 </p>
@@ -56,7 +56,7 @@
 
 - SSH ターミナル、SFTP、ポートフォワーディング、帯域内転送、ローカル shell を並べて管理
 - Grace Period 再接続で、ネットワークが揺れても作業を続行
-- 自分の AI プロバイダーでライブセッションを確認し、承認済みのワークスペース操作を実行
+- autonomous OxideSens サイドバーに、自分の AI provider 経由で live session の確認と承認済み workspace action の実行を任せる
 
 ---
 
@@ -64,16 +64,16 @@
 
 | 課題 | OxideTerm の回答 |
 |---|---|
-| 1 つのリモートノード、多数のツール | ターミナル、SFTP、ポートフォワーディング、trzsz、軽量 IDE、監視、AI コンテキストが同じ SSH ワークスペースに結び付きます |
+| 1 つのリモートノード、多数のツール | ターミナル、SFTP、ポートフォワーディング、trzsz、軽量 IDE、監視、autonomous OxideSens サイドバーが同じ SSH ワークスペースに結び付きます |
 | Local-first な SSH ワークフロー | SSH、SFTP、フォワーディング、ローカル shell、設定管理はサインアップ不要。クラウド同期は[公式プラグイン](#公式プラグイン)で必要なときだけ有効化できます |
-| プラットフォームクレジットではなく BYOK AI | OxideSens は OpenAI/Ollama/DeepSeek/OpenAI 互換エンドポイントを使い、MCP と RAG に対応します |
+| プラットフォームクレジットではなく BYOK autonomous AI | OxideSens は OpenAI/Ollama/DeepSeek/OpenAI 互換エンドポイントを使い、MCP、RAG、承認済み workspace action に対応します |
 | 再接続の安定性 | Grace Period が旧接続を 30 秒プローブしてから置き換えるため、短いネットワーク断でも vim/htop/yazi が生き残れます |
 | 純粋な Rust のネイティブアプリ | Tauri 2.0 ネイティブアプリ、`ring` でコンパイルされた russh 0.59、Electron なし、OpenSSL/libssh2 なし |
 | 認証情報の安全性 | パスワードと API キーは OS キーチェーンに保存され、接続メタデータはローカルで保護され、`.oxide` は ChaCha20-Poly1305 + Argon2id で暗号化されます |
 
 ## 何であり / 何ではないか
 
-OxideTerm は **local-first な SSH ワークフロー**に集中しています。ターミナル、ファイル、ポート、転送、軽量編集、AI コンテキストを、自分のマシンとリモートノード中心に扱いたいユーザー向けです。
+OxideTerm は **リモートサーバー向け local-first AI workspace** に集中しています。ターミナル、ファイル、ポート、転送、軽量編集、autonomous BYOK AI サイドバーを、自分のマシンとリモートノード中心に扱いたいユーザー向けです。
 
 ホスト型クラウド Agent プラットフォームや、ターミナル描画ベンチマークだけを目的にしたプロジェクトではありません。方向性はより狭く、OxideTerm アカウントなしでリモート作業を 1 つのローカルワークスペースのように扱うことです。
 

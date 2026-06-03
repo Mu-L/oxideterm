@@ -5,11 +5,11 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>Local-first SSH workspace for people who live in terminals.</strong>
+  <strong>AI-native workspace for remote servers.</strong>
   <br>
-  Connect to a remote machine once, then work with its shell, files, ports, transfers, lightweight editor, and BYOK AI from one place.
+  Connect to your servers over SSH, then work with terminals, files, ports, transfers, lightweight editing, and the autonomous OxideSens sidebar in one local-first app.
   <br>
-  Native Tauri app · Pure Rust SSH · No account required for core SSH workflows
+  Native Tauri app · Pure Rust SSH · BYOK autonomous AI · No account required for core SSH workflows
   <br>
   <strong>Zero Electron. Zero OpenSSL. Zero Telemetry. Zero Subscription. BYOK-first. Pure Rust SSH.</strong>
 </p>
@@ -56,7 +56,7 @@
 
 - Manage SSH terminals, SFTP, port forwards, in-terminal transfers, and local shells side by side
 - Keep working through network hiccups with Grace Period reconnect
-- Use your own AI provider to inspect live sessions and perform approved workspace actions
+- Ask the autonomous OxideSens sidebar to inspect live sessions and perform approved workspace actions through your own AI provider
 
 ---
 
@@ -64,16 +64,16 @@
 
 | If you care about... | OxideTerm gives you... |
 |---|---|
-| One remote node, many tools | Terminal, SFTP, port forwarding, trzsz, mini IDE, monitoring, and AI context stay attached to the same SSH workspace |
+| One remote node, many tools | Terminal, SFTP, port forwarding, trzsz, mini IDE, monitoring, and the autonomous OxideSens sidebar stay attached to the same SSH workspace |
 | Local-first SSH workflows | SSH, SFTP, forwarding, local shell, and config work without signup; cloud sync is opt-in via [official plugin](#official-plugins) |
-| BYOK AI instead of platform credits | OxideSens uses your OpenAI/Ollama/DeepSeek/OpenAI-compatible endpoint with MCP and RAG support |
+| BYOK autonomous AI instead of platform credits | OxideSens uses your OpenAI/Ollama/DeepSeek/OpenAI-compatible endpoint with MCP, RAG, and approved workspace actions |
 | Reconnect stability | Grace Period probes the old connection for 30s before replacing it, so vim/htop/yazi can survive short network drops |
 | Pure Rust, native app | Tauri 2.0 native app, russh 0.59 compiled against `ring`, no Electron, no OpenSSL/libssh2 dependency |
 | Credential safety | Passwords and API keys stay in OS keychain, saved connection metadata is sealed locally, and `.oxide` files use ChaCha20-Poly1305 + Argon2id encryption |
 
 ## What It Is / Is Not
 
-OxideTerm focuses on **local-first SSH workflows**. It is built for users who want terminal, files, ports, transfers, lightweight editing, and AI context to stay centered around their own machines and remote nodes.
+OxideTerm focuses on a **local-first AI workspace for remote servers**. It is built for users who want terminals, files, ports, transfers, lightweight editing, and an autonomous BYOK AI sidebar centered around their own machines and remote nodes.
 
 It is not trying to be a hosted cloud agent platform or a benchmark-only terminal renderer. The product direction is narrower: make remote work feel like one local workspace, without requiring an OxideTerm account.
 

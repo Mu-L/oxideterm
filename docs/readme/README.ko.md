@@ -5,11 +5,11 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>터미널에서 일하는 사람을 위한 로컬 우선 SSH 워크스페이스입니다.</strong>
+  <strong>원격 서버를 위한 AI-native 워크스페이스입니다.</strong>
   <br>
-  원격 머신에 한 번 연결한 뒤 shell, 파일, 포트, 전송, 가벼운 편집기, BYOK AI를 한곳에서 다룹니다.
+  SSH로 서버에 연결한 뒤 terminal, 파일, 포트, 전송, 가벼운 편집, autonomous OxideSens 사이드바를 하나의 local-first 앱에서 다룹니다.
   <br>
-  네이티브 Tauri 앱 · 순수 Rust SSH · 핵심 SSH 워크플로에는 계정 불필요
+  네이티브 Tauri 앱 · 순수 Rust SSH · BYOK autonomous AI · 핵심 SSH 워크플로에는 계정 불필요
   <br>
   <strong>Electron 없음. OpenSSL 없음. 텔레메트리 없음. 구독 없음. BYOK-first. 순수 Rust SSH.</strong>
 </p>
@@ -56,7 +56,7 @@
 
 - SSH 터미널, SFTP, 포트 포워딩, 터미널 내 전송, 로컬 shell을 나란히 관리
 - Grace Period 재연결로 네트워크가 흔들려도 작업 지속
-- 내 AI 제공자를 사용해 라이브 세션을 확인하고 승인된 워크스페이스 작업 실행
+- autonomous OxideSens 사이드바가 사용자의 AI provider로 live session을 확인하고 승인된 workspace action을 실행하도록 요청
 
 ---
 
@@ -64,16 +64,16 @@
 
 | 관심사 | OxideTerm이 제공하는 것 |
 |---|---|
-| 하나의 원격 노드, 여러 도구 | 터미널, SFTP, 포트 포워딩, trzsz, 미니 IDE, 모니터링, AI 컨텍스트가 같은 SSH 워크스페이스에 붙어 있습니다 |
+| 하나의 원격 노드, 여러 도구 | 터미널, SFTP, 포트 포워딩, trzsz, 미니 IDE, 모니터링, autonomous OxideSens 사이드바가 같은 SSH 워크스페이스에 붙어 있습니다 |
 | 로컬 우선 SSH 워크플로 | SSH, SFTP, 포워딩, 로컬 shell, 설정은 가입 없이 동작하며, 클라우드 동기화는 [공식 플러그인](#공식-플러그인)으로 선택 사용합니다 |
-| 플랫폼 크레딧 대신 BYOK AI | OxideSens는 OpenAI/Ollama/DeepSeek/OpenAI 호환 엔드포인트를 사용하며 MCP와 RAG를 지원합니다 |
+| 플랫폼 크레딧 대신 BYOK autonomous AI | OxideSens는 OpenAI/Ollama/DeepSeek/OpenAI 호환 엔드포인트를 사용하며 MCP, RAG, 승인된 workspace action을 지원합니다 |
 | 재연결 안정성 | Grace Period가 기존 연결을 30초간 확인한 뒤 교체하므로 짧은 네트워크 끊김에도 vim/htop/yazi가 살아남을 수 있습니다 |
 | 순수 Rust 네이티브 앱 | Tauri 2.0 네이티브 앱, `ring` 기반 russh 0.59, Electron 없음, OpenSSL/libssh2 없음 |
 | 자격 증명 안전 | 비밀번호와 API 키는 OS 키체인에 저장되고, 연결 메타데이터는 로컬에 밀봉되며, `.oxide`는 ChaCha20-Poly1305 + Argon2id로 암호화됩니다 |
 
 ## 무엇이고 / 무엇이 아닌가
 
-OxideTerm은 **로컬 우선 SSH 워크플로**에 집중합니다. 터미널, 파일, 포트, 전송, 가벼운 편집, AI 컨텍스트를 자신의 머신과 원격 노드 중심에 두고 싶은 사용자를 위한 도구입니다.
+OxideTerm은 **원격 서버를 위한 local-first AI workspace**에 집중합니다. 터미널, 파일, 포트, 전송, 가벼운 편집, autonomous BYOK AI 사이드바를 자신의 머신과 원격 노드 중심에 두고 싶은 사용자를 위한 도구입니다.
 
 호스팅 클라우드 Agent 플랫폼이나 터미널 렌더링 벤치마크만을 위한 프로젝트가 아닙니다. 방향은 더 좁습니다. OxideTerm 계정 없이 원격 작업을 하나의 로컬 워크스페이스처럼 만드는 것입니다.
 

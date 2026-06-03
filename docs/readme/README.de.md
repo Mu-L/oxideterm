@@ -5,11 +5,11 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>Ein lokales SSH-Workspace für Menschen, die im Terminal leben.</strong>
+  <strong>AI-native Workspace für Remote-Server.</strong>
   <br>
-  Einmal mit einer entfernten Maschine verbinden und Shell, Dateien, Ports, Transfers, leichtgewichtigen Editor und BYOK-KI an einem Ort nutzen.
+  Verbinden Sie sich per SSH mit Ihren Servern und arbeiten Sie dann mit Terminals, Dateien, Ports, Transfers, leichter Bearbeitung und der autonomen OxideSens-Seitenleiste in einer local-first App.
   <br>
-  Native Tauri-App · reines Rust-SSH · kein Konto für zentrale SSH-Workflows erforderlich
+  Native Tauri-App · reines Rust-SSH · autonome BYOK-KI · kein Konto für zentrale SSH-Workflows erforderlich
   <br>
   <strong>Zero Electron. Zero OpenSSL. Zero Telemetrie. Zero Subscription. BYOK-first. Reines Rust-SSH.</strong>
 </p>
@@ -56,7 +56,7 @@
 
 - SSH-Terminals, SFTP, Portweiterleitungen, In-Terminal-Transfers und lokale Shells nebeneinander verwalten
 - Mit Grace-Period-Reconnect trotz kurzer Netzwerkaussetzer weiterarbeiten
-- Den eigenen KI-Anbieter nutzen, um Live-Sitzungen zu prüfen und freigegebene Workspace-Aktionen auszuführen
+- Die autonome OxideSens-Seitenleiste kann mit Ihrem eigenen KI-Anbieter Live-Sitzungen prüfen und genehmigte Workspace-Aktionen ausführen
 
 ---
 
@@ -64,16 +64,16 @@
 
 | Wenn Ihnen wichtig ist... | OxideTerm bietet... |
 |---|---|
-| Ein Remote-Node, viele Werkzeuge | Terminal, SFTP, Portweiterleitung, trzsz, Mini-IDE, Monitoring und KI-Kontext bleiben am selben SSH-Workspace |
+| Ein Remote-Node, viele Werkzeuge | Terminal, SFTP, Portweiterleitung, trzsz, Mini-IDE, Monitoring und die autonome OxideSens-Seitenleiste bleiben am selben SSH-Workspace |
 | Local-first SSH-Workflows | SSH, SFTP, Forwarding, lokale Shell und Konfiguration funktionieren ohne Registrierung; Cloud Sync ist optional per [offiziellem Plugin](#offizielle-plugins) |
-| BYOK-KI statt Plattform-Credits | OxideSens nutzt Ihren OpenAI/Ollama/DeepSeek/OpenAI-kompatiblen Endpoint mit MCP- und RAG-Unterstützung |
+| Autonome BYOK-KI statt Plattform-Credits | OxideSens nutzt Ihren OpenAI/Ollama/DeepSeek/OpenAI-kompatiblen Endpoint mit MCP, RAG und genehmigten Workspace-Aktionen |
 | Stabile Wiederverbindung | Grace Period prüft die alte Verbindung 30 s lang, bevor sie ersetzt wird, damit vim/htop/yazi kurze Aussetzer überstehen können |
 | Native App in reinem Rust | Tauri-2.0-App, russh 0.59 mit `ring`, kein Electron, keine OpenSSL/libssh2-Abhängigkeit |
 | Sichere Zugangsdaten | Passwörter und API-Schlüssel bleiben im OS-Keychain, Verbindungsmetadaten werden lokal versiegelt, `.oxide` nutzt ChaCha20-Poly1305 + Argon2id |
 
 ## Was es ist / nicht ist
 
-OxideTerm konzentriert sich auf **local-first SSH-Workflows**. Es richtet sich an Nutzer, die Terminal, Dateien, Ports, Transfers, leichtgewichtiges Editieren und KI-Kontext um ihre eigenen Maschinen und Remote-Nodes herum halten wollen.
+OxideTerm konzentriert sich auf einen **local-first KI-Workspace für Remote-Server**. Es richtet sich an Nutzer, die Terminal, Dateien, Ports, Transfers, leichtes Editieren und eine autonome BYOK-KI-Seitenleiste um ihre eigenen Maschinen und Remote-Nodes herum halten wollen.
 
 Es ist keine gehostete Cloud-Agent-Plattform und kein Projekt, das nur Terminal-Rendering-Benchmarks verkauft. Die Richtung ist enger: Remote-Arbeit soll sich wie ein lokales Workspace anfühlen, ohne OxideTerm-Konto.
 

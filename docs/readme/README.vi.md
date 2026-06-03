@@ -5,11 +5,11 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>Workspace SSH local-first cho những người sống trong terminal.</strong>
+  <strong>Workspace AI-native cho máy chủ từ xa.</strong>
   <br>
-  Kết nối tới máy từ xa một lần, rồi làm việc với shell, tệp, cổng, truyền tải, editor nhẹ và BYOK AI từ một nơi.
+  Kết nối tới server của bạn qua SSH, rồi làm việc với terminal, tệp, cổng, truyền tải, chỉnh sửa nhẹ và sidebar OxideSens tự chủ trong một app local-first.
   <br>
-  Ứng dụng Tauri native · SSH thuần Rust · không cần tài khoản cho workflow SSH chính
+  Ứng dụng Tauri native · SSH thuần Rust · BYOK AI tự chủ · không cần tài khoản cho workflow SSH chính
   <br>
   <strong>Zero Electron. Zero OpenSSL. Zero telemetry. Zero subscription. BYOK-first. SSH thuần Rust.</strong>
 </p>
@@ -56,7 +56,7 @@
 
 - Quản lý SSH terminal, SFTP, port forward, truyền tải trong terminal và local shell cạnh nhau
 - Tiếp tục làm việc khi mạng chập chờn nhờ Grace Period reconnect
-- Dùng nhà cung cấp AI của bạn để kiểm tra phiên đang chạy và thực hiện thao tác workspace đã duyệt
+- Yêu cầu sidebar OxideSens tự chủ kiểm tra phiên đang chạy và thực hiện thao tác workspace đã duyệt qua nhà cung cấp AI của bạn
 
 ---
 
@@ -64,16 +64,16 @@
 
 | Nếu bạn quan tâm đến... | OxideTerm mang lại... |
 |---|---|
-| Một remote node, nhiều công cụ | Terminal, SFTP, port forwarding, trzsz, mini IDE, monitoring và ngữ cảnh AI cùng gắn với một workspace SSH |
+| Một remote node, nhiều công cụ | Terminal, SFTP, port forwarding, trzsz, mini IDE, monitoring và sidebar OxideSens tự chủ cùng gắn với một workspace SSH |
 | Workflow SSH local-first | SSH, SFTP, forwarding, local shell và cấu hình hoạt động không cần đăng ký; cloud sync là tùy chọn qua [plugin chính thức](#plugin-chính-thức) |
-| BYOK AI thay vì credit nền tảng | OxideSens dùng endpoint OpenAI/Ollama/DeepSeek/OpenAI-compatible của bạn với hỗ trợ MCP và RAG |
+| BYOK AI tự chủ thay vì credit nền tảng | OxideSens dùng endpoint OpenAI/Ollama/DeepSeek/OpenAI-compatible của bạn với MCP, RAG và workspace action đã được phê duyệt |
 | Reconnect ổn định | Grace Period thăm dò kết nối cũ 30 giây trước khi thay thế, giúp vim/htop/yazi sống sót qua mất mạng ngắn |
 | Ứng dụng native Rust thuần | Ứng dụng Tauri 2.0 native, russh 0.59 biên dịch với `ring`, không Electron, không OpenSSL/libssh2 |
 | An toàn thông tin xác thực | Mật khẩu và API key ở trong OS keychain, metadata kết nối được niêm phong cục bộ, `.oxide` dùng ChaCha20-Poly1305 + Argon2id |
 
 ## Là gì / Không phải là gì
 
-OxideTerm tập trung vào **workflow SSH local-first**. Nó dành cho người dùng muốn terminal, tệp, cổng, truyền tải, chỉnh sửa nhẹ và ngữ cảnh AI xoay quanh máy của họ và các node từ xa.
+OxideTerm tập trung vào **workspace AI local-first cho máy chủ từ xa**. Nó dành cho người dùng muốn terminal, tệp, cổng, truyền tải, chỉnh sửa nhẹ và sidebar BYOK AI tự chủ xoay quanh máy của họ và các node từ xa.
 
 Nó không cố trở thành nền tảng cloud Agent được host, cũng không chỉ bán benchmark render terminal. Hướng đi hẹp hơn: làm việc từ xa có cảm giác như một workspace local, không cần tài khoản OxideTerm.
 

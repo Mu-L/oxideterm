@@ -5,11 +5,11 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>面向長期使用終端使用者的本地優先 SSH 工作區。</strong>
+  <strong>面向遠端伺服器的 AI-native 工作區。</strong>
   <br>
-  連接一次遠端機器，就能在一個地方處理它的 Shell、檔案、連接埠、傳輸、輕量編輯器和 BYOK AI。
+  透過 SSH 連接你的伺服器，然後在一個本地優先應用裡使用終端、檔案、連接埠、傳輸、輕量編輯和 autonomous OxideSens 側邊欄。
   <br>
-  原生 Tauri 應用 · 純 Rust SSH · 核心 SSH 工作流無需帳號
+  原生 Tauri 應用 · 純 Rust SSH · BYOK autonomous AI · 核心 SSH 工作流無需帳號
   <br>
   <strong>零 Electron。零 OpenSSL。零遙測。零訂閱。BYOK 優先。純 Rust SSH。</strong>
 </p>
@@ -56,7 +56,7 @@
 
 - 並排管理 SSH 終端、SFTP、連接埠轉發、終端內傳輸和本地 Shell
 - 透過寬限期重連，在網路抖動後繼續工作
-- 使用你自己的 AI 提供商檢查即時工作階段，並執行已核准的工作區操作
+- 讓 autonomous OxideSens 側邊欄透過你自己的 AI 提供商檢查即時工作階段，並執行已核准的工作區操作
 
 ---
 
@@ -64,16 +64,16 @@
 
 | 如果你在意... | OxideTerm 提供... |
 |---|---|
-| 一個遠端節點，多種工具 | 終端、SFTP、連接埠轉發、trzsz、輕量 IDE、監控和 AI 上下文都掛在同一個 SSH 工作區上 |
+| 一個遠端節點，多種工具 | 終端、SFTP、連接埠轉發、trzsz、輕量 IDE、監控和 autonomous OxideSens 側邊欄都掛在同一個 SSH 工作區上 |
 | 本地優先 SSH 工作流 | SSH、SFTP、連接埠轉發、本地 Shell 和設定管理都無需註冊；雲同步透過[官方外掛](#官方外掛)按需啟用 |
-| BYOK AI，而不是平台點數 | OxideSens 使用你自己的 OpenAI/Ollama/DeepSeek/OpenAI-compatible 端點，並支援 MCP 與 RAG |
+| BYOK autonomous AI，而不是平台點數 | OxideSens 使用你自己的 OpenAI/Ollama/DeepSeek/OpenAI-compatible 端點，支援 MCP、RAG 和已核准的工作區操作 |
 | 重連穩定性 | 寬限期會先探測舊連線 30 秒再替換它，短暫網路中斷時 vim/htop/yazi 仍有機會存活 |
 | 純 Rust 原生應用 | Tauri 2.0 原生應用，russh 0.59 基於 `ring` 編譯，無 Electron，無 OpenSSL/libssh2 依賴 |
 | 憑證安全 | 密碼和 API 金鑰保存在 OS 金鑰鏈中，已儲存連線的中繼資料在本地密封儲存，`.oxide` 檔案使用 ChaCha20-Poly1305 + Argon2id 加密 |
 
 ## 它是什麼 / 不是什麼
 
-OxideTerm 專注於**本地優先的 SSH 工作流**。它面向希望終端、檔案、連接埠、傳輸、輕量編輯和 AI 上下文圍繞自己的機器與遠端節點展開的使用者。
+OxideTerm 專注於**面向遠端伺服器的本地優先 AI 工作區**。它面向希望終端、檔案、連接埠、傳輸、輕量編輯和 autonomous BYOK AI 側邊欄圍繞自己的機器與遠端節點展開的使用者。
 
 它不是託管雲端 Agent 平台，也不是只追求終端渲染跑分的專案。產品方向更窄：讓遠端工作像一個本地工作區，同時不要求 OxideTerm 帳號。
 

@@ -73,6 +73,8 @@ pub enum PrivilegeCredentialKind {
     CustomPrompt,
 }
 
+pub const LOCAL_SHELL_PRIVILEGE_CONNECTION_ID: &str = "local-shell:default";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SavedPrivilegeCredential {
     pub id: String,
@@ -417,6 +419,10 @@ pub struct ConfigFile {
     /// Saved serial terminal profiles. Kept separate from SSH saved connections.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub serial_profiles: Vec<SerialProfile>,
+
+    /// App-scoped sudo/su helper metadata for local shell terminals.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_privilege_credentials: Vec<SavedPrivilegeCredential>,
 }
 
 impl Default for ConfigFile {
@@ -429,6 +435,7 @@ impl Default for ConfigFile {
             connection_tombstones: Vec::new(),
             managed_ssh_keys: Vec::new(),
             serial_profiles: Vec::new(),
+            local_privilege_credentials: Vec::new(),
         }
     }
 }

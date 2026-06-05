@@ -58,6 +58,8 @@ import { api } from '@/lib/api';
 import { detectPrivilegePrompt, findPrivilegeCredentialsForPrompt } from '@/lib/privilegePromptHelper';
 import type { SavedPrivilegeCredential } from '@/types';
 
+const LOCAL_SHELL_PRIVILEGE_CONNECTION_ID = 'local-shell:default';
+
 type TerminalCommandBarProps = {
   paneId: string;
   sessionId: string;
@@ -65,6 +67,7 @@ type TerminalCommandBarProps = {
   terminalType: TerminalCommandBarTerminalType;
   nodeId?: string | null;
   connectionId?: string | null;
+  privilegeConnectionId?: string | null;
   isActive: boolean;
   sendInput: (input: string) => void;
   readVisibleBuffer?: () => string;
@@ -81,6 +84,7 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
     terminalType,
     nodeId,
     connectionId,
+    privilegeConnectionId,
     isActive,
     sendInput,
     readVisibleBuffer,
@@ -111,6 +115,9 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
   const hydrateQuickCommands = useQuickCommandsStore((s) => s.hydrate);
   const { confirm, ConfirmDialog } = useConfirm();
   const openConnectionEditor = useAppStore((s) => s.openConnectionEditor);
+  const privilegeScopeId = privilegeConnectionId
+    ?? connectionId
+    ?? (terminalType === 'local_terminal' ? LOCAL_SHELL_PRIVILEGE_CONNECTION_ID : null);
 
   const placeholder = t('terminal.command_bar.command_placeholder');
   const detectedPrivilegePrompt = useMemo(
@@ -138,13 +145,13 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
   }, [hydrateQuickCommands, quickCommandSettings.quickCommandsEnabled]);
 
   useEffect(() => {
-    if (!isActive || !connectionId) {
+    if (!isActive || !privilegeScopeId) {
       setPrivilegeCredentials([]);
       return;
     }
 
     let cancelled = false;
-    api.listPrivilegeCredentials(connectionId)
+    api.listPrivilegeCredentials(privilegeScopeId)
       .then((credentials) => {
         if (!cancelled) setPrivilegeCredentials(credentials);
       })
@@ -157,10 +164,10 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
     return () => {
       cancelled = true;
     };
-  }, [connectionId, isActive]);
+  }, [isActive, privilegeScopeId]);
 
   useEffect(() => {
-    if (!isActive || !connectionId || !readVisibleBuffer) {
+    if (!isActive || !privilegeScopeId || !readVisibleBuffer) {
       setPrivilegeBufferSnapshot('');
       return;
     }
@@ -179,15 +186,15 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
     refresh();
     const intervalId = window.setInterval(refresh, 500);
     return () => window.clearInterval(intervalId);
-  }, [connectionId, isActive, readVisibleBuffer]);
+  }, [isActive, privilegeScopeId, readVisibleBuffer]);
 
   const handlePrivilegeFill = useCallback(async (credential: SavedPrivilegeCredential) => {
-    if (!connectionId || !sendPrivilegeInput) return;
+    if (!privilegeScopeId || !sendPrivilegeInput) return;
 
     setPrivilegeFillLoading(true);
     try {
       const secret = await api.getPrivilegeCredentialSecret(
-        connectionId,
+        privilegeScopeId,
         credential.id,
       );
       // Privilege helper secrets intentionally bypass the command draft,
@@ -214,13 +221,21 @@ export const TerminalCommandBar: React.FC<TerminalCommandBarProps> = (props) => 
     } finally {
       setPrivilegeFillLoading(false);
     }
-  }, [connectionId, focusTerminal, sendPrivilegeInput, t]);
+  }, [focusTerminal, privilegeScopeId, sendPrivilegeInput, t]);
 
   const handlePrivilegeManage = useCallback(() => {
-    if (!connectionId) return;
+    if (!privilegeScopeId) return;
+    if (privilegeScopeId === LOCAL_SHELL_PRIVILEGE_CONNECTION_ID) {
+      useAppStore.getState().createTab('settings');
+      window.dispatchEvent(new CustomEvent('oxideterm:open-settings-tab', {
+        detail: { tab: 'local', section: 'privilege-credentials' },
+      }));
+      return;
+    }
+    const connectionId = privilegeScopeId;
     openConnectionEditor(connectionId);
     focusTerminal();
-  }, [connectionId, focusTerminal, openConnectionEditor]);
+  }, [focusTerminal, openConnectionEditor, privilegeScopeId, t]);
 
   const runCommand = useCallback(async (command: string) => {
     const risk = classifyCommandRisk(command);

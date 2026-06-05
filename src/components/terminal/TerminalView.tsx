@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -527,6 +527,27 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // Subscribe to session changes (including ws_url updates after reconnect)
   const session = useAppStore((state) => state.sessions.get(sessionId));
+  const terminalTreeNode = useSessionTreeStore(s => (
+    nodeId ? s.nodes.find((candidate) => candidate.id === nodeId) : undefined
+  ));
+  const savedConnections = useAppStore((state) => state.savedConnections);
+  const privilegeConnectionId = useMemo(() => {
+    if (!terminalTreeNode) return null;
+    const candidates = savedConnections.filter((connection) => (
+      connection.host === terminalTreeNode.host
+      && connection.port === terminalTreeNode.port
+      && connection.username === terminalTreeNode.username
+    ));
+    const title = terminalTreeNode.displayName ?? session?.name ?? null;
+    if (title) {
+      const named = candidates.find((connection) => connection.name === title);
+      if (named) return named.id;
+    }
+    // Privilege helper secrets must target a saved connection. When the
+    // runtime node did not carry that id, only recover it from a unique config
+    // match; duplicate aliases intentionally fall back to no owner.
+    return candidates.length === 1 ? candidates[0].id : null;
+  }, [savedConnections, session?.name, terminalTreeNode]);
   const sessionRef = useRef<SessionInfo | undefined>(session);
   const connectionIdRef = useRef<string | null>(session?.connectionId ?? null);
   const terminalSessionRehydrateRef = useRef<string | null>(null);
@@ -3354,6 +3375,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
            terminalType="terminal"
            nodeId={nodeId}
            connectionId={session?.connectionId ?? null}
+           privilegeConnectionId={privilegeConnectionId}
            isActive={isActive}
            sendInput={sendCommandBarInput}
            readVisibleBuffer={getVisibleBuffer}

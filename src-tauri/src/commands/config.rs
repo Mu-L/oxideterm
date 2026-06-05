@@ -12,7 +12,8 @@ use crate::config::connection_import::{
     ImportedProxyHopDraft,
 };
 use crate::config::types::{
-    ManagedSshKey, ManagedSshKeyOrigin, PrivilegeCredentialKind, SavedPrivilegeCredential,
+    LOCAL_SHELL_PRIVILEGE_CONNECTION_ID, ManagedSshKey, ManagedSshKeyOrigin,
+    PrivilegeCredentialKind, SavedPrivilegeCredential,
 };
 use crate::config::types::{SerialFlowControl, SerialParity, SerialProfile};
 use crate::config::{
@@ -309,7 +310,10 @@ impl ConfigState {
             ),
             keychain: Keychain::new(),
             managed_keychain: Keychain::with_service(MANAGED_SSH_KEYCHAIN_SERVICE),
-            privilege_keychain: Keychain::with_service(PRIVILEGE_CREDENTIAL_KEYCHAIN_SERVICE),
+            privilege_keychain: Keychain::with_biometrics_reason(
+                PRIVILEGE_CREDENTIAL_KEYCHAIN_SERVICE,
+                "OxideTerm needs to access your privilege helper credential",
+            ),
             ai_keychain: Keychain::with_biometrics(AI_KEYCHAIN_SERVICE),
             api_key_cache: RwLock::new(HashMap::new()),
             ai_providers: RwLock::new((Vec::new(), None)),
@@ -1291,7 +1295,61 @@ fn privilege_keychain_id(connection_id: &str, credential_id: &str) -> String {
     format!("privilege:v1:{connection_id}:{credential_id}")
 }
 
+fn privilege_credentials_for_scope<'a>(
+    config: &'a ConfigFile,
+    connection_id: &str,
+) -> Result<&'a Vec<SavedPrivilegeCredential>, String> {
+    if connection_id == LOCAL_SHELL_PRIVILEGE_CONNECTION_ID {
+        // Local shell credentials are app-scoped because there is no
+        // SavedConnection row for a local PTY. Secret values still live only in
+        // the dedicated privilege keychain service.
+        return Ok(&config.local_privilege_credentials);
+    }
+    config
+        .get_connection(connection_id)
+        .map(|connection| &connection.privilege_credentials)
+        .ok_or("Connection not found".to_string())
+}
+
+fn privilege_credentials_for_scope_mut<'a>(
+    config: &'a mut ConfigFile,
+    connection_id: &str,
+) -> Result<&'a mut Vec<SavedPrivilegeCredential>, String> {
+    if connection_id == LOCAL_SHELL_PRIVILEGE_CONNECTION_ID {
+        // Keep local shell sudo/su metadata separate from SSH saved connection
+        // metadata so no SSH password can be selected by accident.
+        return Ok(&mut config.local_privilege_credentials);
+    }
+    config
+        .connections
+        .iter_mut()
+        .find(|conn| conn.id == connection_id)
+        .map(|connection| &mut connection.privilege_credentials)
+        .ok_or("Connection not found".to_string())
+}
+
 fn default_privilege_prompt_patterns(kind: PrivilegeCredentialKind) -> Vec<String> {
+    match kind {
+        PrivilegeCredentialKind::SudoPassword => {
+            vec![
+                "[sudo]".to_string(),
+                "password for".to_string(),
+                "的密码".to_string(),
+                "sudo password".to_string(),
+            ]
+        }
+        PrivilegeCredentialKind::SuPassword => {
+            vec![
+                "su: password".to_string(),
+                "password:".to_string(),
+                "密码：".to_string(),
+            ]
+        }
+        PrivilegeCredentialKind::CustomPrompt => Vec::new(),
+    }
+}
+
+fn legacy_privilege_prompt_patterns(kind: PrivilegeCredentialKind) -> Vec<String> {
     match kind {
         PrivilegeCredentialKind::SudoPassword => {
             vec![
@@ -1304,6 +1362,36 @@ fn default_privilege_prompt_patterns(kind: PrivilegeCredentialKind) -> Vec<Strin
         }
         PrivilegeCredentialKind::CustomPrompt => Vec::new(),
     }
+}
+
+fn normalize_privilege_prompt_patterns(
+    kind: PrivilegeCredentialKind,
+    patterns: Vec<String>,
+) -> Vec<String> {
+    let patterns = patterns
+        .into_iter()
+        .map(|pattern| pattern.trim().to_string())
+        .filter(|pattern| !pattern.is_empty())
+        .collect::<Vec<_>>();
+    if patterns.is_empty() {
+        return default_privilege_prompt_patterns(kind);
+    }
+    // Only the generated legacy defaults are upgraded automatically. Real
+    // custom fragments must stay exactly under user control.
+    if kind != PrivilegeCredentialKind::CustomPrompt
+        && patterns == legacy_privilege_prompt_patterns(kind)
+    {
+        return default_privilege_prompt_patterns(kind);
+    }
+    patterns
+}
+
+fn normalize_saved_privilege_credential_for_display(
+    mut credential: SavedPrivilegeCredential,
+) -> SavedPrivilegeCredential {
+    credential.prompt_patterns =
+        normalize_privilege_prompt_patterns(credential.kind, credential.prompt_patterns);
+    credential
 }
 
 impl From<&SavedConnection> for ConnectionInfo {
@@ -2944,6 +3032,51 @@ mod tests {
     }
 
     #[test]
+    fn sudo_privilege_defaults_are_generic_and_localized() {
+        assert_eq!(
+            default_privilege_prompt_patterns(PrivilegeCredentialKind::SudoPassword),
+            vec![
+                "[sudo]".to_string(),
+                "password for".to_string(),
+                "的密码".to_string(),
+                "sudo password".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn legacy_sudo_privilege_defaults_are_displayed_as_current_defaults() {
+        let now = Utc::now();
+        let credential =
+            normalize_saved_privilege_credential_for_display(SavedPrivilegeCredential {
+                id: "cred-legacy".to_string(),
+                connection_id: "conn-1".to_string(),
+                label: "sudo".to_string(),
+                kind: PrivilegeCredentialKind::SudoPassword,
+                username_hint: None,
+                prompt_patterns: vec![
+                    "[sudo] password for".to_string(),
+                    "sudo password".to_string(),
+                ],
+                keychain_id: None,
+                enabled: true,
+                require_click_to_send: true,
+                created_at: now,
+                updated_at: now,
+            });
+
+        assert_eq!(
+            credential.prompt_patterns,
+            vec![
+                "[sudo]".to_string(),
+                "password for".to_string(),
+                "的密码".to_string(),
+                "sudo password".to_string()
+            ]
+        );
+    }
+
+    #[test]
     fn build_saved_auth_for_update_preserves_key_passphrase_for_unchanged_key_path() {
         let existing = SavedAuth::Key {
             key_path: "/tmp/id_ed25519".to_string(),
@@ -3988,10 +4121,11 @@ pub async fn list_privilege_credentials(
     connection_id: String,
 ) -> Result<Vec<SavedPrivilegeCredential>, String> {
     let config = state.config.read();
-    let conn = config
-        .get_connection(&connection_id)
-        .ok_or("Connection not found")?;
-    Ok(conn.privilege_credentials.clone())
+    Ok(privilege_credentials_for_scope(&config, &connection_id)?
+        .iter()
+        .cloned()
+        .map(normalize_saved_privilege_credential_for_display)
+        .collect())
 }
 
 /// Save sudo/su helper metadata and optionally replace its keychain secret.
@@ -4032,26 +4166,13 @@ pub async fn save_privilege_credential(
 
     let credential = {
         let mut config = state.config.write();
-        let conn = config
-            .connections
-            .iter_mut()
-            .find(|conn| conn.id == connection_id)
-            .ok_or("Connection not found")?;
-        let existing = conn
-            .privilege_credentials
+        let credentials = privilege_credentials_for_scope_mut(&mut config, connection_id)?;
+        let existing = credentials
             .iter()
             .find(|credential| credential.id == credential_id)
             .cloned();
-        let prompt_patterns = if request.prompt_patterns.is_empty() {
-            default_privilege_prompt_patterns(request.kind)
-        } else {
-            request
-                .prompt_patterns
-                .into_iter()
-                .map(|pattern| pattern.trim().to_string())
-                .filter(|pattern| !pattern.is_empty())
-                .collect()
-        };
+        let prompt_patterns =
+            normalize_privilege_prompt_patterns(request.kind, request.prompt_patterns);
         let keychain_id = if request.secret.is_some() {
             Some(keychain_id.clone())
         } else {
@@ -4080,14 +4201,13 @@ pub async fn save_privilege_credential(
                 .unwrap_or(now),
             updated_at: now,
         };
-        if let Some(index) = conn
-            .privilege_credentials
+        if let Some(index) = credentials
             .iter()
             .position(|candidate| candidate.id == credential_id)
         {
-            conn.privilege_credentials[index] = credential.clone();
+            credentials[index] = credential.clone();
         } else {
-            conn.privilege_credentials.push(credential.clone());
+            credentials.push(credential.clone());
         }
         credential
     };
@@ -4105,15 +4225,10 @@ pub async fn delete_privilege_credential(
     state.ensure_ready()?;
     let removed = {
         let mut config = state.config.write();
-        let conn = config
-            .connections
-            .iter_mut()
-            .find(|conn| conn.id == connection_id)
-            .ok_or("Connection not found")?;
-        let before = conn.privilege_credentials.len();
-        conn.privilege_credentials
-            .retain(|credential| credential.id != credential_id);
-        before != conn.privilege_credentials.len()
+        let credentials = privilege_credentials_for_scope_mut(&mut config, &connection_id)?;
+        let before = credentials.len();
+        credentials.retain(|credential| credential.id != credential_id);
+        before != credentials.len()
     };
     if removed {
         let keychain_id = privilege_keychain_id(&connection_id, &credential_id);
@@ -4132,11 +4247,7 @@ pub async fn get_privilege_credential_secret(
 ) -> Result<String, String> {
     let keychain_id = {
         let config = state.config.read();
-        let conn = config
-            .get_connection(&connection_id)
-            .ok_or("Connection not found")?;
-        let credential = conn
-            .privilege_credentials
+        let credential = privilege_credentials_for_scope(&config, &connection_id)?
             .iter()
             .find(|credential| credential.id == credential_id)
             .ok_or("Privilege credential not found")?;

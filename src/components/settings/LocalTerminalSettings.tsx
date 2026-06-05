@@ -1,19 +1,43 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { KeyRound, Plus, Save as SaveIcon, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { api } from '@/lib/api';
 import { platform } from '@/lib/platform';
 import { useLocalTerminalStore } from '@/store/localTerminalStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { ShellInfo } from '@/types';
+import type { PrivilegeCredentialKind, SavedPrivilegeCredential, ShellInfo } from '@/types';
 
 const GIT_BASH_ID = 'git-bash';
+const LOCAL_SHELL_PRIVILEGE_CONNECTION_ID = 'local-shell:default';
+
+type PrivilegeCredentialDraft = {
+    credentialId: string | null;
+    label: string;
+    kind: PrivilegeCredentialKind;
+    usernameHint: string;
+    promptPatterns: string;
+    secret: string;
+    enabled: boolean;
+};
+
+const EMPTY_PRIVILEGE_DRAFT: PrivilegeCredentialDraft = {
+    credentialId: null,
+    label: '',
+    kind: 'sudo_password',
+    usernameHint: '',
+    promptPatterns: '',
+    secret: '',
+    enabled: true,
+};
 
 function withGitBashOverride(shells: ShellInfo[], gitBashPath: string | null | undefined): ShellInfo[] {
     const path = gitBashPath?.trim();
@@ -35,6 +59,11 @@ export const LocalTerminalSettings = () => {
     const { shells, loadShells, shellsLoaded } = useLocalTerminalStore();
     const { settings, updateLocalTerminal } = useSettingsStore();
     const localSettings = settings.localTerminal;
+    const [privilegeCredentials, setPrivilegeCredentials] = useState<SavedPrivilegeCredential[]>([]);
+    const [privilegeDraft, setPrivilegeDraft] = useState<PrivilegeCredentialDraft>(EMPTY_PRIVILEGE_DRAFT);
+    const [privilegeSaving, setPrivilegeSaving] = useState(false);
+    const [privilegeError, setPrivilegeError] = useState('');
+    const privilegeSectionRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (!shellsLoaded) {
@@ -46,6 +75,107 @@ export const LocalTerminalSettings = () => {
     const effectiveShells = withGitBashOverride(shells, localSettings?.gitBashPath);
     const defaultShell = effectiveShells.find((shell) => shell.id === defaultShellId) || effectiveShells[0];
 
+    useEffect(() => {
+        let cancelled = false;
+        api.listPrivilegeCredentials(LOCAL_SHELL_PRIVILEGE_CONNECTION_ID)
+            .then((credentials) => {
+                if (!cancelled) setPrivilegeCredentials(credentials);
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    console.error('[LocalTerminalSettings] Failed to load local privilege credentials:', error);
+                    setPrivilegeCredentials([]);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleFocusSettingsSection = (event: Event) => {
+            const detail = (event as CustomEvent<{ tab?: string; section?: string }>).detail;
+            if (detail?.tab !== 'local' || detail.section !== 'privilege-credentials') {
+                return;
+            }
+            privilegeSectionRef.current?.scrollIntoView({ block: 'center' });
+        };
+        window.addEventListener('oxideterm:focus-settings-section', handleFocusSettingsSection);
+        return () => window.removeEventListener('oxideterm:focus-settings-section', handleFocusSettingsSection);
+    }, []);
+
+    const resetPrivilegeDraft = () => {
+        setPrivilegeDraft(EMPTY_PRIVILEGE_DRAFT);
+        setPrivilegeError('');
+    };
+
+    const startEditPrivilegeCredential = (credential: SavedPrivilegeCredential) => {
+        setPrivilegeDraft({
+            credentialId: credential.id,
+            label: credential.label,
+            kind: credential.kind,
+            usernameHint: credential.username_hint ?? '',
+            promptPatterns: credential.prompt_patterns.join('\n'),
+            secret: '',
+            enabled: credential.enabled,
+        });
+        setPrivilegeError('');
+    };
+
+    const handleSavePrivilegeCredential = async () => {
+        const label = privilegeDraft.label.trim();
+        if (!label) return;
+
+        setPrivilegeSaving(true);
+        setPrivilegeError('');
+        try {
+            // Local shell credentials have no SSH connection owner. They use a
+            // dedicated scope so local sudo/su secrets cannot be confused with
+            // saved connection authentication material.
+            const saved = await api.savePrivilegeCredential({
+                connectionId: LOCAL_SHELL_PRIVILEGE_CONNECTION_ID,
+                credentialId: privilegeDraft.credentialId,
+                label,
+                kind: privilegeDraft.kind,
+                usernameHint: privilegeDraft.usernameHint.trim() || null,
+                promptPatterns: privilegeDraft.promptPatterns
+                    .split(/\r?\n/)
+                    .map((pattern) => pattern.trim())
+                    .filter(Boolean),
+                secret: privilegeDraft.secret || null,
+                enabled: privilegeDraft.enabled,
+                requireClickToSend: true,
+            });
+            setPrivilegeCredentials((current) => {
+                const index = current.findIndex((candidate) => candidate.id === saved.id);
+                if (index === -1) return [...current, saved];
+                const next = [...current];
+                next[index] = saved;
+                return next;
+            });
+            resetPrivilegeDraft();
+        } catch (error) {
+            console.error('[LocalTerminalSettings] Failed to save local privilege credential:', error);
+            setPrivilegeError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setPrivilegeSaving(false);
+        }
+    };
+
+    const handleDeletePrivilegeCredential = async (credential: SavedPrivilegeCredential) => {
+        setPrivilegeError('');
+        try {
+            await api.deletePrivilegeCredential(LOCAL_SHELL_PRIVILEGE_CONNECTION_ID, credential.id);
+            setPrivilegeCredentials((current) => current.filter((candidate) => candidate.id !== credential.id));
+            if (privilegeDraft.credentialId === credential.id) {
+                resetPrivilegeDraft();
+            }
+        } catch (error) {
+            console.error('[LocalTerminalSettings] Failed to delete local privilege credential:', error);
+            setPrivilegeError(error instanceof Error ? error.message : String(error));
+        }
+    };
+
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div>
@@ -54,7 +184,10 @@ export const LocalTerminalSettings = () => {
             </div>
             <Separator />
 
-            <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
+            <div
+                ref={privilegeSectionRef}
+                className="rounded-lg border border-theme-border bg-theme-bg-card p-5"
+            >
                 <h4 className="text-sm font-medium text-theme-text mb-4 uppercase tracking-wider">{t('settings_view.local_terminal.shell')}</h4>
                 <div className="space-y-5">
                     <div className="flex items-center justify-between">
@@ -132,6 +265,170 @@ export const LocalTerminalSettings = () => {
                             checked={localSettings?.loadShellProfile ?? true}
                             onCheckedChange={(checked) => updateLocalTerminal('loadShellProfile', checked === true)}
                         />
+                    </div>
+                </div>
+            </div>
+
+            <div className="rounded-lg border border-theme-border bg-theme-bg-card p-5">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                    <div>
+                        <h4 className="flex items-center gap-2 text-sm font-medium text-theme-text uppercase tracking-wider">
+                            <KeyRound className="h-4 w-4 text-theme-text-muted" />
+                            {t('settings_view.local_terminal.privilege_credentials')}
+                        </h4>
+                        <p className="mt-1 text-xs text-theme-text-muted">
+                            {t('settings_view.local_terminal.privilege_credentials_hint')}
+                        </p>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={resetPrivilegeDraft}
+                        className="gap-1"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        {t('sessionManager.privilege_credentials.new')}
+                    </Button>
+                </div>
+
+                <div className="space-y-2">
+                    {privilegeCredentials.length === 0 ? (
+                        <p className="rounded-md border border-dashed border-theme-border/50 px-3 py-2 text-xs text-theme-text-muted">
+                            {t('sessionManager.privilege_credentials.empty')}
+                        </p>
+                    ) : (
+                        privilegeCredentials.map((credential) => (
+                            <div key={credential.id} className="flex items-center gap-2 rounded-md border border-theme-border/50 bg-theme-bg-panel/30 px-2 py-1.5">
+                                <KeyRound className="h-4 w-4 flex-shrink-0 text-amber-300" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm text-theme-text">{credential.label}</p>
+                                    <p className="truncate text-xs text-theme-text-muted">
+                                        {t(`sessionManager.privilege_credentials.kind.${credential.kind}`)}
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => startEditPrivilegeCredential(credential)}
+                                >
+                                    {t('sessionManager.privilege_credentials.edit')}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    radius="sm"
+                                    onClick={() => void handleDeletePrivilegeCredential(credential)}
+                                    aria-label={t('sessionManager.privilege_credentials.delete')}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                <div className="mt-3 grid gap-3 rounded-md border border-theme-border/50 bg-theme-bg/50 p-3">
+                    <div className="grid gap-2">
+                        <Label htmlFor="local-privilege-label">{t('sessionManager.privilege_credentials.label')}</Label>
+                        <Input
+                            id="local-privilege-label"
+                            value={privilegeDraft.label}
+                            onChange={(event) => setPrivilegeDraft((draft) => ({ ...draft, label: event.target.value }))}
+                            placeholder={t('sessionManager.privilege_credentials.label_placeholder')}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-2">
+                            <Label>{t('sessionManager.privilege_credentials.kind_label')}</Label>
+                            <Select
+                                value={privilegeDraft.kind}
+                                onValueChange={(value) => setPrivilegeDraft((draft) => ({
+                                    ...draft,
+                                    kind: value as PrivilegeCredentialKind,
+                                }))}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="sudo_password">{t('sessionManager.privilege_credentials.kind.sudo_password')}</SelectItem>
+                                    <SelectItem value="su_password">{t('sessionManager.privilege_credentials.kind.su_password')}</SelectItem>
+                                    <SelectItem value="custom_prompt">{t('sessionManager.privilege_credentials.kind.custom_prompt')}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="local-privilege-username">{t('sessionManager.privilege_credentials.username_hint')}</Label>
+                            <Input
+                                id="local-privilege-username"
+                                value={privilegeDraft.usernameHint}
+                                onChange={(event) => setPrivilegeDraft((draft) => ({ ...draft, usernameHint: event.target.value }))}
+                                placeholder={t('settings_view.local_terminal.privilege_username_placeholder')}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="local-privilege-secret">{t('sessionManager.privilege_credentials.secret')}</Label>
+                        <Input
+                            id="local-privilege-secret"
+                            type="password"
+                            value={privilegeDraft.secret}
+                            onChange={(event) => setPrivilegeDraft((draft) => ({ ...draft, secret: event.target.value }))}
+                            placeholder={privilegeDraft.credentialId
+                                ? t('sessionManager.privilege_credentials.secret_keep_placeholder')
+                                : t('sessionManager.privilege_credentials.secret_placeholder')}
+                        />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="local-privilege-patterns">{t('sessionManager.privilege_credentials.prompt_patterns')}</Label>
+                        <textarea
+                            id="local-privilege-patterns"
+                            value={privilegeDraft.promptPatterns}
+                            onChange={(event) => setPrivilegeDraft((draft) => ({ ...draft, promptPatterns: event.target.value }))}
+                            placeholder={t('sessionManager.privilege_credentials.prompt_patterns_placeholder')}
+                            className="min-h-20 resize-y rounded-md border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-text outline-none placeholder:text-theme-text-muted focus:border-theme-accent/60"
+                        />
+                        <p className="text-xs text-theme-text-muted">
+                            {t('sessionManager.privilege_credentials.prompt_patterns_hint')}
+                        </p>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-sm text-theme-text">
+                        <Checkbox
+                            checked={privilegeDraft.enabled}
+                            onCheckedChange={(checked) => setPrivilegeDraft((draft) => ({ ...draft, enabled: checked === true }))}
+                        />
+                        {t('sessionManager.privilege_credentials.enabled')}
+                    </label>
+
+                    {privilegeError && (
+                        <p className="text-xs text-theme-error">{privilegeError}</p>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                        {privilegeDraft.credentialId && (
+                            <Button type="button" variant="ghost" size="sm" onClick={resetPrivilegeDraft}>
+                                {t('sessionManager.privilege_credentials.cancel_edit')}
+                            </Button>
+                        )}
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void handleSavePrivilegeCredential()}
+                            disabled={privilegeSaving || !privilegeDraft.label.trim()}
+                            className="gap-1"
+                        >
+                            <SaveIcon className="h-3.5 w-3.5" />
+                            {privilegeSaving
+                                ? t('sessionManager.privilege_credentials.saving')
+                                : t('sessionManager.privilege_credentials.save')}
+                        </Button>
                     </div>
                 </div>
             </div>

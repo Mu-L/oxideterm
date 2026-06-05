@@ -141,6 +141,7 @@ const apiMock = vi.hoisted(() => ({
 }));
 const appStoreMock = vi.hoisted(() => ({
   openConnectionEditor: vi.fn(),
+  createTab: vi.fn(),
   splitPane: vi.fn(),
   getPaneCount: vi.fn(() => 1),
 }));
@@ -158,16 +159,22 @@ vi.mock('@/lib/terminalRegistry', () => ({
 }));
 
 vi.mock('@/store/appStore', () => ({
-  useAppStore: (selector?: (state: unknown) => unknown) => {
+  useAppStore: Object.assign((selector?: (state: unknown) => unknown) => {
     const state = {
     sessions: new Map(),
     tabs: [{ id: 'tab-1' }],
       splitPane: appStoreMock.splitPane,
       getPaneCount: appStoreMock.getPaneCount,
       openConnectionEditor: appStoreMock.openConnectionEditor,
+      createTab: appStoreMock.createTab,
     };
     return selector ? selector(state) : state;
-  },
+  }, {
+    getState: () => ({
+      createTab: appStoreMock.createTab,
+      openConnectionEditor: appStoreMock.openConnectionEditor,
+    }),
+  }),
 }));
 
 vi.mock('@/store/broadcastStore', () => ({
@@ -234,6 +241,7 @@ describe('TerminalCommandBar', () => {
     apiMock.getPrivilegeCredentialSecret.mockReset();
     apiMock.getPrivilegeCredentialSecret.mockResolvedValue('sudo-secret');
     appStoreMock.openConnectionEditor.mockReset();
+    appStoreMock.createTab.mockReset();
   });
 
   it('keeps the popup closed while typing until the user explicitly opens suggestions', () => {
@@ -591,6 +599,35 @@ describe('TerminalCommandBar', () => {
     expect(apiMock.getPrivilegeCredentialSecret).not.toHaveBeenCalled();
   });
 
+  it('opens local settings for local shell privilege credential management', async () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+
+    render(
+      <TerminalCommandBar
+        paneId="pane-1"
+        sessionId="session-1"
+        tabId="tab-1"
+        terminalType="local_terminal"
+        connectionId={null}
+        isActive
+        sendInput={vi.fn()}
+        readVisibleBuffer={() => '[sudo] password for tester:'}
+        sendPrivilegeInput={vi.fn()}
+        focusTerminal={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByText('terminal.privilege_helper.manage'));
+
+    expect(appStoreMock.createTab).toHaveBeenCalledWith('settings');
+    expect(appStoreMock.openConnectionEditor).not.toHaveBeenCalled();
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'oxideterm:open-settings-tab',
+      detail: { tab: 'local', section: 'privilege-credentials' },
+    }));
+    dispatchSpy.mockRestore();
+  });
+
   it('renders one fill chip per matching privilege credential', async () => {
     const now = new Date().toISOString();
     apiMock.listPrivilegeCredentials.mockResolvedValue([
@@ -638,5 +675,74 @@ describe('TerminalCommandBar', () => {
     );
 
     expect(await screen.findAllByText('terminal.privilege_helper.fill')).toHaveLength(2);
+  });
+
+  it('uses saved connection owner for remote privilege credential management', async () => {
+    apiMock.listPrivilegeCredentials.mockResolvedValue([]);
+
+    render(
+      <TerminalCommandBar
+        paneId="pane-1"
+        sessionId="session-1"
+        tabId="tab-1"
+        terminalType="terminal"
+        connectionId="runtime-connection-1"
+        privilegeConnectionId="saved-connection-1"
+        isActive
+        sendInput={vi.fn()}
+        readVisibleBuffer={() => '[sudo] password for tester:'}
+        sendPrivilegeInput={vi.fn()}
+        focusTerminal={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByText('terminal.privilege_helper.manage'));
+
+    await waitFor(() => {
+      expect(apiMock.listPrivilegeCredentials).toHaveBeenCalledWith('saved-connection-1');
+      expect(appStoreMock.openConnectionEditor).toHaveBeenCalledWith('saved-connection-1');
+      expect(appStoreMock.openConnectionEditor).not.toHaveBeenCalledWith('runtime-connection-1');
+    });
+  });
+
+  it('fills local shell privilege prompts through the local credential scope', async () => {
+    apiMock.listPrivilegeCredentials.mockResolvedValue([{
+      id: 'local-sudo',
+      connection_id: 'local-shell:default',
+      label: 'local sudo',
+      kind: 'sudo_password',
+      username_hint: 'tester',
+      prompt_patterns: [],
+      keychain_id: 'local-privilege-key',
+      enabled: true,
+      require_click_to_send: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }]);
+    const sendPrivilegeInput = vi.fn(() => true);
+
+    render(
+      <TerminalCommandBar
+        paneId="pane-1"
+        sessionId="session-1"
+        tabId="tab-1"
+        terminalType="local_terminal"
+        connectionId={null}
+        isActive
+        sendInput={vi.fn()}
+        readVisibleBuffer={() => '[sudo] password for tester:'}
+        sendPrivilegeInput={sendPrivilegeInput}
+        focusTerminal={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByText('terminal.privilege_helper.fill'));
+
+    await waitFor(() => {
+      expect(apiMock.listPrivilegeCredentials).toHaveBeenCalledWith('local-shell:default');
+      expect(apiMock.getPrivilegeCredentialSecret)
+        .toHaveBeenCalledWith('local-shell:default', 'local-sudo');
+      expect(sendPrivilegeInput).toHaveBeenCalledWith('sudo-secret\n');
+    });
   });
 });

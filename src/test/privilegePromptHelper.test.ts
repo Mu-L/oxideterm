@@ -26,6 +26,18 @@ describe('detectPrivilegePrompt', () => {
     });
   });
 
+  it('detects localized sudo prompts after retry output', () => {
+    expect(
+      detectPrivilegePrompt(
+        'sudo yazi\n[sudo] lipsc 的密码:\n对不起，请重试。\n[sudo] lipsc 的密码:',
+      ),
+    ).toEqual({
+      kind: 'sudo_password',
+      username: 'lipsc',
+      promptText: '[sudo] lipsc 的密码:',
+    });
+  });
+
   it('detects su prompts with explicit su prefix', () => {
     expect(detectPrivilegePrompt('su - root\nsu: Password:')).toEqual({
       kind: 'su_password',

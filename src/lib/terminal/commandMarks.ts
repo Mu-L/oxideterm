@@ -909,6 +909,12 @@ export function selectTerminalCommandMark(term: Terminal, paneId: string, comman
 }
 
 function selectTerminalCommandMarkRecord(term: Terminal, paneId: string, mark: TerminalCommandMark): boolean {
+  // A second click on the same mark should dismiss the lightweight selection overlay.
+  if (selectedMarkByPane.get(paneId) === mark.commandId) {
+    clearTerminalCommandMarkSelection(paneId);
+    return true;
+  }
+
   clearSelectionDecorations(paneId);
   selectedMarkByPane.delete(paneId);
   const overlay = createSelectionOverlay(term, paneId, mark);

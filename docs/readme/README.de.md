@@ -478,7 +478,7 @@ Gemessen mit `tokei`, ohne Abhängigkeiten und Build-Artefakte.
 
 ## Support und Wartung
 
-OxideTerm wird von einem einzelnen Entwickler nach dem **Best-Effort-Prinzip** gepflegt. Fehlerberichte und reproduzierbare Regressionen haben Priorität; Feature-Anfragen sind willkommen, werden aber nicht immer umgesetzt.
+Fehlerberichte und reproduzierbare Regressionen haben Priorität. Feature-Anfragen werden nach Umfang, Sicherheit und Ausrichtung auf OxideTerms Remote-Server-Workspace-Richtung bewertet.
 
 Wenn OxideTerm Ihren Workflow verbessert, helfen ein GitHub-Stern, eine Issue-Reproduktion, eine Übersetzungskorrektur, ein Plugin oder ein Pull Request dabei, das Projekt voranzubringen.
 

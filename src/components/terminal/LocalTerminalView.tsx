@@ -760,6 +760,7 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
 
     // Detect mouse tracking mode changes (tmux, vim, etc.)
     let prevMouseTracking = false;
+    let prevAlternateBuffer = term.buffer.active.type === 'alternate';
     term.onWriteParsed(() => {
       const active = term.modes.mouseTrackingMode !== 'none';
       if (active !== prevMouseTracking) {
@@ -769,6 +770,12 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
           closeTerminalCommandMarks(effectivePaneId, 'interrupted_mode', 'unknown', true);
         }
       }
+      const alternateBuffer = term.buffer.active.type === 'alternate';
+      // Alternate-screen apps own the visible surface, so stale mark overlays must leave.
+      if (alternateBuffer && !prevAlternateBuffer) {
+        clearTerminalCommandMarkSelection(effectivePaneId);
+      }
+      prevAlternateBuffer = alternateBuffer;
       notifyTerminalOutput(sessionId);
     });
 
@@ -1764,7 +1771,11 @@ export const LocalTerminalView: React.FC<LocalTerminalViewProps> = ({
     if (event.button !== 0) return;
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
     const selection = term.getSelection();
-    if (term.buffer.active.type === 'alternate' || (selection && selection !== start.selection)) return;
+    if (term.buffer.active.type === 'alternate' || (selection && selection !== start.selection)) {
+      // TUI or browser text selection has taken ownership of the click surface.
+      clearTerminalCommandMarkSelection(effectivePaneId);
+      return;
+    }
     const line = getTerminalAbsoluteLineFromClientY(term, container, event.clientY);
     if (line === null) {
       clearTerminalCommandMarkSelection(effectivePaneId);

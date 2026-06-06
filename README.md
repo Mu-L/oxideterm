@@ -478,7 +478,7 @@ Measured with `tokei`, excluding dependencies and build artifacts.
 
 ## Support and Maintenance
 
-OxideTerm is maintained on a **best-effort basis** by a solo developer. Bug reports and reproducible regressions are prioritized; feature requests are welcome, but may not always be implemented.
+Reproducible bug reports and regressions are prioritized. Feature requests are reviewed based on scope, safety, and alignment with OxideTerm's remote-server workspace direction.
 
 <p align="center">
   <a href="https://github.com/AnalyseDeCircuit/oxideterm/stargazers">

@@ -478,7 +478,7 @@ Misurato con `tokei`, escludendo dipendenze e artefatti di build.
 
 ## Supporto e manutenzione
 
-OxideTerm è mantenuto da un singolo sviluppatore con il **massimo impegno possibile**. Le segnalazioni di bug e le regressioni riproducibili hanno la priorità; le richieste di funzionalità sono benvenute, ma non sempre verranno implementate.
+Le segnalazioni di bug e le regressioni riproducibili hanno la priorità. Le richieste di funzionalità vengono valutate in base ad ambito, sicurezza e allineamento con la direzione di OxideTerm per il workspace dei server remoti.
 
 Se OxideTerm aiuta il tuo workflow, una stella su GitHub, una riproduzione di issue, una correzione di traduzione, un plugin o una pull request aiutano il progetto ad andare avanti.
 

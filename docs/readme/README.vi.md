@@ -478,7 +478,7 @@ pnpm run tauri build
 
 ## Hỗ trợ và bảo trì
 
-OxideTerm được duy trì bởi một nhà phát triển độc lập theo nguyên tắc **nỗ lực tối đa**. Báo cáo lỗi và hồi quy có thể tái hiện được ưu tiên; yêu cầu tính năng luôn được hoan nghênh, nhưng không phải lúc nào cũng được triển khai.
+Báo cáo lỗi và hồi quy có thể tái hiện được ưu tiên. Yêu cầu tính năng được đánh giá theo phạm vi, an toàn và mức độ phù hợp với định hướng của OxideTerm cho workspace máy chủ từ xa.
 
 Nếu OxideTerm giúp ích cho workflow của bạn, một GitHub star, bản tái hiện issue, sửa bản dịch, plugin hoặc pull request đều giúp dự án tiếp tục tiến lên.
 

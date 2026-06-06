@@ -202,11 +202,17 @@ impl PtyHandle {
                 base_args.push("-Command".to_string());
 
                 // Build the full init command
+                // PowerShell -LiteralPath does not expand "$HOME"; resolve it
+                // before building the initialization command.
                 let cwd_path = config
                     .cwd
                     .as_ref()
+                    .cloned()
+                    .or_else(|| std::env::var_os("HOME").map(std::path::PathBuf::from))
+                    .or_else(|| std::env::var_os("USERPROFILE").map(std::path::PathBuf::from))
+                    .or_else(|| std::env::current_dir().ok())
                     .map(|p| p.display().to_string())
-                    .unwrap_or_else(|| "$HOME".to_string());
+                    .unwrap_or_else(|| ".".to_string());
 
                 let full_command = format!(
                     "{}; Set-Location -LiteralPath '{}'",

@@ -17,7 +17,7 @@
 //! - `local_write_terminal` - 向终端写入数据
 
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::mpsc;
 
@@ -82,6 +82,30 @@ fn default_load_profile() -> bool {
 
 fn default_telnet_port() -> u16 {
     23
+}
+
+fn local_home_dir() -> Option<PathBuf> {
+    dirs::home_dir()
+        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+}
+
+/// Expands home aliases before paths reach Rust filesystem APIs or PTY cwd.
+fn expand_local_path(path: &str) -> PathBuf {
+    let trimmed = path.trim();
+    if trimmed == "~" || trimmed == "$HOME" {
+        return local_home_dir().unwrap_or_else(|| PathBuf::from(trimmed));
+    }
+
+    for prefix in ["~/", "~\\", "$HOME/", "$HOME\\"] {
+        if let Some(rest) = trimmed.strip_prefix(prefix) {
+            if let Some(home) = local_home_dir() {
+                return home.join(rest);
+            }
+        }
+    }
+
+    PathBuf::from(trimmed)
 }
 
 /// Response from creating a local terminal
@@ -233,7 +257,7 @@ pub async fn local_create_terminal(
         shell
     };
 
-    let cwd = request.cwd.map(std::path::PathBuf::from);
+    let cwd = request.cwd.as_deref().map(expand_local_path);
 
     // Create session through registry with options
     let (session_id, event_rx) = state
@@ -776,20 +800,34 @@ pub async fn local_list_dir(path: String) -> Result<Vec<LocalDirEntry>, String> 
     use std::time::UNIX_EPOCH;
 
     let mut entries = Vec::new();
-    let dir = fs::read_dir(&path).map_err(|e| format!("Failed to read directory: {}", e))?;
+    let expanded_path = expand_local_path(&path);
+    let dir = fs::read_dir(&expanded_path).map_err(|e| {
+        format!(
+            "Failed to read directory {}: {}",
+            expanded_path.display(),
+            e
+        )
+    })?;
 
     for entry in dir {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let entry_path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
-        let symlink_metadata = fs::symlink_metadata(&entry_path).map_err(|e| {
-            format!(
-                "Failed to get symlink metadata for {}: {}",
-                entry_path.display(),
-                e
-            )
-        })?;
+        let symlink_metadata = match fs::symlink_metadata(&entry_path) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                // Windows reserved device names such as NUL can surface through
+                // directory enumeration; skip the bad entry instead of failing
+                // the whole local file manager view.
+                tracing::warn!(
+                    "Skipping local directory entry with unreadable metadata: {}: {}",
+                    entry_path.display(),
+                    error
+                );
+                continue;
+            }
+        };
         let metadata = fs::metadata(&entry_path).unwrap_or_else(|_| symlink_metadata.clone());
 
         let is_symlink = symlink_metadata.file_type().is_symlink();

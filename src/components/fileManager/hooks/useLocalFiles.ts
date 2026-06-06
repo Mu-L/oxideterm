@@ -190,6 +190,23 @@ export function useLocalFiles(options: UseLocalFilesOptions = {}): UseLocalFiles
   const getParentPath = useCallback((currentPath: string): string | '__DRIVES__' => {
     return getLocalParentPath(currentPath);
   }, []);
+
+  // Keep local navigation state on concrete paths because PowerShell does not
+  // expand shell aliases when the backend uses LiteralPath.
+  const resolveHomePath = useCallback((target: string): string => {
+    if (!homePath) return target;
+
+    const trimmed = target.trim();
+    if (trimmed === '~' || trimmed === '$HOME') return homePath;
+
+    for (const prefix of ['~/', '~\\', '$HOME/', '$HOME\\']) {
+      if (trimmed.startsWith(prefix)) {
+        return joinLocalPath(homePath, trimmed.slice(prefix.length));
+      }
+    }
+
+    return target;
+  }, [homePath]);
   
   // Navigation
   const navigate = useCallback((target: string) => {
@@ -202,10 +219,10 @@ export function useLocalFiles(options: UseLocalFilesOptions = {}): UseLocalFiles
     } else if (target === '~') {
       setPath(homePath);
     } else {
-      setPath(normalizeLocalPath(target));
+      setPath(normalizeLocalPath(resolveHomePath(target)));
     }
     setIsPathEditing(false);
-  }, [path, homePath, getParentPath]);
+  }, [path, homePath, getParentPath, resolveHomePath]);
   
   const goUp = useCallback(() => {
     navigate('..');
@@ -218,10 +235,10 @@ export function useLocalFiles(options: UseLocalFilesOptions = {}): UseLocalFiles
   // Submit path input
   const submitPathInput = useCallback(() => {
     if (pathInput.trim()) {
-      setPath(normalizeLocalPath(pathInput.trim()));
+      setPath(normalizeLocalPath(resolveHomePath(pathInput)));
     }
     setIsPathEditing(false);
-  }, [pathInput]);
+  }, [pathInput, resolveHomePath]);
   
   // Browse folder dialog
   const browseFolder = useCallback(async () => {

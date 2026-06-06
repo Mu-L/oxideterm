@@ -43,6 +43,32 @@ pub struct UpstreamProxyConfig {
     pub no_proxy: String,
 }
 
+pub fn log_upstream_proxy_path(
+    target_host: &str,
+    target_port: u16,
+    proxy: Option<&UpstreamProxyConfig>,
+) {
+    if let Some(proxy) = proxy {
+        tracing::info!(
+            target_host,
+            target_port,
+            proxy_protocol = upstream_proxy_protocol_label(proxy.protocol),
+            proxy_host = proxy.host.as_str(),
+            proxy_port = proxy.port,
+            proxy_remote_dns = proxy.remote_dns,
+            proxy_no_proxy_configured = !proxy.no_proxy.trim().is_empty(),
+            "Connecting through upstream proxy"
+        );
+    }
+}
+
+fn upstream_proxy_protocol_label(protocol: UpstreamProxyProtocol) -> &'static str {
+    match protocol {
+        UpstreamProxyProtocol::Socks5 => "socks5",
+        UpstreamProxyProtocol::HttpConnect => "http_connect",
+    }
+}
+
 impl fmt::Debug for UpstreamProxyConfig {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter

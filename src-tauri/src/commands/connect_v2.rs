@@ -457,6 +457,8 @@ pub enum TestConnectionCategory {
     Timeout,
     Network,
     Tunnel,
+    ProxyConnect,
+    ProxyAuthentication,
     HostKeyUnknown,
     HostKeyChanged,
     Authentication,
@@ -661,9 +663,9 @@ fn classify_test_connection_error(
             TestConnectionPhase::HostKeyVerification,
             TestConnectionCategory::HostKeyChanged,
         ),
-        SshError::ConnectionFailed(_) => (
+        SshError::ConnectionFailed(message) => (
             TestConnectionPhase::Transport,
-            TestConnectionCategory::Unknown,
+            classify_connection_failed_message(message),
         ),
         _ => (
             TestConnectionPhase::Preparation,
@@ -690,6 +692,12 @@ fn direct_failure_summary(
             TestConnectionCategory::DnsResolution => "Target DNS resolution failed".to_string(),
             TestConnectionCategory::Timeout => "Timed out reaching the target".to_string(),
             TestConnectionCategory::Network => "Target network connection failed".to_string(),
+            TestConnectionCategory::ProxyConnect => {
+                "Upstream proxy connection failed before reaching the target".to_string()
+            }
+            TestConnectionCategory::ProxyAuthentication => {
+                "Upstream proxy authentication failed before reaching the target".to_string()
+            }
             TestConnectionCategory::Protocol => {
                 "Target SSH transport negotiation failed".to_string()
             }
@@ -706,6 +714,28 @@ fn direct_failure_summary(
             _ => "Target authentication failed".to_string(),
         },
         TestConnectionPhase::Complete => "Connection test succeeded".to_string(),
+    }
+}
+
+fn classify_connection_failed_message(message: &str) -> TestConnectionCategory {
+    let lower = message.to_lowercase();
+    if lower.contains("upstream proxy")
+        || lower.contains("socks5 proxy")
+        || lower.contains("http connect proxy")
+    {
+        if lower.contains("auth")
+            || lower.contains("credential")
+            || lower.contains("status 407")
+            || lower.contains("username/password")
+        {
+            TestConnectionCategory::ProxyAuthentication
+        } else {
+            TestConnectionCategory::ProxyConnect
+        }
+    } else if lower.contains("network") || lower.contains("connection refused") {
+        TestConnectionCategory::Network
+    } else {
+        TestConnectionCategory::Unknown
     }
 }
 
@@ -767,6 +797,12 @@ fn proxy_failure_summary(
                     TestConnectionCategory::Protocol => {
                         format!("Jump host {} SSH transport negotiation failed", hop)
                     }
+                    TestConnectionCategory::ProxyConnect => {
+                        format!("Upstream proxy connection failed before reaching jump host {}", hop)
+                    }
+                    TestConnectionCategory::ProxyAuthentication => {
+                        format!("Upstream proxy authentication failed before reaching jump host {}", hop)
+                    }
                     _ => format!("Jump host {} transport failed", hop),
                 },
                 TestConnectionPhase::Authentication => match category {
@@ -795,6 +831,14 @@ fn proxy_failure_summary(
                 }
                 TestConnectionCategory::Protocol => {
                     "Target SSH transport negotiation failed after jump hosts connected".to_string()
+                }
+                TestConnectionCategory::ProxyConnect => {
+                    "Upstream proxy connection failed before reaching the first jump host"
+                        .to_string()
+                }
+                TestConnectionCategory::ProxyAuthentication => {
+                    "Upstream proxy authentication failed before reaching the first jump host"
+                        .to_string()
                 }
                 _ => "Target transport failed after jump hosts connected".to_string(),
             },
@@ -1249,6 +1293,72 @@ mod tests {
         ));
         assert_eq!(location.hop_index, Some(2));
         assert_eq!(location.via_hop_index, Some(1));
+    }
+
+    #[test]
+    fn test_direct_failure_diagnostic_marks_upstream_proxy_connect_failure() {
+        let request = ConnectRequest {
+            host: "target.example.com".to_string(),
+            port: 22,
+            username: "target-user".to_string(),
+            auth: AuthRequest::Agent,
+            cols: default_cols(),
+            rows: default_rows(),
+            name: Some("Target".to_string()),
+            proxy_chain: None,
+            trust_host_key: None,
+            expected_host_key_fingerprint: None,
+        };
+
+        let diagnostic = build_direct_failure_diagnostic(
+            &request,
+            &SshError::ConnectionFailed(
+                "HTTP CONNECT upstream proxy I/O failed: connection refused".to_string(),
+            ),
+        );
+
+        assert!(matches!(diagnostic.phase, TestConnectionPhase::Transport));
+        assert!(matches!(
+            diagnostic.category,
+            TestConnectionCategory::ProxyConnect
+        ));
+        assert_eq!(
+            diagnostic.summary,
+            "Upstream proxy connection failed before reaching the target"
+        );
+    }
+
+    #[test]
+    fn test_direct_failure_diagnostic_marks_upstream_proxy_auth_failure() {
+        let request = ConnectRequest {
+            host: "target.example.com".to_string(),
+            port: 22,
+            username: "target-user".to_string(),
+            auth: AuthRequest::Agent,
+            cols: default_cols(),
+            rows: default_rows(),
+            name: Some("Target".to_string()),
+            proxy_chain: None,
+            trust_host_key: None,
+            expected_host_key_fingerprint: None,
+        };
+
+        let diagnostic = build_direct_failure_diagnostic(
+            &request,
+            &SshError::ConnectionFailed(
+                "HTTP CONNECT proxy rejected the tunnel with status 407".to_string(),
+            ),
+        );
+
+        assert!(matches!(diagnostic.phase, TestConnectionPhase::Transport));
+        assert!(matches!(
+            diagnostic.category,
+            TestConnectionCategory::ProxyAuthentication
+        ));
+        assert_eq!(
+            diagnostic.summary,
+            "Upstream proxy authentication failed before reaching the target"
+        );
     }
 
     #[test]

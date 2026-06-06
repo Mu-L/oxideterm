@@ -40,7 +40,7 @@ use super::auth::{
 use super::client::ClientHandler;
 use super::config::AuthMethod;
 use super::error::SshError;
-use super::upstream_proxy::{UpstreamProxyConfig, dial_initial_tcp};
+use super::upstream_proxy::{UpstreamProxyConfig, dial_initial_tcp, log_upstream_proxy_path};
 use zeroize::Zeroizing;
 
 use crate::session::tree::MAX_CHAIN_DEPTH;
@@ -399,6 +399,7 @@ async fn direct_connect(
     let addr = format!("{}:{}", hop.host, hop.port);
 
     info!("Connecting to jump host at {}", addr);
+    log_upstream_proxy_path(&hop.host, hop.port, upstream_proxy);
 
     // Create SSH config with keepalive
     let ssh_config = build_client_config();

@@ -3702,6 +3702,35 @@ mod tests {
     }
 
     #[test]
+    fn upstream_proxy_to_connect_info_prefers_global_settings_over_env_fallback() {
+        let _socks_env = EnvVarGuard::set("OXIDETERM_SOCKS5_PROXY", "env-proxy.local:1080");
+        let _http_env = EnvVarGuard::set("OXIDETERM_HTTP_PROXY", "http://env-http.local:8080");
+        let keychain = Keychain::in_memory_for_tests("com.oxideterm.test");
+        let settings = serde_json::json!({
+            "network": {
+                "upstreamProxy": {
+                    "protocol": "socks5",
+                    "host": "global-proxy.local",
+                    "port": 1080,
+                    "auth": { "type": "none" },
+                    "remoteDns": true,
+                    "noProxy": ""
+                }
+            }
+        });
+
+        let proxy = upstream_proxy_to_connect_info(
+            &SavedUpstreamProxyPolicy::UseGlobal,
+            &keychain,
+            Some(&settings),
+        )
+        .unwrap();
+
+        assert_eq!(proxy.host, "global-proxy.local");
+        assert!(matches!(proxy.auth, UpstreamProxyAuthForConnect::None));
+    }
+
+    #[test]
     fn upstream_proxy_to_connect_info_direct_ignores_global_settings() {
         let keychain = Keychain::in_memory_for_tests("com.oxideterm.test");
         let settings = serde_json::json!({
@@ -3723,6 +3752,35 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            // These resolver tests run in-process and temporarily control
+            // proxy environment variables to verify fallback precedence.
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            // Restore the caller's environment after the focused resolver test.
+            unsafe {
+                match &self.previous {
+                    Some(value) => std::env::set_var(self.key, value),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
     }
 
     #[test]
@@ -5405,7 +5463,12 @@ fn upstream_proxy_to_connect_info(
         }
         SavedUpstreamProxyPolicy::UseGlobal => app_settings
             .and_then(|settings| global_upstream_proxy_to_connect_info(settings, keychain))
-            .or_else(|| upstream_proxy_from_env().ok().flatten().map(runtime_upstream_proxy_to_connect_info)),
+            .or_else(|| {
+                upstream_proxy_from_env()
+                    .ok()
+                    .flatten()
+                    .map(runtime_upstream_proxy_to_connect_info)
+            }),
     }
 }
 

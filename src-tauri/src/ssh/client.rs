@@ -21,7 +21,7 @@ use super::config::{AuthMethod, SshConfig};
 use super::error::SshError;
 use super::known_hosts::{HostKeyVerification, get_known_hosts};
 use super::session::SshSession;
-use super::upstream_proxy::dial_initial_tcp;
+use super::upstream_proxy::{dial_initial_tcp, log_upstream_proxy_path};
 
 pub type AuthBannerSink = Arc<parking_lot::Mutex<Vec<String>>>;
 
@@ -108,6 +108,11 @@ impl SshClient {
         let addr = format!("{}:{}", self.config.host, self.config.port);
 
         info!("Connecting to SSH server at {}", addr);
+        log_upstream_proxy_path(
+            &self.config.host,
+            self.config.port,
+            self.config.upstream_proxy.as_ref(),
+        );
 
         // SSH keepalive config (defense-in-depth):
         // Layer 1 (here): russh native keepalive — safety net in case app heartbeat stalls

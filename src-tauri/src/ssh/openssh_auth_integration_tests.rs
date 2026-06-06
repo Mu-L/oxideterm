@@ -369,6 +369,7 @@ fn openssh_client_config(port: u16, username: &str, auth: AuthMethod) -> SshConf
         cols: 80,
         rows: 24,
         proxy_chain: None,
+        upstream_proxy: None,
         strict_host_key_checking: false,
         trust_host_key: Some(false),
         expected_host_key_fingerprint: None,

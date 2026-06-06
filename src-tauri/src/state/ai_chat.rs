@@ -175,6 +175,72 @@ pub struct PersistedMessage {
     pub model: Option<String>,
 }
 
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct NativePersistedMessage {
+    id: String,
+    conversation_id: String,
+    role: String,
+    content: String,
+    timestamp: i64,
+    #[serde(default)]
+    projection_updated_at: i64,
+    #[serde(default)]
+    tool_calls: Vec<PersistedToolCall>,
+    #[serde(default)]
+    tool_call_id: Option<String>,
+    context_snapshot: Option<ContextSnapshot>,
+    #[serde(default)]
+    turn: Option<Value>,
+    #[serde(default)]
+    transcript_ref: Option<Value>,
+    #[serde(default)]
+    summary_ref: Option<Value>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    branches: Option<serde::de::IgnoredAny>,
+    #[serde(default)]
+    suggestions: Vec<serde::de::IgnoredAny>,
+}
+
+impl From<NativePersistedMessage> for PersistedMessage {
+    fn from(message: NativePersistedMessage) -> Self {
+        let NativePersistedMessage {
+            id,
+            conversation_id,
+            role,
+            content,
+            timestamp,
+            projection_updated_at,
+            tool_calls,
+            tool_call_id: _,
+            context_snapshot,
+            turn,
+            transcript_ref,
+            summary_ref,
+            model,
+            branches: _,
+            suggestions: _,
+        } = message;
+
+        Self {
+            id,
+            conversation_id,
+            role,
+            content,
+            timestamp,
+            projection_updated_at,
+            tool_calls,
+            context_snapshot,
+            turn,
+            transcript_ref,
+            summary_ref,
+            model,
+        }
+    }
+}
+
 /// Conversation metadata (lightweight, for list display)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationMeta {
@@ -200,6 +266,42 @@ pub struct ConversationMeta {
 
 fn default_origin() -> String {
     "sidebar".to_string()
+}
+
+const TAURI_MESSAGE_FIELD_COUNT: usize = 12;
+const LEGACY_TAURI_MESSAGE_FIELD_COUNT: usize = 11;
+const NATIVE_MESSAGE_FIELD_COUNT: usize = 15;
+
+fn messagepack_array_len(bytes: &[u8]) -> Option<usize> {
+    let first = *bytes.first()?;
+    match first {
+        0x90..=0x9f => Some((first & 0x0f) as usize),
+        0xdc => {
+            let len = bytes.get(1..3)?;
+            Some(u16::from_be_bytes([len[0], len[1]]) as usize)
+        }
+        0xdd => {
+            let len = bytes.get(1..5)?;
+            Some(u32::from_be_bytes([len[0], len[1], len[2], len[3]]) as usize)
+        }
+        _ => None,
+    }
+}
+
+fn decode_persisted_message(bytes: &[u8]) -> Result<PersistedMessage, rmp_serde::decode::Error> {
+    match messagepack_array_len(bytes) {
+        // rmp-serde serializes structs positionally by default. Native inserted
+        // tool_call_id before context_snapshot, so native rows must use the
+        // native field order instead of Tauri's historical projection order.
+        Some(NATIVE_MESSAGE_FIELD_COUNT) => {
+            rmp_serde::from_slice::<NativePersistedMessage>(bytes).map(Into::into)
+        }
+        Some(LEGACY_TAURI_MESSAGE_FIELD_COUNT | TAURI_MESSAGE_FIELD_COUNT) | None => {
+            rmp_serde::from_slice::<PersistedMessage>(bytes)
+        }
+        _ => rmp_serde::from_slice::<PersistedMessage>(bytes)
+            .or_else(|_| rmp_serde::from_slice::<NativePersistedMessage>(bytes).map(Into::into)),
+    }
 }
 
 fn effective_projection_updated_at(message: &PersistedMessage) -> i64 {
@@ -681,7 +783,7 @@ impl AiChatStore {
 
         for msg_id in message_ids {
             if let Some(msg_bytes) = msg_table.get(msg_id.as_str())? {
-                let mut msg: PersistedMessage = rmp_serde::from_slice(msg_bytes.value())?;
+                let mut msg = decode_persisted_message(msg_bytes.value())?;
 
                 // Decompress buffer if needed
                 if let Some(ref mut ctx) = msg.context_snapshot {
@@ -731,9 +833,7 @@ impl AiChatStore {
 
             let should_write_message = msg_table
                 .get(message.id.as_str())?
-                .map(|existing_bytes| {
-                    rmp_serde::from_slice::<PersistedMessage>(existing_bytes.value())
-                })
+                .map(|existing_bytes| decode_persisted_message(existing_bytes.value()))
                 .transpose()?
                 .map(|existing| should_replace_projection(&message, &existing))
                 .unwrap_or(true);
@@ -813,9 +913,7 @@ impl AiChatStore {
 
             let should_write_message = msg_table
                 .get(message.id.as_str())?
-                .map(|existing_bytes| {
-                    rmp_serde::from_slice::<PersistedMessage>(existing_bytes.value())
-                })
+                .map(|existing_bytes| decode_persisted_message(existing_bytes.value()))
                 .transpose()?
                 .map(|existing| should_replace_projection(&message, &existing))
                 .unwrap_or(true);
@@ -1063,7 +1161,7 @@ impl AiChatStore {
             // Read first, then write
             let existing_msg: Option<PersistedMessage> = msg_table
                 .get(message_id)?
-                .map(|msg_bytes| rmp_serde::from_slice(msg_bytes.value()).ok())
+                .map(|msg_bytes| decode_persisted_message(msg_bytes.value()).ok())
                 .flatten();
 
             if let Some(mut msg) = existing_msg {
@@ -1710,6 +1808,25 @@ mod tests {
         summary_ref: Option<Value>,
     }
 
+    #[derive(Serialize)]
+    struct SerializedNativePersistedMessage {
+        id: String,
+        conversation_id: String,
+        role: String,
+        content: String,
+        timestamp: i64,
+        projection_updated_at: i64,
+        tool_calls: Vec<PersistedToolCall>,
+        tool_call_id: Option<String>,
+        context_snapshot: Option<ContextSnapshot>,
+        turn: Option<Value>,
+        transcript_ref: Option<Value>,
+        summary_ref: Option<Value>,
+        model: Option<String>,
+        branches: Option<Value>,
+        suggestions: Vec<Value>,
+    }
+
     #[test]
     fn test_persisted_message_deserializes_legacy_records_without_model() {
         let legacy = LegacyPersistedMessage {
@@ -1727,12 +1844,46 @@ mod tests {
         };
 
         let bytes = rmp_serde::to_vec(&legacy).unwrap();
-        let decoded: PersistedMessage = rmp_serde::from_slice(&bytes).unwrap();
+        let decoded = decode_persisted_message(&bytes).unwrap();
 
         assert_eq!(decoded.id, "legacy-1");
         assert_eq!(decoded.content, "old answer");
         assert_eq!(decoded.projection_updated_at, 1100);
         assert!(decoded.model.is_none());
+    }
+
+    #[test]
+    fn test_persisted_message_deserializes_native_records() {
+        let native = SerializedNativePersistedMessage {
+            id: "native-1".to_string(),
+            conversation_id: "conv-native".to_string(),
+            role: "assistant".to_string(),
+            content: "native answer".to_string(),
+            timestamp: 1000,
+            projection_updated_at: 1200,
+            tool_calls: vec![],
+            tool_call_id: Some("tool-1".to_string()),
+            context_snapshot: None,
+            turn: Some(serde_json::json!({ "status": "complete" })),
+            transcript_ref: None,
+            summary_ref: None,
+            model: Some("native-model".to_string()),
+            branches: None,
+            suggestions: vec![serde_json::json!({ "text": "next" })],
+        };
+
+        let bytes = rmp_serde::to_vec(&native).unwrap();
+        let decoded = decode_persisted_message(&bytes).unwrap();
+
+        assert_eq!(decoded.id, "native-1");
+        assert_eq!(decoded.content, "native answer");
+        assert_eq!(decoded.projection_updated_at, 1200);
+        assert_eq!(decoded.model.as_deref(), Some("native-model"));
+        assert_eq!(
+            decoded.turn.as_ref().and_then(|turn| turn.get("status")),
+            Some(&serde_json::json!("complete"))
+        );
+        assert!(decoded.context_snapshot.is_none());
     }
 
     #[test]

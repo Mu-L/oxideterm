@@ -14,7 +14,6 @@
 //! 4. Frontend shows confirmation dialog if needed
 //! 5. Frontend proceeds with `ssh_connect` with `trust_host_key` flag if user approves
 
-use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -26,6 +25,7 @@ use tracing::{debug, info, warn};
 
 use super::error::SshError;
 use super::known_hosts::{HostKeyVerification, KnownHostsStore, get_known_hosts};
+use super::upstream_proxy::{UpstreamProxyConfig, dial_initial_tcp};
 
 /// Cache TTL for verified hosts (1 hour)
 const CACHE_TTL_SECS: u64 = 3600;
@@ -276,6 +276,15 @@ impl client::Handler for PreflightHandler {
 /// This initiates an SSH handshake but aborts after receiving the host key.
 /// The result indicates whether the host is known and trusted.
 pub async fn check_host_key(host: &str, port: u16, timeout_secs: u64) -> HostKeyStatus {
+    check_host_key_with_upstream_proxy(host, port, timeout_secs, None).await
+}
+
+pub async fn check_host_key_with_upstream_proxy(
+    host: &str,
+    port: u16,
+    timeout_secs: u64,
+    upstream_proxy: Option<&UpstreamProxyConfig>,
+) -> HostKeyStatus {
     // Check cache first
     if get_host_key_cache().get_verified(host, port).is_some() {
         debug!("Using cached verification for {}:{}", host, port);
@@ -285,19 +294,11 @@ pub async fn check_host_key(host: &str, port: u16, timeout_secs: u64) -> HostKey
     let addr = format!("{}:{}", host, port);
     debug!("Starting preflight check for {}", addr);
 
-    // Resolve address
-    let socket_addr = match addr.to_socket_addrs() {
-        Ok(mut addrs) => match addrs.next() {
-            Some(addr) => addr,
-            None => {
-                return HostKeyStatus::Error {
-                    message: format!("Could not resolve address: {}", addr),
-                };
-            }
-        },
-        Err(e) => {
+    let stream = match dial_initial_tcp(host, port, timeout_secs, upstream_proxy).await {
+        Ok(stream) => stream,
+        Err(error) => {
             return HostKeyStatus::Error {
-                message: format!("DNS resolution failed: {}", e),
+                message: error.to_string(),
             };
         }
     };
@@ -315,7 +316,7 @@ pub async fn check_host_key(host: &str, port: u16, timeout_secs: u64) -> HostKey
     // Attempt connection - we expect this to fail after capturing the key
     let connect_result = tokio::time::timeout(
         Duration::from_secs(timeout_secs),
-        client::connect(Arc::new(ssh_config), socket_addr, handler),
+        client::connect_stream(Arc::new(ssh_config), stream, handler),
     )
     .await;
 

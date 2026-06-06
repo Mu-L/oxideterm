@@ -6,6 +6,8 @@
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
+use super::upstream_proxy::UpstreamProxyConfig;
+
 /// SSH connection configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshConfig {
@@ -37,6 +39,11 @@ pub struct SshConfig {
     /// Optional proxy chain for jump hosts (ProxyJump)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy_chain: Option<Vec<ProxyHopConfig>>,
+
+    /// Runtime-only upstream proxy outlet. Persisted proxy secrets are hydrated
+    /// at the settings/keychain boundary, never serialized inside SSH config.
+    #[serde(default, skip)]
+    pub upstream_proxy: Option<UpstreamProxyConfig>,
 
     /// Strict host key checking (default: false for user-friendly behavior)
     /// - true: reject connections to unknown hosts
@@ -186,6 +193,7 @@ impl Default for SshConfig {
             cols: 80,
             rows: 24,
             proxy_chain: None,
+            upstream_proxy: None,
             strict_host_key_checking: false,
             trust_host_key: None,
             expected_host_key_fingerprint: None,

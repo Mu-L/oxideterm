@@ -1013,6 +1013,7 @@ pub async fn test_connection(
             cols: request.cols,
             rows: request.rows,
             proxy_chain: None,
+            upstream_proxy: None,
             strict_host_key_checking: true,
             trust_host_key: request.trust_host_key,
             expected_host_key_fingerprint: request.expected_host_key_fingerprint.clone(),

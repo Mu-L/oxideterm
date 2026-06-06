@@ -3,7 +3,6 @@
 
 //! SSH Client implementation using russh
 
-use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,6 +21,7 @@ use super::config::{AuthMethod, SshConfig};
 use super::error::SshError;
 use super::known_hosts::{HostKeyVerification, get_known_hosts};
 use super::session::SshSession;
+use super::upstream_proxy::dial_initial_tcp;
 
 pub type AuthBannerSink = Arc<parking_lot::Mutex<Vec<String>>>;
 
@@ -109,19 +109,6 @@ impl SshClient {
 
         info!("Connecting to SSH server at {}", addr);
 
-        // Resolve address
-        let socket_addr = addr
-            .to_socket_addrs()
-            .map_err(|e| SshError::DnsResolution {
-                address: addr.clone(),
-                message: e.to_string(),
-            })?
-            .next()
-            .ok_or_else(|| SshError::DnsResolution {
-                address: addr.clone(),
-                message: "No address found".to_string(),
-            })?;
-
         // SSH keepalive config (defense-in-depth):
         // Layer 1 (here): russh native keepalive — safety net in case app heartbeat stalls
         // Layer 2: App-level heartbeat (15s) in connection_registry — provides granular
@@ -139,10 +126,18 @@ impl SshClient {
         );
         let auth_banners = handler.auth_banners();
 
+        let stream = dial_initial_tcp(
+            &self.config.host,
+            self.config.port,
+            self.config.timeout_secs,
+            self.config.upstream_proxy.as_ref(),
+        )
+        .await?;
+
         // Connect with timeout
         let mut handle = tokio::time::timeout(
             Duration::from_secs(self.config.timeout_secs),
-            client::connect(Arc::new(ssh_config), socket_addr, handler),
+            client::connect_stream(Arc::new(ssh_config), stream, handler),
         )
         .await
         .map_err(|_| SshError::Timeout("Connection timed out".to_string()))?

@@ -25,7 +25,6 @@
 //! - Non-blocking: All operations async with tokio
 //! - Memory efficient: No extra buffers, channels used as transports
 
-use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -41,6 +40,7 @@ use super::auth::{
 use super::client::ClientHandler;
 use super::config::AuthMethod;
 use super::error::SshError;
+use super::upstream_proxy::{UpstreamProxyConfig, dial_initial_tcp};
 use zeroize::Zeroizing;
 
 use crate::session::tree::MAX_CHAIN_DEPTH;
@@ -104,17 +104,27 @@ impl ProxyHop {
 pub struct ProxyChain {
     /// List of jump hosts (in order)
     pub hops: Vec<ProxyHop>,
+    /// Runtime-only upstream proxy used for the first TCP outlet.
+    pub upstream_proxy: Option<UpstreamProxyConfig>,
 }
 
 impl ProxyChain {
     /// Create an empty proxy chain
     pub fn new() -> Self {
-        Self { hops: Vec::new() }
+        Self {
+            hops: Vec::new(),
+            upstream_proxy: None,
+        }
     }
 
     /// Add a hop to the chain
     pub fn add_hop(mut self, hop: ProxyHop) -> Self {
         self.hops.push(hop);
+        self
+    }
+
+    pub fn with_upstream_proxy(mut self, upstream_proxy: Option<UpstreamProxyConfig>) -> Self {
+        self.upstream_proxy = upstream_proxy;
         self
     }
 
@@ -242,19 +252,6 @@ fn target_endpoint(
         total_hops,
         via_hop_index: None,
     }
-}
-
-fn resolve_socket_addr(addr: &str) -> Result<SocketAddr, SshError> {
-    addr.to_socket_addrs()
-        .map_err(|e| SshError::DnsResolution {
-            address: addr.to_string(),
-            message: e.to_string(),
-        })?
-        .next()
-        .ok_or_else(|| SshError::DnsResolution {
-            address: addr.to_string(),
-            message: "No address found".to_string(),
-        })
 }
 
 async fn authenticate_proxy_hop(
@@ -397,9 +394,9 @@ async fn direct_connect(
     timeout_secs: u64,
     trust_unknown_host: Option<bool>,
     managed_key_resolver: Option<&ManagedKeyResolver>,
+    upstream_proxy: Option<&UpstreamProxyConfig>,
 ) -> Result<Handle<ClientHandler>, SshError> {
     let addr = format!("{}:{}", hop.host, hop.port);
-    let socket_addr = resolve_socket_addr(&addr)?;
 
     info!("Connecting to jump host at {}", addr);
 
@@ -410,9 +407,10 @@ async fn direct_connect(
     let handler = build_proxy_client_handler(hop.host.clone(), hop.port, trust_unknown_host);
 
     // Connect with timeout
+    let stream = dial_initial_tcp(&hop.host, hop.port, timeout_secs, upstream_proxy).await?;
     let mut handle = tokio::time::timeout(
         Duration::from_secs(timeout_secs),
-        client::connect(Arc::new(ssh_config), socket_addr, handler),
+        client::connect_stream(Arc::new(ssh_config), stream, handler),
     )
     .await
     .map_err(|_| SshError::Timeout(format!("Connection to {} timed out", addr)))?
@@ -668,6 +666,7 @@ pub async fn connect_via_proxy_for_test_with_managed_key_resolver(
                 timeout_secs,
                 endpoint.clone(),
                 managed_key_resolver.as_ref(),
+                chain.upstream_proxy.as_ref(),
             )
             .await?
         };
@@ -751,22 +750,25 @@ async fn direct_connect_for_test(
     timeout_secs: u64,
     endpoint: ProxyConnectEndpoint,
     managed_key_resolver: Option<&ManagedKeyResolver>,
+    upstream_proxy: Option<&UpstreamProxyConfig>,
 ) -> Result<Handle<ClientHandler>, ProxyConnectError> {
     let addr = format!("{}:{}", hop.host, hop.port);
-    let socket_addr = resolve_socket_addr(&addr).map_err(|source| {
-        ProxyConnectError::step(
-            ProxyConnectOperation::ResolveAddress,
-            endpoint.clone(),
-            source,
-        )
-    })?;
+    let stream = dial_initial_tcp(&hop.host, hop.port, timeout_secs, upstream_proxy)
+        .await
+        .map_err(|source| {
+            ProxyConnectError::step(
+                ProxyConnectOperation::EstablishTransport,
+                endpoint.clone(),
+                source,
+            )
+        })?;
 
     let ssh_config = build_client_config();
     let handler = build_proxy_client_handler(hop.host.clone(), hop.port, Some(false));
 
     let mut handle = tokio::time::timeout(
         Duration::from_secs(timeout_secs),
-        client::connect(Arc::new(ssh_config), socket_addr, handler),
+        client::connect_stream(Arc::new(ssh_config), stream, handler),
     )
     .await
     .map_err(|_| {
@@ -902,6 +904,7 @@ async fn connect_via_proxy_internal(
                 timeout_secs,
                 trust_unknown_host,
                 managed_key_resolver.as_ref(),
+                chain.upstream_proxy.as_ref(),
             )
             .await?
         };

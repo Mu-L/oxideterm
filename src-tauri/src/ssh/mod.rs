@@ -31,6 +31,7 @@ mod proxy;
 #[cfg(test)]
 mod proxy_integration_tests;
 mod session;
+mod upstream_proxy;
 
 pub use agent::{SshAgentClient, is_agent_available};
 pub(crate) use auth::ManagedKeyResolver;
@@ -49,7 +50,8 @@ pub use keyboard_interactive::{
 };
 pub use known_hosts::{HostKeyVerification, KnownHostsStore, get_known_hosts};
 pub use preflight::{
-    HostKeyCache, HostKeyStatus, accept_host_key, check_host_key, get_host_key_cache,
+    HostKeyCache, HostKeyStatus, accept_host_key, check_host_key,
+    check_host_key_with_upstream_proxy, get_host_key_cache,
 };
 pub use proxy::{
     ProxyChain, ProxyConnectEndpoint, ProxyConnectEndpointKind, ProxyConnectError,
@@ -59,4 +61,8 @@ pub use proxy::{
 };
 pub use session::{
     DEFAULT_PTY_MODES, ExtendedSessionHandle, SessionCommand, SessionHandle, SshSession,
+};
+pub use upstream_proxy::{
+    UpstreamProxyAuth, UpstreamProxyConfig, UpstreamProxyError, UpstreamProxyProtocol,
+    dial_initial_tcp, parse_socks5_proxy_value, socks5_proxy_from_env,
 };

@@ -1212,6 +1212,7 @@ impl SshConnectionRegistry {
             cols: config.cols,
             rows: config.rows,
             proxy_chain: None,
+            upstream_proxy: None,
             strict_host_key_checking: false,
             trust_host_key: config.trust_host_key,
             expected_host_key_fingerprint: config.expected_host_key_fingerprint.clone(),

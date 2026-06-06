@@ -134,6 +134,29 @@ type AcpAgentPatch = Partial<Omit<AcpAgentConfig, 'capabilityPolicy' | 'auth' | 
     status?: Partial<AcpAgentRuntimeStatus>;
 };
 
+type AcpAgentPreset = 'claude-code' | 'codex' | 'github-copilot';
+
+type AcpAgentPresetConfig = Pick<AcpAgentConfig, 'displayName' | 'command' | 'args'>;
+
+// Presets only seed editable ACP agent entries; permissions remain disabled by default.
+const ACP_AGENT_PRESET_CONFIGS: Record<AcpAgentPreset, AcpAgentPresetConfig> = {
+    'claude-code': {
+        displayName: 'Claude Code',
+        command: 'npx',
+        args: ['-y', '@agentclientprotocol/claude-agent-acp'],
+    },
+    codex: {
+        displayName: 'Codex',
+        command: 'codex-acp',
+        args: [],
+    },
+    'github-copilot': {
+        displayName: 'GitHub Copilot',
+        command: 'copilot',
+        args: ['--acp', '--stdio'],
+    },
+};
+
 type AcpProbeAgentResponse = {
     runtimeState: AcpAgentRuntimeStatus['state'];
     authStatus: AcpAgentAuthStatus;
@@ -148,6 +171,34 @@ function acpListDraftId(prefix: string): string {
     return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? `${prefix}-${crypto.randomUUID()}`
         : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function uniqueAcpAgentId(baseId: string, agents: AcpAgentConfig[]): string {
+    if (!agents.some((agent) => agent.id === baseId)) {
+        return baseId;
+    }
+    for (let suffix = 2; ; suffix += 1) {
+        const candidate = `${baseId}-${suffix}`;
+        if (!agents.some((agent) => agent.id === candidate)) {
+            return candidate;
+        }
+    }
+}
+
+function acpAgentFromPreset(preset: AcpAgentPreset, agents: AcpAgentConfig[]): AcpAgentConfig {
+    const config = ACP_AGENT_PRESET_CONFIGS[preset];
+    return {
+        id: uniqueAcpAgentId(preset, agents),
+        displayName: config.displayName,
+        command: config.command,
+        args: [...config.args],
+        env: {},
+        cwd: null,
+        enabled: true,
+        auth: defaultAcpAgentAuthState(),
+        capabilityPolicy: defaultAcpAgentCapabilityPolicy(),
+        status: defaultAcpAgentRuntimeStatus(),
+    };
 }
 
 function acpArgsDraft(args: string[]): string {
@@ -285,6 +336,11 @@ export const AiTab = ({
             capabilityPolicy: defaultAcpAgentCapabilityPolicy(),
             status: defaultAcpAgentRuntimeStatus(),
         };
+        updateAi('acpAgents', [...acpAgentsRef.current, agent]);
+        setAcpAgentsExpanded(true);
+    };
+    const addAcpAgentPreset = (preset: AcpAgentPreset) => {
+        const agent = acpAgentFromPreset(preset, acpAgentsRef.current);
         updateAi('acpAgents', [...acpAgentsRef.current, agent]);
         setAcpAgentsExpanded(true);
     };
@@ -637,10 +693,22 @@ export const AiTab = ({
 
                             {acpAgentsExpanded && (
                                 <div className="mb-6 max-w-3xl space-y-3">
-                                    <div className="flex justify-end">
+                                    <div className="flex flex-wrap justify-end gap-2">
                                         <Button type="button" variant="outline" size="sm" onClick={addAcpAgent} className="gap-1.5">
                                             <Plus className="h-3.5 w-3.5" />
                                             {t('settings_view.ai.acp_agent_add')}
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => addAcpAgentPreset('claude-code')} className="gap-1.5">
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Claude Code
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => addAcpAgentPreset('codex')} className="gap-1.5">
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Codex
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => addAcpAgentPreset('github-copilot')} className="gap-1.5">
+                                            <Plus className="h-3.5 w-3.5" />
+                                            GitHub Copilot
                                         </Button>
                                     </div>
                                     {acpAgents.length === 0 && (

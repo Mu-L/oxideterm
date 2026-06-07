@@ -5,7 +5,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
-    fmt,
+    env, fmt,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -776,7 +776,8 @@ impl AcpStdioLauncher {
         ),
         agent_client_protocol::Error,
     > {
-        let mut command = async_process::Command::new(self.config.command.trim());
+        let command_path = resolve_acp_command(self.config.command.trim());
+        let mut command = async_process::Command::new(command_path);
         command.args(&self.config.args);
         command.envs(&self.config.env);
         if let Some(cwd) = &self.config.cwd {
@@ -913,6 +914,13 @@ pub fn build_acp_stdio_launcher(
     Ok(AcpStdioLauncher { config })
 }
 
+pub fn acp_launch_command_available(
+    config: &AcpLaunchConfig,
+) -> Result<bool, AcpLaunchConfigError> {
+    validate_launch_config(config)?;
+    Ok(resolve_acp_command(config.command.trim()).exists())
+}
+
 pub fn build_acp_initialize_request(
     client_version: &str,
     policy: &AcpHostCapabilityPolicy,
@@ -968,6 +976,9 @@ pub async fn acp_probe_agent(
         Ok(launcher) => launcher,
         Err(_) => return Ok(acp_probe_error_response("config")),
     };
+    if !acp_launch_command_available(launcher.config()).unwrap_or(false) {
+        return Ok(acp_probe_error_response("command_not_found"));
+    }
 
     match initialize_acp_agent(
         launcher,
@@ -1944,6 +1955,86 @@ fn validate_launch_config(config: &AcpLaunchConfig) -> Result<(), AcpLaunchConfi
         return Err(AcpLaunchConfigError::CommandContainsNul);
     }
     Ok(())
+}
+
+fn resolve_acp_command(command: &str) -> PathBuf {
+    let command_path = Path::new(command);
+    if command_path.components().count() > 1 || command_path.is_absolute() {
+        return command_path.to_path_buf();
+    }
+
+    if let Ok(current_exe) = env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            for parent in acp_packaged_command_search_dirs(exe_dir) {
+                for candidate in acp_command_candidates(&parent, command) {
+                    if candidate.exists() {
+                        return candidate;
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(path_var) = env::var_os("PATH") {
+        for search_dir in env::split_paths(&path_var) {
+            for candidate in acp_command_candidates(&search_dir, command) {
+                if candidate.exists() {
+                    return candidate;
+                }
+            }
+        }
+    }
+
+    command_path.to_path_buf()
+}
+
+fn acp_packaged_command_search_dirs(exe_dir: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![exe_dir.to_path_buf(), exe_dir.join("cli-bin")];
+    // Tauri stores bundled resources under Contents/Resources on macOS and
+    // under a resources directory on other targets. ACP adapter presets use a
+    // plain command name, so the launcher must resolve these packaged layouts.
+    dirs.push(exe_dir.join("resources"));
+    dirs.push(exe_dir.join("resources").join("cli-bin"));
+    if let Some(parent) = exe_dir.parent() {
+        dirs.push(parent.join("Resources"));
+        dirs.push(parent.join("Resources").join("cli-bin"));
+        dirs.push(parent.join("resources"));
+        dirs.push(parent.join("resources").join("cli-bin"));
+    }
+    dirs
+}
+
+fn acp_command_candidates(parent: &Path, command: &str) -> Vec<PathBuf> {
+    #[cfg(windows)]
+    {
+        let has_extension = Path::new(command).extension().is_some();
+        if has_extension {
+            return vec![parent.join(command)];
+        }
+        let pathext = env::var_os("PATHEXT")
+            .map(|value| {
+                value
+                    .to_string_lossy()
+                    .split(';')
+                    .filter(|extension| !extension.trim().is_empty())
+                    .map(|extension| extension.trim().to_ascii_lowercase())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|extensions| !extensions.is_empty())
+            .unwrap_or_else(|| vec![".exe".to_string(), ".cmd".to_string(), ".bat".to_string()]);
+        let mut candidates = Vec::with_capacity(pathext.len() + 1);
+        candidates.push(parent.join(command));
+        candidates.extend(
+            pathext
+                .into_iter()
+                .map(|extension| parent.join(format!("{command}{extension}"))),
+        );
+        candidates
+    }
+    #[cfg(not(windows))]
+    {
+        vec![parent.join(command)]
+    }
 }
 
 fn acp_env_variables(config: &AcpLaunchConfig) -> Result<Vec<EnvVariable>, AcpLaunchConfigError> {

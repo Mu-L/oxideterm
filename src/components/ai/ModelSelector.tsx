@@ -11,6 +11,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, Check, Key, Circle, Settings, RefreshCw, Search, X } from 'lucide-react';
+import { resolveExecutionProfile } from '../../lib/ai/profiles';
+import { useAiChatStore } from '../../store/aiChatStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useToastStore } from '../../hooks/useToast';
 import { api } from '../../lib/api';
@@ -57,7 +59,15 @@ export const ModelSelector = ({ onOpenSettings, dropdownPlacement = 'up' }: Mode
   const aiSettings = useSettingsStore((s) => s.settings.ai);
   const setActiveProvider = useSettingsStore((s) => s.setActiveProvider);
   const refreshProviderModels = useSettingsStore((s) => s.refreshProviderModels);
+  const activeConversation = useAiChatStore((state) => state.conversations.find((item) => item.id === state.activeConversationId));
 
+  const activeProfileId = activeConversation?.profileId
+    ?? activeConversation?.sessionMetadata?.profileId
+    ?? aiSettings.executionProfiles?.defaultProfileId;
+  const activeProfile = resolveExecutionProfile(aiSettings.executionProfiles, activeProfileId);
+  const activeAcpAgent = activeProfile?.backend === 'acp'
+    ? aiSettings.acpAgents?.find((agent) => agent.id === activeProfile.acpAgentId)
+    : undefined;
   const activeProvider = aiSettings.providers.find((p) => p.id === aiSettings.activeProviderId);
   const activeModel = aiSettings.activeModel || activeProvider?.defaultModel || '';
 
@@ -240,6 +250,37 @@ export const ModelSelector = ({ onOpenSettings, dropdownPlacement = 'up' }: Mode
       return { provider, visibleModels };
     })
     .filter(({ visibleModels }) => !isSearchingModels || visibleModels.length > 0);
+
+  if (activeProfile?.backend === 'acp') {
+    const acpBackendLabel = t('settings_view.ai.profile_backend_acp');
+    const agentLabel = activeAcpAgent?.displayName?.trim()
+      || activeAcpAgent?.id
+      || activeProfile.acpAgentId
+      || 'ACP';
+    const truncatedAgentLabel = agentLabel.length > 24 ? agentLabel.slice(0, 22) + '...' : agentLabel;
+    const ready = !!activeAcpAgent?.enabled && activeAcpAgent.status?.state === 'ready';
+
+    return (
+      <div className="relative min-w-0 flex-1">
+        <button
+          onClick={onOpenSettings}
+          className={cn(
+            "flex w-full max-w-full items-center gap-1 px-1.5 py-0.5 rounded-[var(--radius-md)] text-[10px] font-medium min-w-0",
+            "text-theme-text-muted hover:text-theme-text hover:bg-theme-accent/10"
+          )}
+          title={`${acpBackendLabel}: ${agentLabel}`}
+        >
+          {/* ACP profiles delegate model choice to the selected agent. */}
+          <Circle className={cn(
+            "w-1.5 h-1.5 fill-current shrink-0",
+            ready ? "text-emerald-400" : "text-amber-400"
+          )} />
+          <span className="truncate">{truncatedAgentLabel}</span>
+          <Settings className="w-2.5 h-2.5 shrink-0" />
+        </button>
+      </div>
+    );
+  }
 
   // If no providers, show a setup prompt
   if (aiSettings.providers.length === 0) {

@@ -41,6 +41,14 @@ export type ConnectToSavedHostKeyChallenge = {
   status: Extract<HostKeyStatus, { status: 'unknown' } | { status: 'changed' }>;
 };
 
+export type SavedConnectionCredentialOverride = {
+  authType: 'password' | 'key' | 'agent' | 'certificate';
+  password?: string | null;
+  keyPath?: string | null;
+  certPath?: string | null;
+  passphrase?: string | null;
+};
+
 async function finalizeConnectedSavedNode(
   connectionId: string,
   nodeId: string,
@@ -157,6 +165,38 @@ async function handleSavedConnectionFailure(
   return null;
 }
 
+function applySavedConnectionCredentialOverride<T extends {
+  auth_type: string;
+  password?: string;
+  key_path?: string;
+  cert_path?: string;
+  passphrase?: string;
+  managed_key_id?: string;
+}>(
+  savedConn: T,
+  credentials?: SavedConnectionCredentialOverride,
+): T {
+  if (!credentials) {
+    return savedConn;
+  }
+
+  // Password prompts retry a saved connection with only the target credential
+  // replaced; proxy chain and upstream proxy fields must stay intact.
+  return {
+    ...savedConn,
+    auth_type: credentials.authType,
+    password: credentials.authType === 'password' ? credentials.password ?? undefined : undefined,
+    key_path: credentials.authType === 'key' || credentials.authType === 'certificate'
+      ? credentials.keyPath ?? undefined
+      : undefined,
+    cert_path: credentials.authType === 'certificate' ? credentials.certPath ?? undefined : undefined,
+    passphrase: credentials.authType === 'key' || credentials.authType === 'certificate'
+      ? credentials.passphrase ?? undefined
+      : undefined,
+    managed_key_id: undefined,
+  };
+}
+
 export async function continueConnectToSavedPlan(
   pendingPlan: PendingSavedConnectionPlan,
   options: ConnectToSavedOptions,
@@ -180,6 +220,7 @@ export async function continueConnectToSavedPlan(
 export async function connectToSaved(
   connectionId: string,
   options: ConnectToSavedOptions,
+  credentials?: SavedConnectionCredentialOverride,
 ): Promise<ConnectToSavedResult | null> {
   const { toast, t, onError } = options;
 
@@ -200,11 +241,19 @@ export async function connectToSaved(
   };
 
   try {
-    const savedConn = await api.getSavedConnectionForConnect(connectionId);
+    const savedConn = applySavedConnectionCredentialOverride(
+      await api.getSavedConnectionForConnect(connectionId),
+      credentials,
+    );
     const upstreamProxy = savedConn.upstream_proxy ?? undefined;
 
     // ========== Proxy Chain 支持 ==========
     if (savedConn.proxy_chain && savedConn.proxy_chain.length > 0) {
+      if (requiresSavedConnectionPasswordPrompt(savedConn)) {
+        onError?.(connectionId, 'missing-password');
+        return null;
+      }
+
       const unsupportedProxyHop = findUnsupportedProxyHopAuth(savedConn.proxy_chain);
       if (unsupportedProxyHop) {
         const description = unsupportedProxyHop.reason === 'keyboard_interactive'

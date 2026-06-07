@@ -285,6 +285,28 @@ describe('settingsStore', () => {
     expect(serialized).not.toContain('secret stderr');
   });
 
+  it('migrates wrapped GitHub Copilot ACP preset back to native ACP server', async () => {
+    localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
+      ai: {
+        ...buildSavedSettings().ai,
+        acpAgents: [{
+          id: 'github-copilot',
+          displayName: 'GitHub Copilot',
+          command: 'oxideterm',
+          args: ['--acp-adapter', 'github-copilot'],
+        }],
+      },
+    })));
+
+    const useSettingsStore = await loadSettingsStore();
+    const agent = useSettingsStore.getState().settings.ai.acpAgents?.[0];
+
+    expect(agent).toMatchObject({
+      command: 'copilot',
+      args: ['--acp', '--stdio'],
+    });
+  });
+
   it('merges terminal autosuggest defaults for existing settings', async () => {
     localStorage.setItem('oxide-settings-v2', JSON.stringify(buildSavedSettings({
       terminal: { theme: 'default', renderer: 'auto' },

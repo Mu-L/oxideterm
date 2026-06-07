@@ -41,7 +41,7 @@ import { useConfirm } from '../../hooks/useConfirm';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { EditConnectionModal } from '../modals/EditConnectionModal';
+import { EditConnectionModal, type EditConnectionSubmitPayload } from '../modals/EditConnectionModal';
 import { SessionTree } from '../sessions/SessionTree';
 import { Breadcrumb } from '../sessions/Breadcrumb';
 import { FocusedNodeList } from '../sessions/FocusedNodeList';
@@ -704,6 +704,33 @@ export const Sidebar = () => {
     });
   }, [openConnectionEditor, createTab, toast, t]);
 
+  const handlePromptConnectSaved = useCallback(async ({
+    connection,
+    authType,
+    password,
+    keyPath,
+    certPath,
+    passphrase,
+  }: EditConnectionSubmitPayload) => {
+    await connectToSaved(connection.id, {
+      createTab,
+      toast,
+      t,
+      onError: (id, reason) => {
+        if (reason === 'missing-password') {
+          openConnectionEditor(id);
+        }
+      },
+    }, {
+      authType,
+      password,
+      keyPath,
+      certPath,
+      passphrase,
+    });
+    await loadSavedConnections();
+  }, [createTab, loadSavedConnections, openConnectionEditor, toast, t]);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // Data-driven sidebar button definitions
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1092,6 +1119,7 @@ export const Sidebar = () => {
         open={modals.editConnection}
         onOpenChange={(open) => toggleModal('editConnection', open)}
         connection={editingConnection}
+        onSubmit={handlePromptConnectSaved}
         onConnect={() => {
           loadSavedConnections();
         }}

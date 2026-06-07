@@ -42,7 +42,6 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import {
   buildSavedConnectionTestRequest,
-  buildTestConnectionRequest,
   requiresSavedConnectionPasswordPrompt,
 } from '../../lib/testConnectionRequest';
 import type { ConnectionInfo, HostKeyStatus, SerialProfile } from '../../types';
@@ -464,21 +463,43 @@ export const SessionManagerPanel = () => {
     certPath,
     passphrase,
   }: EditConnectionSubmitPayload) => {
+    const savedConn = await api.getSavedConnectionForConnect(connection.id);
     await prepareTestConnection(
       `${connection.username}@${connection.host}:${connection.port}`,
-      buildTestConnectionRequest({
+      buildSavedConnectionTestRequest({
+        ...savedConn,
+        // Keep the saved proxy metadata while replacing only credentials
+        // supplied by the password/key prompt.
+        name: connection.name,
         host: connection.host,
         port: connection.port,
         username: connection.username,
-        name: connection.name,
-        authType,
+        auth_type: authType,
         password,
-        keyPath,
-        certPath,
+        key_path: keyPath,
+        cert_path: certPath,
         passphrase,
       }),
     );
   }, [prepareTestConnection]);
+
+  const handlePromptConnectConnection = useCallback(async ({
+    connection,
+    authType,
+    password,
+    keyPath,
+    certPath,
+    passphrase,
+  }: EditConnectionSubmitPayload) => {
+    await connectToSaved(connection.id, getConnectToSavedOptions(), {
+      authType,
+      password,
+      keyPath,
+      certPath,
+      passphrase,
+    });
+    await refresh();
+  }, [getConnectToSavedOptions, refresh]);
 
   const handleAcceptTestHostKey = useCallback(async (persist: boolean) => {
     if (!pendingTestConnection || !testHostKeyStatus || testHostKeyStatus.status !== 'unknown') {
@@ -706,7 +727,7 @@ export const SessionManagerPanel = () => {
         }}
         connection={connectPromptConnectionId ? allConnections.find(c => c.id === connectPromptConnectionId) ?? null : null}
         action={connectPromptAction}
-        onSubmit={connectPromptAction === 'test' ? handlePromptTestConnection : undefined}
+        onSubmit={connectPromptAction === 'test' ? handlePromptTestConnection : handlePromptConnectConnection}
         onConnect={connectPromptAction === 'connect' ? refresh : undefined}
       />
 

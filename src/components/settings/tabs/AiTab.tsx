@@ -142,13 +142,13 @@ type AcpAgentPresetConfig = Pick<AcpAgentConfig, 'displayName' | 'command' | 'ar
 const ACP_AGENT_PRESET_CONFIGS: Record<AcpAgentPreset, AcpAgentPresetConfig> = {
     'claude-code': {
         displayName: 'Claude Code',
-        command: 'npx',
-        args: ['-y', '@agentclientprotocol/claude-agent-acp'],
+        command: 'oxideterm',
+        args: ['--acp-adapter', 'claude-code'],
     },
     codex: {
         displayName: 'Codex',
-        command: 'codex-acp',
-        args: [],
+        command: 'oxideterm',
+        args: ['--acp-adapter', 'codex'],
     },
     'github-copilot': {
         displayName: 'GitHub Copilot',
@@ -199,6 +199,21 @@ function acpAgentFromPreset(preset: AcpAgentPreset, agents: AcpAgentConfig[]): A
         capabilityPolicy: defaultAcpAgentCapabilityPolicy(),
         status: defaultAcpAgentRuntimeStatus(),
     };
+}
+
+function acpAgentErrorLabel(errorKind: string): string {
+    switch (errorKind) {
+        case 'command_not_found':
+            return 'settings_view.ai.acp_agent_error_command_not_found';
+        case 'config':
+            return 'settings_view.ai.acp_agent_error_config';
+        case 'initialize':
+            return 'settings_view.ai.acp_agent_error_initialize';
+        case 'invoke':
+            return 'settings_view.ai.acp_agent_error_invoke';
+        default:
+            return 'settings_view.ai.acp_agent_error_unknown';
+    }
 }
 
 function acpArgsDraft(args: string[]): string {
@@ -726,7 +741,9 @@ export const AiTab = ({
                                                 <div className="flex items-center gap-2">
                                                     {agent.status.lastErrorKind && (
                                                         <span className="text-[10px] text-theme-text-muted">
-                                                            {t('settings_view.ai.acp_agent_last_error', { error: agent.status.lastErrorKind })}
+                                                            {t('settings_view.ai.acp_agent_last_error', {
+                                                                error: t(acpAgentErrorLabel(agent.status.lastErrorKind)),
+                                                            })}
                                                         </span>
                                                     )}
                                                     <span className="rounded bg-theme-bg-panel px-2 py-1 text-[10px] uppercase tracking-wider text-theme-text-muted">

@@ -882,6 +882,23 @@ function stringRecord(value: unknown): Record<string, string> {
   );
 }
 
+function migrateAcpAgentPreset(command: string, args: string[]): Pick<AcpAgentConfig, 'command' | 'args'> {
+  // Only exact historical preset defaults are rewritten; user-edited agent
+  // launch commands remain under user control.
+  if (command === 'npx' && args.length === 2 && args[0] === '-y' && args[1] === '@agentclientprotocol/claude-agent-acp') {
+    return { command: 'oxideterm', args: ['--acp-adapter', 'claude-code'] };
+  }
+  if (command === 'codex-acp' && args.length === 0) {
+    return { command: 'oxideterm', args: ['--acp-adapter', 'codex'] };
+  }
+  // Copilot already exposes a native ACP stdio server, so undo the old
+  // OxideTerm wrapper preset when loading saved settings.
+  if ((command === 'oxideterm' || command === 'oxideterm-native') && args.length === 2 && args[0] === '--acp-adapter' && args[1] === 'github-copilot') {
+    return { command: 'copilot', args: ['--acp', '--stdio'] };
+  }
+  return { command, args };
+}
+
 function normalizedAcpAgents(value: unknown): AcpAgentConfig[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -903,12 +920,15 @@ function normalizedAcpAgents(value: unknown): AcpAgentConfig[] {
         ? status.state as AcpAgentRuntimeStatus['state']
         : defaultAcpAgentRuntimeStatus().state;
       const defaults = defaultAcpAgentCapabilityPolicy();
+      const command = typeof item.command === 'string' ? item.command.trim() : '';
+      const args = Array.isArray(item.args) ? item.args.filter((arg): arg is string => typeof arg === 'string') : [];
+      const launch = migrateAcpAgentPreset(command, args);
 
       return {
         id: typeof item.id === 'string' ? item.id.trim() : '',
         displayName: typeof item.displayName === 'string' ? item.displayName.trim() : '',
-        command: typeof item.command === 'string' ? item.command.trim() : '',
-        args: Array.isArray(item.args) ? item.args.filter((arg): arg is string => typeof arg === 'string') : [],
+        command: launch.command,
+        args: launch.args,
         env: stringRecord(item.env),
         cwd: typeof item.cwd === 'string' && item.cwd.trim() ? item.cwd.trim() : null,
         enabled: typeof item.enabled === 'boolean' ? item.enabled : true,

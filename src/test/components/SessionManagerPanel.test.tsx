@@ -363,6 +363,92 @@ describe('SessionManagerPanel', () => {
     });
   });
 
+  it('preserves saved proxy metadata when submitting prompted test credentials', async () => {
+    const upstreamProxy = {
+      protocol: 'socks5',
+      host: 'proxy.local',
+      port: 1080,
+      auth: { type: 'none' },
+      remoteDns: true,
+      noProxy: '',
+    } as const;
+    vi.mocked(api.getSavedConnectionForConnect).mockResolvedValue({
+      name: 'Test Conn',
+      host: 'example.com',
+      port: 22,
+      username: 'tester',
+      auth_type: 'password',
+      agent_forwarding: false,
+      proxy_chain: [{
+        host: 'jump.example.com',
+        port: 22,
+        username: 'jump',
+        auth_type: 'agent',
+        agent_forwarding: false,
+      }],
+      upstream_proxy: upstreamProxy,
+    });
+    vi.mocked(api.testConnection).mockResolvedValue({
+      success: true,
+      elapsedMs: 12,
+      diagnostic: {
+        phase: 'complete',
+        category: 'success',
+        summary: 'Connection test succeeded',
+        detail: 'Connected successfully',
+      },
+    });
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('test-row'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('connect-modal')).toHaveAttribute('data-action', 'test');
+    });
+
+    fireEvent.click(screen.getByText('submit-connect-modal'));
+
+    await waitFor(() => {
+      expect(api.testConnection).toHaveBeenCalledWith(expect.objectContaining({
+        auth_type: 'password',
+        password: 'secret',
+        upstream_proxy: upstreamProxy,
+        proxy_chain: [expect.objectContaining({
+          host: 'jump.example.com',
+          auth_type: 'agent',
+        })],
+      }));
+    });
+  });
+
+  it('submits prompted connect credentials through shared saved connection flow', async () => {
+    connectToSavedMock.mockImplementation(async (_id: string, options: { onError?: (id: string, reason?: 'missing-password' | 'connect-failed') => void }) => {
+      options.onError?.('conn-1', 'missing-password');
+    });
+
+    render(<SessionManagerPanel />);
+    fireEvent.click(screen.getByText('connect-row'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('connect-modal')).toHaveAttribute('data-action', 'connect');
+    });
+
+    connectToSavedMock.mockResolvedValueOnce({ nodeId: 'node-1', sessionId: 'term-1' });
+    fireEvent.click(screen.getByText('submit-connect-modal'));
+
+    await waitFor(() => {
+      expect(connectToSavedMock).toHaveBeenLastCalledWith(
+        'conn-1',
+        expect.any(Object),
+        expect.objectContaining({
+          authType: 'password',
+          password: 'secret',
+        }),
+      );
+    });
+    expect(sessionManagerState.refresh).toHaveBeenCalled();
+  });
+
   it('shows host key confirmation before running a test on an unknown host', async () => {
     vi.mocked(api.getSavedConnectionForConnect).mockResolvedValue({
       name: 'Test Conn',

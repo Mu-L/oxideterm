@@ -351,6 +351,95 @@ describe('connectToSaved', () => {
     expect(sessionTreeState.connectNode).not.toHaveBeenCalled();
   });
 
+  it('requests a password prompt before expanding a proxy-chain target with a missing password', async () => {
+    apiMocks.getSavedConnectionForConnect.mockResolvedValue({
+      name: 'Proxy Target Missing Password',
+      host: 'target.example.com',
+      port: 22,
+      username: 'target',
+      auth_type: 'password',
+      agent_forwarding: false,
+      proxy_chain: [
+        {
+          host: 'jump.example.com',
+          port: 22,
+          username: 'jump',
+          auth_type: 'agent',
+          agent_forwarding: false,
+        },
+      ],
+    });
+    const onError = vi.fn();
+
+    await connectToSaved('saved-proxy-missing-password', {
+      createTab: vi.fn(),
+      toast: vi.fn(),
+      t: (key: string) => key,
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledWith('saved-proxy-missing-password', 'missing-password');
+    expect(sessionTreeState.expandManualPreset).not.toHaveBeenCalled();
+    expect(sessionTreeState.connectNode).not.toHaveBeenCalled();
+  });
+
+  it('retries prompted proxy-chain credentials without dropping upstream proxy metadata', async () => {
+    const upstreamProxy = {
+      protocol: 'socks5',
+      host: 'proxy.local',
+      port: 1080,
+      auth: { type: 'none' },
+      remoteDns: true,
+      noProxy: '',
+    };
+    apiMocks.getSavedConnectionForConnect.mockResolvedValue({
+      name: 'Prompted Proxy Target',
+      host: 'target.example.com',
+      port: 22,
+      username: 'target',
+      auth_type: 'password',
+      agent_forwarding: false,
+      proxy_chain: [
+        {
+          host: 'jump.example.com',
+          port: 22,
+          username: 'jump',
+          auth_type: 'agent',
+          agent_forwarding: false,
+        },
+      ],
+      upstream_proxy: upstreamProxy,
+    });
+    sessionTreeState.expandManualPreset.mockResolvedValue({
+      targetNodeId: 'node-target',
+      pathNodeIds: ['node-jump', 'node-target'],
+      chainDepth: 2,
+    });
+    sessionTreeState.createTerminalForNode.mockResolvedValue('term-target');
+
+    await connectToSaved('saved-prompted-proxy', {
+      createTab: vi.fn(),
+      toast: vi.fn(),
+      t: (key: string) => key,
+    }, {
+      authType: 'password',
+      password: 'prompt-secret',
+    });
+
+    expect(sessionTreeState.expandManualPreset).toHaveBeenCalledWith(expect.objectContaining({
+      upstreamProxy,
+      target: expect.objectContaining({
+        authType: 'password',
+        password: 'prompt-secret',
+      }),
+      hops: [expect.objectContaining({ host: 'jump.example.com' })],
+    }));
+    expect(apiMocks.preflightTreeNode).toHaveBeenNthCalledWith(1, 'node-jump', upstreamProxy);
+    expect(sessionTreeState.connectNode).toHaveBeenNthCalledWith(1, 'node-jump', expect.objectContaining({
+      upstreamProxy,
+    }));
+  });
+
   it('treats an explicitly empty saved password as a valid password auth value', async () => {
     apiMocks.getSavedConnectionForConnect.mockResolvedValue({
       name: 'Empty Password',

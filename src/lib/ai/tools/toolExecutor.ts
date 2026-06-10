@@ -63,7 +63,6 @@ import {
   renderedDeltaFromLineCount,
   renderedDeltaFromTextSnapshot,
   searchRenderedBuffer,
-  terminalRunRemote,
   terminalSend,
   toLegacyToolResult,
   waitForTerminalOutput as waitForTerminalOutputV2,
@@ -75,7 +74,6 @@ import {
   type ToolTarget,
 } from './protocol';
 
-const MAX_COMMAND_TIMEOUT_SECS = 60;
 const MAX_LIST_DEPTH = 8;
 const MAX_GREP_RESULTS = 200;
 const MAX_PATTERN_LENGTH = 200;
@@ -944,51 +942,34 @@ async function execTerminalCommand(
     return { toolCallId, toolName: 'terminal_exec', success: false, output: '', error: 'Missing required argument: command', durationMs: Date.now() - startTime };
   }
 
-  const cwd = args.cwd as string | undefined;
-  const timeoutSecs = clamp(Number(args.timeout_secs) || 30, 1, MAX_COMMAND_TIMEOUT_SECS);
-
-  const result = await terminalRunRemote({ nodeId: resolved.nodeId, command, cwd, timeoutSecs });
-  const combined = result.stderr
-    ? `${result.stdout}\n--- stderr ---\n${result.stderr}`
-    : result.stdout;
-
-  // Apply semantic sampling on verbose output to focus on errors/commands
-  const lines = combined.split('\n');
-  const processed = lines.length > 100 ? semanticSample(lines, 200).join('\n') : combined;
-
-  const { text, truncated } = truncateOutput(processed);
-
-  const success = result.exitCode === 0 || result.exitCode === null;
   return envelopeResult(toolCallId, {
-    ok: success,
+    ok: false,
     toolName: 'terminal_exec',
-    summary: success ? 'Remote command completed.' : `Remote command exited with ${result.exitCode}.`,
-    output: text,
-    data: { nodeId: resolved.nodeId, exitCode: result.exitCode },
+    summary: 'Visible terminal execution is required.',
+    output: 'Hidden remote command capture is disabled. Use the matching terminal-session:* target so the command appears in the terminal.',
+    data: { nodeId: resolved.nodeId, command },
     execution: createExecutionSummary({
       kind: 'command',
       command,
-      cwd,
       target: { id: `ssh-node:${resolved.nodeId}`, kind: 'ssh-node', label: resolved.nodeId },
-      exitCode: result.exitCode ?? null,
+      exitCode: null,
       timedOut: false,
-      truncated,
-      stderr: result.stderr,
-      errorMessage: success ? undefined : `Exit code: ${result.exitCode}`,
+      truncated: false,
+      visibleInTerminal: false,
+      state: 'rejected',
+      errorMessage: 'Hidden remote command capture is disabled.',
     }),
     capability: 'command.run',
     targetId: `ssh-node:${resolved.nodeId}`,
-    truncated,
     durationMs: Date.now() - startTime,
     targets: [{ id: `ssh-node:${resolved.nodeId}`, kind: 'ssh-node', label: resolved.nodeId, metadata: { nodeId: resolved.nodeId } }],
-    ...(success ? {} : {
-      error: {
-        code: 'remote_command_failed',
-        message: `Exit code: ${result.exitCode}`,
-        recoverable: true,
-      },
+    nextActions: [{ tool: 'list_targets', reason: 'Find the visible terminal-session for this SSH node.', priority: 'recommended' }],
+    error: {
+      code: 'visible_terminal_required',
+      message: 'Use terminal-session:* for remote commands so execution is visible.',
       recoverable: true,
-    }),
+    },
+    recoverable: true,
   });
 }
 
@@ -1053,6 +1034,8 @@ async function execTerminalCommandToSession(
           exitCode: null,
           timedOut: false,
           truncated: false,
+          visibleInTerminal: true,
+          state: 'sent',
         }),
         capability: 'terminal.send',
         targetId: `terminal-session:${sessionId}`,
@@ -1102,6 +1085,8 @@ async function execTerminalCommandToSession(
         exitCode: null,
         timedOut: waitResult.reason === 'timeout',
         truncated: renderedWaitResult?.truncated ?? waitResult.truncated ?? false,
+        visibleInTerminal: true,
+        state: waitResult.reason === 'timeout' ? 'waiting_for_input' : 'output_captured',
         errorMessage: renderedWaitResult?.error ?? waitResult.error,
       }),
       capability: 'terminal.send',
@@ -1874,66 +1859,6 @@ async function execGetConnectionHealth(
 // Session-ID Tool Executors
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Semantic buffer sampling: keeps the last TAIL_SIZE lines in full,
- * then filters the older lines to retain only "interesting" ones
- * (commands, errors, warnings, status changes). This preserves
- * context depth while cutting token consumption by 60%+.
- */
-const SEMANTIC_TAIL_SIZE = 50;
-const SEMANTIC_KEYWORDS = /\b(error|fail|fatal|panic|exception|denied|warning|warn|exit|killed|timeout|refused|not found|no such|segfault|oom|abort|SIGTERM|SIGKILL|SIGSEGV)\b/i;
-const PROMPT_PATTERN = /^[\s]*[\$#>%»›]\s|^\[.*@.*\][\$#]\s|^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+[:\s]/;
-const SEPARATOR_PATTERN = /^[-=]{4,}$|^#{1,3}\s/;
-
-function semanticSample(lines: string[], maxLines: number): string[] {
-  if (lines.length <= SEMANTIC_TAIL_SIZE) return lines;
-
-  // Split: older head vs recent tail
-  const tailStart = Math.max(0, lines.length - SEMANTIC_TAIL_SIZE);
-  const tail = lines.slice(tailStart);
-  const head = lines.slice(0, tailStart);
-
-  // Filter head: keep only interesting lines
-  const sampledHead: string[] = [];
-  for (let i = 0; i < head.length; i++) {
-    const line = head[i];
-    if (
-      SEMANTIC_KEYWORDS.test(line) ||
-      PROMPT_PATTERN.test(line) ||
-      SEPARATOR_PATTERN.test(line)
-    ) {
-      sampledHead.push(line);
-    }
-  }
-
-  // Build output — always include omitted marker when lines were filtered
-  const result: string[] = [];
-  const omittedCount = head.length - sampledHead.length;
-  if (sampledHead.length > 0) {
-    result.push(...sampledHead);
-  }
-  if (omittedCount > 0) {
-    result.push(`--- (${omittedCount} lines omitted, ${tail.length} recent lines follow) ---`);
-  }
-  result.push(...tail);
-
-  // Apply maxLines limit — ensure we keep the separator + tail over head
-  if (result.length > maxLines) {
-    // Reserve at least 20% for semantic head, rest for tail
-    const headBudget = Math.min(sampledHead.length, Math.floor(maxLines * 0.2));
-    const tailBudget = Math.max(0, maxLines - headBudget - 1); // -1 for separator
-    const kept: string[] = [];
-    if (headBudget > 0) {
-      kept.push(...sampledHead.slice(-headBudget));
-    }
-    kept.push(`--- (${omittedCount} lines omitted, showing last ${Math.min(tailBudget, tail.length)} lines) ---`);
-    kept.push(...tail.slice(-tailBudget));
-    return kept;
-  }
-
-  return result;
-}
-
 async function execGetTerminalBuffer(
   args: Record<string, unknown>,
   startTime: number,
@@ -2345,6 +2270,8 @@ async function execBatchExec(
       target: { id: `terminal-session:${sessionId}`, kind: 'terminal-session', label: `Terminal ${sessionId}` },
       timedOut: executionItems.some((item) => item.timedOut === true),
       truncated,
+      visibleInTerminal: true,
+      state: abortSignal?.aborted ? 'aborted' : 'output_captured',
       items: executionItems,
       errorMessage: abortSignal?.aborted ? 'Generation was stopped.' : undefined,
     }),

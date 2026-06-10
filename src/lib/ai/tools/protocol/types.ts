@@ -107,6 +107,8 @@ export type ToolExecutionSummary = {
   exitCode?: number | null;
   timedOut?: boolean;
   truncated?: boolean;
+  visibleInTerminal?: boolean;
+  state?: string;
   stderrSummary?: string;
   items?: Array<{
     command?: string;

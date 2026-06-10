@@ -3,6 +3,7 @@
 
 export * from './definitions';
 export * from './executor';
+export * from './evidenceBinding';
 export * from './ledger';
 export * from './policy';
 export * from './cliAgents';

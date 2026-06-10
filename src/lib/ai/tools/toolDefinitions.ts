@@ -20,8 +20,8 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
     name: 'terminal_exec',
     description:
       'Execute a shell command on a resolved target. Prefer target_id from resolve_target. Two modes:\n' +
-      '• target_id/node_id for non-interactive remote commands: Direct remote execution with reliable stdout/stderr capture.\n' +
       '• target_id/session_id for visible terminal sessions: Send command to an open shell and capture output from the terminal screen.\n' +
+      '• local one-shot execution is handled by local_exec; remote SSH commands should use terminal-session:* so the user can see the command.\n' +
       'If target_id, node_id, and session_id conflict, target_id wins. If output is empty or incomplete, use get_terminal_buffer with the same target_id/session_id.',
     parameters: {
       type: 'object',
@@ -32,7 +32,7 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
         },
         target_id: {
           type: 'string',
-          description: 'Target ID returned by resolve_target/list_targets. ssh-node:* runs directly on that SSH node; terminal-session:* sends the command to that visible shell.',
+          description: 'Target ID returned by resolve_target/list_targets. Prefer terminal-session:* so the command is visible in the shell.',
         },
         cwd: {
           type: 'string',
@@ -42,11 +42,11 @@ export const BUILTIN_TOOLS: AiToolDefinition[] = [
           type: 'number',
           minimum: 1,
           maximum: 60,
-          description: 'Timeout in seconds (node_id mode). Default: 30. Max: 60. For session_id mode, auto-await timeout is 30s.',
+          description: 'Timeout in seconds for visible terminal auto-await. Default: 30. Max: 60.',
         },
         node_id: {
           type: 'string',
-          description: 'Legacy target node ID for direct remote execution. Prefer target_id from resolve_target.',
+          description: 'Legacy target node ID. Hidden remote command capture is disabled; prefer target_id with a terminal-session:* target.',
         },
         session_id: {
           type: 'string',

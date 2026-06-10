@@ -741,7 +741,7 @@ describe('toolExecutor get_settings sanitization', () => {
     expect(result.envelope?.nextActions?.[0]?.tool).toBe('resolve_target');
   });
 
-  it('maps terminal_exec target_id to direct SSH node execution', async () => {
+  it('rejects terminal_exec ssh-node target_id because remote commands must be visible', async () => {
     sessionTreeState.nodes = [
       { id: 'node-1', host: 'example.com', username: 'root', port: 22, runtime: { status: 'connected', terminalIds: [] } },
     ];
@@ -753,9 +753,10 @@ describe('toolExecutor get_settings sanitization', () => {
       { activeNodeId: null, activeAgentAvailable: false, requireExplicitTarget: true },
     );
 
-    expect(result.success).toBe(true);
-    expect(result.output).toContain('/home/root');
-    expect(nodeIdeExecCommandMock).toHaveBeenCalledWith('node-1', 'pwd', undefined, 30);
+    expect(result.success).toBe(false);
+    expect(result.envelope?.error?.code).toBe('visible_terminal_required');
+    expect(result.envelope?.nextActions?.[0]?.tool).toBe('list_targets');
+    expect(nodeIdeExecCommandMock).not.toHaveBeenCalled();
     expect(result.envelope?.meta.targetId).toBe('ssh-node:node-1');
   });
 

@@ -15,7 +15,7 @@ import { resolveChatEmbeddingApiKey } from '../lib/ai/providerKeyScope';
 import { resolveAiReasoningEffort } from '../lib/ai/reasoningSettings';
 import { estimateTokens, estimateToolDefinitionsTokens, trimHistoryToTokenBudget, getModelContextWindow, responseReserve } from '../lib/ai/tokenUtils';
 import type { AiToolChoice, ChatMessage as ProviderChatMessage } from '../lib/ai/providers';
-import type { AiChatMessage, AiConversation, AiToolCall } from '../types';
+import type { AiChatMessage, AiConversation, AiToolCall, AiToolResult } from '../types';
 import type {
   AiAssistantTurn,
   AiDiagnosticEvent,
@@ -38,10 +38,15 @@ import {
   buildOrchestratorObligationPrompt,
   buildOrchestratorSystemPrompt,
   classifyOrchestratorObligation,
+  applyAiResultBindingGuard,
+  aiToolResultFactsForMessage,
+  buildAiToolExecutionRecord,
   executeOrchestratorTool,
   formatContextChipsForPrompt,
   buildRuntimeContextChips,
   getOrchestratorToolDefs,
+  recordAiToolExecution,
+  recordAiToolResultFacts,
   resolveAiPolicyDecision,
   type OrchestratorObligation,
   type OrchestratorToolContext,
@@ -140,6 +145,42 @@ function shouldRetryRequiredToolRound(obligation: OrchestratorObligation | null,
 
   const looksLikeClarification = /[?？]\s*$|(?:请|需要你|你可以|是否|哪一个|哪个|确认)/.test(trimmed);
   return !looksLikeClarification;
+}
+
+function recordTurnToolEvidence(
+  conversationId: string,
+  assistantMessageId: string,
+  turn: AiAssistantTurn,
+): void {
+  for (const part of turn.parts) {
+    if (part.type !== 'tool_result') {
+      continue;
+    }
+
+    const result: AiToolResult = {
+      toolCallId: part.toolCallId,
+      toolName: part.toolName,
+      success: part.success,
+      output: part.output,
+      error: part.error,
+      durationMs: part.durationMs,
+      truncated: part.truncated,
+      envelope: part.envelope,
+    };
+    const record = buildAiToolExecutionRecord({
+      conversationId,
+      assistantMessageId,
+      toolCallId: part.toolCallId,
+      toolName: part.toolName,
+      args: {},
+      status: part.success ? 'completed' : 'error',
+      result,
+      risk: 'unknown',
+      finishedAt: Date.now(),
+    });
+    recordAiToolExecution(record);
+    recordAiToolResultFacts(record, result);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3014,7 +3055,29 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
         };
       }
 
-      const projectedAssistantMessage = projectTurnToLegacyMessageFields(assistantTurn);
+      recordTurnToolEvidence(convId, assistantMessage.id, assistantTurn);
+      let projectedAssistantMessage = projectTurnToLegacyMessageFields(assistantTurn);
+      const bindingFacts = aiToolResultFactsForMessage(convId, assistantMessage.id);
+      const bindingResult = applyAiResultBindingGuard({
+        ...assistantMessage,
+        ...projectedAssistantMessage,
+        turn: assistantTurn,
+      }, bindingFacts);
+      if (bindingResult.guardrail) {
+        assistantTurn = bindingResult.message.turn ?? assistantTurn;
+        projectedAssistantMessage = projectTurnToLegacyMessageFields(assistantTurn);
+        queueDiagnosticEvent('guardrail', {
+          code: 'result-binding-required',
+          message: bindingResult.guardrail.message,
+          rawTextLength: bindingResult.guardrail.rawText.length,
+        }, {
+          turnId: assistantMessage.id,
+          requestKind: 'chat',
+        });
+      } else if (bindingResult.message.turn !== assistantTurn || bindingResult.message.content !== projectedAssistantMessage.content) {
+        assistantTurn = bindingResult.message.turn ?? assistantTurn;
+        projectedAssistantMessage = projectTurnToLegacyMessageFields(assistantTurn);
+      }
       queueAssistantTurnCompletion(assistantTurn, 'complete');
 
       // Final update with parsed content

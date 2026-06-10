@@ -142,6 +142,29 @@ function truncateForModel(value: string, maxChars = MODEL_OUTPUT_MAX_CHARS): { v
   };
 }
 
+function evidenceFactsForModel(
+  result: AiToolResult,
+  envelope: ToolResultEnvelope,
+): Array<{ factId: string; toolCallId: string; toolName: string; sourceKind: string }> {
+  const executionExtras = envelope.execution as { visibleInTerminal?: unknown; state?: unknown } | undefined;
+  const candidates: Array<[string, unknown]> = [
+    ['summary', envelope.summary],
+    ['output', envelope.output],
+    ['execution.exit_code', envelope.execution?.exitCode],
+    ['execution.visible_in_terminal', executionExtras?.visibleInTerminal],
+    ['execution.state', executionExtras?.state],
+  ];
+
+  return candidates
+    .filter(([, value]) => value !== undefined && !(typeof value === 'string' && value.trim() === ''))
+    .map(([sourceKind]) => ({
+      factId: `${result.toolCallId}.${sourceKind}`,
+      toolCallId: result.toolCallId,
+      toolName: result.toolName,
+      sourceKind,
+    }));
+}
+
 export function formatToolResultForModel(result: AiToolResult): string {
   const envelope = fromLegacyToolResult(result);
   const summary = truncateForModel(envelope.summary, MODEL_SUMMARY_MAX_CHARS);
@@ -152,6 +175,7 @@ export function formatToolResultForModel(result: AiToolResult): string {
   const errorMessage = envelope.error
     ? truncateForModel(envelope.error.message, MODEL_ERROR_MESSAGE_MAX_CHARS)
     : null;
+  const evidenceFacts = evidenceFactsForModel(result, envelope);
   const payload = {
     ok: envelope.ok,
     summary: summary.value,
@@ -176,6 +200,7 @@ export function formatToolResultForModel(result: AiToolResult): string {
     ...(envelope.nextActions && envelope.nextActions.length > 0 ? { nextActions: envelope.nextActions } : {}),
     ...(envelope.disambiguation ? { disambiguation: envelope.disambiguation } : {}),
     ...(envelope.outputPreview ? { outputPreview: envelope.outputPreview } : {}),
+    ...(evidenceFacts.length > 0 ? { evidenceFacts } : {}),
     meta: {
       ...envelope.meta,
       truncated: envelope.meta.truncated === true

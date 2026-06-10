@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AnalyseDeCircuit
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { api, nodeIdeExecCommand } from '../../api';
+import { api } from '../../api';
 import {
   beginTerminalCommandMark,
   findPaneBySessionId,
@@ -120,34 +120,19 @@ export async function runCommandOnTarget(options: {
   }
 
   if (target.kind === 'ssh-node') {
-    const nodeId = target.refs.nodeId;
-    if (!nodeId) {
-      return failAction('SSH node target is missing nodeId.', 'missing_node_id', 'Target cannot run remote commands without nodeId.', 'execute', { target });
-    }
-    try {
-      const result = await nodeIdeExecCommand(nodeId, command, options.cwd, options.timeoutSecs ?? 30);
-      const output = commandOutput(result.stdout, result.stderr, result.exitCode);
-      const hasOutput = hasCapturedCommandOutput(result.stdout, result.stderr);
-      const ok = result.exitCode === 0 || (result.exitCode == null && hasOutput);
-      return {
-        ok,
-        summary: result.exitCode === 0
-          ? 'Remote command completed.'
-          : result.exitCode == null && hasOutput
-            ? 'Remote command output captured; exit code was not reported.'
-            : `Remote command exited with ${result.exitCode ?? 'unknown'}.`,
-        output,
-        data: { exitCode: result.exitCode ?? null },
-        ...(result.exitCode == null && hasOutput ? { observations: ['The remote command produced output, but the backend did not report an exit code.'] } : {}),
+    return failAction(
+      'Remote commands must run in a visible terminal.',
+      'visible_terminal_required',
+      'ssh-node targets do not execute commands through a hidden capture path. Use the matching terminal-session target returned by connect_target or list_targets so the command appears in the terminal.',
+      'execute',
+      {
         target,
-        risk: 'execute',
-        ...(ok ? {} : {
-          error: { code: 'remote_command_failed', message: `Exit code: ${result.exitCode ?? 'unknown'}`, recoverable: true },
-        }),
-      };
-    } catch (error) {
-      return failAction('Remote command failed.', 'remote_command_error', error instanceof Error ? error.message : String(error), 'execute', { target });
-    }
+        nextActions: [
+          { action: 'list_targets', reason: 'Find the terminal-session for this SSH connection.' },
+          { action: 'connect_target', args: { target_id: target.id }, reason: 'Reconnect or reveal the SSH terminal session.' },
+        ],
+      },
+    );
   }
 
   if (target.kind === 'local-shell') {

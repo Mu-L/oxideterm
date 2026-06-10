@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { actionResultToToolResult } from '@/lib/ai/orchestrator/result';
+import { formatToolResultForModel } from '@/lib/ai/tools/protocol';
 
 describe('orchestrator result output handling', () => {
   it('keeps small output as the model output without rawOutput duplication', () => {
@@ -66,5 +67,32 @@ describe('orchestrator result output handling', () => {
       rawOutputStored: false,
     });
     expect(result.envelope?.warnings?.[0]).toContain('Full output exceeded');
+  });
+
+  it('adds model-facing evidence facts for tool result binding', () => {
+    const result = actionResultToToolResult('tool-1', 'run_command', {
+      ok: true,
+      summary: 'Command completed.',
+      output: 'Filesystem Size Used\n/ 468G 72G',
+      risk: 'execute',
+    }, 1, {
+      execution: {
+        kind: 'terminal',
+        command: 'df -h /',
+        target: { id: 'terminal-session:s1', kind: 'terminal-session', label: 'Terminal s1' },
+        exitCode: 0,
+        visibleInTerminal: true,
+        state: 'output_captured',
+      },
+    });
+
+    const payload = JSON.parse(formatToolResultForModel(result)) as { evidenceFacts?: Array<{ factId: string }> };
+
+    expect(payload.evidenceFacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ factId: 'tool-1.output' }),
+      expect.objectContaining({ factId: 'tool-1.execution.exit_code' }),
+      expect.objectContaining({ factId: 'tool-1.execution.visible_in_terminal' }),
+      expect.objectContaining({ factId: 'tool-1.execution.state' }),
+    ]));
   });
 });

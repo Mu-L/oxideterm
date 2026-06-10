@@ -41,35 +41,16 @@ const localTarget: AiTarget = {
 };
 
 describe('orchestrator terminal command execution', () => {
-  it('treats remote null exit code with captured output as successful observation', async () => {
-    nodeIdeExecCommandMock.mockResolvedValueOnce({
-      stdout: 'file-a\nfile-b\n',
-      stderr: '',
-      exitCode: null,
-    });
-
+  it('rejects ssh-node command execution because remote commands must be visible', async () => {
     const result = await runCommandOnTarget({ target: sshTarget, command: 'ls -la' });
-
-    expect(result.ok).toBe(true);
-    expect(result.error).toBeUndefined();
-    expect(result.summary).toContain('exit code was not reported');
-    expect(result.observations?.[0]).toContain('did not report an exit code');
-  });
-
-  it('keeps non-zero remote exit code as a failed command', async () => {
-    nodeIdeExecCommandMock.mockResolvedValueOnce({
-      stdout: '',
-      stderr: 'Permission denied',
-      exitCode: 1,
-    });
-
-    const result = await runCommandOnTarget({ target: sshTarget, command: 'cat /root/secret' });
 
     expect(result.ok).toBe(false);
     expect(result.error).toMatchObject({
-      code: 'remote_command_failed',
+      code: 'visible_terminal_required',
       recoverable: true,
     });
+    expect(nodeIdeExecCommandMock).not.toHaveBeenCalled();
+    expect(result.nextActions?.[0]).toMatchObject({ action: 'list_targets' });
   });
 
   it('treats local null exit code with captured output as successful when not timed out', async () => {

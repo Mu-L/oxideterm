@@ -53,6 +53,8 @@ export function createExecutionSummary(input: {
   exitCode?: number | null;
   timedOut?: boolean;
   truncated?: boolean;
+  visibleInTerminal?: boolean;
+  state?: string | null;
   stderr?: string | null;
   stderrSummary?: string | null;
   errorMessage?: string | null;
@@ -66,6 +68,8 @@ export function createExecutionSummary(input: {
     ...(hasOwn(input, 'exitCode') ? { exitCode: input.exitCode ?? null } : {}),
     ...(input.timedOut !== undefined ? { timedOut: input.timedOut } : {}),
     ...(input.truncated !== undefined ? { truncated: input.truncated } : {}),
+    ...(input.visibleInTerminal !== undefined ? { visibleInTerminal: input.visibleInTerminal } : {}),
+    ...(input.state ? { state: input.state } : {}),
     ...(input.stderrSummary
       ? { stderrSummary: clampText(sanitizeForAi(input.stderrSummary)) }
       : summarizeStderr(input.stderr, input.errorMessage)

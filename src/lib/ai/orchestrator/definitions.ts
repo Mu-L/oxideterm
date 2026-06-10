@@ -114,7 +114,7 @@ export const ORCHESTRATOR_TOOL_DEFS: AiToolDefinition[] = [
   },
   {
     name: 'run_command',
-    description: 'Run a command on an explicit target. Use ssh-node:* for direct remote execution, local-shell:default for local one-shot commands, or terminal-session:* when visible shell state matters.',
+    description: 'Run a command on an explicit target. Use terminal-session:* for remote/SSH commands so execution is visible to the user, or local-shell:default for local one-shot commands.',
     parameters: {
       type: 'object',
       properties: {

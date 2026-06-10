@@ -300,6 +300,8 @@ export async function executeOrchestratorTool(
           ? Boolean((result.data as { timedOut?: boolean }).timedOut)
           : undefined,
         truncated: previewProbe.truncated,
+        visibleInTerminal: result.target?.kind === 'terminal-session',
+        state: result.waitingForInput ? 'waiting_for_input' : result.ok ? 'output_captured' : 'error',
         errorMessage: result.error?.message,
       })
     : undefined;

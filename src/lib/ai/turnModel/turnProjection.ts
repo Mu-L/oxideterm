@@ -142,6 +142,7 @@ function collectToolResults(turn: AiAssistantTurn): Map<string, AiToolResult> {
       error: part.error,
       durationMs: part.durationMs,
       truncated: part.truncated,
+      envelope: part.envelope,
     });
   }
 

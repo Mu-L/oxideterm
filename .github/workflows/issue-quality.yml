@@ -83,12 +83,12 @@ jobs:
             if (versionMatch) {
               const claimed = versionMatch[1];
               try {
-                const { data: tags } = await github.rest.repos.listTags({
+                const tags = await github.paginate(github.rest.repos.listTags, {
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   per_page: 100,
                 });
-                const tagNames = tags.map(t => t.name.replace(/^v/, ''));
+                const tagNames = tags.map(t => t.name.replace(/^(?:gpui-)?v/, ''));
                 if (!tagNames.includes(claimed)) {
                   problems.push('unknown_version');
                 }

@@ -294,6 +294,10 @@ pub struct ConfigState {
     config: RwLock<ConfigFile>,
     bootstrap_status: RwLock<PortableBootstrapStatus>,
     config_keychain: Keychain,
+    /// In-memory cache for the local config master key.
+    /// Avoids repeated Touch ID prompts when routine writes update recent
+    /// connection metadata during the same app session.
+    config_key_cache: RwLock<Option<[u8; CONFIG_ENCRYPTION_KEY_LEN]>>,
     keychain: Keychain,
     managed_keychain: Keychain,
     privilege_keychain: Keychain,
@@ -318,6 +322,7 @@ impl ConfigState {
                 CONFIG_KEYCHAIN_SERVICE,
                 "OxideTerm needs to unlock your encrypted connections",
             ),
+            config_key_cache: RwLock::new(None),
             keychain: Keychain::new(),
             managed_keychain: Keychain::with_service(MANAGED_SSH_KEYCHAIN_SERVICE),
             privilege_keychain: Keychain::with_biometrics_reason(
@@ -334,7 +339,7 @@ impl ConfigState {
         let loaded = match self.storage.load_with_key(None).await {
             Ok(loaded) => loaded,
             Err(crate::config::StorageError::MissingEncryptionKey) => {
-                let existing_config_key = match load_config_encryption_key(&self.config_keychain)
+                let existing_config_key = match self.load_config_encryption_key_cached()
                     .map_err(|err| {
                         format!(
                             "Unable to unlock encrypted local config because the local secret backend is unavailable: {}",
@@ -366,7 +371,7 @@ impl ConfigState {
 
         if loaded.format == ConfigStorageFormat::Plaintext {
             let (config_key, created_key) =
-                get_or_create_config_encryption_key(&self.config_keychain).map_err(|err| {
+                self.get_or_create_config_encryption_key_cached().map_err(|err| {
                     format!(
                         "Unable to migrate plaintext local config to encrypted storage because the local secret backend is unavailable: {}",
                         err
@@ -379,7 +384,7 @@ impl ConfigState {
                 .await
             {
                 if created_key {
-                    rollback_new_config_key(&self.config_keychain);
+                    self.rollback_new_config_key();
                 }
 
                 return Err(format!(
@@ -441,6 +446,35 @@ impl ConfigState {
             }
             PortableBootstrapStatus::Disabled | PortableBootstrapStatus::Unlocked => unreachable!(),
         })
+    }
+
+    fn load_config_encryption_key_cached(&self) -> Result<ConfigEncryptionKeyLookup, String> {
+        if let Some(key) = *self.config_key_cache.read() {
+            return Ok(ConfigEncryptionKeyLookup::Found(key));
+        }
+
+        let lookup = load_config_encryption_key(&self.config_keychain)?;
+        if let ConfigEncryptionKeyLookup::Found(key) = lookup {
+            *self.config_key_cache.write() = Some(key);
+        }
+        Ok(lookup)
+    }
+
+    fn get_or_create_config_encryption_key_cached(
+        &self,
+    ) -> Result<([u8; CONFIG_ENCRYPTION_KEY_LEN], bool), String> {
+        if let Some(key) = *self.config_key_cache.read() {
+            return Ok((key, false));
+        }
+
+        let (key, created) = get_or_create_config_encryption_key(&self.config_keychain)?;
+        *self.config_key_cache.write() = Some(key);
+        Ok((key, created))
+    }
+
+    fn rollback_new_config_key(&self) {
+        rollback_new_config_key(&self.config_keychain);
+        *self.config_key_cache.write() = None;
     }
 
     pub(crate) fn count_exportable_ai_provider_keys(
@@ -619,6 +653,7 @@ impl ConfigState {
         }
 
         *self.config.write() = ConfigFile::default();
+        *self.config_key_cache.write() = None;
         self.api_key_cache.write().clear();
         self.ai_providers.write().0.clear();
         self.ai_providers.write().1 = None;
@@ -632,13 +667,13 @@ impl ConfigState {
     async fn save(&self) -> Result<(), String> {
         self.ensure_ready()?;
         let config = self.config.read().clone();
-        let (config_key, created_key) = get_or_create_config_encryption_key(&self.config_keychain)?;
+        let (config_key, created_key) = self.get_or_create_config_encryption_key_cached()?;
 
         match self.storage.save_encrypted(&config, &config_key).await {
             Ok(()) => Ok(()),
             Err(err) => {
                 if created_key {
-                    rollback_new_config_key(&self.config_keychain);
+                    self.rollback_new_config_key();
                 }
 
                 Err(err.to_string())
@@ -705,7 +740,7 @@ impl ConfigState {
                 );
                 let _ = self.managed_keychain.delete(key);
                 let (config_key, created_config_key) =
-                    get_or_create_config_encryption_key(&self.config_keychain)?;
+                    self.get_or_create_config_encryption_key_cached()?;
                 write_managed_ssh_key_secret_file(
                     &self.config_data_dir()?,
                     key,
@@ -770,7 +805,7 @@ impl ConfigState {
         match self.managed_keychain.get(&secret_id) {
             Ok(secret) => Ok(Zeroizing::new(secret)),
             Err(keychain_error) => {
-                let config_key = match load_config_encryption_key(&self.config_keychain)? {
+                let config_key = match self.load_config_encryption_key_cached()? {
                     ConfigEncryptionKeyLookup::Found(key) => key,
                     ConfigEncryptionKeyLookup::Locked => {
                         return Err(
@@ -4634,7 +4669,7 @@ pub async fn create_managed_ssh_key_from_text(
         let _ = state.managed_keychain.delete(&secret_id);
         let _ = delete_managed_ssh_key_secret_file(&state.config_data_dir()?, &secret_id);
         if created_managed_secret_config_key {
-            rollback_new_config_key(&state.config_keychain);
+            state.rollback_new_config_key();
         }
         state
             .config
@@ -4691,7 +4726,7 @@ pub async fn create_managed_ssh_key_from_file(
         let _ = state.managed_keychain.delete(&secret_id);
         let _ = delete_managed_ssh_key_secret_file(&state.config_data_dir()?, &secret_id);
         if created_managed_secret_config_key {
-            rollback_new_config_key(&state.config_keychain);
+            state.rollback_new_config_key();
         }
         state
             .config

@@ -5,13 +5,13 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>Client SSH con IA per server remoti — App desktop Tauri</strong>
+  <strong>Client SSH con IA per server remoti — app desktop Tauri</strong>
   <br>
-  Terminali SSH, SFTP, port forwarding, terminali seriali, trasferimenti nel terminale, shell locali ed editing leggero in un workspace.
+  Terminali SSH, SFTP, inoltro porte, terminali seriali, trasferimenti nel terminale, shell locali e modifica leggera in uno spazio di lavoro.
   <br>
-  Costruito con Tauri & React, alimentato da SSH Pure Rust. Gratis. Nessun account necessario.
+  Costruito con Tauri e React, alimentato da SSH puro in Rust. Gratis. Nessun account necessario.
   <br>
-  <strong>Zero Electron. Zero OpenSSL. Zero telemetria. Zero abbonamento. BYOK-first. SSH puro in Rust.</strong>
+  <strong>Senza Electron. Senza OpenSSL. Senza telemetria. Senza abbonamento. BYOK prima di tutto. SSH puro in Rust.</strong>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 </p>
 
 <p align="center">
-  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — Documentation & website
+  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — Documentazione e sito web
 </p>
 
 <p align="center">
@@ -54,9 +54,9 @@
 
 ## Cosa puoi fare
 
-- Gestire affiancati terminali SSH, SFTP, port forwarding, trasferimenti nel terminale e shell locali
-- Continuare a lavorare durante piccoli problemi di rete con Grace Period reconnect
-- Chiedere alOxideSens AI di ispezionare sessioni live ed eseguire azioni approvate tramite il tuo provider AI
+- Gestire affiancati terminali SSH, SFTP, inoltro porte, trasferimenti nel terminale e shell locali
+- Continuare a lavorare durante piccoli problemi di rete con la riconnessione Grace Period
+- Chiedere a OxideSens AI di ispezionare sessioni attive ed eseguire azioni approvate tramite il tuo fornitore IA
 
 ---
 
@@ -64,18 +64,18 @@
 
 | Se ti interessa... | OxideTerm offre... |
 |---|---|
-| Un nodo remoto, molti strumenti | Terminale, SFTP, port forwarding, trzsz, editor leggero, monitoraggio e OxideSens AI restano legati allo stesso workspace SSH |
-| Workflow SSH local-first | SSH, SFTP, forwarding, shell locale e configurazione funzionano senza registrazione; la sincronizzazione cloud è opzionale via [plugin ufficiale](#plugin-ufficiali) |
-| OxideSens AI BYOK invece di crediti piattaforma | OxideSens usa il tuo endpoint OpenAI/Ollama/DeepSeek/OpenAI-compatible con MCP, RAG e azioni workspace approvate |
+| Un nodo remoto, molti strumenti | Terminale, SFTP, inoltro porte, trzsz, editor leggero, monitoraggio e OxideSens AI restano legati allo stesso spazio di lavoro SSH |
+| Flussi SSH locali prima di tutto | SSH, SFTP, inoltro, shell locale e configurazione funzionano senza registrazione; la sincronizzazione cloud è opzionale via [plugin ufficiale](#plugin-ufficiali) |
+| OxideSens AI con BYOK invece di crediti piattaforma | OxideSens usa il tuo punto di accesso OpenAI/Ollama/DeepSeek/OpenAI-compatible con MCP, RAG e azioni approvate nello spazio di lavoro |
 | Riconnessione stabile | Grace Period prova la vecchia connessione per 30 s prima di sostituirla, così vim/htop/yazi possono sopravvivere a brevi interruzioni |
 | App nativa in Rust puro | App nativa Tauri 2.0, russh 0.59 compilato con `ring`, niente Electron, niente OpenSSL/libssh2 |
 | Sicurezza credenziali | Password e chiavi API restano nel portachiavi OS, i metadati sono sigillati localmente e `.oxide` usa ChaCha20-Poly1305 + Argon2id |
 
 ## Che cos’è / cosa non è
 
-OxideTerm si concentra su un **workspace AI local-first per server remoti**. È pensato per chi vuole tenere terminale, file, porte, trasferimenti, editing leggero e una OxideSens AI attorno alle proprie macchine e ai propri nodi remoti.
+OxideTerm si concentra su uno **spazio di lavoro IA locale prima di tutto per server remoti**. È pensato per chi vuole tenere terminale, file, porte, trasferimenti, modifica leggera e OxideSens AI attorno alle proprie macchine e ai propri nodi remoti.
 
-Non vuole essere una piattaforma cloud Agent né un progetto centrato solo sui benchmark di rendering del terminale. La direzione è più stretta: far sembrare il lavoro remoto un workspace locale, senza account OxideTerm.
+Non vuole essere una piattaforma di agenti ospitata nel cloud né un progetto centrato solo sui benchmark di rendering del terminale. La direzione è più stretta: far sembrare il lavoro remoto uno spazio di lavoro locale, senza account OxideTerm.
 
 ---
 
@@ -108,10 +108,10 @@ Scarica l'ultima versione da [GitHub Releases](https://github.com/AnalyseDeCircu
 | **SSH e autenticazione** | Pool di connessioni e multiplexing, ProxyJump (salti illimitati) con grafo topologico, riconnessione automatica con periodo di grazia, Inoltro agente. Auth: password, chiave SSH (RSA/Ed25519/ECDSA), SSH Agent, certificati, 2FA interattivo da tastiera, Known Hosts TOFU |
 | **SFTP** | Browser a doppio pannello, drag-and-drop, anteprima intelligente (immagini/video/audio/codice/PDF/hex/font), coda di trasferimento con progresso ed ETA, segnalibri, estrazione archivi |
 | **Modalità IDE** | CodeMirror 6 con 30+ linguaggi, albero file + stato Git, multi-tab, risoluzione conflitti, terminale integrato. Agente remoto opzionale per Linux (9 architetture aggiuntive) |
-| **Port forwarding** | Locale (-L), remoto (-R), SOCKS5 dinamico (-D), I/O message-passing senza lock, ripristino automatico alla riconnessione, report di terminazione, timeout di inattività |
-| **IA (OxideSens)** | Assistente orientato ai target per connessioni salvate, sessioni SSH live, buffer del terminale, percorsi SFTP, impostazioni e voci della knowledge base; può diagnosticare output remoto, eseguire comandi approvati, ispezionare file e spiegare guasti senza un account OxideTerm |
+| **Inoltro porte** | Locale (-L), remoto (-R), SOCKS5 dinamico (-D), I/O con passaggio messaggi senza lock, ripristino automatico alla riconnessione, notifica di terminazione, timeout di inattività |
+| **IA (OxideSens)** | Assistente orientato agli obiettivi per connessioni salvate, sessioni SSH attive, buffer del terminale, percorsi SFTP, impostazioni e voci della base di conoscenza; può diagnosticare l’output remoto, eseguire comandi approvati, ispezionare file e spiegare guasti senza un account OxideTerm |
 | **Plugin** | Caricamento ESM runtime, 18 namespace API, 24 componenti UI Kit, API congelata + ACL Proxy, circuit breaker, disattivazione automatica in caso di errori |
-| **CLI** | Companion `oxt`: JSON-RPC 2.0 tramite Unix Socket / Named Pipe, status/health/list/forward/config/connect/focus/attach/SFTP/import/AI, output leggibile + JSON |
+| **CLI** | Strumento companion `oxt`: JSON-RPC 2.0 tramite Unix Socket / Named Pipe, status/health/list/forward/config/connect/focus/attach/SFTP/import/AI, output leggibile + JSON |
 | **Sicurezza** | Export .oxide crittografato (ChaCha20-Poly1305 + Argon2id 256 MB), configurazione locale cifrata a riposo, portachiavi OS, Touch ID (macOS), keystore crittografato portatile, TOFU chiave host, pulizia memoria `zeroize` |
 | **i18n** | 11 lingue: EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
 
@@ -119,7 +119,7 @@ Scarica l'ultima versione da [GitHub Releases](https://github.com/AnalyseDeCircu
 
 ## Sotto il cofano
 
-OxideTerm mantiene una superficie local-first, ma internamente è costruito per workflow SSH intensivi. I dettagli completi sono conservati sotto.
+OxideTerm mantiene una superficie locale prima di tutto, ma internamente è costruito per flussi SSH intensivi. I dettagli completi sono conservati sotto.
 
 <details>
 <summary><strong>Architettura, internals SSH, riconnessione, AI, forwarding, plugin e altro</strong></summary>
@@ -153,7 +153,7 @@ OxideTerm separa i dati del terminale dai comandi di controllo in due piani indi
 L'intero stack SSH è **russh 0.59** compilato con il backend crittografico **`ring`**:
 
 - **Zero dipendenze OpenSSL** — l'intero stack crittografico è in Rust. Niente più debug «quale versione di OpenSSL?».
-- Protocollo SSH2 completo: scambio chiavi, canali, sottosistema SFTP, port forwarding
+- Protocollo SSH2 completo: scambio chiavi, canali, sottosistema SFTP, inoltro porte
 - Suite crittografiche ChaCha20-Poly1305 e AES-GCM, chiavi Ed25519/RSA/ECDSA
 - **`AgentSigner`** personalizzato: avvolge il SSH Agent di sistema e implementa il trait `Signer` di russh, risolvendo problemi di bound `Send` RPITIT clonando `&AgentIdentity` in un valore posseduto prima di attraversare `.await`
 
@@ -195,13 +195,13 @@ Tutta la logica passa attraverso un `ReconnectOrchestratorStore` dedicato — ze
 
 Assistente IA incentrato sulla privacy con due modalità di interazione:
 
-- **Pannello inline** (`⌘I`): comandi terminale rapidi, output iniettato tramite bracketed paste
+- **Pannello in linea** (`⌘I`): comandi terminale rapidi, output inserito tramite bracketed paste
 - **Chat laterale**: conversazioni persistenti con cronologia completa
-- **Contesto workspace orientato ai target**: vede connessioni salvate, sessioni SSH live, buffer del terminale, percorsi SFTP, impostazioni e voci della knowledge base come target del workspace
-- **Azioni approvate**: può diagnosticare output remoto, eseguire comandi approvati, ispezionare file e spiegare guasti senza richiedere un account OxideTerm
+- **Contesto dello spazio di lavoro orientato agli obiettivi**: vede connessioni salvate, sessioni SSH attive, buffer del terminale, percorsi SFTP, impostazioni e voci della base di conoscenza come obiettivi dello spazio di lavoro
+- **Azioni approvate**: può diagnosticare l’output remoto, eseguire comandi approvati, ispezionare file e spiegare guasti senza richiedere un account OxideTerm
 - **Supporto MCP**: connessione a server [Model Context Protocol](https://modelcontextprotocol.io) esterni (stdio e SSE) per integrazione di strumenti di terze parti
 - **Knowledge base RAG** (v0.20): importa documenti Markdown/TXT in collezioni con scope (globale o per connessione). La ricerca ibrida fonde indice di keyword BM25 + similarità coseno vettoriale tramite Reciprocal Rank Fusion. Chunking consapevole del Markdown che preserva la gerarchia dei titoli. Tokenizer a bigrammi CJK per cinese/giapponese/coreano.
-- **Provider**: OpenAI, Ollama, DeepSeek, OneAPI, o qualsiasi endpoint `/v1/chat/completions`
+- **Fornitori**: OpenAI, Ollama, DeepSeek, OneAPI, o qualsiasi punto di accesso `/v1/chat/completions`
 - **Sicurezza**: chiavi API conservate nel portachiavi OS; su macOS, la lettura delle chiavi è protetta da **Touch ID** tramite `LAContext` — nessun entitlement o firma del codice richiesti, in cache dopo la prima autenticazione per sessione
 
 ###  Port Forwarding — I/O senza lock
@@ -293,7 +293,7 @@ Shell locale multipiattaforma tramite `portable-pty 0.8`, protetto dal feature g
 
 | Plugin | Descrizione | Repository |
 |---|---|---|
-| **Cloud Sync** | Sincronizzazione self-hosted crittografata — carica e importa snapshot `.oxide` tramite WebDAV, HTTP JSON, Dropbox, Git o S3 | [oxideterm.cloud-sync](https://github.com/AnalyseDeCircuit/oxideterm.cloud-sync) |
+| **Cloud Sync** | Sincronizzazione self-hosted crittografata — carica e importa istantanee `.oxide` tramite WebDAV, HTTP JSON, Dropbox, Git o S3 | [oxideterm.cloud-sync](https://github.com/AnalyseDeCircuit/oxideterm.cloud-sync) |
 | **Telnet Client** | Client Telnet nativo per router, switch e dispositivi legacy — nessun binario esterno richiesto | [oxideterm.telnet](https://github.com/AnalyseDeCircuit/oxideterm.telnet) |
 
 <details>
@@ -421,7 +421,7 @@ pnpm run tauri build
 |---|---|---|
 | **Framework** | Tauri 2.0 | Shell nativa con il WebView del sistema operativo |
 | **Runtime** | Tokio + DashMap 6 | Completamente asincrono, mappe concorrenti senza lock |
-| **SSH** | russh 0.59 (`ring`) | Puro Rust, zero dipendenze C, SSH Agent |
+| **SSH** | russh 0.59 (`ring`) | Puro Rust, senza OpenSSL/libssh2, SSH Agent |
 | **PTY locale** | portable-pty 0.8 | Feature-gated, ConPTY su Windows |
 | **Frontend** | React 19.1 + TypeScript 5.8 | Vite 7, Tailwind CSS 4 |
 | **Stato** | Zustand 5 | 19 store specializzati |
@@ -454,7 +454,7 @@ Misurato con `tokei`, escludendo dipendenze e artefatti di build.
 
 | Aspetto | Implementazione |
 |---|---|
-| **Password** | Portachiavi OS (macOS Keychain / Windows Credential Manager / libsecret) |
+| **Password** | Portachiavi del sistema operativo (macOS Keychain / Windows Credential Manager / libsecret) |
 | **Keystore portatile** | Vault crittografato con ChaCha20-Poly1305 accanto all’applicazione, binding biometrico opzionale tramite portachiavi OS |
 | **Chiavi API IA** | Portachiavi OS + autenticazione biometrica Touch ID su macOS |
 | **Export** | .oxide: ChaCha20-Poly1305 + Argon2id (256 MB di memoria, 4 iterazioni) |
@@ -478,7 +478,7 @@ Misurato con `tokei`, escludendo dipendenze e artefatti di build.
 
 ## Supporto e manutenzione
 
-Le segnalazioni di bug e le regressioni riproducibili hanno la priorità. Le richieste di funzionalità vengono valutate in base ad ambito, sicurezza e allineamento con la direzione di OxideTerm per il workspace dei server remoti.
+Le segnalazioni di bug e le regressioni riproducibili hanno la priorità. Le richieste di funzionalità vengono valutate in base ad ambito, sicurezza e allineamento con la direzione di OxideTerm per lo spazio di lavoro dei server remoti.
 
 Se OxideTerm aiuta il tuo workflow, una stella su GitHub, una riproduzione di issue, una correzione di traduzione, un plugin o una pull request aiutano il progetto ad andare avanti.
 

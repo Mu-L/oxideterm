@@ -5,7 +5,7 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>面向远程服务器的 AI SSH 客户端 —— Tauri 桌面应用</strong>
+  <strong>面向远程服务器、带 AI 能力的 SSH 客户端 —— Tauri 桌面应用</strong>
   <br>
   SSH 终端、SFTP、端口转发、串口终端、终端内传输、本地 Shell 和轻量编辑，集中在一个工作区。
   <br>
@@ -33,7 +33,7 @@
 </p>
 
 <p align="center">
-  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — Documentation & website
+  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — 文档与官网
 </p>
 
 <p align="center">
@@ -72,10 +72,10 @@ OxideTerm 是一个**面向远程服务器的本地优先 AI 工作区**——Te
 |---|---|
 | 一个远程节点，多种工具 | 终端、SFTP、端口转发、trzsz、轻量 IDE、监控和 OxideSens AI 都挂在同一个 SSH 工作区上 |
 | 本地优先 SSH 工作流 | SSH、SFTP、端口转发、本地 Shell 和配置管理都无需注册；云同步通过[官方插件](#官方插件)按需启用 |
-| BYOK OxideSens AI，而不是平台点数 | OxideSens 使用你自己的 OpenAI/Ollama/DeepSeek/OpenAI-compatible 端点，支持 MCP、RAG 和已批准的工作区操作 |
+| BYOK OxideSens AI，而不是平台点数 | OxideSens 使用你自己的 OpenAI/Ollama/DeepSeek/OpenAI 兼容端点，支持 MCP、RAG 和已批准的工作区操作 |
 | 重连稳定性 | 宽限期会先探测旧连接 30 秒再替换它，短暂网络中断时 vim/htop/yazi 仍有机会存活 |
 | 纯 Rust 原生应用 | Tauri 2.0 原生应用，russh 0.59 基于 `ring` 编译，无 Electron，无 OpenSSL/libssh2 依赖 |
-| 凭证安全 | 密码和 API 密钥保存在 OS 密钥链中，已保存连接的元数据在本地密封存储，`.oxide` 文件使用 ChaCha20-Poly1305 + Argon2id 加密 |
+| 凭证安全 | 密码和 API 密钥保存在系统钥匙串中，已保存连接的元数据在本地密封存储，`.oxide` 文件使用 ChaCha20-Poly1305 + Argon2id 加密 |
 
 ---
 
@@ -454,7 +454,7 @@ pnpm run tauri build
 
 | 关注点 | 实现方式 |
 |---|---|
-| **密码** | OS 密钥链（macOS Keychain / Windows Credential Manager / libsecret） |
+| **密码** | 系统钥匙串（macOS Keychain / Windows Credential Manager / libsecret） |
 | **便携式密钥库** | ChaCha20-Poly1305 加密保险库，位于应用程序旁边，可选通过 OS 密钥链绑定生物识别 |
 | **AI API 密钥** | OS 密钥链 + macOS 上的 Touch ID 生物识别保护 |
 | **导出** | .oxide：ChaCha20-Poly1305 + Argon2id（256 MB 内存，4 次迭代） |

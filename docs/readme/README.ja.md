@@ -33,7 +33,7 @@
 </p>
 
 <p align="center">
-  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — Documentation & website
+  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — ドキュメントと Web サイト
 </p>
 
 <p align="center">
@@ -56,7 +56,7 @@
 
 - SSH ターミナル、SFTP、ポートフォワーディング、帯域内転送、ローカル shell を並べて管理
 - Grace Period 再接続で、ネットワークが揺れても作業を続行
-- OxideSens AIに、自分の AI provider 経由で live session の確認と承認済み workspace action の実行を任せる
+- OxideSens AI に、自分の AI プロバイダー経由で実行中のセッション確認と承認済みワークスペース操作の実行を任せる
 
 ---
 
@@ -66,14 +66,14 @@
 |---|---|
 | 1 つのリモートノード、多数のツール | ターミナル、SFTP、ポートフォワーディング、trzsz、軽量 IDE、監視、OxideSens AIが同じ SSH ワークスペースに結び付きます |
 | Local-first な SSH ワークフロー | SSH、SFTP、フォワーディング、ローカル shell、設定管理はサインアップ不要。クラウド同期は[公式プラグイン](#公式プラグイン)で必要なときだけ有効化できます |
-| プラットフォームクレジットではなく BYOK OxideSens AI | OxideSens は OpenAI/Ollama/DeepSeek/OpenAI 互換エンドポイントを使い、MCP、RAG、承認済み workspace action に対応します |
+| プラットフォームクレジットではなく BYOK OxideSens AI | OxideSens は OpenAI/Ollama/DeepSeek/OpenAI 互換エンドポイントを使い、MCP、RAG、承認済みワークスペース操作に対応します |
 | 再接続の安定性 | Grace Period が旧接続を 30 秒プローブしてから置き換えるため、短いネットワーク断でも vim/htop/yazi が生き残れます |
 | 純粋な Rust のネイティブアプリ | Tauri 2.0 ネイティブアプリ、`ring` でコンパイルされた russh 0.59、Electron なし、OpenSSL/libssh2 なし |
 | 認証情報の安全性 | パスワードと API キーは OS キーチェーンに保存され、接続メタデータはローカルで保護され、`.oxide` は ChaCha20-Poly1305 + Argon2id で暗号化されます |
 
 ## 何であり / 何ではないか
 
-OxideTerm は **リモートサーバー向け local-first AI workspace** に集中しています。ターミナル、ファイル、ポート、転送、軽量編集、OxideSens AIを、自分のマシンとリモートノード中心に扱いたいユーザー向けです。
+OxideTerm は **リモートサーバー向けのローカル優先 AI ワークスペース** に集中しています。ターミナル、ファイル、ポート、転送、軽量編集、OxideSens AI を、自分のマシンとリモートノード中心に扱いたいユーザー向けです。
 
 ホスト型クラウド Agent プラットフォームや、ターミナル描画ベンチマークだけを目的にしたプロジェクトではありません。方向性はより狭く、OxideTerm アカウントなしでリモート作業を 1 つのローカルワークスペースのように扱うことです。
 
@@ -119,7 +119,7 @@ OxideTerm は **リモートサーバー向け local-first AI workspace** に集
 
 ## 技術的な詳細
 
-OxideTerm の表面は local-first に保ちつつ、内部は SSH 多用ワークフロー向けに作っています。実装の詳細は、エンジニアリング面を読みたい人のために下に残しています。
+OxideTerm の表面はローカル優先に保ちつつ、内部は SSH 多用ワークフロー向けに作っています。実装の詳細は、エンジニアリング面を読みたい人のために下に残しています。
 
 <details>
 <summary><strong>アーキテクチャ、SSH 内部、再接続、AI、フォワーディング、プラグインなど</strong></summary>
@@ -421,7 +421,7 @@ pnpm run tauri build
 |---|---|---|
 | **フレームワーク** | Tauri 2.0 | OS の WebView を使うネイティブシェル |
 | **ランタイム** | Tokio + DashMap 6 | 完全非同期、ロックフリー並行マップ |
-| **SSH** | russh 0.59（`ring`） | 純粋な Rust、C 依存ゼロ、SSH Agent |
+| **SSH** | russh 0.59（`ring`） | 純粋な Rust、OpenSSL/libssh2 なし、SSH Agent |
 | **ローカル PTY** | portable-pty 0.8 | フィーチャーゲート、Windows は ConPTY |
 | **フロントエンド** | React 19.1 + TypeScript 5.8 | Vite 7、Tailwind CSS 4 |
 | **状態管理** | Zustand 5 | 19 の専用ストア |
@@ -454,7 +454,7 @@ pnpm run tauri build
 
 | 項目 | 実装 |
 |---|---|
-| **パスワード** | OS キーチェーン（macOS Keychain / Windows Credential Manager / libsecret） |
+| **パスワード** | OS のキーチェーン（macOS Keychain / Windows Credential Manager / libsecret） |
 | **ポータブルキーストア** | ChaCha20-Poly1305 暗号化ボールト（アプリの横に配置）、OS キーチェーン経由で生体認証バインドがオプション |
 | **AI API キー** | OS キーチェーン + macOS での Touch ID 生体認証ゲート |
 | **エクスポート** | .oxide：ChaCha20-Poly1305 + Argon2id（メモリ 256 MB、4 イテレーション） |
@@ -478,7 +478,7 @@ pnpm run tauri build
 
 ## サポートとメンテナンス
 
-バグ報告と再現可能なリグレッションを優先して対応します。機能リクエストは範囲、安全性、OxideTerm の remote-server workspace の方向性との整合性に基づいて検討します。
+バグ報告と再現可能なリグレッションを優先して対応します。機能リクエストは範囲、安全性、リモートサーバー向けワークスペースという OxideTerm の方向性との整合性に基づいて検討します。
 
 OxideTerm があなたのワークフローに役立ったなら、GitHub スター、再現手順、翻訳修正、プラグイン、Pull Request のいずれもプロジェクトを前に進める助けになります。
 

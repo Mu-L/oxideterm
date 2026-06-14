@@ -5,7 +5,7 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>面向遠端伺服器的 AI SSH 用戶端 —— Tauri 桌面應用</strong>
+  <strong>面向遠端伺服器、具備 AI 能力的 SSH 用戶端 —— Tauri 桌面應用</strong>
   <br>
   SSH 終端、SFTP、連接埠轉發、序列埠終端、終端內傳輸、本地 Shell 和輕量編輯，集中在一個工作區。
   <br>
@@ -33,7 +33,7 @@
 </p>
 
 <p align="center">
-  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — Documentation & website
+  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — 文件與官網
 </p>
 
 <p align="center">
@@ -56,7 +56,7 @@
 
 - 並排管理 SSH 終端、SFTP、連接埠轉發、終端內傳輸和本地 Shell
 - 透過寬限期重連，在網路抖動後繼續工作
-- 讓 OxideSens AI透過你自己的 AI 提供商檢查即時工作階段，並執行已核准的工作區操作
+- 讓 OxideSens AI 透過你自己的 AI 提供商檢查即時工作階段，並執行已核准的工作區操作
 
 ---
 
@@ -64,16 +64,16 @@
 
 | 如果你在意... | OxideTerm 提供... |
 |---|---|
-| 一個遠端節點，多種工具 | 終端、SFTP、連接埠轉發、trzsz、輕量 IDE、監控和 OxideSens AI都掛在同一個 SSH 工作區上 |
+| 一個遠端節點，多種工具 | 終端、SFTP、連接埠轉發、trzsz、輕量 IDE、監控和 OxideSens AI 都掛在同一個 SSH 工作區上 |
 | 本地優先 SSH 工作流 | SSH、SFTP、連接埠轉發、本地 Shell 和設定管理都無需註冊；雲同步透過[官方外掛](#官方外掛)按需啟用 |
-| BYOK OxideSens AI，而不是平台點數 | OxideSens 使用你自己的 OpenAI/Ollama/DeepSeek/OpenAI-compatible 端點，支援 MCP、RAG 和已核准的工作區操作 |
+| BYOK OxideSens AI，而不是平台點數 | OxideSens 使用你自己的 OpenAI/Ollama/DeepSeek/OpenAI 相容端點，支援 MCP、RAG 和已核准的工作區操作 |
 | 重連穩定性 | 寬限期會先探測舊連線 30 秒再替換它，短暫網路中斷時 vim/htop/yazi 仍有機會存活 |
 | 純 Rust 原生應用 | Tauri 2.0 原生應用，russh 0.59 基於 `ring` 編譯，無 Electron，無 OpenSSL/libssh2 依賴 |
-| 憑證安全 | 密碼和 API 金鑰保存在 OS 金鑰鏈中，已儲存連線的中繼資料在本地密封儲存，`.oxide` 檔案使用 ChaCha20-Poly1305 + Argon2id 加密 |
+| 憑證安全 | 密碼和 API 金鑰保存在系統鑰匙圈中，已儲存連線的中繼資料在本地密封儲存，`.oxide` 檔案使用 ChaCha20-Poly1305 + Argon2id 加密 |
 
 ## 它是什麼 / 不是什麼
 
-OxideTerm 專注於**面向遠端伺服器的本地優先 AI 工作區**。它面向希望終端、檔案、連接埠、傳輸、輕量編輯和 BYOK OxideSens AI圍繞自己的機器與遠端節點展開的使用者。
+OxideTerm 專注於**面向遠端伺服器的本地優先 AI 工作區**。它面向希望終端、檔案、連接埠、傳輸、輕量編輯和 BYOK OxideSens AI 圍繞自己的機器與遠端節點展開的使用者。
 
 它不是託管雲端 Agent 平台，也不是只追求終端渲染跑分的專案。產品方向更窄：讓遠端工作像一個本地工作區，同時不要求 OxideTerm 帳號。
 
@@ -421,7 +421,7 @@ pnpm run tauri build
 |---|---|---|
 | **框架** | Tauri 2.0 | 使用作業系統 WebView 的原生外殼 |
 | **執行環境** | Tokio + DashMap 6 | 全非同步，無鎖並行對映 |
-| **SSH** | russh 0.59（`ring`） | 純 Rust，零 C 依賴，SSH Agent |
+| **SSH** | russh 0.59（`ring`） | 純 Rust，不使用 OpenSSL/libssh2，SSH Agent |
 | **本機 PTY** | portable-pty 0.8 | Feature 閘控，Windows 上使用 ConPTY |
 | **前端** | React 19.1 + TypeScript 5.8 | Vite 7，Tailwind CSS 4 |
 | **狀態** | Zustand 5 | 19 個專用 Store |
@@ -454,7 +454,7 @@ pnpm run tauri build
 
 | 關注點 | 實作方式 |
 |---|---|
-| **密碼** | OS 鑰匙圈（macOS Keychain / Windows Credential Manager / libsecret） |
+| **密碼** | 系統鑰匙圈（macOS Keychain / Windows Credential Manager / libsecret） |
 | **便攜式金鑰庫** | ChaCha20-Poly1305 加密保險庫，位於應用程式旁邊，可選透過 OS 鑰匙圈綁定生物辨識 |
 | **AI API 金鑰** | OS 鑰匙圈 + macOS 上的 Touch ID 生物辨識保護 |
 | **匯出** | .oxide：ChaCha20-Poly1305 + Argon2id（256 MB 記憶體，4 次迭代） |

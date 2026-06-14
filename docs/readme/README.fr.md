@@ -5,13 +5,13 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>Client SSH avec IA pour serveurs distants — Application desktop Tauri</strong>
+  <strong>Client SSH avec IA pour serveurs distants — application de bureau Tauri</strong>
   <br>
-  Terminaux SSH, SFTP, redirection de ports, terminaux série, transferts dans le terminal, shells locaux et édition légère dans un workspace.
+  Terminaux SSH, SFTP, redirection de ports, terminaux série, transferts dans le terminal, shells locaux et édition légère dans un espace de travail.
   <br>
-  Construit avec Tauri & React, propulsé par SSH pure Rust. Gratuit. Aucun compte requis.
+  Construit avec Tauri et React, propulsé par SSH pur Rust. Gratuit. Aucun compte requis.
   <br>
-  <strong>Zéro Electron. Zéro OpenSSL. Zéro télémétrie. Zéro abonnement. BYOK-first. SSH pure Rust.</strong>
+  <strong>Sans Electron. Sans OpenSSL. Sans télémétrie. Sans abonnement. BYOK d'abord. SSH pur Rust.</strong>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 </p>
 
 <p align="center">
-  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — Documentation & website
+  🌐 <strong><a href="https://oxideterm.app">oxideterm.app</a></strong> — Documentation et site web
 </p>
 
 <p align="center">
@@ -64,18 +64,18 @@
 
 | Si vous tenez à... | OxideTerm vous donne... |
 |---|---|
-| Un nœud distant, plusieurs outils | Terminal, SFTP, redirection de ports, trzsz, éditeur léger, monitoring et OxideSens AI restent attachés au même workspace SSH |
-| Workflows SSH local-first | SSH, SFTP, forwarding, shell local et configuration fonctionnent sans inscription ; la synchro cloud est optionnelle via [plugin officiel](#plugins-officiels) |
-| OxideSens AI BYOK plutôt que crédits de plateforme | OxideSens utilise votre endpoint OpenAI/Ollama/DeepSeek/OpenAI-compatible avec MCP, RAG et actions workspace approuvées |
+| Un nœud distant, plusieurs outils | Terminal, SFTP, redirection de ports, trzsz, éditeur léger, supervision et OxideSens AI restent attachés au même espace de travail SSH |
+| Flux SSH locaux d’abord | SSH, SFTP, redirection, shell local et configuration fonctionnent sans inscription ; la synchronisation cloud est optionnelle via [plugin officiel](#plugins-officiels) |
+| OxideSens AI avec BYOK plutôt que crédits de plateforme | OxideSens utilise votre point d’accès OpenAI/Ollama/DeepSeek/OpenAI-compatible avec MCP, RAG et actions approuvées dans l’espace de travail |
 | Reconnexion stable | Grace Period sonde l’ancienne connexion pendant 30 s avant de la remplacer, pour préserver vim/htop/yazi lors des microcoupures |
 | Application native en Rust | Application Tauri 2.0 native, russh 0.59 compilé avec `ring`, sans Electron ni OpenSSL/libssh2 |
 | Sécurité des identifiants | Mots de passe et clés API restent dans le trousseau OS, les métadonnées sont scellées localement, et `.oxide` utilise ChaCha20-Poly1305 + Argon2id |
 
 ## Ce que c'est / ce que ce n'est pas
 
-OxideTerm se concentre sur un **workspace IA local-first pour serveurs distants**. Il s’adresse aux utilisateurs qui veulent garder terminal, fichiers, ports, transferts, édition légère et une OxideSens AI autour de leurs propres machines et nœuds distants.
+OxideTerm se concentre sur un **espace de travail IA local d’abord pour serveurs distants**. Il s’adresse aux utilisateurs qui veulent garder terminal, fichiers, ports, transferts, édition légère et OxideSens AI autour de leurs propres machines et nœuds distants.
 
-Ce n’est pas une plateforme Agent cloud hébergée ni un projet centré sur les benchmarks de rendu terminal. La direction est plus ciblée : rendre le travail distant aussi cohérent qu’un workspace local, sans compte OxideTerm.
+Ce n’est pas une plateforme d’agents hébergée dans le cloud ni un projet centré sur les benchmarks de rendu terminal. La direction est plus ciblée : rendre le travail distant aussi cohérent qu’un espace de travail local, sans compte OxideTerm.
 
 ---
 
@@ -110,7 +110,7 @@ Téléchargez la dernière version depuis [GitHub Releases](https://github.com/A
 | **Mode IDE** | CodeMirror 6 avec 30+ langages, arborescence + statut Git, multi-onglets, résolution de conflits, terminal intégré. Agent distant Linux optionnel ; les autres architectures doivent le compiler et l'envoyer manuellement |
 | **Redirection de ports** | Local (-L), distant (-R), SOCKS5 dynamique (-D), I/O par passage de messages sans verrou, restauration automatique à la reconnexion, rapport d'arrêt, délai d'inactivité |
 | **IA (OxideSens)** | Assistant orienté cible pour connexions enregistrées, sessions SSH actives, buffers de terminal, chemins SFTP, paramètres et entrées de base de connaissances ; peut diagnostiquer la sortie distante, exécuter des commandes approuvées, inspecter des fichiers et expliquer les échecs sans compte OxideTerm |
-| **Plugins** | Chargement ESM en runtime, 18 espaces de noms API, 24 composants UI Kit, API gelée + ACL Proxy, disjoncteur, désactivation automatique en cas d'erreurs |
+| **Plugins** | Chargement ESM en temps d’exécution, 18 espaces de noms API, 24 composants UI Kit, API gelée + ACL Proxy, disjoncteur, désactivation automatique en cas d'erreurs |
 | **CLI** | Companion `oxt` : JSON-RPC 2.0 via Unix Socket / Named Pipe, status/health/list/forward/config/connect/focus/attach/SFTP/import/AI, sortie humaine + JSON |
 | **Sécurité** | Export .oxide chiffré (ChaCha20-Poly1305 + Argon2id 256 Mo), configuration locale chiffrée au repos, trousseau OS, Touch ID (macOS), trousseau chiffré portable, TOFU clé hôte, nettoyage mémoire `zeroize` |
 | **i18n** | 11 langues : EN, 简体中文, 繁體中文, 日本語, 한국어, FR, DE, ES, IT, PT-BR, VI |
@@ -119,10 +119,10 @@ Téléchargez la dernière version depuis [GitHub Releases](https://github.com/A
 
 ## Fonctionnement interne
 
-OxideTerm garde une surface produit local-first, mais ses internals sont pensés pour les workflows SSH intensifs. Les détails complets sont conservés ci-dessous pour les lecteurs qui veulent la partie ingénierie.
+OxideTerm garde une surface produit locale d’abord, mais ses composants internes sont pensés pour les flux SSH intensifs. Les détails complets sont conservés ci-dessous pour les lecteurs qui veulent la partie ingénierie.
 
 <details>
-<summary><strong>Architecture, internals SSH, reconnexion, IA, forwarding, plugins et plus</strong></summary>
+<summary><strong>Architecture, internes SSH, reconnexion, IA, redirection, plugins et plus</strong></summary>
 <br>
 
 ### Architecture — Communication à double plan
@@ -197,18 +197,18 @@ Assistant IA axé sur la confidentialité avec deux modes d'interaction :
 
 - **Panneau inline** (`⌘I`) : commandes terminal rapides, sortie injectée via bracketed paste
 - **Chat latéral** : conversations persistantes avec historique complet
-- **Contexte de workspace orienté cible** : voit les connexions enregistrées, sessions SSH actives, buffers de terminal, chemins SFTP, paramètres et entrées de base de connaissances comme des cibles du workspace
+- **Contexte d’espace de travail orienté cible** : voit les connexions enregistrées, sessions SSH actives, buffers de terminal, chemins SFTP, paramètres et entrées de base de connaissances comme des cibles de l’espace de travail
 - **Actions approuvées** : peut diagnostiquer la sortie distante, exécuter des commandes approuvées, inspecter des fichiers et expliquer les échecs sans nécessiter de compte OxideTerm
 - **Support MCP** : connexion à des serveurs [Model Context Protocol](https://modelcontextprotocol.io) externes (stdio & SSE) pour l'intégration d'outils tiers
 - **Base de connaissances RAG** (v0.20) : importez des documents Markdown/TXT dans des collections ciblées (globales ou par connexion). La recherche hybride fusionne index de mots-clés BM25 + similarité cosinus vectorielle via Reciprocal Rank Fusion. Découpage Markdown préservant la hiérarchie des titres. Tokenizer bigramme CJK pour chinois/japonais/coréen.
-- **Fournisseurs** : OpenAI, Ollama, DeepSeek, OneAPI, ou tout endpoint `/v1/chat/completions`
+- **Fournisseurs** : OpenAI, Ollama, DeepSeek, OneAPI, ou tout point d’accès `/v1/chat/completions`
 - **Sécurité** : clés API stockées dans le trousseau OS ; sur macOS, la lecture des clés est protégée par **Touch ID** via `LAContext` — aucun entitlement ni signature de code requis, mis en cache après la première authentification par session
 
 ###  Redirection de ports — I/O sans verrou
 
 Redirection locale (-L), distante (-R) et dynamique SOCKS5 (-D) complète :
 
-- **Architecture par passage de messages** : le canal SSH est détenu par une seule tâche `ssh_io` — pas de `Arc<Mutex<Channel>>`, éliminant totalement la contention mutex
+- **Architecture par échange de messages** : le canal SSH est détenu par une seule tâche `ssh_io` — pas de `Arc<Mutex<Channel>>`, éliminant totalement la contention mutex
 - **Rapport d'arrêt** : les tâches de redirection signalent activement la raison de sortie (déconnexion SSH, fermeture du port distant, timeout) pour un diagnostic clair
 - **Restauration automatique** : les redirections `Suspended` reprennent automatiquement à la reconnexion sans intervention utilisateur
 - **Délai d'inactivité** : `FORWARD_IDLE_TIMEOUT` (300 s) empêche l'accumulation de connexions zombies
@@ -225,14 +225,14 @@ Uploadez et téléchargez des fichiers directement via la session SSH — sans c
 - **Notifications en direct** : notifications Toast pour le démarrage, la complétion, l'annulation et les erreurs — y compris un indice quand trzsz est détecté mais la fonctionnalité est désactivée
 - Activer dans **Paramètres → Terminal → Transfert Intégré**
 
-### 🔌 Système de plugins en runtime
+### 🔌 Système de plugins en temps d’exécution
 
 Chargement ESM dynamique avec une surface API gelée et renforcée en sécurité :
 
 - **API PluginContext** : 18 espaces de noms — terminal, ui, commands, settings, lifecycle, events, storage, system
-- **24 composants UI Kit** : composants React préconstruits (boutons, champs de saisie, dialogues, tableaux…) injectés dans les sandboxes de plugins via `window.__OXIDE__`
+- **24 composants UI Kit** : composants React préconstruits (boutons, champs de saisie, dialogues, tableaux…) injectés dans les bacs à sable de plugins via `window.__OXIDE__`
 - **Membrane de sécurité** : `Object.freeze` sur tous les objets de contexte, ACL basée sur Proxy, liste blanche IPC, disjoncteur avec désactivation automatique après erreurs répétées
-- **Modules partagés** : React, ReactDOM, zustand, lucide-react exposés pour utilisation par les plugins sans duplication de bundles
+- **Modules partagés** : React, ReactDOM, zustand, lucide-react exposés pour utilisation par les plugins sans duplication de paquets
 
 ### ⚡ Rendu adaptatif
 
@@ -325,13 +325,13 @@ Shell local multiplateforme via `portable-pty 0.8`, protégé par le feature gat
 
 ---
 
-## Prérequis runtime
+## Prérequis temps d’exécution
 
-OxideTerm utilise le runtime WebView natif fourni par le système d'exploitation. La plupart des utilisateurs l'ont déjà installé ; installez-le manuellement uniquement si l'application ne démarre pas ou si votre environnement est hors ligne.
+OxideTerm utilise le temps d’exécution WebView natif fourni par le système d'exploitation. La plupart des utilisateurs l'ont déjà installé ; installez-le manuellement uniquement si l'application ne démarre pas ou si votre environnement est hors ligne.
 
-| Plateforme | Dépendance runtime |
+| Plateforme | Dépendance temps d’exécution |
 |---|---|
-| **Windows** | [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — préinstallé sur Windows 10 (1803+) et Windows 11. Pour les environnements **hors ligne / intranet**, utilisez l'[installateur autonome Evergreen](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download) (hors ligne, ~170 Mo) ou déployez le runtime en **version fixe** via les stratégies de groupe. |
+| **Windows** | [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — préinstallé sur Windows 10 (1803+) et Windows 11. Pour les environnements **hors ligne / intranet**, utilisez l'[installateur autonome Evergreen](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download) (hors ligne, ~170 Mo) ou déployez le temps d’exécution en **version fixe** via les stratégies de groupe. |
 | **macOS** | Aucune (utilise WebKit natif) |
 | **Linux** | `libwebkit2gtk-4.1` (généralement préinstallé sur les bureaux modernes) |
 
@@ -421,7 +421,7 @@ pnpm run tauri build
 |---|---|---|
 | **Framework** | Tauri 2.0 | Shell native avec le WebView du système d'exploitation |
 | **Runtime** | Tokio + DashMap 6 | Entièrement asynchrone, maps concurrentes sans verrou |
-| **SSH** | russh 0.59 (`ring`) | Pur Rust, zéro dépendance C, SSH Agent |
+| **SSH** | russh 0.59 (`ring`) | Pur Rust, sans OpenSSL/libssh2, SSH Agent |
 | **PTY local** | portable-pty 0.8 | Feature-gated, ConPTY sous Windows |
 | **Frontend** | React 19.1 + TypeScript 5.8 | Vite 7, Tailwind CSS 4 |
 | **État** | Zustand 5 | 19 stores spécialisés |
@@ -454,7 +454,7 @@ Mesuré avec `tokei`, en excluant les dépendances et les artefacts de build.
 
 | Préoccupation | Implémentation |
 |---|---|
-| **Mots de passe** | Trousseau OS (macOS Keychain / Windows Credential Manager / libsecret) |
+| **Mots de passe** | Trousseau du système (macOS Keychain / Windows Credential Manager / libsecret) |
 | **Trousseau portable** | Coffre-fort chiffré ChaCha20-Poly1305 à côté de l’application, liaison biométrique optionnelle via le trousseau OS |
 | **Clés API IA** | Trousseau OS + authentification biométrique Touch ID sous macOS |
 | **Export** | .oxide : ChaCha20-Poly1305 + Argon2id (256 Mo de mémoire, 4 itérations) |
@@ -478,7 +478,7 @@ Mesuré avec `tokei`, en excluant les dépendances et les artefacts de build.
 
 ## Support et maintenance
 
-Les rapports de bugs et les régressions reproductibles sont prioritaires. Les demandes de fonctionnalités sont évaluées selon leur périmètre, leur sûreté et leur alignement avec la direction d’OxideTerm pour le workspace de serveurs distants.
+Les rapports de bugs et les régressions reproductibles sont prioritaires. Les demandes de fonctionnalités sont évaluées selon leur périmètre, leur sûreté et leur alignement avec la direction d’OxideTerm pour l’espace de travail de serveurs distants.
 
 Si OxideTerm améliore votre workflow, une étoile GitHub, une reproduction d'issue, une correction de traduction, un plugin ou une pull request aident le projet à avancer.
 

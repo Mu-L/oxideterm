@@ -5,7 +5,9 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>AI 驅動的 SSH 客戶端 · SFTP 瀏覽器 · 終端管理器 —— 一站式工作區 </strong>
+  <strong>面向遠端伺服器的 AI SSH 用戶端 —— Tauri 桌面應用</strong>
+  <br>
+  SSH 終端、SFTP、連接埠轉發、序列埠終端、終端內傳輸、本地 Shell 和輕量編輯，集中在一個工作區。
   <br>
   基於 Tauri & React，純 Rust SSH 協定棧驅動。免費，無需註冊。
   <br>
@@ -417,7 +419,7 @@ pnpm run tauri build
 
 | 層級 | 技術 | 詳情 |
 |---|---|---|
-| **框架** | Tauri 2.0 | 原生二進位檔，25–40 MB |
+| **框架** | Tauri 2.0 | 使用作業系統 WebView 的原生外殼 |
 | **執行環境** | Tokio + DashMap 6 | 全非同步，無鎖並行對映 |
 | **SSH** | russh 0.59（`ring`） | 純 Rust，零 C 依賴，SSH Agent |
 | **本機 PTY** | portable-pty 0.8 | Feature 閘控，Windows 上使用 ConPTY |

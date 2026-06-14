@@ -5,7 +5,9 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>AI-SSH-Client · SFTP-Browser · Terminal-Manager —— All-in-One </strong>
+  <strong>SSH-Client mit KI für Remote-Server — Tauri Desktop App</strong>
+  <br>
+  SSH-Terminals, SFTP, Portweiterleitung, serielle Terminals, Terminal-Transfers, lokale Shells und leichtes Editieren in einem Workspace.
   <br>
   Gebaut mit Tauri & React, angetrieben von Pure Rust SSH. Kostenlos. Kein Konto nötig.
   <br>
@@ -62,7 +64,7 @@
 
 | Wenn Ihnen wichtig ist... | OxideTerm bietet... |
 |---|---|
-| Ein Remote-Node, viele Werkzeuge | Terminal, SFTP, Portweiterleitung, trzsz, Mini-IDE, Monitoring und OxideSens AI bleiben am selben SSH-Workspace |
+| Ein Remote-Node, viele Werkzeuge | Terminal, SFTP, Portweiterleitung, trzsz, leichter Editor, Monitoring und OxideSens AI bleiben am selben SSH-Workspace |
 | Local-first SSH-Workflows | SSH, SFTP, Forwarding, lokale Shell und Konfiguration funktionieren ohne Registrierung; Cloud Sync ist optional per [offiziellem Plugin](#offizielle-plugins) |
 | Autonome OxideSens AI statt Plattform-Credits | OxideSens nutzt Ihren OpenAI/Ollama/DeepSeek/OpenAI-kompatiblen Endpoint mit MCP, RAG und genehmigten Workspace-Aktionen |
 | Stabile Wiederverbindung | Grace Period prüft die alte Verbindung 30 s lang, bevor sie ersetzt wird, damit vim/htop/yazi kurze Aussetzer überstehen können |
@@ -417,7 +419,7 @@ pnpm run tauri build
 
 | Schicht | Technologie | Details |
 |---|---|---|
-| **Framework** | Tauri 2.0 | Native Binärdatei, 25–40 MB |
+| **Framework** | Tauri 2.0 | Native Shell mit dem WebView des Betriebssystems |
 | **Runtime** | Tokio + DashMap 6 | Vollständig asynchron, lock-freie nebenläufige Maps |
 | **SSH** | russh 0.59 (`ring`) | Reines Rust, null C-Abhängigkeiten, SSH Agent |
 | **Lokales PTY** | portable-pty 0.8 | Feature-gated, ConPTY unter Windows |

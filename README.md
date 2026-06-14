@@ -5,7 +5,9 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>AI-Powered SSH Client · SFTP Browser · Terminal Manager — All in One </strong>
+  <strong>AI-Powered SSH Client for Remote Servers — Tauri Desktop App</strong>
+  <br>
+  SSH terminals, SFTP, port forwarding, serial terminals, in-terminal transfers, local shells, and lightweight editing in one workspace.
   <br>
   Built with Tauri & React, powered by Pure Rust SSH. Free. No account needed.
   <br>
@@ -68,7 +70,7 @@ It is **not** a hosted cloud agent platform or a benchmark-only terminal rendere
 
 | If you care about... | OxideTerm gives you... |
 |---|---|
-| One remote node, many tools | Terminal, SFTP, port forwarding, trzsz, mini IDE, monitoring, and OxideSens AI stay attached to the same SSH workspace |
+| One remote node, many tools | Terminal, SFTP, port forwarding, trzsz, lightweight editor, monitoring, and OxideSens AI stay attached to the same SSH workspace |
 | Local-first SSH workflows | SSH, SFTP, forwarding, local shell, and config work without signup; cloud sync is opt-in via [official plugin](#official-plugins) |
 | BYOK OxideSens AI instead of platform credits | OxideSens uses your OpenAI/Ollama/DeepSeek/OpenAI-compatible endpoint with MCP, RAG, and approved workspace actions |
 | Reconnect stability | Grace Period probes the old connection for 30s before replacing it, so vim/htop/yazi can survive short network drops |
@@ -417,9 +419,9 @@ pnpm run tauri build
 
 | Layer | Technology | Details |
 |---|---|---|
-| **Framework** | Tauri 2.0 | Native binary, 25–40 MB |
+| **Framework** | Tauri 2.0 | Native shell with the operating system WebView |
 | **Runtime** | Tokio + DashMap 6 | Full async, lock-free concurrent maps |
-| **SSH** | russh 0.59 (`ring`) | Pure Rust, zero C deps, SSH Agent |
+| **SSH** | russh 0.59 (`ring`) | No OpenSSL/libssh2 in the SSH stack; SSH Agent |
 | **Local PTY** | portable-pty 0.8 | Feature-gated, ConPTY on Windows |
 | **Frontend** | React 19.1 + TypeScript 5.8 | Vite 7, Tailwind CSS 4 |
 | **State** | Zustand 5 | 19 specialized stores |

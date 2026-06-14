@@ -5,7 +5,9 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>AI 기반 SSH 클라이언트 · SFTP 브라우저 · 터미널 매니저 —— 올인원 </strong>
+  <strong>원격 서버를 위한 AI 기반 SSH 클라이언트 — Tauri 데스크톱 앱</strong>
+  <br>
+  SSH 터미널, SFTP, 포트 포워딩, 시리얼 터미널, 터미널 내 전송, 로컬 shell, 경량 편집을 하나의 워크스페이스에.
   <br>
   Tauri & React 기반, 순수 Rust SSH 스택. 무료, 계정 불필요.
   <br>
@@ -417,7 +419,7 @@ pnpm run tauri build
 
 | 계층 | 기술 | 상세 |
 |---|---|---|
-| **프레임워크** | Tauri 2.0 | 네이티브 바이너리, 25~40 MB |
+| **프레임워크** | Tauri 2.0 | 운영체제 WebView를 사용하는 네이티브 셸 |
 | **런타임** | Tokio + DashMap 6 | 완전 비동기, 무잠금 동시 맵 |
 | **SSH** | russh 0.59(`ring`) | 순수 Rust, C 의존성 제로, SSH Agent |
 | **로컬 PTY** | portable-pty 0.8 | 피처 게이트, Windows에서 ConPTY |

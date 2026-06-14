@@ -5,7 +5,9 @@
 <h1 align="center">⚡ OxideTerm</h1>
 
 <p align="center">
-  <strong>Client SSH AI · Trình duyệt SFTP · Trình quản lý terminal —— Tất cả trong một </strong>
+  <strong>SSH client tích hợp AI cho máy chủ từ xa — Ứng dụng desktop Tauri</strong>
+  <br>
+  SSH terminal, SFTP, chuyển tiếp cổng, terminal serial, truyền tải trong terminal, local shell và chỉnh sửa nhẹ trong một workspace.
   <br>
   Xây dựng với Tauri & React, vận hành bởi SSH Rust thuần túy. Miễn phí. Không cần tài khoản.
   <br>
@@ -62,7 +64,7 @@
 
 | Nếu bạn quan tâm đến... | OxideTerm mang lại... |
 |---|---|
-| Một remote node, nhiều công cụ | Terminal, SFTP, port forwarding, trzsz, mini IDE, monitoring và OxideSens AI cùng gắn với một workspace SSH |
+| Một remote node, nhiều công cụ | Terminal, SFTP, port forwarding, trzsz, trình soạn thảo nhẹ, monitoring và OxideSens AI cùng gắn với một workspace SSH |
 | Workflow SSH local-first | SSH, SFTP, forwarding, local shell và cấu hình hoạt động không cần đăng ký; cloud sync là tùy chọn qua [plugin chính thức](#plugin-chính-thức) |
 | OxideSens AI BYOK thay vì credit nền tảng | OxideSens dùng endpoint OpenAI/Ollama/DeepSeek/OpenAI-compatible của bạn với MCP, RAG và workspace action đã được phê duyệt |
 | Reconnect ổn định | Grace Period thăm dò kết nối cũ 30 giây trước khi thay thế, giúp vim/htop/yazi sống sót qua mất mạng ngắn |
@@ -417,7 +419,7 @@ pnpm run tauri build
 
 | Tầng | Công nghệ | Chi tiết |
 |---|---|---|
-| **Framework** | Tauri 2.0 | Nhị phân gốc, 25–40 MB |
+| **Framework** | Tauri 2.0 | Shell native dùng WebView của hệ điều hành |
 | **Runtime** | Tokio + DashMap 6 | Hoàn toàn bất đồng bộ, map đồng thời không khóa |
 | **SSH** | russh 0.59 (`ring`) | Thuần Rust, không phụ thuộc C, SSH Agent |
 | **PTY cục bộ** | portable-pty 0.8 | Feature-gated, ConPTY trên Windows |

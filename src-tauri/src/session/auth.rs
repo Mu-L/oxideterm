@@ -42,8 +42,18 @@ pub enum KeyError {
     #[error("Invalid passphrase")]
     InvalidPassphrase,
 
-    #[error("Unsupported key type")]
-    UnsupportedKeyType,
+    #[error("Unsupported SSH private key format")]
+    UnsupportedKeyFormat,
+
+    #[error(
+        "FIDO/security-key SSH private keys require agent-backed signing and are not supported for direct private-key authentication yet"
+    )]
+    UnsupportedHardwareKey,
+
+    #[error(
+        "DSA SSH private keys are deprecated and are not supported for direct private-key authentication"
+    )]
+    UnsupportedDsaKey,
 }
 
 impl KeyAuth {
@@ -126,6 +136,14 @@ pub fn load_private_key(path: &Path, passphrase: Option<&str>) -> Result<KeyPair
 }
 
 fn map_key_decode_error(err: russh::keys::Error, missing_passphrase: bool) -> KeyError {
+    let message = err.to_string();
+    let normalized = message.to_ascii_lowercase();
+    if normalized.contains("unsupported")
+        || normalized.contains("unknown")
+        || normalized.contains("could not read key")
+    {
+        return KeyError::UnsupportedKeyFormat;
+    }
     match &err {
         russh::keys::Error::KeyIsEncrypted
         | russh::keys::Error::SshKey(russh::keys::ssh_key::Error::Encrypted) => {
@@ -147,14 +165,14 @@ fn map_key_decode_error(err: russh::keys::Error, missing_passphrase: bool) -> Ke
         _ => {}
     }
 
-    let message = err.to_string();
-    let normalized = message.to_ascii_lowercase();
     let passphrase_related = normalized.contains("decrypt")
         || normalized.contains("password")
         || normalized.contains("passphrase")
         || normalized.contains("encrypted")
         || normalized.contains("bcrypt")
-        || normalized.contains("kdf");
+        || normalized.contains("kdf")
+        || normalized.contains("crypto")
+        || normalized.contains("cryptographic");
 
     if passphrase_related {
         if missing_passphrase {
@@ -163,13 +181,31 @@ fn map_key_decode_error(err: russh::keys::Error, missing_passphrase: bool) -> Ke
             KeyError::InvalidPassphrase
         }
     } else {
-        KeyError::ParseError(message)
+        KeyError::UnsupportedKeyFormat
     }
+}
+
+fn key_text_looks_hardware_key(key_data: &str) -> bool {
+    key_data.contains("sk-ecdsa-sha2-nistp256")
+        || key_data.contains("sk-ssh-ed25519")
+        || key_data.contains("id_ecdsa_sk")
+        || key_data.contains("id_ed25519_sk")
+}
+
+fn key_text_looks_dsa(key_data: &str) -> bool {
+    key_data.contains("-----BEGIN DSA PRIVATE KEY-----") || key_data.contains("ssh-dss")
 }
 
 /// Internal sync implementation
 fn load_private_key_sync(path: &Path, passphrase: Option<&str>) -> Result<KeyPair, KeyError> {
     let key_data = Zeroizing::new(std::fs::read_to_string(path)?);
+
+    if key_text_looks_hardware_key(&key_data) || key_path_looks_hardware_key(path) {
+        return Err(KeyError::UnsupportedHardwareKey);
+    }
+    if key_text_looks_dsa(&key_data) {
+        return Err(KeyError::UnsupportedDsaKey);
+    }
 
     // Check if key is encrypted
     let is_encrypted =
@@ -180,37 +216,89 @@ fn load_private_key_sync(path: &Path, passphrase: Option<&str>) -> Result<KeyPai
     }
 
     // Try to decode the key
-    match passphrase {
+    let key = match passphrase {
         Some(pass) => russh::keys::decode_secret_key(&key_data, Some(pass))
             .map_err(|e| map_key_decode_error(e, false)),
         None => russh::keys::decode_secret_key(&key_data, None)
             .map_err(|e| map_key_decode_error(e, true)),
+    }?;
+    if key.algorithm().to_string().starts_with("sk-") {
+        return Err(KeyError::UnsupportedHardwareKey);
     }
+    Ok(key)
 }
 
 /// Get default SSH key paths
 pub fn default_key_paths() -> Vec<PathBuf> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    let ssh_dir = home.join(".ssh");
+    default_key_paths_in_home(home)
+}
 
-    vec![
-        ssh_dir.join("id_ed25519"), // Prefer Ed25519 (modern, fast)
-        ssh_dir.join("id_ecdsa"),   // Then ECDSA
-        ssh_dir.join("id_rsa"),     // Then RSA (legacy but common)
-    ]
+fn default_key_paths_in_home(home: PathBuf) -> Vec<PathBuf> {
+    let ssh_dir = home.join(".ssh");
+    let preferred_names = ["id_ed25519", "id_ecdsa", "id_rsa"];
+    let mut paths = preferred_names
+        .iter()
+        .map(|name| ssh_dir.join(name))
+        .collect::<Vec<_>>();
+
+    let Ok(entries) = std::fs::read_dir(&ssh_dir) else {
+        return paths;
+    };
+    let mut discovered = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| default_key_candidate_name(path).is_some())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_none_or(|name| !preferred_names.contains(&name))
+        })
+        .collect::<Vec<_>>();
+    discovered.sort_by(|left, right| {
+        left.file_name()
+            .unwrap_or_default()
+            .cmp(right.file_name().unwrap_or_default())
+    });
+    paths.extend(discovered);
+    paths
+}
+
+fn default_key_candidate_name(path: &Path) -> Option<&str> {
+    let name = path.file_name()?.to_str()?;
+    if name.starts_with("id_") && !name.ends_with(".pub") && !name.ends_with("-cert.pub") {
+        Some(name)
+    } else {
+        None
+    }
+}
+
+fn key_path_looks_hardware_key(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with("_sk"))
 }
 
 /// Check if any default keys exist
 pub fn has_default_keys() -> bool {
-    default_key_paths().iter().any(|p| p.exists())
+    default_key_paths()
+        .iter()
+        .any(|path| default_key_is_loadable_or_promptable(path))
 }
 
 /// List available default keys
 pub fn list_available_keys() -> Vec<PathBuf> {
     default_key_paths()
         .into_iter()
-        .filter(|p| p.exists())
+        .filter(default_key_is_loadable_or_promptable)
         .collect()
+}
+
+fn default_key_is_loadable_or_promptable(path: &PathBuf) -> bool {
+    match load_private_key(path, None) {
+        Ok(_) | Err(KeyError::PassphraseRequired) => true,
+        Err(_) => false,
+    }
 }
 
 /// Get key type description
@@ -252,6 +340,23 @@ mod tests {
             let path_str = path.to_string_lossy();
             assert!(path_str.contains(".ssh"));
         }
+    }
+
+    #[test]
+    fn test_default_key_paths_scan_extra_id_candidates_after_preferred_names() {
+        let temp_dir = tempdir().unwrap();
+        let ssh = temp_dir.path().join(".ssh");
+        std::fs::create_dir_all(&ssh).unwrap();
+        std::fs::write(ssh.join("id_work"), "").unwrap();
+        std::fs::write(ssh.join("id_ed25519_sk.pub"), "").unwrap();
+        std::fs::write(ssh.join("id_ed25519-cert.pub"), "").unwrap();
+
+        let names = default_key_paths_in_home(temp_dir.path().to_path_buf())
+            .into_iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["id_ed25519", "id_ecdsa", "id_rsa", "id_work"]);
     }
 
     #[test]
@@ -310,14 +415,25 @@ mod tests {
     }
 
     #[test]
-    fn test_load_private_key_invalid_content_returns_parse_error() {
+    fn test_load_private_key_invalid_content_returns_unsupported_format() {
         let temp_dir = tempdir().unwrap();
         let key_path = temp_dir.path().join("not_a_key");
         std::fs::write(&key_path, "definitely not an ssh key").unwrap();
 
         let error = load_private_key(&key_path, None).unwrap_err();
 
-        assert!(matches!(error, KeyError::ParseError(_)));
+        assert!(matches!(error, KeyError::UnsupportedKeyFormat));
+    }
+
+    #[test]
+    fn test_load_private_key_rejects_hardware_key_path_for_direct_auth() {
+        let temp_dir = tempdir().unwrap();
+        let key_path = temp_dir.path().join("id_ed25519_sk");
+        write_test_key(&key_path, None);
+
+        let error = load_private_key(&key_path, None).unwrap_err();
+
+        assert!(matches!(error, KeyError::UnsupportedHardwareKey));
     }
 
     #[test]
@@ -363,5 +479,23 @@ mod tests {
         let error = load_first_available_key(vec![encrypted_path], None).unwrap_err();
 
         assert!(matches!(error, KeyError::PassphraseRequired));
+    }
+
+    #[test]
+    fn test_list_available_keys_skips_invalid_and_keeps_promptable_keys() {
+        let temp_dir = tempdir().unwrap();
+        let loadable = temp_dir.path().join("id_custom");
+        let encrypted = temp_dir.path().join("id_secret");
+        let invalid = temp_dir.path().join("id_invalid");
+        write_test_key(&loadable, None);
+        write_test_key(&encrypted, Some("secret-pass"));
+        std::fs::write(&invalid, "not a private key").unwrap();
+
+        let keys = vec![loadable.clone(), encrypted.clone(), invalid]
+            .into_iter()
+            .filter(default_key_is_loadable_or_promptable)
+            .collect::<Vec<_>>();
+
+        assert_eq!(keys, vec![loadable, encrypted]);
     }
 }

@@ -29,6 +29,12 @@ export function AiSafetyModeIndicator({ onOpenToolSettings }: AiSafetyModeIndica
   const { confirm, ConfirmDialog } = useConfirm();
   const isBypass = mode === 'bypass';
 
+  const runAfterMenuClose = (action: () => void) => {
+    // Opening a Radix Dialog during DropdownMenu's select/close cycle can leave
+    // Tauri WebView with a stale modal layer, making the page non-interactive.
+    window.requestAnimationFrame(() => window.setTimeout(action, 0));
+  };
+
   const setMode = async (nextMode: 'default' | 'bypass') => {
     if (!activeConversationId) return;
     if (nextMode === 'default') {
@@ -75,7 +81,7 @@ export function AiSafetyModeIndicator({ onOpenToolSettings }: AiSafetyModeIndica
             {t('ai.safety_mode.menu_title')}
           </DropdownMenuLabel>
           <DropdownMenuItem
-            onSelect={() => void setMode('default')}
+            onSelect={() => runAfterMenuClose(() => void setMode('default'))}
             className="flex items-start gap-2 text-xs"
           >
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-theme-accent" />
@@ -85,7 +91,7 @@ export function AiSafetyModeIndicator({ onOpenToolSettings }: AiSafetyModeIndica
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() => void setMode('bypass')}
+            onSelect={() => runAfterMenuClose(() => void setMode('bypass'))}
             className="flex items-start gap-2 text-xs"
           >
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
@@ -95,7 +101,7 @@ export function AiSafetyModeIndicator({ onOpenToolSettings }: AiSafetyModeIndica
             </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onOpenToolSettings} className="flex items-center gap-2 text-xs">
+          <DropdownMenuItem onSelect={() => runAfterMenuClose(onOpenToolSettings)} className="flex items-center gap-2 text-xs">
             <Settings className="h-3.5 w-3.5 text-theme-text-muted" />
             {t('ai.safety_mode.open_settings')}
           </DropdownMenuItem>

@@ -659,12 +659,24 @@ fn normalize_port_path(port_path: &str) -> String {
     let trimmed = port_path.trim();
     #[cfg(target_os = "windows")]
     {
-        trimmed.to_ascii_uppercase()
+        normalize_windows_port_path(trimmed)
     }
     #[cfg(not(target_os = "windows"))]
     {
         trimmed.to_string()
     }
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn normalize_windows_port_path(port_path: &str) -> String {
+    let uppercase = port_path.trim().to_ascii_uppercase();
+    // Windows accepts both COM10 and the Win32 device namespace form; use one
+    // owner key so existence checks and duplicate reservations agree.
+    uppercase
+        .strip_prefix("\\\\.\\")
+        .or_else(|| uppercase.strip_prefix("\\\\?\\"))
+        .unwrap_or(&uppercase)
+        .to_string()
 }
 
 pub fn encode_serial_bytes(bytes: &[u8]) -> String {
@@ -835,6 +847,15 @@ mod tests {
 
         assert_eq!(error.code, SerialErrorCode::PortBusy);
         assert_eq!(error.session_id.as_deref(), Some("session-1"));
+    }
+
+    #[test]
+    fn windows_serial_normalization_collapses_device_namespace() {
+        assert_eq!(normalize_windows_port_path("COM10"), "COM10");
+        assert_eq!(normalize_windows_port_path("com10"), "COM10");
+        assert_eq!(normalize_windows_port_path("\\\\.\\COM10"), "COM10");
+        assert_eq!(normalize_windows_port_path("\\\\?\\com10"), "COM10");
+        assert_eq!(normalize_windows_port_path(" COM3 "), "COM3");
     }
 
     #[test]

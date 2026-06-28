@@ -76,7 +76,11 @@ export function normalizeExecutionProfiles(input: {
   reasoningEffort: AiReasoningEffort;
   toolUse?: AiExecutionProfile['toolUse'];
 }): AiExecutionProfilesConfig {
-  const fallback = createDefaultExecutionProfile(input);
+  const fallback = createDefaultExecutionProfile({
+    providerId: input.providerId,
+    model: input.model,
+    reasoningEffort: input.reasoningEffort,
+  });
   const existingProfiles = Array.isArray(input.config?.profiles) ? input.config.profiles : [];
   const profiles = (existingProfiles.length > 0 ? existingProfiles : [fallback]).map(normalizeExecutionProfile);
   const defaultProfileId = input.config?.defaultProfileId && profiles.some((profile) => profile.id === input.config?.defaultProfileId)
@@ -87,6 +91,7 @@ export function normalizeExecutionProfiles(input: {
 
 function normalizeExecutionProfile(profile: AiExecutionProfile): AiExecutionProfile {
   const backend: AiExecutionBackend = profile.backend === 'acp' ? 'acp' : 'provider';
+  const toolUse = isLegacyDefaultProfileToolUseOverride(profile) ? undefined : profile.toolUse;
   return {
     ...profile,
     // Missing backend is legacy provider-backed profile data.
@@ -94,7 +99,22 @@ function normalizeExecutionProfile(profile: AiExecutionProfile): AiExecutionProf
     providerId: backend === 'acp' ? null : profile.providerId,
     acpAgentId: backend === 'acp' ? profile.acpAgentId ?? null : null,
     model: backend === 'acp' ? null : profile.model,
+    toolUse,
   };
+}
+
+function isLegacyDefaultProfileToolUseOverride(profile: AiExecutionProfile): boolean {
+  if (profile.id !== DEFAULT_AI_EXECUTION_PROFILE_ID || !profile.toolUse) return false;
+
+  const autoApproveTools = profile.toolUse.autoApproveTools ?? {};
+  const disabledTools = profile.toolUse.disabledTools ?? [];
+
+  // Older default profiles stored a disabled tool-use block even though the UI
+  // exposes tool calling as a global setting. Treat that generated block as
+  // inherited so the global Tools page controls chat behavior.
+  return profile.toolUse.enabled === false
+    && Object.keys(autoApproveTools).length === 0
+    && disabledTools.length === 0;
 }
 
 export function resolveExecutionProfile(

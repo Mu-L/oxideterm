@@ -298,7 +298,6 @@ export const AiTab = ({
                 providerId: ai.activeProviderId,
                 model: ai.activeModel,
                 reasoningEffort: ai.reasoningEffort,
-                toolUse,
             }),
         ],
     };
@@ -443,7 +442,6 @@ export const AiTab = ({
             providerId: ai.activeProviderId,
             model: ai.activeModel,
             reasoningEffort: ai.reasoningEffort,
-            toolUse: { ...toolUse, autoApproveTools: { ...approveTools } },
             context: { includeRuntimeChips: true, includeMemory: true, includeRag: true },
             commandPolicy: { allow: [], deny: [] },
             createdAt: now,

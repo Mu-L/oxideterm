@@ -705,12 +705,6 @@ const defaultAiSettings: AiSettings = {
         providerId: null,
         model: null,
         reasoningEffort: 'auto',
-        toolUse: {
-          enabled: false,
-          maxRounds: DEFAULT_AI_TOOL_MAX_ROUNDS,
-          autoApproveTools: {},
-          disabledTools: [],
-        },
       }),
     ],
   },
